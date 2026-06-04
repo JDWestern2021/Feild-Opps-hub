@@ -48,6 +48,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Helpers ──
 async function getSetting(key, def = null) {
+  // Check environment variables first (e.g. SMTP_HOST, SMTP_PORT, etc.)
+  const envKey = key.toUpperCase();
+  if (process.env[envKey] !== undefined) return process.env[envKey];
   const { rows } = await pool.query('SELECT value FROM app_settings WHERE key=$1', [key]);
   return rows[0]?.value ?? def;
 }
