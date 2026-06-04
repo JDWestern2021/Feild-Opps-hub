@@ -220,9 +220,32 @@ app.patch('/api/users/:id', requireAdmin, (req, res) => {
   const { name, role, status } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  if (parseInt(req.params.id) === req.user.id && status === 'inactive') return res.status(400).json({ error: 'Cannot deactivate your own account' });
+  if (parseInt(req.params.id) === req.user.id && status === 'inactive')
+    return res.status(400).json({ error: 'Cannot deactivate your own account' });
+
+  // Safeguard: prevent removing the last Office Admin
+  if (role && role !== user.role) {
+    const adminCount = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND status='active'").get().c;
+    if (user.role === 'admin' && role !== 'admin' && adminCount <= 1)
+      return res.status(400).json({ error: 'Cannot change role — at least one Office Admin must exist at all times.' });
+  }
+
   db.prepare('UPDATE users SET name = COALESCE(?, name), role = COALESCE(?, role), status = COALESCE(?, status) WHERE id = ?')
     .run(name || null, role || null, status || null, req.params.id);
+
+  // Audit role change
+  if (role && role !== user.role) {
+    const oldLabel  = user.role === 'admin' ? 'Office Admin' : 'Field User';
+    const newLabel  = role === 'admin' ? 'Office Admin' : 'Field User';
+    logAction(req, 'role_changed', null, null,
+      `Role changed from ${oldLabel} to ${newLabel} for ${user.name} by ${req.user.name}`);
+    // When promoted to admin, grant full permissions automatically
+    if (role === 'admin') {
+      db.prepare('UPDATE users SET permissions = ? WHERE id = ?')
+        .run('time_ticket,get_po,office_dashboard', req.params.id);
+    }
+  }
+
   res.json({ ok: true });
 });
 
@@ -348,14 +371,25 @@ app.get('/api/tickets/:id/audit', requireAuth, (req, res) => {
 
 // ── Update user permissions ──
 app.patch('/api/users/:id/permissions', requireAdmin, (req, res) => {
-  const { permissions } = req.body; // array like ['time_ticket','get_po']
+  const { permissions } = req.body;
   if (!Array.isArray(permissions)) return res.status(400).json({ error: 'permissions must be an array' });
-  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.params.id);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  if (user.role === 'admin') return res.status(400).json({ error: 'Admin users always have full access' });
-  const valid = ['time_ticket', 'get_po'];
+
+  // Allow admins to have their permissions saved (they effectively always have all, but store it)
+  const valid = ['time_ticket', 'get_po', 'office_dashboard'];
+
+  // Safeguard: cannot remove office_dashboard from the last admin
+  if (user.role === 'admin' && !permissions.includes('office_dashboard')) {
+    const adminCount = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND status='active'").get().c;
+    if (adminCount <= 1)
+      return res.status(400).json({ error: 'Cannot revoke Office Dashboard access — at least one Office Admin must keep this permission.' });
+  }
+
   const cleaned = permissions.filter(p => valid.includes(p)).join(',');
   db.prepare('UPDATE users SET permissions = ? WHERE id = ?').run(cleaned, req.params.id);
+  logAction(req, 'permissions_changed', null, null,
+    `Permissions updated for ${user.name}: ${cleaned || 'none'} by ${req.user.name}`);
   res.json({ ok: true, permissions: cleaned });
 });
 
