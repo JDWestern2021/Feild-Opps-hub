@@ -1,10 +1,11 @@
+require('dotenv').config(); // load .env in development
 const express  = require('express');
 const path     = require('path');
 const crypto   = require('crypto');
 const XLSX     = require('xlsx');
 const multer   = require('multer');
 const nodemailer = require('nodemailer');
-const db       = require('./db');
+const { pool, connectWithRetry, initSchema } = require('./db');
 const { sessionMiddleware, requireAuth, requireAdmin, requirePermission, logAction, hashPassword, checkPassword, ensureDefaultAdmin } = require('./auth');
 
 const app  = express();
@@ -13,10 +14,14 @@ const PORT = process.env.PORT || 3000;
 // ── Uploads storage ──
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (req, file, cb) => { const fs = require('fs'); fs.mkdirSync(path.join(__dirname,'public','uploads'), {recursive:true}); cb(null, path.join(__dirname,'public','uploads')); },
+    destination: (req, file, cb) => {
+      const fs = require('fs');
+      fs.mkdirSync(path.join(__dirname,'public','uploads'), {recursive:true});
+      cb(null, path.join(__dirname,'public','uploads'));
+    },
     filename: (req, file, cb) => { cb(null, file.fieldname + path.extname(file.originalname)); }
   }),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5*1024*1024 },
   fileFilter: (req, file, cb) => { cb(null, /image\/(png|jpeg|jpg|gif|webp|svg)/.test(file.mimetype)); }
 });
 
@@ -29,7 +34,7 @@ const receiptUpload = multer({
     },
     filename: (req, file, cb) => { cb(null, `receipt-${req.params.id}${path.extname(file.originalname).toLowerCase()}`); }
   }),
-  limits: { fileSize: 15 * 1024 * 1024 },
+  limits: { fileSize: 15*1024*1024 },
   fileFilter: (req, file, cb) => {
     const ok = /image\/(png|jpeg|jpg|heic|heif)|application\/pdf/.test(file.mimetype)
              || /\.(png|jpg|jpeg|heic|heif|pdf)$/i.test(file.originalname);
@@ -42,11 +47,12 @@ app.use(sessionMiddleware());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Helpers ──
-function getSetting(key, def = null) {
-  return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? def;
+async function getSetting(key, def = null) {
+  const { rows } = await pool.query('SELECT value FROM app_settings WHERE key=$1', [key]);
+  return rows[0]?.value ?? def;
 }
-function setSetting(key, value) {
-  db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(key, value);
+async function setSetting(key, value) {
+  await pool.query('INSERT INTO app_settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2', [key, value]);
 }
 
 function parseEmployeesRaw(raw) {
@@ -62,301 +68,287 @@ function generateTicketNumber() {
   return `JDW-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(1000+Math.random()*9000)}`;
 }
 
-// Validate an optional project assignment. Returns the project id if it refers
-// to an existing project folder, otherwise null (assignment is always optional).
-function resolveProjectId(raw) {
+async function generatePONumber(client) {
+  const year = new Date().getFullYear();
+  await client.query('INSERT INTO po_sequence (year, last_seq) VALUES ($1, 0) ON CONFLICT DO NOTHING', [year]);
+  const { rows } = await client.query('UPDATE po_sequence SET last_seq=last_seq+1 WHERE year=$1 RETURNING last_seq', [year]);
+  return `JD-PO-${year}-${String(rows[0].last_seq).padStart(4,'0')}`;
+}
+
+async function resolveProjectId(raw) {
   if (raw === undefined || raw === null || raw === '') return null;
   const id = parseInt(raw, 10);
   if (isNaN(id) || id <= 0) return null;
-  const proj = db.prepare('SELECT id FROM projects WHERE id = ?').get(id);
-  return proj ? id : null;
+  const { rows } = await pool.query('SELECT id FROM projects WHERE id=$1', [id]);
+  return rows.length > 0 ? id : null;
 }
 
-// Normalize associated job-number tags into a clean comma-separated string.
-// Accepts an array or a free-text string of comma/space-separated values.
 function normalizeJobNumbers(raw) {
   if (!raw) return null;
-  const parts = (Array.isArray(raw) ? raw : String(raw).split(/[,\n]/))
-    .map(s => String(s).trim()).filter(Boolean);
-  return parts.length ? parts.join(', ') : null;
+  return raw.split(',').map(s=>s.trim()).filter(Boolean).join(', ') || null;
+}
+
+function logPOAction(req, poId, poNumber, action, details = null) {
+  pool.query(
+    'INSERT INTO po_audit_log (po_id,po_number,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5,$6)',
+    [poId, poNumber, req.user?.name||'System', action, details, new Date().toISOString()]
+  ).catch(err => console.error('PO audit error:', err.message));
 }
 
 // ─────────────────────────────────────────────
-// PUBLIC ROUTES (no auth)
+// PUBLIC ROUTES
 // ─────────────────────────────────────────────
 
-// Dynamic theme CSS
-app.get('/theme.css', (req, res) => {
-  const color = getSetting('theme_color', '#F47920');
-  res.setHeader('Content-Type', 'text/css');
-  res.setHeader('Cache-Control', 'no-cache');
+app.get('/theme.css', async (req, res) => {
+  const color = await getSetting('theme_color', '#F47920');
+  res.setHeader('Content-Type','text/css');
+  res.setHeader('Cache-Control','no-cache');
   res.send(`:root { --orange: ${color}; --orange-dark: color-mix(in srgb, ${color} 85%, black); --orange-light: color-mix(in srgb, ${color} 15%, white); }`);
 });
 
-// Public settings (theme + logo for pages to read)
-app.get('/api/settings/public', (req, res) => {
+app.get('/api/settings/public', async (req, res) => {
   res.json({
-    theme_color: getSetting('theme_color', '#F47920'),
-    logo_path:   getSetting('logo_path', null),
-    home_bg:     getSetting('home_bg', null),
+    theme_color: await getSetting('theme_color','#F47920'),
+    logo_path:   await getSetting('logo_path', null),
+    home_bg:     await getSetting('home_bg', null),
   });
 });
 
-// Auth: check if first-time setup needed
-app.get('/api/auth/setup-needed', (req, res) => {
-  res.json({ needed: db.prepare('SELECT COUNT(*) as c FROM users').get().c === 0 });
+app.get('/api/auth/setup-needed', async (req, res) => {
+  const { rows } = await pool.query('SELECT COUNT(*) AS c FROM users');
+  res.json({ needed: parseInt(rows[0].c) === 0 });
 });
 
-// Auth: login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(email.toLowerCase().trim());
+  const { rows } = await pool.query('SELECT * FROM users WHERE LOWER(email)=$1', [email.toLowerCase().trim()]);
+  const user = rows[0];
   if (!user || !user.password_hash || !checkPassword(password, user.password_hash))
     return res.status(401).json({ error: 'Invalid email or password' });
   if (user.status !== 'active')
     return res.status(403).json({ error: 'Account is not active. Check your invite email.' });
   req.session.userId = user.id;
-  db.prepare('UPDATE users SET last_login = ? WHERE id = ?').run(new Date().toISOString(), user.id);
+  await pool.query('UPDATE users SET last_login=$1 WHERE id=$2', [new Date().toISOString(), user.id]);
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
 });
 
-// Auth: me
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const user = db.prepare('SELECT id, name, email, role, status, permissions FROM users WHERE id = ?').get(req.session.userId);
+  const { rows } = await pool.query('SELECT id,name,email,role,status,permissions FROM users WHERE id=$1', [req.session.userId]);
+  const user = rows[0];
   if (!user || user.status !== 'active') return res.status(401).json({ error: 'Not authenticated' });
-  // Normalise permissions
   if (user.role === 'admin') user.permissions = 'time_ticket,get_po,office_dashboard';
   else if (!user.permissions) user.permissions = 'time_ticket';
   res.json(user);
 });
 
-// Auth: logout
 app.post('/api/auth/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
 
-// Auth: accept invite — validate token
-app.get('/api/auth/invite/:token', (req, res) => {
-  const user = db.prepare('SELECT id, name, email FROM users WHERE invite_token = ? AND status = ? AND invite_expires > ?').get(req.params.token, 'invited', new Date().toISOString());
-  if (!user) return res.status(404).json({ error: 'Invalid or expired invite link' });
-  res.json(user);
+app.get('/api/auth/invite/:token', async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id,name,email FROM users WHERE invite_token=$1 AND status='invited' AND invite_expires>$2",
+    [req.params.token, new Date().toISOString()]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Invalid or expired invite link' });
+  res.json(rows[0]);
 });
 
-// Auth: accept invite — set password
-app.post('/api/auth/invite/:token/accept', (req, res) => {
+app.post('/api/auth/invite/:token/accept', async (req, res) => {
   const { name, password } = req.body;
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  const user = db.prepare('SELECT * FROM users WHERE invite_token = ? AND status = ? AND invite_expires > ?').get(req.params.token, 'invited', new Date().toISOString());
+  const { rows } = await pool.query(
+    "SELECT * FROM users WHERE invite_token=$1 AND status='invited' AND invite_expires>$2",
+    [req.params.token, new Date().toISOString()]
+  );
+  const user = rows[0];
   if (!user) return res.status(404).json({ error: 'Invalid or expired invite link' });
-  db.prepare('UPDATE users SET name = ?, password_hash = ?, status = ?, invite_token = NULL, invite_expires = NULL WHERE id = ?')
-    .run(name || user.name, hashPassword(password), 'active', user.id);
+  await pool.query('UPDATE users SET name=$1,password_hash=$2,status=$3,invite_token=NULL,invite_expires=NULL WHERE id=$4',
+    [name||user.name, hashPassword(password), 'active', user.id]);
   req.session.userId = user.id;
-  db.prepare('UPDATE users SET last_login = ? WHERE id = ?').run(new Date().toISOString(), user.id);
+  await pool.query('UPDATE users SET last_login=$1 WHERE id=$2', [new Date().toISOString(), user.id]);
   res.json({ ok: true, role: user.role });
 });
 
-// Auth: change own password
-app.post('/api/auth/change-password', requireAuth, (req, res) => {
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
   const { current_password, new_password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  if (!checkPassword(current_password, user.password_hash)) return res.status(401).json({ error: 'Current password is incorrect' });
+  const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.user.id]);
+  if (!checkPassword(current_password, rows[0].password_hash)) return res.status(401).json({ error: 'Current password is incorrect' });
   if (!new_password || new_password.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(new_password), req.user.id);
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hashPassword(new_password), req.user.id]);
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/reset/:token', async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id,name,email FROM users WHERE reset_token=$1 AND reset_token_expires>$2',
+    [req.params.token, new Date().toISOString()]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'This reset link is invalid or has expired.' });
+  res.json(rows[0]);
+});
+
+app.post('/api/auth/reset/:token', async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const { rows } = await pool.query(
+    'SELECT * FROM users WHERE reset_token=$1 AND reset_token_expires>$2',
+    [req.params.token, new Date().toISOString()]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'This reset link is invalid or has expired.' });
+  await pool.query('UPDATE users SET password_hash=$1,status=$2,reset_token=NULL,reset_token_expires=NULL WHERE id=$3',
+    [hashPassword(password), 'active', rows[0].id]);
   res.json({ ok: true });
 });
 
 // ─────────────────────────────────────────────
-// USER MANAGEMENT (Admin only)
+// USER MANAGEMENT
 // ─────────────────────────────────────────────
 
-app.get('/api/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, name, email, role, status, permissions, created_at, last_login FROM users ORDER BY created_at DESC').all();
-  res.json(users.map(u => ({
+app.get('/api/users', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT id,name,email,role,status,permissions,created_at,last_login FROM users ORDER BY created_at DESC');
+  res.json(rows.map(u => ({
     ...u,
-    permissions: u.role === 'admin' ? 'time_ticket,get_po,office_dashboard' : (u.permissions || 'time_ticket')
+    permissions: u.role==='admin' ? 'time_ticket,get_po,office_dashboard' : (u.permissions||'time_ticket')
   })));
 });
 
 app.post('/api/users/invite', requireAdmin, async (req, res) => {
   const { name, email, role } = req.body;
-  if (!name || !email || !role) return res.status(400).json({ error: 'Name, email and role required' });
-  const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(email.toLowerCase());
-  if (existing) return res.status(409).json({ error: 'A user with this email already exists' });
-
+  if (!name||!email||!role) return res.status(400).json({ error: 'Name, email and role required' });
+  const existing = await pool.query('SELECT id FROM users WHERE LOWER(email)=$1', [email.toLowerCase()]);
+  if (existing.rows[0]) return res.status(409).json({ error: 'A user with this email already exists' });
   const token   = crypto.randomBytes(32).toString('hex');
-  const expires = new Date(Date.now() + 7 * 24 * 3600000).toISOString(); // 7 days
-  db.prepare('INSERT INTO users (name, email, role, status, invite_token, invite_expires, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(name, email.toLowerCase(), role, 'invited', token, expires, new Date().toISOString());
-
+  const expires = new Date(Date.now()+7*24*3600000).toISOString();
+  await pool.query('INSERT INTO users (name,email,role,status,invite_token,invite_expires,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [name, email.toLowerCase(), role, 'invited', token, expires, new Date().toISOString()]);
   const inviteUrl = `${req.protocol}://${req.get('host')}/accept-invite.html?token=${token}`;
-
-  // Try to send email if SMTP configured
-  const smtpHost = getSetting('smtp_host');
+  const smtpHost = await getSetting('smtp_host');
   let emailSent = false;
   if (smtpHost) {
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost, port: parseInt(getSetting('smtp_port', '587')),
-        auth: { user: getSetting('smtp_user'), pass: getSetting('smtp_pass') }
-      });
-      await transporter.sendMail({
-        from: getSetting('smtp_from', 'noreply@jdwesternelectric.ca'),
-        to: email,
-        subject: "You've been invited to J&D Western Electric Field Hub",
-        html: `<p>Hi ${name},</p><p>You have been invited to join the J&D Western Electric Field Operations Hub as a <strong>${role === 'admin' ? 'Office Admin' : 'Field User'}</strong>.</p><p><a href="${inviteUrl}">Click here to set your password and activate your account</a></p><p>This link expires in 7 days.</p>`
-      });
+      const t = nodemailer.createTransport({ host: smtpHost, port: parseInt(await getSetting('smtp_port','587')), auth: { user: await getSetting('smtp_user'), pass: await getSetting('smtp_pass') } });
+      await t.sendMail({ from: await getSetting('smtp_from','noreply@jdwesternelectric.ca'), to: email, subject: "You've been invited to J&D Western Electric Field Hub",
+        html: `<p>Hi ${name},</p><p>You have been invited. <a href="${inviteUrl}">Click here to activate your account</a>. Link expires in 7 days.</p>` });
       emailSent = true;
-    } catch (err) {
-      console.error('Email send failed:', err.message);
-    }
+    } catch (err) { console.error('Invite email failed:', err.message); }
   }
-
   res.status(201).json({ ok: true, invite_url: inviteUrl, email_sent: emailSent });
 });
 
-app.patch('/api/users/:id', requireAdmin, (req, res) => {
+app.patch('/api/users/:id', requireAdmin, async (req, res) => {
   const { name, role, status } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.params.id]);
+  const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (parseInt(req.params.id) === req.user.id && status === 'inactive')
     return res.status(400).json({ error: 'Cannot deactivate your own account' });
-
-  // Safeguard: prevent removing the last Office Admin
   if (role && role !== user.role) {
-    const adminCount = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND status='active'").get().c;
-    if (user.role === 'admin' && role !== 'admin' && adminCount <= 1)
+    const { rows: ac } = await pool.query("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND status='active'");
+    if (user.role==='admin' && role!=='admin' && parseInt(ac[0].c) <= 1)
       return res.status(400).json({ error: 'Cannot change role — at least one Office Admin must exist at all times.' });
   }
-
-  db.prepare('UPDATE users SET name = COALESCE(?, name), role = COALESCE(?, role), status = COALESCE(?, status) WHERE id = ?')
-    .run(name || null, role || null, status || null, req.params.id);
-
-  // Audit role change
+  await pool.query('UPDATE users SET name=COALESCE($1,name),role=COALESCE($2,role),status=COALESCE($3,status) WHERE id=$4',
+    [name||null, role||null, status||null, req.params.id]);
   if (role && role !== user.role) {
-    const oldLabel  = user.role === 'admin' ? 'Office Admin' : 'Field User';
-    const newLabel  = role === 'admin' ? 'Office Admin' : 'Field User';
-    logAction(req, 'role_changed', null, null,
-      `Role changed from ${oldLabel} to ${newLabel} for ${user.name} by ${req.user.name}`);
-    // When promoted to admin, grant full permissions automatically
-    if (role === 'admin') {
-      db.prepare('UPDATE users SET permissions = ? WHERE id = ?')
-        .run('time_ticket,get_po,office_dashboard', req.params.id);
-    }
+    const oldLabel = user.role==='admin'?'Office Admin':'Field User';
+    const newLabel = role==='admin'?'Office Admin':'Field User';
+    logAction(req,'role_changed',null,null,`Role changed from ${oldLabel} to ${newLabel} for ${user.name} by ${req.user.name}`);
+    if (role==='admin') await pool.query('UPDATE users SET permissions=$1 WHERE id=$2',['time_ticket,get_po,office_dashboard',req.params.id]);
   }
-
   res.json({ ok: true });
 });
 
-// ── Admin: set a user's password directly ──
-app.post('/api/users/:id/reset-password', requireAdmin, (req, res) => {
+app.patch('/api/users/:id/permissions', requireAdmin, async (req, res) => {
+  const { permissions } = req.body;
+  if (!Array.isArray(permissions)) return res.status(400).json({ error: 'permissions must be an array' });
+  const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.params.id]);
+  const user = rows[0];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const valid = ['time_ticket','get_po','office_dashboard'];
+  if (user.role==='admin' && !permissions.includes('office_dashboard')) {
+    const { rows: ac } = await pool.query("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND status='active'");
+    if (parseInt(ac[0].c) <= 1) return res.status(400).json({ error: 'Cannot revoke Office Dashboard access — at least one Office Admin must keep this permission.' });
+  }
+  const cleaned = permissions.filter(p=>valid.includes(p)).join(',');
+  await pool.query('UPDATE users SET permissions=$1 WHERE id=$2', [cleaned, req.params.id]);
+  logAction(req,'permissions_changed',null,null,`Permissions updated for ${user.name}: ${cleaned||'none'} by ${req.user.name}`);
+  res.json({ ok: true, permissions: cleaned });
+});
+
+app.post('/api/users/:id/reset-password', requireAdmin, async (req, res) => {
   const { password } = req.body;
-  if (!password || password.length < 8)
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  db.prepare('UPDATE users SET password_hash = ?, status = CASE WHEN status = ? THEN ? ELSE status END WHERE id = ?')
-    .run(hashPassword(password), 'invited', 'active', req.params.id);
+  if (!password||password.length<8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const { rows } = await pool.query('SELECT id FROM users WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+  await pool.query("UPDATE users SET password_hash=$1,status=CASE WHEN status='invited' THEN 'active' ELSE status END WHERE id=$2",
+    [hashPassword(password), req.params.id]);
   res.json({ ok: true });
 });
 
-// ── Admin: send password reset email ──
 app.post('/api/users/:id/send-reset-link', requireAdmin, async (req, res) => {
-  const user = db.prepare('SELECT id, name, email, status FROM users WHERE id = ?').get(req.params.id);
+  const { rows } = await pool.query('SELECT id,name,email,status FROM users WHERE id=$1', [req.params.id]);
+  const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
-
   const token   = crypto.randomBytes(32).toString('hex');
-  const expires = new Date(Date.now() + 24 * 3600000).toISOString(); // 24 hours
-  db.prepare('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?').run(token, expires, user.id);
-
+  const expires = new Date(Date.now()+24*3600000).toISOString();
+  await pool.query('UPDATE users SET reset_token=$1,reset_token_expires=$2 WHERE id=$3', [token, expires, user.id]);
   const resetUrl = `${req.protocol}://${req.get('host')}/reset-password.html?token=${token}`;
-
-  const smtpHost = getSetting('smtp_host');
+  const smtpHost = await getSetting('smtp_host');
   let emailSent = false;
   if (smtpHost) {
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost, port: parseInt(getSetting('smtp_port', '587')),
-        auth: { user: getSetting('smtp_user'), pass: getSetting('smtp_pass') }
-      });
-      await transporter.sendMail({
-        from: getSetting('smtp_from', 'noreply@jdwesternelectric.ca'),
-        to: user.email,
-        subject: 'Reset your J&D Western Electric password',
-        html: `<p>Hi ${user.name},</p><p>A password reset was requested for your account. Click the link below to set a new password. This link expires in 24 hours.</p><p><a href="${resetUrl}">Reset my password</a></p><p>If you did not request this, you can safely ignore this email.</p>`
-      });
+      const t = nodemailer.createTransport({ host: smtpHost, port: parseInt(await getSetting('smtp_port','587')), auth:{ user: await getSetting('smtp_user'), pass: await getSetting('smtp_pass') } });
+      await t.sendMail({ from: await getSetting('smtp_from','noreply@jdwesternelectric.ca'), to: user.email, subject: 'Reset your J&D Western Electric password',
+        html: `<p>Hi ${user.name},</p><p><a href="${resetUrl}">Reset my password</a> — expires in 24 hours.</p>` });
       emailSent = true;
-    } catch (err) {
-      console.error('Reset email failed:', err.message);
-    }
+    } catch (err) { console.error('Reset email failed:', err.message); }
   }
-
   res.json({ ok: true, reset_url: resetUrl, email_sent: emailSent });
 });
 
-// ── Public: validate reset token ──
-app.get('/api/auth/reset/:token', (req, res) => {
-  const user = db.prepare('SELECT id, name, email FROM users WHERE reset_token = ? AND reset_token_expires > ?')
-    .get(req.params.token, new Date().toISOString());
-  if (!user) return res.status(404).json({ error: 'This reset link is invalid or has expired.' });
-  res.json({ name: user.name, email: user.email });
-});
-
-// ── Public: apply new password via reset token ──
-app.post('/api/auth/reset/:token', (req, res) => {
-  const { password } = req.body;
-  if (!password || password.length < 8)
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  const user = db.prepare('SELECT * FROM users WHERE reset_token = ? AND reset_token_expires > ?')
-    .get(req.params.token, new Date().toISOString());
-  if (!user) return res.status(404).json({ error: 'This reset link is invalid or has expired.' });
-  db.prepare('UPDATE users SET password_hash = ?, status = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?')
-    .run(hashPassword(password), 'active', user.id);
-  res.json({ ok: true });
-});
-
-app.delete('/api/users/:id', requireAdmin, (req, res) => {
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'Cannot delete your own account' });
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
   res.json({ ok: true });
 });
 
 // ─────────────────────────────────────────────
-// SETTINGS (Admin only)
+// SETTINGS
 // ─────────────────────────────────────────────
 
-app.get('/api/settings', requireAdmin, (req, res) => {
-  const rows = db.prepare('SELECT key, value FROM app_settings').all();
+app.get('/api/settings', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT key,value FROM app_settings');
   const s = {};
-  rows.forEach(r => s[r.key] = r.value);
-  // Mask SMTP password
-  if (s.smtp_pass) s.smtp_pass = '••••••••';
+  rows.forEach(r => s[r.key]=r.value);
+  if (s.smtp_pass) s.smtp_pass='••••••••';
   res.json(s);
 });
 
-app.post('/api/settings', requireAdmin, (req, res) => {
-  const allowed = ['theme_color', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from'];
-  for (const [key, val] of Object.entries(req.body)) {
-    if (allowed.includes(key) && val !== '••••••••') setSetting(key, val);
+app.post('/api/settings', requireAdmin, async (req, res) => {
+  const allowed = ['theme_color','smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from'];
+  for (const [key,val] of Object.entries(req.body)) {
+    if (allowed.includes(key) && val !== '••••••••') await setSetting(key, val);
   }
   res.json({ ok: true });
 });
 
-app.post('/api/settings/logo', requireAdmin, upload.single('logo'), (req, res) => {
+app.post('/api/settings/logo', requireAdmin, upload.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  setSetting('logo_path', '/uploads/' + req.file.filename);
-  res.json({ ok: true, path: '/uploads/' + req.file.filename });
+  await setSetting('logo_path', '/uploads/'+req.file.filename);
+  res.json({ ok: true, path: '/uploads/'+req.file.filename });
 });
 
-app.post('/api/settings/home-bg', requireAdmin, upload.single('home_bg'), (req, res) => {
+app.post('/api/settings/home-bg', requireAdmin, upload.single('home_bg'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  setSetting('home_bg', '/uploads/' + req.file.filename);
-  res.json({ ok: true, path: '/uploads/' + req.file.filename });
+  await setSetting('home_bg', '/uploads/'+req.file.filename);
+  res.json({ ok: true, path: '/uploads/'+req.file.filename });
 });
 
-app.delete('/api/settings/home-bg', requireAdmin, (req, res) => {
-  setSetting('home_bg', null);
+app.delete('/api/settings/home-bg', requireAdmin, async (req, res) => {
+  await setSetting('home_bg', null);
   res.json({ ok: true });
 });
 
@@ -364,793 +356,605 @@ app.delete('/api/settings/home-bg', requireAdmin, (req, res) => {
 // AUDIT LOG
 // ─────────────────────────────────────────────
 
-app.get('/api/tickets/:id/audit', requireAuth, (req, res) => {
-  const logs = db.prepare('SELECT user_name, action, details, created_at FROM audit_log WHERE ticket_id = ? ORDER BY created_at ASC').all(req.params.id);
-  res.json(logs);
-});
-
-// ── Update user permissions ──
-app.patch('/api/users/:id/permissions', requireAdmin, (req, res) => {
-  const { permissions } = req.body;
-  if (!Array.isArray(permissions)) return res.status(400).json({ error: 'permissions must be an array' });
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  // Allow admins to have their permissions saved (they effectively always have all, but store it)
-  const valid = ['time_ticket', 'get_po', 'office_dashboard'];
-
-  // Safeguard: cannot remove office_dashboard from the last admin
-  if (user.role === 'admin' && !permissions.includes('office_dashboard')) {
-    const adminCount = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND status='active'").get().c;
-    if (adminCount <= 1)
-      return res.status(400).json({ error: 'Cannot revoke Office Dashboard access — at least one Office Admin must keep this permission.' });
-  }
-
-  const cleaned = permissions.filter(p => valid.includes(p)).join(',');
-  db.prepare('UPDATE users SET permissions = ? WHERE id = ?').run(cleaned, req.params.id);
-  logAction(req, 'permissions_changed', null, null,
-    `Permissions updated for ${user.name}: ${cleaned || 'none'} by ${req.user.name}`);
-  res.json({ ok: true, permissions: cleaned });
-});
-
-// ─────────────────────────────────────────────
-// PURCHASE ORDERS
-// ─────────────────────────────────────────────
-
-function generatePONumber() {
-  const year = new Date().getFullYear();
-  db.prepare('INSERT OR IGNORE INTO po_sequence (year, last_seq) VALUES (?, 0)').run(year);
-  const seq = db.prepare('UPDATE po_sequence SET last_seq = last_seq + 1 WHERE year = ? RETURNING last_seq').get(year).last_seq;
-  return `JD-PO-${year}-${String(seq).padStart(4, '0')}`;
-}
-
-function logPOAction(req, poId, poNumber, action, details = null) {
-  db.prepare('INSERT INTO po_audit_log (po_id, po_number, user_name, action, details, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(poId, poNumber, req.user?.name || 'System', action, details, new Date().toISOString());
-}
-
-// Receipt upload (protected)
-app.post('/api/po/:id/receipt', requirePermission('get_po'), receiptUpload.single('receipt'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const po = db.prepare('SELECT id FROM purchase_orders WHERE id = ?').get(req.params.id);
-  if (!po) return res.status(404).json({ error: 'PO not found' });
-  const p = `/uploads/receipts/receipt-${req.params.id}${path.extname(req.file.originalname).toLowerCase()}`;
-  db.prepare('UPDATE purchase_orders SET receipt_path = ? WHERE id = ?').run(p, req.params.id);
-  res.json({ ok: true, path: p });
-});
-
-// Generate a new PO
-app.post('/api/po', requirePermission('get_po'), async (req, res) => {
-  const { jobber_job_number, job_name, supplier, description, estimated_amount, needs_reimbursement, project_id } = req.body;
-  if (!jobber_job_number?.trim() || !description?.trim() || !job_name?.trim())
-    return res.status(400).json({ error: 'Jobber Job Number, Job Name, and Description are required' });
-
-  const projectId  = resolveProjectId(project_id);
-  const po_number  = generatePONumber();
-  const date       = new Date().toISOString().slice(0, 10);
-  const created_at = new Date().toISOString();
-
-  db.prepare(`INSERT INTO purchase_orders (po_number, date, generated_by_id, generated_by_name, jobber_job_number, job_name, supplier, description, estimated_amount, needs_reimbursement, status, created_at, project_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open', ?, ?)`)
-    .run(po_number, date, req.user.id, req.user.name, jobber_job_number.trim(), job_name.trim(),
-        supplier?.trim() || null, description.trim(),
-        estimated_amount ? parseFloat(estimated_amount) : null,
-        needs_reimbursement ? 1 : 0, created_at, projectId);
-
-  const poId = db.prepare('SELECT id FROM purchase_orders WHERE po_number = ?').get(po_number).id;
-  logPOAction(req, poId, po_number, 'po_created', `Created by ${req.user.name}`);
-
-  // Notify office admins by email
-  const smtpHost = getSetting('smtp_host');
-  if (smtpHost) {
-    try {
-      const admins = db.prepare("SELECT email FROM users WHERE role = 'admin' AND status = 'active'").all();
-      const to = admins.map(a => a.email).join(',');
-      if (to) {
-        const transporter = nodemailer.createTransport({
-          host: smtpHost, port: parseInt(getSetting('smtp_port', '587')),
-          auth: { user: getSetting('smtp_user'), pass: getSetting('smtp_pass') }
-        });
-        await transporter.sendMail({
-          from: getSetting('smtp_from', 'noreply@jdwesternelectric.ca'),
-          to,
-          subject: `New PO Generated: ${po_number}`,
-          html: `<h2>New Purchase Order — ${po_number}</h2>
-            <table><tbody>
-              <tr><td><b>PO Number</b></td><td>${po_number}</td></tr>
-              <tr><td><b>Date</b></td><td>${date}</td></tr>
-              <tr><td><b>Generated By</b></td><td>${req.user.name}</td></tr>
-              <tr><td><b>Jobber Job #</b></td><td>${jobber_job_number}</td></tr>
-              <tr><td><b>Job Name</b></td><td>${job_name}</td></tr>
-              <tr><td><b>Supplier</b></td><td>${supplier || '—'}</td></tr>
-              <tr><td><b>Description</b></td><td>${description}</td></tr>
-              <tr><td><b>Estimated Amount</b></td><td>${estimated_amount ? '$' + parseFloat(estimated_amount).toFixed(2) : '—'}</td></tr>
-              ${needs_reimbursement ? '<tr><td><b>⚠ Reimbursement Required</b></td><td>Yes — receipt to follow</td></tr>' : ''}
-            </tbody></table>`
-        });
-      }
-    } catch (err) { console.error('PO notify email failed:', err.message); }
-  }
-
-  res.status(201).json({ po_number, id: poId });
-});
-
-// List POs (admin)
-app.get('/api/po', requireAdmin, (req, res) => {
-  const { status, date_from, date_to, employee, job_name, reimbursement, limit = 200, offset = 0 } = req.query;
-  let where = [], params = [];
-  if (status)        { where.push('status = ?'); params.push(status); }
-  if (date_from)     { where.push('date >= ?'); params.push(date_from); }
-  if (date_to)       { where.push('date <= ?'); params.push(date_to); }
-  if (employee)      { where.push('LOWER(generated_by_name) LIKE ?'); params.push(`%${employee.toLowerCase()}%`); }
-  if (job_name)      { where.push("LOWER(COALESCE(job_name,'')) LIKE ?"); params.push(`%${job_name.toLowerCase()}%`); }
-  if (reimbursement === '1') { where.push('needs_reimbursement = 1'); }
-  const wc = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const { total } = db.prepare(`SELECT COUNT(*) as total FROM purchase_orders ${wc}`).get(...params);
-  const pos = db.prepare(`SELECT * FROM purchase_orders ${wc} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, parseInt(limit), parseInt(offset));
-  res.json({ total, purchase_orders: pos });
-});
-
-// Get single PO with audit log (admin)
-app.get('/api/po/:id', requireAdmin, (req, res) => {
-  const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
-  if (!po) return res.status(404).json({ error: 'PO not found' });
-  const audit = db.prepare('SELECT user_name, action, details, created_at FROM po_audit_log WHERE po_id = ? ORDER BY created_at ASC').all(po.id);
-  logPOAction(req, po.id, po.po_number, 'po_viewed');
-  res.json({ ...po, audit });
-});
-
-// Update PO status / note (admin)
-app.patch('/api/po/:id', requireAdmin, (req, res) => {
-  const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
-  if (!po) return res.status(404).json({ error: 'PO not found' });
-  const { status, office_note } = req.body;
-  const updated_at = new Date().toISOString();
-  db.prepare('UPDATE purchase_orders SET status = COALESCE(?, status), office_note = COALESCE(?, office_note), updated_at = ? WHERE id = ?')
-    .run(status || null, office_note !== undefined ? office_note : null, updated_at, req.params.id);
-  if (status && status !== po.status) logPOAction(req, po.id, po.po_number, 'status_changed', `${po.status} → ${status}`);
-  if (office_note !== undefined && office_note !== po.office_note) logPOAction(req, po.id, po.po_number, 'note_updated');
-
-  // Auto project-archive when status changes to Entered and PO is linked to a project
-  const autoProjectArchive = status === 'Entered' && po.status !== 'Entered' && po.project_id && !po.project_archived;
-  if (autoProjectArchive) {
-    db.prepare('UPDATE purchase_orders SET project_archived = 1 WHERE id = ?').run(req.params.id);
-    logPOAction(req, po.id, po.po_number, 'po_project_archived',
-      `Auto-archived within project upon status change to Entered by ${req.user?.name}`);
-  }
-
-  res.json({ ok: true, auto_project_archived: autoProjectArchive });
-});
-
-// Delete PO (admin)
-app.delete('/api/po/:id', requireAdmin, (req, res) => {
-  const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
-  if (!po) return res.status(404).json({ error: 'PO not found' });
-  if (po.status !== 'Archived') return res.status(400).json({ error: 'A PO must be archived before it can be permanently deleted.' });
-  logPOAction(req, po.id, po.po_number, 'po_deleted', `Permanently deleted by ${req.user.name}`);
-  db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(req.params.id);
-  res.json({ ok: true });
-});
-
-// Export POs to XLSX (admin) — supports ?ids=1,2,3 for selective export
-app.get('/api/po/export/xlsx', requireAdmin, (req, res) => {
-  const { status, date_from, date_to, employee, job_name, reimbursement, ids } = req.query;
-  let where = [], params = [];
-  if (ids) {
-    const idList = ids.split(',').map(Number).filter(n => !isNaN(n) && n > 0);
-    if (idList.length) { where.push(`id IN (${idList.map(()=>'?').join(',')})`); params.push(...idList); }
-  } else {
-    if (status)        { where.push('status = ?'); params.push(status); }
-    if (date_from)     { where.push('date >= ?'); params.push(date_from); }
-    if (date_to)       { where.push('date <= ?'); params.push(date_to); }
-    if (employee)      { where.push('LOWER(generated_by_name) LIKE ?'); params.push(`%${employee.toLowerCase()}%`); }
-    if (job_name)      { where.push("LOWER(COALESCE(job_name,'')) LIKE ?"); params.push(`%${job_name.toLowerCase()}%`); }
-    if (reimbursement === '1') { where.push('needs_reimbursement = 1'); }
-  }
-  const wc = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const pos = db.prepare(`SELECT * FROM purchase_orders ${wc} ORDER BY created_at DESC`).all(...params);
-
-  const exportDate = new Date().toISOString().slice(0, 10);
-  const rows = [
-    ['J&D Western Electric Ltd — Purchase Orders'],
-    [`Exported: ${exportDate}`],
-    [],
-    ['PO Number','Date Generated','Generated By','Jobber Job #','Job Name','Supplier','Description','Estimated Amount','Needs Reimbursement','Status','Office Notes','Date Status Last Changed'],
-    ...pos.map(p => [
-      p.po_number,
-      p.date,
-      p.generated_by_name,
-      p.jobber_job_number || '',
-      p.job_name || '',
-      p.supplier || '',
-      p.description,
-      p.estimated_amount != null ? parseFloat(p.estimated_amount) : '',
-      p.needs_reimbursement ? 'Yes' : 'No',
-      p.status,
-      p.office_note || '',
-      p.updated_at ? new Date(p.updated_at).toLocaleString('en-CA', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''
-    ])
-  ];
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:18},{wch:14},{wch:18},{wch:16},{wch:24},{wch:18},{wch:36},{wch:16},{wch:12},{wch:12},{wch:30},{wch:22}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders');
-  logAction(req, 'po_export', null, null, 'PO XLSX export');
-  const buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
-  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition',`attachment; filename="JD-POs-${exportDate}.xlsx"`);
-  res.send(buf);
-});
-
-// ─────────────────────────────────────────────
-// TICKETS (Auth required)
-// ─────────────────────────────────────────────
-
-app.post('/api/tickets', requireAuth, (req, res) => {
-  const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id } = req.body;
-  if (!date || !job_name || !supervisor || !work_description) return res.status(400).json({ error: 'Missing required fields' });
-  if (!employees?.length) return res.status(400).json({ error: 'At least one employee required' });
-
-  const projectId = resolveProjectId(project_id);
-
-  const ticket_number = generateTicketNumber();
-  const submitted_at  = new Date().toISOString();
-  const insertTicket  = db.prepare(`INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id) VALUES (?,?,?,?,?,?,?,?,?,?)`);
-  const insertEmp     = db.prepare(`INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level) VALUES (?,?,?,?,?)`);
-
-  try {
-    db.exec('BEGIN');
-    const { lastInsertRowid: tid } = insertTicket.run(ticket_number, date, job_name, job_number||null, supervisor, work_description, equipment_used||null, notes||null, submitted_at, projectId);
-    for (const e of employees)
-      if (e.name?.trim()) insertEmp.run(tid, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman');
-    db.exec('COMMIT');
-    logAction(req, 'ticket_submitted', tid, ticket_number, `Submitted by ${req.user.name}`);
-    res.status(201).json({ id: tid, ticket_number, message: 'Ticket submitted successfully' });
-  } catch (err) {
-    db.exec('ROLLBACK'); console.error(err);
-    res.status(500).json({ error: 'Failed to save ticket' });
-  }
-});
-
-app.get('/api/tickets', requireAuth, (req, res) => {
-  const { job, date_from, date_to, supervisor, search, limit = 50, offset = 0, archived = '0' } = req.query;
-  let where = ['t.archived = ?'], params = [archived === '1' ? 1 : 0];
-  if (job)        { where.push(`(LOWER(t.job_name) LIKE ? OR LOWER(t.job_number) LIKE ?)`); params.push(`%${job.toLowerCase()}%`, `%${job.toLowerCase()}%`); }
-  if (date_from)  { where.push(`t.date >= ?`); params.push(date_from); }
-  if (date_to)    { where.push(`t.date <= ?`); params.push(date_to); }
-  if (supervisor) { where.push(`LOWER(t.supervisor) LIKE ?`); params.push(`%${supervisor.toLowerCase()}%`); }
-  if (search) {
-    where.push(`(LOWER(t.job_name) LIKE ? OR LOWER(t.supervisor) LIKE ? OR LOWER(t.ticket_number) LIKE ? OR LOWER(t.work_description) LIKE ?)`);
-    const s = `%${search.toLowerCase()}%`; params.push(s,s,s,s);
-  }
-  const wc = `WHERE ${where.join(' AND ')}`;
-  const { total } = db.prepare(`SELECT COUNT(*) as total FROM daily_tickets t ${wc}`).get(...params);
-  const tickets = db.prepare(`SELECT t.*, p.name as project_name, GROUP_CONCAT(${EMP_SELECT},'||') as employees_raw FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id LEFT JOIN projects p ON p.id=t.project_id ${wc} GROUP BY t.id ORDER BY t.date DESC, t.submitted_at DESC LIMIT ? OFFSET ?`).all(...params, parseInt(limit), parseInt(offset));
-  res.json({ total, tickets: tickets.map(t => ({...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined})) });
-});
-
-app.get('/api/tickets/:id', requireAuth, (req, res) => {
-  const ticket = db.prepare('SELECT t.*, p.name as project_name FROM daily_tickets t LEFT JOIN projects p ON p.id=t.project_id WHERE t.id = ?').get(req.params.id);
-  if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-  const employees = db.prepare(`SELECT employee_name, regular_hours, overtime_hours, COALESCE(level,'Journeyman') as level FROM ticket_employees WHERE ticket_id = ?`).all(ticket.id);
-  logAction(req, 'ticket_viewed', ticket.id, ticket.ticket_number);
-  res.json({ ...ticket, employees });
-});
-
-app.put('/api/tickets/:id', requireAdmin, (req, res) => {
-  const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id, ticket_status } = req.body;
-  const ticket = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-  const resolvedProjectId = project_id !== undefined ? resolveProjectId(project_id) : ticket.project_id;
-  const resolvedStatus = ['Pending','Reviewed','Entered'].includes(ticket_status) ? ticket_status : ticket.ticket_status;
-  try {
-    db.exec('BEGIN');
-    db.prepare(`UPDATE daily_tickets SET date=?,job_name=?,job_number=?,supervisor=?,work_description=?,equipment_used=?,notes=?,updated_at=?,project_id=?,ticket_status=? WHERE id=?`)
-      .run(date, job_name, job_number||null, supervisor, work_description, equipment_used||null, notes||null, new Date().toISOString(), resolvedProjectId, resolvedStatus, req.params.id);
-    db.prepare('DELETE FROM ticket_employees WHERE ticket_id=?').run(req.params.id);
-    const ins = db.prepare('INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level) VALUES (?,?,?,?,?)');
-    for (const e of employees) if (e.name?.trim()) ins.run(req.params.id, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman');
-    db.exec('COMMIT');
-    logAction(req, 'ticket_updated', ticket.id, ticket.ticket_number, `Edited by ${req.user?.name}`);
-    res.json({ message: 'Updated' });
-  } catch (err) { db.exec('ROLLBACK'); res.status(500).json({ error: 'Failed to update' }); }
-});
-
-// Full PO update (all fields)
-app.put('/api/po/:id', requireAdmin, (req, res) => {
-  const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
-  if (!po) return res.status(404).json({ error: 'PO not found' });
-  const {
-    date, generated_by_name, jobber_job_number, job_name, supplier,
-    description, estimated_amount, needs_reimbursement,
-    status, office_note, project_id, ticket_status
-  } = req.body;
-  const resolvedProjectId = project_id !== undefined ? resolveProjectId(project_id) : po.project_id;
-  const updated_at = new Date().toISOString();
-  db.prepare(`UPDATE purchase_orders SET
-    date=COALESCE(?,date), generated_by_name=COALESCE(?,generated_by_name),
-    jobber_job_number=COALESCE(?,jobber_job_number), job_name=COALESCE(?,job_name),
-    supplier=?, description=COALESCE(?,description),
-    estimated_amount=?, needs_reimbursement=COALESCE(?,needs_reimbursement),
-    status=COALESCE(?,status), office_note=?,
-    project_id=?, updated_at=?
-    WHERE id=?`)
-    .run(date||null, generated_by_name||null, jobber_job_number||null, job_name||null,
-         supplier||null, description||null,
-         estimated_amount != null ? parseFloat(estimated_amount) : null,
-         needs_reimbursement != null ? (needs_reimbursement ? 1 : 0) : null,
-         status||null, office_note||null,
-         resolvedProjectId, updated_at, req.params.id);
-  logPOAction(req, po.id, po.po_number, 'po_edited', `Edited by ${req.user.name}`);
-  res.json({ ok: true });
-});
-
-// Project-level archive / unarchive (independent of main dashboard archive)
-app.patch('/api/tickets/:id/project-archive', requireAdmin, (req, res) => {
-  const t = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!t) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE daily_tickets SET project_archived = 1 WHERE id = ?').run(req.params.id);
-  logAction(req, 'ticket_project_archived', t.id, t.ticket_number);
-  res.json({ ok: true });
-});
-app.patch('/api/tickets/:id/project-unarchive', requireAdmin, (req, res) => {
-  const t = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!t) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE daily_tickets SET project_archived = 0 WHERE id = ?').run(req.params.id);
-  logAction(req, 'ticket_project_unarchived', t.id, t.ticket_number);
-  res.json({ ok: true });
-});
-app.patch('/api/po/:id/project-archive', requireAdmin, (req, res) => {
-  const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
-  if (!po) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE purchase_orders SET project_archived = 1 WHERE id = ?').run(req.params.id);
-  logPOAction(req, po.id, po.po_number, 'po_project_archived');
-  res.json({ ok: true });
-});
-app.patch('/api/po/:id/project-unarchive', requireAdmin, (req, res) => {
-  const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
-  if (!po) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE purchase_orders SET project_archived = 0 WHERE id = ?').run(req.params.id);
-  logPOAction(req, po.id, po.po_number, 'po_project_unarchived');
-  res.json({ ok: true });
-});
-
-// Update ticket workflow status (Pending / Reviewed / Entered)
-// Auto-archives the ticket when status is set to Entered
-app.patch('/api/tickets/:id/status', requireAdmin, (req, res) => {
-  const { ticket_status } = req.body;
-  if (!['Pending','Reviewed','Entered'].includes(ticket_status))
-    return res.status(400).json({ error: 'Invalid status. Must be Pending, Reviewed, or Entered.' });
-  const t = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!t) return res.status(404).json({ error: 'Ticket not found' });
-
-  const now = new Date().toISOString();
-  const autoArchive = ticket_status === 'Entered' && !t.archived;
-
-  // Auto project-archive if ticket is linked to a project and not already project-archived
-  const autoProjectArchive = ticket_status === 'Entered' && t.project_id && !t.project_archived;
-
-  if (autoArchive) {
-    db.prepare('UPDATE daily_tickets SET ticket_status = ?, archived = 1, archived_at = ? WHERE id = ?')
-      .run(ticket_status, now, req.params.id);
-    logAction(req, 'ticket_status_changed', t.id, t.ticket_number,
-      `Status: ${t.ticket_status || 'Pending'} → ${ticket_status}`);
-    logAction(req, 'ticket_archived', t.id, t.ticket_number,
-      `Auto-archived upon status change to Entered by ${req.user?.name}`);
-  } else {
-    db.prepare('UPDATE daily_tickets SET ticket_status = ? WHERE id = ?').run(ticket_status, req.params.id);
-    logAction(req, 'ticket_status_changed', t.id, t.ticket_number,
-      `Status: ${t.ticket_status || 'Pending'} → ${ticket_status}`);
-  }
-
-  if (autoProjectArchive) {
-    db.prepare('UPDATE daily_tickets SET project_archived = 1 WHERE id = ?').run(req.params.id);
-    logAction(req, 'ticket_project_archived', t.id, t.ticket_number,
-      `Auto-archived within project upon status change to Entered by ${req.user?.name}`);
-  }
-
-  res.json({ ok: true, auto_archived: autoArchive, auto_project_archived: autoProjectArchive });
-});
-
-app.patch('/api/tickets/:id/archive', requireAdmin, (req, res) => {
-  const t = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!t) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE daily_tickets SET archived=1, archived_at=? WHERE id=?').run(new Date().toISOString(), req.params.id);
-  logAction(req, 'ticket_archived', t.id, t.ticket_number);
-  res.json({ message: 'Archived' });
-});
-
-app.patch('/api/tickets/:id/unarchive', requireAdmin, (req, res) => {
-  const t = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!t) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE daily_tickets SET archived=0, archived_at=NULL WHERE id=?').run(req.params.id);
-  logAction(req, 'ticket_unarchived', t.id, t.ticket_number);
-  res.json({ message: 'Unarchived' });
-});
-
-app.delete('/api/tickets/:id', requireAdmin, (req, res) => {
-  const t = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!t) return res.status(404).json({ error: 'Not found' });
-  if (!t.archived) return res.status(400).json({ error: 'A ticket must be archived before it can be permanently deleted.' });
-  logAction(req, 'ticket_deleted', t.id, t.ticket_number, `Permanently deleted by ${req.user?.name}`);
-  db.prepare('DELETE FROM daily_tickets WHERE id=?').run(req.params.id);
-  res.json({ message: 'Deleted' });
-});
-
-// Export multiple tickets to XLSX by IDs
-app.get('/api/tickets/export/xlsx', requireAuth, (req, res) => {
-  const { ids, filename } = req.query;
-  if (!ids) return res.status(400).json({ error: 'ids required' });
-  const idList = ids.split(',').map(Number).filter(n => !isNaN(n) && n > 0);
-  if (!idList.length) return res.status(400).json({ error: 'no valid ids' });
-  const tickets = db.prepare(`
-    SELECT t.*, GROUP_CONCAT(${EMP_SELECT},'||') AS employees_raw
-    FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id = t.id
-    WHERE t.id IN (${idList.map(()=>'?').join(',')})
-    GROUP BY t.id ORDER BY t.date DESC
-  `).all(...idList).map(t => ({...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined}));
-
-  const exportDate = new Date().toISOString().slice(0,10);
-  const rows = [
-    ['J&D Western Electric Ltd — Time Tickets Export'],
-    [`Exported: ${exportDate}`], [],
-    ['Ticket #','Date','Job Name','Job #','Supervisor','Employee','Level','Reg Hrs','OT Hrs','Total Hrs','Work Description','Equipment','Notes','Status']
-  ];
-  for (const t of tickets) {
-    for (const e of t.employees) {
-      rows.push([t.ticket_number, t.date, t.job_name, t.job_number||'', t.supervisor,
-        e.name, e.level||'', e.regular_hours, e.overtime_hours, e.regular_hours+e.overtime_hours,
-        t.work_description, t.equipment_used||'', t.notes||'', t.ticket_status||'Pending']);
-    }
-  }
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:18},{wch:12},{wch:24},{wch:12},{wch:16},{wch:20},{wch:18},{wch:10},{wch:10},{wch:10},{wch:36},{wch:20},{wch:20},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Time Tickets');
-  const safeName = filename ? decodeURIComponent(filename) : `JD-Tickets-${exportDate}.xlsx`;
-  const buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
-  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition',`attachment; filename="${safeName}"`);
-  res.send(buf);
-});
-
-// Single ticket XLSX
-app.get('/api/tickets/:id/export/xlsx', requireAuth, (req, res) => {
-  const t = db.prepare('SELECT * FROM daily_tickets WHERE id = ?').get(req.params.id);
-  if (!t) return res.status(404).json({ error: 'Not found' });
-  const emps = db.prepare(`SELECT employee_name, regular_hours, overtime_hours, COALESCE(level,'Journeyman') as level FROM ticket_employees WHERE ticket_id=?`).all(t.id);
-  const totalReg = emps.reduce((s,e)=>s+e.regular_hours,0), totalOT = emps.reduce((s,e)=>s+e.overtime_hours,0);
-  const rows = [
-    ['J&D Western Electric Ltd — Daily Time Ticket'], [],
-    ['Ticket #', t.ticket_number], ['Date', t.date], ['Job Name', t.job_name], ['Job #', t.job_number||''], ['Supervisor', t.supervisor], ['Submitted', t.submitted_at], [],
-    ['Employee','Level','Regular Hrs','OT Hrs','Total Hrs'],
-    ...emps.map(e=>[e.employee_name, e.level, e.regular_hours, e.overtime_hours, e.regular_hours+e.overtime_hours]),
-    ['TOTAL','',totalReg, totalOT, totalReg+totalOT], [],
-    ['Work Description', t.work_description], ['Equipment', t.equipment_used||''], ['Notes', t.notes||''],
-  ];
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:18},{wch:22},{wch:14},{wch:10},{wch:10}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Time Ticket');
-  logAction(req, 'ticket_exported', t.id, t.ticket_number, 'XLSX export');
-  const buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
-  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition',`attachment; filename="${t.ticket_number}.xlsx"`);
-  res.send(buf);
-});
-
-// ─────────────────────────────────────────────
-// PROJECTS
-// ─────────────────────────────────────────────
-
-app.get('/api/projects', requireAuth, (req, res) => {
-  res.json(db.prepare(`SELECT t.job_name, t.job_number, COUNT(DISTINCT t.id) as ticket_count, MIN(t.date) as first_date, MAX(t.date) as last_date, COALESCE(SUM(e.regular_hours+e.overtime_hours),0) as total_hours FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE t.archived=0 GROUP BY t.job_name ORDER BY MAX(t.date) DESC`).all());
-});
-
-app.get('/api/projects/:job/tickets', requireAuth, (req, res) => {
-  const job = decodeURIComponent(req.params.job);
-  const tickets = db.prepare(`SELECT t.*, GROUP_CONCAT(${EMP_SELECT},'||') as employees_raw FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE t.job_name=? AND t.archived=0 GROUP BY t.id ORDER BY t.date DESC`).all(job);
-  res.json(tickets.map(t=>({...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined})));
-});
-
-app.get('/api/projects/:job/export/xlsx', requireAdmin, (req, res) => {
-  const job = decodeURIComponent(req.params.job);
-  const tickets = db.prepare(`SELECT t.*, GROUP_CONCAT(${EMP_SELECT},'||') as employees_raw FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE t.job_name=? AND t.archived=0 GROUP BY t.id ORDER BY t.date ASC`).all(job);
-  const rows = [['J&D Western Electric Ltd — Project Export'],[`Project: ${job}`],[`Exported: ${new Date().toLocaleDateString('en-CA')}`],[],['Date','Ticket #','Supervisor','Employee','Level','Regular Hrs','OT Hrs','Total Hrs','Work Description','Equipment','Notes']];
-  let gReg=0, gOT=0;
-  for (const t of tickets) {
-    for (const e of parseEmployeesRaw(t.employees_raw)) {
-      gReg+=e.regular_hours; gOT+=e.overtime_hours;
-      rows.push([t.date, t.ticket_number, t.supervisor, e.name, e.level, e.regular_hours, e.overtime_hours, e.regular_hours+e.overtime_hours, t.work_description, t.equipment_used||'', t.notes||'']);
-    }
-  }
-  rows.push([],[,'','','TOTAL','',gReg,gOT,gReg+gOT]);
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:12},{wch:18},{wch:16},{wch:20},{wch:20},{wch:12},{wch:10},{wch:10},{wch:40},{wch:24},{wch:24}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Project Tickets');
-  logAction(req, 'project_exported', null, null, `Project: ${job}`);
-  const buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
-  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition',`attachment; filename="${job.replace(/[^a-z0-9]/gi,'_')}_export.xlsx"`);
-  res.send(buf);
-});
-
-// ─────────────────────────────────────────────
-// PROJECT FOLDERS (real admin-managed projects)
-// Time Tickets and POs link to these via project_id.
-// ─────────────────────────────────────────────
-
-// Active projects for the assignment dropdown on field forms.
-// Any authenticated user (field or admin) — read-only, names only.
-app.get('/api/project-folders', requireAuth, (req, res) => {
-  res.json(db.prepare(`SELECT id, name, job_numbers FROM projects WHERE status = 'active' ORDER BY name COLLATE NOCASE ASC`).all());
-});
-
-// Full project list with record counts (admin). Filter by status.
-app.get('/api/project-folders/all', requireAdmin, (req, res) => {
-  const allowed = ['active', 'complete', 'archived'];
-  const status = allowed.includes(req.query.status) ? req.query.status : 'active';
-  const projects = db.prepare(`
-    SELECT p.*,
-      (SELECT COUNT(*) FROM daily_tickets   t WHERE t.project_id = p.id) AS ticket_count,
-      (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id = p.id) AS po_count,
-      (SELECT COUNT(*) FROM daily_tickets   t WHERE t.project_id = p.id
-        AND (t.ticket_status = 'Pending' OR t.ticket_status IS NULL)
-        AND (t.project_archived = 0 OR t.project_archived IS NULL)) AS pending_tickets,
-      (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id = p.id
-        AND o.status = 'Open'
-        AND (o.project_archived = 0 OR o.project_archived IS NULL)) AS open_pos
-    FROM projects p
-    WHERE p.status = ?
-    ORDER BY p.updated_at DESC, p.created_at DESC
-  `).all(status);
-  res.json(projects);
-});
-
-// Create a project (admin)
-app.post('/api/project-folders', requireAdmin, (req, res) => {
-  const { name, job_numbers } = req.body;
-  if (!name?.trim()) return res.status(400).json({ error: 'Project name is required' });
-  const now = new Date().toISOString();
-  const jn  = normalizeJobNumbers(job_numbers);
-  const { lastInsertRowid } = db.prepare('INSERT INTO projects (name, job_numbers, status, created_at) VALUES (?, ?, ?, ?)')
-    .run(name.trim(), jn, 'active', now);
-  res.status(201).json({ id: lastInsertRowid, name: name.trim(), job_numbers: jn, status: 'active' });
-});
-
-// Quick-create a project from a field form (any authenticated user).
-// Name only — admins can add job-number tags later. Field users land in the
-// same active projects list as admin-created projects. Reuses an existing
-// active project of the same name to avoid duplicates.
-app.post('/api/project-folders/quick', requireAuth, (req, res) => {
-  const { name } = req.body;
-  if (!name?.trim()) return res.status(400).json({ error: 'Project name is required' });
-  const trimmed = name.trim();
-  const existing = db.prepare("SELECT id, name, job_numbers, status FROM projects WHERE status = 'active' AND LOWER(name) = LOWER(?)").get(trimmed);
-  if (existing) return res.json(existing);
-  const { lastInsertRowid } = db.prepare('INSERT INTO projects (name, job_numbers, status, created_at) VALUES (?, ?, ?, ?)')
-    .run(trimmed, null, 'active', new Date().toISOString());
-  res.status(201).json({ id: lastInsertRowid, name: trimmed, job_numbers: null, status: 'active' });
-});
-
-// Edit a project's name / job numbers (admin)
-app.patch('/api/project-folders/:id', requireAdmin, (req, res) => {
-  const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
-  if (!proj) return res.status(404).json({ error: 'Project not found' });
-  const { name, job_numbers } = req.body;
-  if (name !== undefined && !name.trim()) return res.status(400).json({ error: 'Project name cannot be empty' });
-  db.prepare('UPDATE projects SET name = COALESCE(?, name), job_numbers = ?, updated_at = ? WHERE id = ?')
-    .run(name?.trim() || null,
-         job_numbers !== undefined ? normalizeJobNumbers(job_numbers) : proj.job_numbers,
-         new Date().toISOString(), req.params.id);
-  res.json({ ok: true });
-});
-
-// Mark complete / archive / reactivate (admin). Does NOT touch any linked records.
-app.patch('/api/project-folders/:id/status', requireAdmin, (req, res) => {
-  const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
-  if (!proj) return res.status(404).json({ error: 'Project not found' });
-  const allowed = ['active', 'complete', 'archived'];
-  const status = allowed.includes(req.body.status) ? req.body.status : 'active';
-  const now = new Date().toISOString();
-  db.prepare('UPDATE projects SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?')
-    .run(status, (status === 'complete' || status === 'archived') ? now : null, now, req.params.id);
-  res.json({ ok: true, status });
-});
-
-// Permanently delete a project (must be archived first). Unlinks records but does NOT delete them.
-app.delete('/api/project-folders/:id', requireAdmin, (req, res) => {
-  const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
-  if (!proj) return res.status(404).json({ error: 'Project not found' });
-  if (proj.status !== 'archived') return res.status(400).json({ error: 'A project must be archived before it can be permanently deleted.' });
-  // Unlink all records — they are NOT deleted, just lose the association
-  db.prepare('UPDATE daily_tickets SET project_id = NULL WHERE project_id = ?').run(proj.id);
-  db.prepare('UPDATE purchase_orders SET project_id = NULL WHERE project_id = ?').run(proj.id);
-  db.prepare('DELETE FROM projects WHERE id = ?').run(proj.id);
-  logAction(req, 'project_deleted', null, null, `Project "${proj.name}" permanently deleted by ${req.user.name}`);
-  res.json({ ok: true });
-});
-
-// Project detail: the project plus ALL linked tickets and POs, regardless of
-// archive status. The project view is a complete permanent record.
-app.get('/api/project-folders/:id', requireAdmin, (req, res) => {
-  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
-  if (!project) return res.status(404).json({ error: 'Project not found' });
-
-  const allTickets = db.prepare(`
-    SELECT t.*, GROUP_CONCAT(${EMP_SELECT},'||') AS employees_raw
-    FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id = t.id
-    WHERE t.project_id = ?
-    GROUP BY t.id ORDER BY t.date DESC, t.submitted_at DESC
-  `).all(project.id).map(t => ({ ...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined }));
-
-  const tickets          = allTickets.filter(t => !t.project_archived);
-  const archived_tickets = allTickets.filter(t =>  t.project_archived);
-
-  const allPOs     = db.prepare(`SELECT * FROM purchase_orders WHERE project_id = ? ORDER BY date DESC, created_at DESC`).all(project.id);
-  const purchase_orders = allPOs.filter(p => !p.project_archived);
-  const archived_pos    = allPOs.filter(p =>  p.project_archived);
-
-  res.json({ project, tickets, purchase_orders, archived_tickets, archived_pos });
-});
-
-// Export a project to a single XLSX with two tabs: Time Tickets and POs.
-app.get('/api/project-folders/:id/export/xlsx', requireAdmin, (req, res) => {
-  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
-  if (!project) return res.status(404).json({ error: 'Project not found' });
-
-  const tickets = db.prepare(`
-    SELECT t.*, GROUP_CONCAT(${EMP_SELECT},'||') AS employees_raw
-    FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id = t.id
-    WHERE t.project_id = ?
-    GROUP BY t.id ORDER BY t.date DESC, t.submitted_at DESC
-  `).all(project.id);
-  const pos = db.prepare(`SELECT * FROM purchase_orders WHERE project_id = ? ORDER BY date DESC, created_at DESC`).all(project.id);
-
-  const exportDate = new Date().toISOString().slice(0, 10);
-  const wb = XLSX.utils.book_new();
-
-  // ── Time Tickets sheet ──
-  const tRows = [
-    ['J&D Western Electric Ltd — Project Export'],
-    [`Project: ${project.name}`],
-    [`Exported: ${exportDate}`],
-    [],
-    ['Date','Ticket #','Job Name','Job #','Supervisor','Employee','Level','Regular Hrs','OT Hrs','Total Hrs','Work Description','Equipment','Notes','Archived']
-  ];
-  let gReg = 0, gOT = 0;
-  for (const t of tickets) {
-    const emps = parseEmployeesRaw(t.employees_raw);
-    if (!emps.length) {
-      tRows.push([t.date, t.ticket_number, t.job_name, t.job_number||'', t.supervisor, '', '', 0, 0, 0, t.work_description, t.equipment_used||'', t.notes||'', t.archived ? 'Yes' : 'No']);
-      continue;
-    }
-    for (const e of emps) {
-      gReg += e.regular_hours; gOT += e.overtime_hours;
-      tRows.push([t.date, t.ticket_number, t.job_name, t.job_number||'', t.supervisor, e.name, e.level, e.regular_hours, e.overtime_hours, e.regular_hours+e.overtime_hours, t.work_description, t.equipment_used||'', t.notes||'', t.archived ? 'Yes' : 'No']);
-    }
-  }
-  tRows.push([], ['','','','','','','TOTAL','',gReg,gOT,gReg+gOT]);
-  const tWs = XLSX.utils.aoa_to_sheet(tRows);
-  tWs['!cols'] = [{wch:12},{wch:18},{wch:24},{wch:12},{wch:16},{wch:20},{wch:20},{wch:12},{wch:10},{wch:10},{wch:40},{wch:24},{wch:24},{wch:10}];
-  XLSX.utils.book_append_sheet(wb, tWs, 'Time Tickets');
-
-  // ── Purchase Orders sheet ──
-  const pRows = [
-    ['J&D Western Electric Ltd — Project Export'],
-    [`Project: ${project.name}`],
-    [`Exported: ${exportDate}`],
-    [],
-    ['PO Number','Date','Generated By','Jobber Job #','Job Name','Supplier','Description','Estimated Amount','Needs Reimbursement','Status','Office Notes'],
-    ...pos.map(p => [
-      p.po_number, p.date, p.generated_by_name, p.jobber_job_number||'', p.job_name||'', p.supplier||'',
-      p.description, p.estimated_amount != null ? parseFloat(p.estimated_amount) : '',
-      p.needs_reimbursement ? 'Yes' : 'No', p.status, p.office_note||''
-    ])
-  ];
-  const pWs = XLSX.utils.aoa_to_sheet(pRows);
-  pWs['!cols'] = [{wch:18},{wch:14},{wch:18},{wch:16},{wch:24},{wch:18},{wch:36},{wch:16},{wch:12},{wch:12},{wch:30}];
-  XLSX.utils.book_append_sheet(wb, pWs, 'Purchase Orders');
-
-  logAction(req, 'project_exported', null, null, `Project folder: ${project.name}`);
-  const buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
-  const safeName = project.name.replace(/[^a-z0-9]/gi,'_').replace(/_+/g,'_');
-  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition',`attachment; filename="${safeName}_export.xlsx"`);
-  res.send(buf);
+app.get('/api/tickets/:id/audit', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT user_name,action,details,created_at FROM audit_log WHERE ticket_id=$1 ORDER BY created_at ASC', [req.params.id]);
+  res.json(rows);
 });
 
 // ─────────────────────────────────────────────
 // DASHBOARD OVERVIEW
 // ─────────────────────────────────────────────
 
-app.get('/api/dashboard/overview', requireAdmin, (req, res) => {
+app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
   const today = new Date().toISOString().slice(0,10);
-  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay());
   const ws = weekStart.toISOString().slice(0,10);
 
-  const t = {
-    today:    db.prepare("SELECT COUNT(*) c FROM daily_tickets WHERE date=? AND archived=0").get(today).c,
-    week:     db.prepare("SELECT COUNT(*) c FROM daily_tickets WHERE date>=? AND archived=0").get(ws).c,
-    pending:  db.prepare("SELECT COUNT(*) c FROM daily_tickets WHERE (ticket_status='Pending' OR ticket_status IS NULL) AND archived=0").get().c,
-    reviewed: db.prepare("SELECT COUNT(*) c FROM daily_tickets WHERE ticket_status='Reviewed' AND archived=0").get().c,
-    entered:  db.prepare("SELECT COUNT(*) c FROM daily_tickets WHERE ticket_status='Entered' AND archived=0").get().c,
-  };
-  const p = {
-    active:  db.prepare("SELECT COUNT(*) c FROM projects WHERE status='active'").get().c,
-    outstanding: db.prepare(`SELECT COUNT(*) c FROM projects p WHERE p.status='active' AND (
+  const [ttToday,ttWeek,ttPending,ttReviewed,ttEntered,projActive,projOut,projOutRec,projDone,posOpen,posEntWk,posReimb,activity] = await Promise.all([
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date=$1 AND archived=0",[today]),
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date>=$1 AND archived=0",[ws]),
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE (ticket_status='Pending' OR ticket_status IS NULL) AND archived=0"),
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE ticket_status='Reviewed' AND archived=0"),
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE ticket_status='Entered' AND archived=0"),
+    pool.query("SELECT COUNT(*) c FROM projects WHERE status='active'"),
+    pool.query(`SELECT COUNT(*) c FROM projects p WHERE p.status='active' AND (
       (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL) AND (t.project_archived=0 OR t.project_archived IS NULL))
      +(SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL))
-    )>0`).get().c,
-    // Total outstanding records across ALL active projects (for nav badge)
-    outstanding_records: (
-      db.prepare(`SELECT COUNT(*) c FROM daily_tickets t
-        JOIN projects p ON p.id=t.project_id
-        WHERE p.status='active'
-        AND (t.ticket_status='Pending' OR t.ticket_status IS NULL OR t.ticket_status='Reviewed')
-        AND (t.project_archived=0 OR t.project_archived IS NULL)`).get().c
-      +
-      db.prepare(`SELECT COUNT(*) c FROM purchase_orders o
-        JOIN projects p ON p.id=o.project_id
-        WHERE p.status='active'
-        AND o.status='Open'
-        AND (o.project_archived=0 OR o.project_archived IS NULL)`).get().c
-    ),
-    done:    db.prepare("SELECT COUNT(*) c FROM projects WHERE status IN ('complete','archived')").get().c,
-  };
-  const o = {
-    open:           db.prepare("SELECT COUNT(*) c FROM purchase_orders WHERE status='Open'").get().c,
-    entered_week:   db.prepare("SELECT COUNT(*) c FROM purchase_orders WHERE status='Entered' AND updated_at>=?").get(ws+'T00:00:00').c,
-    reimbursement:  db.prepare("SELECT COUNT(*) c FROM purchase_orders WHERE needs_reimbursement=1 AND status='Open'").get().c,
-  };
-  const activity = db.prepare(`
-    SELECT 'ticket' src, user_name, action, ticket_number ref, details, created_at FROM audit_log
-    UNION ALL
-    SELECT 'po' src, user_name, action, po_number ref, details, created_at FROM po_audit_log
-    ORDER BY created_at DESC LIMIT 15`).all();
+    )>0`),
+    pool.query(`SELECT (
+      (SELECT COUNT(*) FROM daily_tickets t JOIN projects p ON p.id=t.project_id WHERE p.status='active' AND (t.ticket_status='Pending' OR t.ticket_status IS NULL OR t.ticket_status='Reviewed') AND (t.project_archived=0 OR t.project_archived IS NULL))
+     +(SELECT COUNT(*) FROM purchase_orders o JOIN projects p ON p.id=o.project_id WHERE p.status='active' AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL))
+    ) AS c`),
+    pool.query("SELECT COUNT(*) c FROM projects WHERE status IN ('complete','archived')"),
+    pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE status='Open'"),
+    pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE status='Entered' AND updated_at>=$1",[ws+'T00:00:00']),
+    pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE needs_reimbursement=1 AND status='Open'"),
+    pool.query(`(SELECT 'ticket' src,user_name,action,ticket_number ref,details,created_at FROM audit_log)
+                UNION ALL
+                (SELECT 'po' src,user_name,action,po_number ref,details,created_at FROM po_audit_log)
+                ORDER BY created_at DESC LIMIT 15`),
+  ]);
 
-  res.json({ tickets: t, projects: p, pos: o, activity });
+  res.json({
+    tickets: { today: parseInt(ttToday.rows[0].c), week: parseInt(ttWeek.rows[0].c), pending: parseInt(ttPending.rows[0].c), reviewed: parseInt(ttReviewed.rows[0].c), entered: parseInt(ttEntered.rows[0].c) },
+    projects: { active: parseInt(projActive.rows[0].c), outstanding: parseInt(projOut.rows[0].c), outstanding_records: parseInt(projOutRec.rows[0].c), done: parseInt(projDone.rows[0].c) },
+    pos: { open: parseInt(posOpen.rows[0].c), entered_week: parseInt(posEntWk.rows[0].c), reimbursement: parseInt(posReimb.rows[0].c) },
+    activity: activity.rows,
+  });
+});
+
+// ─────────────────────────────────────────────
+// TICKETS
+// ─────────────────────────────────────────────
+
+app.post('/api/tickets', requireAuth, async (req, res) => {
+  const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id } = req.body;
+  if (!date||!job_name||!supervisor||!work_description) return res.status(400).json({ error: 'Missing required fields' });
+  if (!employees?.length) return res.status(400).json({ error: 'At least one employee required' });
+  const ticket_number = generateTicketNumber();
+  const submitted_at  = new Date().toISOString();
+  const resolvedPid   = await resolveProjectId(project_id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid]
+    );
+    const tid = rows[0].id;
+    for (const e of employees) {
+      if (e.name?.trim()) await client.query(
+        'INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level) VALUES ($1,$2,$3,$4,$5)',
+        [tid, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman']
+      );
+    }
+    await client.query('COMMIT');
+    logAction(req,'ticket_submitted',tid,ticket_number,`Submitted by ${req.user.name}`);
+    res.status(201).json({ id: tid, ticket_number, message: 'Ticket submitted successfully' });
+  } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ error: 'Failed to save ticket' }); }
+  finally { client.release(); }
+});
+
+app.get('/api/tickets', requireAuth, async (req, res) => {
+  const { job, date_from, date_to, supervisor, search, limit=50, offset=0, archived='0' } = req.query;
+  const params = [archived==='1'?1:0];
+  let where = ['t.archived=$1']; let p=1;
+  if (job)        { p++; where.push(`(LOWER(t.job_name) LIKE $${p} OR LOWER(t.job_number) LIKE $${p})`); params.push(`%${job.toLowerCase()}%`); }
+  if (date_from)  { p++; where.push(`t.date>=$${p}`); params.push(date_from); }
+  if (date_to)    { p++; where.push(`t.date<=$${p}`); params.push(date_to); }
+  if (supervisor) { p++; where.push(`LOWER(t.supervisor) LIKE $${p}`); params.push(`%${supervisor.toLowerCase()}%`); }
+  if (search) {
+    p++;
+    where.push(`(LOWER(t.job_name) LIKE $${p} OR LOWER(t.supervisor) LIKE $${p} OR LOWER(t.ticket_number) LIKE $${p} OR LOWER(t.work_description) LIKE $${p})`);
+    params.push(`%${search.toLowerCase()}%`);
+  }
+  const wc = `WHERE ${where.join(' AND ')}`;
+  const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS total FROM daily_tickets t ${wc}`, params);
+  p++; params.push(parseInt(limit)); p++; params.push(parseInt(offset));
+  const { rows } = await pool.query(
+    `SELECT t.*, p.name AS project_name,
+      STRING_AGG(${EMP_SELECT},'||' ORDER BY e.id) AS employees_raw
+     FROM daily_tickets t
+     LEFT JOIN ticket_employees e ON e.ticket_id=t.id
+     LEFT JOIN projects p ON p.id=t.project_id
+     ${wc} GROUP BY t.id, p.name ORDER BY t.date DESC, t.submitted_at DESC LIMIT $${p-1} OFFSET $${p}`, params);
+  res.json({ total: parseInt(countRows[0].total), tickets: rows.map(t=>({...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined})) });
+});
+
+app.get('/api/tickets/export/xlsx', requireAuth, async (req, res) => {
+  const { ids, filename } = req.query;
+  if (!ids) return res.status(400).json({ error: 'ids required' });
+  const idList = ids.split(',').map(Number).filter(n=>!isNaN(n)&&n>0);
+  if (!idList.length) return res.status(400).json({ error: 'no valid ids' });
+  const { rows } = await pool.query(
+    `SELECT t.*, STRING_AGG(${EMP_SELECT},'||' ORDER BY e.id) AS employees_raw
+     FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id
+     WHERE t.id = ANY($1) GROUP BY t.id ORDER BY t.date DESC`,
+    [idList]
+  );
+  const exportDate = new Date().toISOString().slice(0,10);
+  const xlsxRows = [['J&D Western Electric Ltd — Time Tickets Export'],[`Exported: ${exportDate}`],[],
+    ['Ticket #','Date','Job Name','Job #','Supervisor','Employee','Level','Reg Hrs','OT Hrs','Total Hrs','Work Description','Equipment','Notes','Status']];
+  for (const t of rows) {
+    for (const e of parseEmployeesRaw(t.employees_raw)) {
+      xlsxRows.push([t.ticket_number,t.date,t.job_name,t.job_number||'',t.supervisor,e.name,e.level||'',e.regular_hours,e.overtime_hours,e.regular_hours+e.overtime_hours,t.work_description,t.equipment_used||'',t.notes||'',t.ticket_status||'Pending']);
+    }
+  }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(xlsxRows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Time Tickets');
+  const safeName = filename ? decodeURIComponent(filename) : `JD-Tickets-${exportDate}.xlsx`;
+  const buf = XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition',`attachment; filename="${safeName}"`);
+  res.send(buf);
+});
+
+app.get('/api/tickets/:id', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Ticket not found' });
+  const { rows: emps } = await pool.query(`SELECT employee_name,regular_hours,overtime_hours,COALESCE(level,'Journeyman') AS level FROM ticket_employees WHERE ticket_id=$1`, [req.params.id]);
+  logAction(req,'ticket_viewed',rows[0].id,rows[0].ticket_number);
+  res.json({ ...rows[0], employees: emps });
+});
+
+app.put('/api/tickets/:id', requireAdmin, async (req, res) => {
+  const { date,job_name,job_number,supervisor,work_description,equipment_used,notes,employees,project_id,ticket_status } = req.body;
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Ticket not found' });
+  const t = rows[0];
+  const resolvedPid    = project_id !== undefined ? await resolveProjectId(project_id) : t.project_id;
+  const resolvedStatus = ['Pending','Reviewed','Entered'].includes(ticket_status) ? ticket_status : t.ticket_status;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`UPDATE daily_tickets SET date=$1,job_name=$2,job_number=$3,supervisor=$4,work_description=$5,equipment_used=$6,notes=$7,updated_at=$8,project_id=$9,ticket_status=$10 WHERE id=$11`,
+      [date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,new Date().toISOString(),resolvedPid,resolvedStatus,req.params.id]);
+    await client.query('DELETE FROM ticket_employees WHERE ticket_id=$1',[req.params.id]);
+    for (const e of employees) {
+      if (e.name?.trim()) await client.query('INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level) VALUES ($1,$2,$3,$4,$5)',
+        [req.params.id,e.name.trim(),parseFloat(e.regular_hours)||0,parseFloat(e.overtime_hours)||0,e.level||'Journeyman']);
+    }
+    await client.query('COMMIT');
+    logAction(req,'ticket_updated',t.id,t.ticket_number,`Edited by ${req.user?.name}`);
+    res.json({ message: 'Updated' });
+  } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: 'Failed to update' }); }
+  finally { client.release(); }
+});
+
+app.patch('/api/tickets/:id/status', requireAdmin, async (req, res) => {
+  const { ticket_status } = req.body;
+  if (!['Pending','Reviewed','Entered'].includes(ticket_status)) return res.status(400).json({ error: 'Invalid status' });
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  const t = rows[0];
+  if (!t) return res.status(404).json({ error: 'Ticket not found' });
+  const now = new Date().toISOString();
+  const autoArchive = ticket_status==='Entered' && !t.archived;
+  const autoProjectArchive = ticket_status==='Entered' && t.project_id && !t.project_archived;
+  if (autoArchive) {
+    await pool.query('UPDATE daily_tickets SET ticket_status=$1,archived=1,archived_at=$2 WHERE id=$3',[ticket_status,now,req.params.id]);
+    logAction(req,'ticket_archived',t.id,t.ticket_number,`Auto-archived upon status change to Entered by ${req.user?.name}`);
+  } else {
+    await pool.query('UPDATE daily_tickets SET ticket_status=$1 WHERE id=$2',[ticket_status,req.params.id]);
+  }
+  if (autoProjectArchive) {
+    await pool.query('UPDATE daily_tickets SET project_archived=1 WHERE id=$1',[req.params.id]);
+    logAction(req,'ticket_project_archived',t.id,t.ticket_number,`Auto-archived within project upon status change to Entered by ${req.user?.name}`);
+  }
+  logAction(req,'ticket_status_changed',t.id,t.ticket_number,`Status: ${t.ticket_status||'Pending'} → ${ticket_status}`);
+  res.json({ ok: true, auto_archived: autoArchive, auto_project_archived: autoProjectArchive });
+});
+
+app.patch('/api/tickets/:id/archive', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE daily_tickets SET archived=1,archived_at=$1 WHERE id=$2',[new Date().toISOString(),req.params.id]);
+  logAction(req,'ticket_archived',rows[0].id,rows[0].ticket_number);
+  res.json({ message: 'Archived' });
+});
+
+app.patch('/api/tickets/:id/unarchive', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE daily_tickets SET archived=0,archived_at=NULL WHERE id=$1',[req.params.id]);
+  logAction(req,'ticket_unarchived',rows[0].id,rows[0].ticket_number);
+  res.json({ message: 'Unarchived' });
+});
+
+app.patch('/api/tickets/:id/project-archive', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE daily_tickets SET project_archived=1 WHERE id=$1',[req.params.id]);
+  logAction(req,'ticket_project_archived',rows[0].id,rows[0].ticket_number);
+  res.json({ ok: true });
+});
+
+app.patch('/api/tickets/:id/project-unarchive', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE daily_tickets SET project_archived=0 WHERE id=$1',[req.params.id]);
+  logAction(req,'ticket_project_unarchived',rows[0].id,rows[0].ticket_number);
+  res.json({ ok: true });
+});
+
+app.delete('/api/tickets/:id', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  if (!rows[0].archived) return res.status(400).json({ error: 'A ticket must be archived before it can be permanently deleted.' });
+  logAction(req,'ticket_deleted',rows[0].id,rows[0].ticket_number,`Permanently deleted by ${req.user?.name}`);
+  await pool.query('DELETE FROM daily_tickets WHERE id=$1',[req.params.id]);
+  res.json({ message: 'Deleted' });
+});
+
+app.get('/api/tickets/:id/export/xlsx', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const { rows: emps } = await pool.query(`SELECT employee_name,regular_hours,overtime_hours,COALESCE(level,'Journeyman') AS level FROM ticket_employees WHERE ticket_id=$1`,[req.params.id]);
+  const t = rows[0];
+  const totalReg=emps.reduce((s,e)=>s+e.regular_hours,0), totalOT=emps.reduce((s,e)=>s+e.overtime_hours,0);
+  const xlsxRows=[['J&D Western Electric Ltd — Daily Time Ticket'],[],['Ticket #',t.ticket_number],['Date',t.date],['Job Name',t.job_name],['Job #',t.job_number||''],['Supervisor',t.supervisor],['Submitted',t.submitted_at],[],
+    ['Employee','Level','Regular Hrs','OT Hrs','Total Hrs'],
+    ...emps.map(e=>[e.employee_name,e.level,e.regular_hours,e.overtime_hours,e.regular_hours+e.overtime_hours]),
+    ['TOTAL','',totalReg,totalOT,totalReg+totalOT],[],['Work Description',t.work_description],['Equipment',t.equipment_used||''],['Notes',t.notes||'']];
+  const wb=XLSX.utils.book_new(); const ws=XLSX.utils.aoa_to_sheet(xlsxRows);
+  ws['!cols']=[{wch:18},{wch:22},{wch:14},{wch:10},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Time Ticket');
+  logAction(req,'ticket_exported',t.id,t.ticket_number,'XLSX export');
+  const buf=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition',`attachment; filename="${t.ticket_number}.xlsx"`);
+  res.send(buf);
 });
 
 // ─────────────────────────────────────────────
 // STATS & CSV
 // ─────────────────────────────────────────────
 
-app.get('/api/stats', requireAuth, (req, res) => {
-  const today = new Date().toISOString().slice(0,10);
-  const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay());
-  res.json({
-    total:    db.prepare('SELECT COUNT(*) as c FROM daily_tickets WHERE archived=0').get().c,
-    archived: db.prepare('SELECT COUNT(*) as c FROM daily_tickets WHERE archived=1').get().c,
-    today:    db.prepare('SELECT COUNT(*) as c FROM daily_tickets WHERE date=? AND archived=0').get(today).c,
-    this_week:db.prepare('SELECT COUNT(*) as c FROM daily_tickets WHERE date>=? AND archived=0').get(weekStart.toISOString().slice(0,10)).c,
-    active_jobs: db.prepare('SELECT COUNT(DISTINCT job_name) as c FROM daily_tickets WHERE archived=0').get().c,
-  });
+app.get('/api/stats', requireAuth, async (req, res) => {
+  const today=new Date().toISOString().slice(0,10);
+  const weekStart=new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+  const ws=weekStart.toISOString().slice(0,10);
+  const [t,a,td,wk,j] = await Promise.all([
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE archived=0"),
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE archived=1"),
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date=$1 AND archived=0",[today]),
+    pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date>=$1 AND archived=0",[ws]),
+    pool.query("SELECT COUNT(DISTINCT job_name) c FROM daily_tickets WHERE archived=0"),
+  ]);
+  res.json({ total:parseInt(t.rows[0].c), archived:parseInt(a.rows[0].c), today:parseInt(td.rows[0].c), this_week:parseInt(wk.rows[0].c), active_jobs:parseInt(j.rows[0].c) });
 });
 
-app.get('/api/export/csv', requireAuth, (req, res) => {
+app.get('/api/export/csv', requireAuth, async (req, res) => {
   const { date_from, date_to, job } = req.query;
-  let where = ['t.archived=0'], params = [];
-  if (date_from) { where.push('t.date>=?'); params.push(date_from); }
-  if (date_to)   { where.push('t.date<=?'); params.push(date_to); }
-  if (job)       { where.push(`(LOWER(t.job_name) LIKE ? OR LOWER(t.job_number) LIKE ?)`); params.push(`%${job.toLowerCase()}%`,`%${job.toLowerCase()}%`); }
-  const rows = db.prepare(`SELECT t.ticket_number,t.date,t.job_name,t.job_number,t.supervisor,e.employee_name,COALESCE(e.level,'Journeyman') as level,e.regular_hours,e.overtime_hours,t.work_description,t.equipment_used,t.notes,t.submitted_at FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE ${where.join(' AND ')} ORDER BY t.date DESC,t.id`).all(...params);
-  const h = ['Ticket #','Date','Job Name','Job #','Supervisor','Employee','Level','Regular Hrs','OT Hrs','Work Description','Equipment','Notes','Submitted At'];
-  const csv = [h.join(','),...rows.map(r=>[r.ticket_number,r.date,`"${(r.job_name||'').replace(/"/g,'""')}"`,r.job_number||'',`"${(r.supervisor||'').replace(/"/g,'""')}"`,`"${(r.employee_name||'').replace(/"/g,'""')}"`,`"${(r.level||'').replace(/"/g,'""')}"`,r.regular_hours,r.overtime_hours,`"${(r.work_description||'').replace(/"/g,'""')}"`,`"${(r.equipment_used||'').replace(/"/g,'""')}"`,`"${(r.notes||'').replace(/"/g,'""')}"`,r.submitted_at].join(','))].join('\n');
-  logAction(req, 'csv_exported', null, null, 'CSV export');
+  const params = [0]; let where=['t.archived=$1']; let p=1;
+  if (date_from) { p++; where.push(`t.date>=$${p}`); params.push(date_from); }
+  if (date_to)   { p++; where.push(`t.date<=$${p}`); params.push(date_to); }
+  if (job)       { p++; where.push(`(LOWER(t.job_name) LIKE $${p} OR LOWER(t.job_number) LIKE $${p})`); params.push(`%${job.toLowerCase()}%`); }
+  const { rows } = await pool.query(
+    `SELECT t.ticket_number,t.date,t.job_name,t.job_number,t.supervisor,e.employee_name,COALESCE(e.level,'Journeyman') AS level,e.regular_hours,e.overtime_hours,t.work_description,t.equipment_used,t.notes,t.submitted_at
+     FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE ${where.join(' AND ')} ORDER BY t.date DESC,t.id`, params);
+  const h=['Ticket #','Date','Job Name','Job #','Supervisor','Employee','Level','Regular Hrs','OT Hrs','Work Description','Equipment','Notes','Submitted At'];
+  const csv=[h.join(','),...rows.map(r=>[r.ticket_number,r.date,`"${(r.job_name||'').replace(/"/g,'""')}"`,r.job_number||'',`"${(r.supervisor||'').replace(/"/g,'""')}"`,`"${(r.employee_name||'').replace(/"/g,'""')}"`,`"${(r.level||'').replace(/"/g,'""')}"`,r.regular_hours,r.overtime_hours,`"${(r.work_description||'').replace(/"/g,'""')}"`,`"${(r.equipment_used||'').replace(/"/g,'""')}"`,`"${(r.notes||'').replace(/"/g,'""')}"`,r.submitted_at].join(','))].join('\n');
+  logAction(req,'csv_exported',null,null,'CSV export');
   res.setHeader('Content-Type','text/csv');
   res.setHeader('Content-Disposition',`attachment; filename="jdw-tickets-${Date.now()}.csv"`);
   res.send(csv);
 });
 
 // ─────────────────────────────────────────────
+// PURCHASE ORDERS
+// ─────────────────────────────────────────────
+
+app.post('/api/po/:id/receipt', requirePermission('get_po'), receiptUpload.single('receipt'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const { rows } = await pool.query('SELECT id FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'PO not found' });
+  const p = `/uploads/receipts/receipt-${req.params.id}${path.extname(req.file.originalname).toLowerCase()}`;
+  await pool.query('UPDATE purchase_orders SET receipt_path=$1 WHERE id=$2',[p,req.params.id]);
+  res.json({ ok: true, path: p });
+});
+
+app.post('/api/po', requirePermission('get_po'), async (req, res) => {
+  const { jobber_job_number, job_name, supplier, description, estimated_amount, needs_reimbursement, project_id } = req.body;
+  if (!jobber_job_number?.trim()||!description?.trim()||!job_name?.trim()) return res.status(400).json({ error: 'Jobber Job Number, Job Name, and Description are required' });
+  const resolvedPid = await resolveProjectId(project_id);
+  const date=new Date().toISOString().slice(0,10), created_at=new Date().toISOString();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const po_number = await generatePONumber(client);
+    const { rows } = await client.query(
+      `INSERT INTO purchase_orders (po_number,date,generated_by_id,generated_by_name,jobber_job_number,job_name,supplier,description,estimated_amount,needs_reimbursement,status,created_at,project_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Open',$11,$12) RETURNING id`,
+      [po_number,date,req.user.id,req.user.name,jobber_job_number.trim(),job_name.trim(),supplier?.trim()||null,description.trim(),estimated_amount?parseFloat(estimated_amount):null,needs_reimbursement?1:0,created_at,resolvedPid]
+    );
+    const poId = rows[0].id;
+    await client.query('COMMIT');
+    logPOAction(req,poId,po_number,'po_created',`Created by ${req.user.name}`);
+    // Notify admins
+    const smtpHost = await getSetting('smtp_host');
+    if (smtpHost) {
+      try {
+        const { rows: admins } = await pool.query("SELECT email FROM users WHERE role='admin' AND status='active'");
+        const to = admins.map(a=>a.email).join(',');
+        if (to) {
+          const t = nodemailer.createTransport({ host: smtpHost, port: parseInt(await getSetting('smtp_port','587')), auth:{ user: await getSetting('smtp_user'), pass: await getSetting('smtp_pass') } });
+          await t.sendMail({ from: await getSetting('smtp_from','noreply@jdwesternelectric.ca'), to, subject: `New PO Generated: ${po_number}`,
+            html: `<h2>New PO — ${po_number}</h2><p>Job: ${job_name} | Jobber #: ${jobber_job_number} | Supplier: ${supplier||'—'} | By: ${req.user.name}</p>` });
+        }
+      } catch (err) { console.error('PO notify failed:', err.message); }
+    }
+    res.status(201).json({ po_number, id: poId });
+  } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ error: 'Failed to create PO' }); }
+  finally { client.release(); }
+});
+
+app.get('/api/po', requireAdmin, async (req, res) => {
+  const { status, date_from, date_to, employee, job_name, reimbursement, limit=200, offset=0, ids } = req.query;
+  const params = []; let where = []; let p = 0;
+  if (ids) {
+    const idList = ids.split(',').map(Number).filter(n=>!isNaN(n)&&n>0);
+    if (idList.length) { p++; where.push(`id = ANY($${p})`); params.push(idList); }
+  } else {
+    if (status)        { p++; where.push(`status=$${p}`); params.push(status); }
+    if (date_from)     { p++; where.push(`date>=$${p}`); params.push(date_from); }
+    if (date_to)       { p++; where.push(`date<=$${p}`); params.push(date_to); }
+    if (employee)      { p++; where.push(`LOWER(generated_by_name) LIKE $${p}`); params.push(`%${employee.toLowerCase()}%`); }
+    if (job_name)      { p++; where.push(`LOWER(COALESCE(job_name,'')) LIKE $${p}`); params.push(`%${job_name.toLowerCase()}%`); }
+    if (reimbursement==='1') { where.push('needs_reimbursement=1'); }
+  }
+  const wc = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const { rows: cnt } = await pool.query(`SELECT COUNT(*) AS total FROM purchase_orders ${wc}`, params);
+  p++; params.push(parseInt(limit)); p++; params.push(parseInt(offset));
+  const { rows } = await pool.query(`SELECT * FROM purchase_orders ${wc} ORDER BY created_at DESC LIMIT $${p-1} OFFSET $${p}`, params);
+  res.json({ total: parseInt(cnt[0].total), purchase_orders: rows });
+});
+
+app.get('/api/po/export/xlsx', requireAdmin, async (req, res) => {
+  const { status, date_from, date_to, employee, job_name, reimbursement, ids } = req.query;
+  const params = []; let where = []; let p = 0;
+  if (ids) {
+    const idList = ids.split(',').map(Number).filter(n=>!isNaN(n)&&n>0);
+    if (idList.length) { p++; where.push(`id = ANY($${p})`); params.push(idList); }
+  } else {
+    if (status)        { p++; where.push(`status=$${p}`); params.push(status); }
+    if (date_from)     { p++; where.push(`date>=$${p}`); params.push(date_from); }
+    if (date_to)       { p++; where.push(`date<=$${p}`); params.push(date_to); }
+    if (employee)      { p++; where.push(`LOWER(generated_by_name) LIKE $${p}`); params.push(`%${employee.toLowerCase()}%`); }
+    if (job_name)      { p++; where.push(`LOWER(COALESCE(job_name,'')) LIKE $${p}`); params.push(`%${job_name.toLowerCase()}%`); }
+    if (reimbursement==='1') { where.push('needs_reimbursement=1'); }
+  }
+  const wc = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const { rows } = await pool.query(`SELECT * FROM purchase_orders ${wc} ORDER BY created_at DESC`, params);
+  const exportDate = new Date().toISOString().slice(0,10);
+  const xlsxRows=[['J&D Western Electric Ltd — Purchase Orders'],[`Exported: ${exportDate}`],[],
+    ['PO Number','Date Generated','Generated By','Jobber Job #','Job Name','Supplier','Description','Estimated Amount','Needs Reimbursement','Status','Office Notes','Date Status Last Changed'],
+    ...rows.map(p2=>[p2.po_number,p2.date,p2.generated_by_name,p2.jobber_job_number||'',p2.job_name||'',p2.supplier||'',p2.description,p2.estimated_amount!=null?parseFloat(p2.estimated_amount):'',p2.needs_reimbursement?'Yes':'No',p2.status,p2.office_note||'',p2.updated_at?new Date(p2.updated_at).toLocaleString('en-CA',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):''])];
+  const wb=XLSX.utils.book_new(); const ws=XLSX.utils.aoa_to_sheet(xlsxRows);
+  ws['!cols']=[{wch:18},{wch:14},{wch:18},{wch:16},{wch:24},{wch:18},{wch:36},{wch:16},{wch:12},{wch:12},{wch:30},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws,'Purchase Orders');
+  logAction(req,'po_export',null,null,'PO XLSX export');
+  const buf=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition',`attachment; filename="JD-POs-${exportDate}.xlsx"`);
+  res.send(buf);
+});
+
+app.get('/api/po/:id', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'PO not found' });
+  const { rows: audit } = await pool.query('SELECT user_name,action,details,created_at FROM po_audit_log WHERE po_id=$1 ORDER BY created_at ASC',[req.params.id]);
+  logPOAction(req,rows[0].id,rows[0].po_number,'po_viewed');
+  res.json({ ...rows[0], audit });
+});
+
+app.patch('/api/po/:id', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'PO not found' });
+  const po = rows[0];
+  const { status, office_note } = req.body;
+  const updated_at = new Date().toISOString();
+  await pool.query('UPDATE purchase_orders SET status=COALESCE($1,status),office_note=COALESCE($2,office_note),updated_at=$3 WHERE id=$4',
+    [status||null, office_note!==undefined?office_note:null, updated_at, req.params.id]);
+  if (status&&status!==po.status) logPOAction(req,po.id,po.po_number,'status_changed',`${po.status} → ${status}`);
+  if (office_note!==undefined&&office_note!==po.office_note) logPOAction(req,po.id,po.po_number,'note_updated');
+  const autoProjectArchive = status==='Entered' && po.status!=='Entered' && po.project_id && !po.project_archived;
+  if (autoProjectArchive) {
+    await pool.query('UPDATE purchase_orders SET project_archived=1 WHERE id=$1',[req.params.id]);
+    logPOAction(req,po.id,po.po_number,'po_project_archived',`Auto-archived within project upon status change to Entered by ${req.user?.name}`);
+  }
+  res.json({ ok: true, auto_project_archived: autoProjectArchive });
+});
+
+app.put('/api/po/:id', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'PO not found' });
+  const po = rows[0];
+  const { date,generated_by_name,jobber_job_number,job_name,supplier,description,estimated_amount,needs_reimbursement,status,office_note,project_id } = req.body;
+  const resolvedPid = project_id!==undefined ? await resolveProjectId(project_id) : po.project_id;
+  await pool.query(`UPDATE purchase_orders SET date=COALESCE($1,date),generated_by_name=COALESCE($2,generated_by_name),
+    jobber_job_number=COALESCE($3,jobber_job_number),job_name=COALESCE($4,job_name),supplier=$5,description=COALESCE($6,description),
+    estimated_amount=$7,needs_reimbursement=COALESCE($8,needs_reimbursement),status=COALESCE($9,status),office_note=$10,project_id=$11,updated_at=$12 WHERE id=$13`,
+    [date||null,generated_by_name||null,jobber_job_number||null,job_name||null,supplier||null,description||null,estimated_amount!=null?parseFloat(estimated_amount):null,needs_reimbursement!=null?(needs_reimbursement?1:0):null,status||null,office_note||null,resolvedPid,new Date().toISOString(),req.params.id]);
+  logPOAction(req,po.id,po.po_number,'po_edited',`Edited by ${req.user.name}`);
+  res.json({ ok: true });
+});
+
+app.patch('/api/po/:id/archive', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE purchase_orders SET status=$1,updated_at=$2 WHERE id=$3',['Archived',new Date().toISOString(),req.params.id]);
+  logPOAction(req,rows[0].id,rows[0].po_number,'po_archived');
+  res.json({ ok: true });
+});
+
+app.patch('/api/po/:id/project-archive', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE purchase_orders SET project_archived=1 WHERE id=$1',[req.params.id]);
+  logPOAction(req,rows[0].id,rows[0].po_number,'po_project_archived');
+  res.json({ ok: true });
+});
+
+app.patch('/api/po/:id/project-unarchive', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE purchase_orders SET project_archived=0 WHERE id=$1',[req.params.id]);
+  logPOAction(req,rows[0].id,rows[0].po_number,'po_project_unarchived');
+  res.json({ ok: true });
+});
+
+app.delete('/api/po/:id', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM purchase_orders WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'PO not found' });
+  if (rows[0].status !== 'Archived') return res.status(400).json({ error: 'A PO must be archived before it can be permanently deleted.' });
+  logPOAction(req,rows[0].id,rows[0].po_number,'po_deleted',`Permanently deleted by ${req.user.name}`);
+  await pool.query('DELETE FROM purchase_orders WHERE id=$1',[req.params.id]);
+  res.json({ ok: true });
+});
+
+// ─────────────────────────────────────────────
+// PROJECTS
+// ─────────────────────────────────────────────
+
+app.get('/api/project-folders', requireAuth, async (req, res) => {
+  const { rows } = await pool.query("SELECT id,name,job_numbers FROM projects WHERE status='active' ORDER BY name");
+  res.json(rows);
+});
+
+app.get('/api/project-folders/all', requireAdmin, async (req, res) => {
+  const allowed=['active','complete','archived'];
+  const status = allowed.includes(req.query.status) ? req.query.status : 'active';
+  const { rows } = await pool.query(`
+    SELECT p.*,
+      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id) AS ticket_count,
+      (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id) AS po_count,
+      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL) AND (t.project_archived=0 OR t.project_archived IS NULL)) AS pending_tickets,
+      (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL)) AS open_pos
+    FROM projects p WHERE p.status=$1 ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC`, [status]);
+  res.json(rows);
+});
+
+app.post('/api/project-folders', requireAdmin, async (req, res) => {
+  const { name, job_numbers } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Project name is required' });
+  const jn = normalizeJobNumbers(job_numbers);
+  const { rows } = await pool.query('INSERT INTO projects (name,job_numbers,status,created_at) VALUES ($1,$2,$3,$4) RETURNING id,name,job_numbers,status',
+    [name.trim(),jn,'active',new Date().toISOString()]);
+  res.status(201).json(rows[0]);
+});
+
+app.post('/api/project-folders/quick', requireAuth, async (req, res) => {
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Project name is required' });
+  const { rows: ex } = await pool.query("SELECT id,name,job_numbers,status FROM projects WHERE status='active' AND LOWER(name)=LOWER($1)",[name.trim()]);
+  if (ex[0]) return res.json(ex[0]);
+  const { rows } = await pool.query('INSERT INTO projects (name,job_numbers,status,created_at) VALUES ($1,$2,$3,$4) RETURNING id,name,job_numbers,status',
+    [name.trim(),null,'active',new Date().toISOString()]);
+  res.status(201).json(rows[0]);
+});
+
+app.patch('/api/project-folders/:id', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
+  const { name, job_numbers } = req.body;
+  if (name!==undefined && !name.trim()) return res.status(400).json({ error: 'Project name cannot be empty' });
+  await pool.query('UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3 WHERE id=$4',
+    [name?.trim()||null, job_numbers!==undefined?normalizeJobNumbers(job_numbers):rows[0].job_numbers, new Date().toISOString(), req.params.id]);
+  res.json({ ok: true });
+});
+
+app.patch('/api/project-folders/:id/status', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
+  const allowed=['active','complete','archived'];
+  const status = allowed.includes(req.body.status) ? req.body.status : 'active';
+  const now = new Date().toISOString();
+  await pool.query('UPDATE projects SET status=$1,completed_at=$2,updated_at=$3 WHERE id=$4',
+    [status, (status==='complete'||status==='archived')?now:null, now, req.params.id]);
+  res.json({ ok: true, status });
+});
+
+app.get('/api/project-folders/:id', requireAdmin, async (req, res) => {
+  const { rows: pr } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
+  if (!pr[0]) return res.status(404).json({ error: 'Project not found' });
+  const { rows: allT } = await pool.query(
+    `SELECT t.*, STRING_AGG(${EMP_SELECT},'||' ORDER BY e.id) AS employees_raw FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE t.project_id=$1 GROUP BY t.id ORDER BY t.date DESC, t.submitted_at DESC`,
+    [pr[0].id]
+  );
+  const { rows: allP } = await pool.query('SELECT * FROM purchase_orders WHERE project_id=$1 ORDER BY date DESC,created_at DESC',[pr[0].id]);
+  const mapT = t => ({ ...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined });
+  res.json({
+    project: pr[0],
+    tickets:          allT.filter(t=>!t.project_archived).map(mapT),
+    purchase_orders:  allP.filter(p=>!p.project_archived),
+    archived_tickets: allT.filter(t=> t.project_archived).map(mapT),
+    archived_pos:     allP.filter(p=> p.project_archived),
+  });
+});
+
+app.get('/api/project-folders/:id/export/xlsx', requireAdmin, async (req, res) => {
+  const { rows: pr } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
+  if (!pr[0]) return res.status(404).json({ error: 'Project not found' });
+  const { rows: tickets } = await pool.query(
+    `SELECT t.*, STRING_AGG(${EMP_SELECT},'||' ORDER BY e.id) AS employees_raw FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE t.project_id=$1 GROUP BY t.id ORDER BY t.date DESC`,
+    [pr[0].id]
+  );
+  const { rows: pos } = await pool.query('SELECT * FROM purchase_orders WHERE project_id=$1 ORDER BY date DESC',[pr[0].id]);
+  const exportDate = new Date().toISOString().slice(0,10);
+  const wb = XLSX.utils.book_new();
+  // Tickets sheet
+  const tRows=[['J&D Western Electric Ltd — Project Export'],[`Project: ${pr[0].name}`],[`Exported: ${exportDate}`],[],['Date','Ticket #','Supervisor','Employee','Level','Reg Hrs','OT Hrs','Total','Work Description','Equipment','Notes','Status']];
+  for (const t of tickets) for (const e of parseEmployeesRaw(t.employees_raw)) tRows.push([t.date,t.ticket_number,t.supervisor,e.name,e.level,e.regular_hours,e.overtime_hours,e.regular_hours+e.overtime_hours,t.work_description,t.equipment_used||'',t.notes||'',t.ticket_status||'Pending']);
+  const tws=XLSX.utils.aoa_to_sheet(tRows); tws['!cols']=[{wch:12},{wch:18},{wch:16},{wch:20},{wch:20},{wch:10},{wch:10},{wch:10},{wch:36},{wch:20},{wch:20},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,tws,'Time Tickets');
+  // POs sheet
+  const pRows=[['Date','PO Number','Generated By','Jobber Job #','Job Name','Supplier','Description','Est. Amount','Status','Office Note'],...pos.map(p2=>[p2.date,p2.po_number,p2.generated_by_name,p2.jobber_job_number,p2.job_name||'',p2.supplier||'',p2.description,p2.estimated_amount!=null?parseFloat(p2.estimated_amount):'',p2.status,p2.office_note||''])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pRows),'Purchase Orders');
+  logAction(req,'po_export',null,null,`Project export: ${pr[0].name}`);
+  const buf=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+  const safeName=pr[0].name.replace(/[^a-z0-9]/gi,'_');
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition',`attachment; filename="${safeName}_export.xlsx"`);
+  res.send(buf);
+});
+
+app.delete('/api/project-folders/:id', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
+  if (rows[0].status !== 'archived') return res.status(400).json({ error: 'A project must be archived before it can be permanently deleted.' });
+  await pool.query('UPDATE daily_tickets SET project_id=NULL WHERE project_id=$1',[req.params.id]);
+  await pool.query('UPDATE purchase_orders SET project_id=NULL WHERE project_id=$1',[req.params.id]);
+  await pool.query('DELETE FROM projects WHERE id=$1',[req.params.id]);
+  logAction(req,'project_deleted',null,null,`Project "${rows[0].name}" permanently deleted by ${req.user.name}`);
+  res.json({ ok: true });
+});
+
+app.get('/api/projects', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT t.job_name, t.job_number, COUNT(DISTINCT t.id) AS ticket_count, MIN(t.date) AS first_date, MAX(t.date) AS last_date,
+      COALESCE(SUM(e.regular_hours+e.overtime_hours),0) AS total_hours
+    FROM daily_tickets t LEFT JOIN ticket_employees e ON e.ticket_id=t.id WHERE t.archived=0
+    GROUP BY t.job_name, t.job_number ORDER BY MAX(t.date) DESC`);
+  res.json(rows);
+});
+
+// ─────────────────────────────────────────────
 // START
 // ─────────────────────────────────────────────
 
-ensureDefaultAdmin();
-
-app.listen(PORT, () => {
-  console.log(`\n  J&D Western Electric — Field Operations Hub`);
-  console.log(`  Running at http://localhost:${PORT}\n`);
-});
+(async () => {
+  try {
+    await connectWithRetry();
+    await initSchema();
+    await ensureDefaultAdmin();
+    app.listen(PORT, () => {
+      console.log(`\n  J&D Western Electric — Field Operations Hub`);
+      console.log(`  Running at http://localhost:${PORT}\n`);
+    });
+  } catch (err) {
+    console.error('Startup failed:', err.message);
+    process.exit(1);
+  }
+})();

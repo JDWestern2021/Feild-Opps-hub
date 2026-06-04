@@ -1,5 +1,7 @@
 node_modules/
-field_ops.db
+.env
+*.db
+*.sqlite
 public/uploads/
 *.log
 .DS_Store
