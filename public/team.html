@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Manage Team — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { visibility: hidden; background: var(--gray-100); }
+    .user-table { width: 100%; border-collapse: collapse; }
+    .user-table th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); padding: 8px 12px; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); text-align: left; }
+    .user-table td { padding: 12px 12px; border-bottom: 1px solid var(--gray-100); font-size: 14px; vertical-align: middle; }
+    .user-table tr:last-child td { border-bottom: none; }
+    .status-badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .status-active   { background: #d4edda; color: #155724; }
+    .status-invited  { background: #fff3cd; color: #856404; }
+    .status-inactive { background: var(--gray-100); color: var(--gray-500); }
+    .role-badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .role-admin { background: var(--orange-light); color: var(--orange-dark); }
+
+    /* Reset password modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 380px; box-shadow: 0 16px 48px rgba(0,0,0,0.2); transform: scale(.96); transition: transform .2s; }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--gray-100); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { font-size: 16px; font-weight: 800; }
+    .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--gray-500); line-height: 1; }
+    .modal-body { padding: 18px 20px; }
+    .modal-footer { padding: 12px 20px 18px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--gray-100); }
+    .reset-user-name { font-weight: 700; color: var(--orange); }
+    .actions-cell { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .role-field { background: var(--gray-100); color: var(--gray-700); }
+    .invite-link-box { background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: 8px; padding: 12px 14px; font-size: 12px; color: var(--gray-700); word-break: break-all; margin-top: 12px; display: none; }
+    .invite-link-box .link-url { font-family: monospace; font-size: 11px; color: var(--orange); margin: 6px 0; }
+    .page-wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px 48px; }
+    .page-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+    .page-sub   { font-size: 14px; color: var(--gray-500); margin-bottom: 24px; }
+    .section-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 24px; overflow: hidden; }
+    .section-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-100); font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+    .section-body { padding: 20px; }
+    .grid-3i { display: grid; grid-template-columns: 1fr 1fr 140px; gap: 12px; align-items: end; }
+    @media(max-width:600px){ .grid-3i { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<header class="app-header">
+  <div class="header-brand">
+    <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
+    <div class="header-title">
+      <span class="company">J&D Western Electric</span>
+      <span class="module">Manage Team</span>
+    </div>
+  </div>
+  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+    <a href="office.html">Dashboard</a>
+    <a href="settings-admin.html">Settings</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page-wrap">
+  <div class="page-title">Manage Team</div>
+  <div class="page-sub">Invite new users and manage existing accounts.</div>
+
+  <!-- Invite form -->
+  <div class="section-card">
+    <div class="section-header">Invite New User</div>
+    <div class="section-body">
+      <div class="grid-3i">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="inv-name" class="form-control" placeholder="Jane Smith"/>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="inv-email" class="form-control" placeholder="jane@example.com"/>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Role</label>
+          <select id="inv-role" class="form-control">
+            <option value="field">Field User</option>
+            <option value="admin">Office Admin</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary" id="btn-invite">Send Invitation</button>
+      </div>
+      <div class="invite-link-box" id="invite-result">
+        <strong>✅ User invited!</strong>
+        <div>Share this link with them to activate their account:</div>
+        <div class="link-url" id="invite-url"></div>
+        <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('invite-url').textContent).then(()=>showToast('Link copied!','success'))">Copy Link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User list -->
+  <div class="section-card">
+    <div class="section-header">
+      <span>Team Members</span>
+      <span id="user-count" class="badge badge-gray">—</span>
+    </div>
+    <div id="user-table-wrap">
+      <table class="user-table">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Module Access</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="user-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal-overlay" id="reset-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Reset Password</h3>
+      <button class="modal-close" id="modal-close-btn">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">
+        Set a temporary password for <span class="reset-user-name" id="modal-user-name"></span>.
+        They can change it themselves after logging in.
+      </p>
+      <div class="msg error" id="modal-err" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;background:rgba(217,52,43,.1);border:1px solid rgba(217,52,43,.3);color:#c0392b;margin-bottom:12px;"></div>
+      <div class="form-group">
+        <label class="form-label">New Password</label>
+        <input type="password" id="new-pw" class="form-control" placeholder="Min 8 characters" autocomplete="new-password"/>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label class="form-label">Confirm Password</label>
+        <input type="password" id="confirm-pw" class="form-control" placeholder="Re-enter password" autocomplete="new-password"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" id="modal-cancel-btn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="modal-save-btn">Save Password</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function showToast(msg, type='') {
+  const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
+  setTimeout(()=>t.className='', 3200);
+}
+
+// ── Auth check ──
+let currentUser;
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  currentUser = await r.json();
+  if (currentUser.role !== 'admin') { location.href = '/field.html'; return; }
+  document.body.style.visibility = 'visible';
+  loadUsers();
+})();
+
+$('logout-btn').addEventListener('click', async e => {
+  e.preventDefault();
+  await fetch('/api/auth/logout', {method:'POST'});
+  location.href = '/login.html';
+});
+
+// ── Permission checkbox handler (delegated) ──
+document.getElementById('user-tbody').addEventListener('change', async e => {
+  const cb = e.target.closest('.perm-cb');
+  if (!cb) return;
+  const uid  = cb.dataset.uid;
+  const perm = cb.dataset.perm;
+  // Collect all checked perms for this user
+  const allCbs = document.querySelectorAll(`.perm-cb[data-uid="${uid}"]`);
+  const perms  = Array.from(allCbs).filter(c => c.checked).map(c => c.dataset.perm);
+  const res = await fetch(`/api/users/${uid}/permissions`, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ permissions: perms })
+  });
+  if (res.ok) showToast('Permissions updated', 'success');
+  else { showToast('Failed to update permissions', 'error'); cb.checked = !cb.checked; }
+});
+
+async function loadUsers() {
+  const res = await fetch('/api/users');
+  const users = await res.json();
+  $('user-count').textContent = users.length;
+  $('user-tbody').innerHTML = users.map(u => {
+    const perms = (u.permissions || '').split(',');
+    const hasTT = perms.includes('time_ticket');
+    const hasPO = perms.includes('get_po');
+    const isAdmin = u.role === 'admin';
+    return `
+    <tr>
+      <td><strong>${esc(u.name)}</strong></td>
+      <td class="text-sm text-muted">${esc(u.email)}</td>
+      <td><span class="role-badge role-${u.role}">${isAdmin ? 'Office Admin' : 'Field User'}</span></td>
+      <td><span class="status-badge status-${u.status}">${u.status}</span></td>
+      <td>
+        ${isAdmin
+          ? '<span class="text-xs text-muted" style="color:var(--orange);">Full Access</span>'
+          : `<div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+                <input type="checkbox" class="perm-cb" data-uid="${u.id}" data-perm="time_ticket" ${hasTT ? 'checked' : ''}> Time Ticket
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+                <input type="checkbox" class="perm-cb" data-uid="${u.id}" data-perm="get_po" ${hasPO ? 'checked' : ''}> Get PO
+              </label>
+            </div>`
+        }
+      </td>
+      <td>
+        ${u.id !== currentUser.id ? `
+          <div class="actions-cell">
+            <button class="btn btn-sm btn-ghost" onclick="openResetModal(${u.id},'${esc(u.name)}')">Reset PW</button>
+            <button class="btn btn-sm btn-secondary" onclick="sendResetLink(${u.id},'${esc(u.name)}')">Send Link</button>
+            ${u.status === 'active' ? `<button class="btn btn-sm btn-secondary" onclick="deactivate(${u.id},'${esc(u.name)}')">Deactivate</button>` : `<button class="btn btn-sm btn-ghost" onclick="reactivate(${u.id})">Reactivate</button>`}
+            <button class="btn btn-sm btn-danger" onclick="removeUser(${u.id},'${esc(u.name)}')">Remove</button>
+          </div>
+        ` : '<span class="text-xs text-muted">You</span>'}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+$('btn-invite').addEventListener('click', async () => {
+  const name = $('inv-name').value.trim();
+  const email = $('inv-email').value.trim();
+  const role = $('inv-role').value;
+  if (!name || !email) { showToast('Name and email required', 'error'); return; }
+  $('btn-invite').disabled = true; $('btn-invite').textContent = 'Sending…';
+  const res = await fetch('/api/users/invite', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, email, role})});
+  const data = await res.json();
+  $('btn-invite').disabled = false; $('btn-invite').textContent = 'Send Invitation';
+  if (!res.ok) { showToast(data.error, 'error'); return; }
+  $('invite-url').textContent = data.invite_url;
+  $('invite-result').style.display = 'block';
+  if (data.email_sent) showToast('Invitation email sent!', 'success');
+  else showToast('User invited — share the link below', '');
+  $('inv-name').value = ''; $('inv-email').value = '';
+  loadUsers();
+});
+
+async function deactivate(id, name) {
+  if (!confirm(`Deactivate ${name}? They will not be able to log in.`)) return;
+  const r = await fetch('/api/users/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'inactive'})});
+  if (r.ok) { showToast('User deactivated', 'success'); loadUsers(); }
+}
+async function reactivate(id) {
+  const r = await fetch('/api/users/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'active'})});
+  if (r.ok) { showToast('User reactivated', 'success'); loadUsers(); }
+}
+async function removeUser(id, name) {
+  if (!confirm(`Permanently remove ${name}? This cannot be undone.`)) return;
+  const r = await fetch('/api/users/'+id, {method:'DELETE'});
+  if (r.ok) { showToast('User removed', 'success'); loadUsers(); }
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Reset password modal ──
+let resetTargetId = null;
+
+function openResetModal(id, name) {
+  resetTargetId = id;
+  $('modal-user-name').textContent = name;
+  $('new-pw').value = '';
+  $('confirm-pw').value = '';
+  $('modal-err').style.display = 'none';
+  $('modal-save-btn').disabled = false;
+  $('modal-save-btn').textContent = 'Save Password';
+  $('reset-modal').classList.add('open');
+  setTimeout(() => $('new-pw').focus(), 100);
+}
+
+function closeResetModal() {
+  $('reset-modal').classList.remove('open');
+  resetTargetId = null;
+}
+
+$('modal-close-btn').addEventListener('click', closeResetModal);
+$('modal-cancel-btn').addEventListener('click', closeResetModal);
+$('reset-modal').addEventListener('click', e => { if (e.target === $('reset-modal')) closeResetModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeResetModal(); });
+
+$('modal-save-btn').addEventListener('click', async () => {
+  const pw = $('new-pw').value;
+  const cf = $('confirm-pw').value;
+  const err = $('modal-err');
+  err.style.display = 'none';
+
+  if (!pw || pw.length < 8) {
+    err.textContent = 'Password must be at least 8 characters.';
+    err.style.display = 'block'; return;
+  }
+  if (pw !== cf) {
+    err.textContent = 'Passwords do not match.';
+    err.style.display = 'block'; return;
+  }
+
+  $('modal-save-btn').disabled = true;
+  $('modal-save-btn').textContent = 'Saving…';
+
+  const res = await fetch(`/api/users/${resetTargetId}/reset-password`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ password: pw })
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    closeResetModal();
+    showToast('Password updated successfully', 'success');
+  } else {
+    err.textContent = data.error || 'Failed to update password.';
+    err.style.display = 'block';
+    $('modal-save-btn').disabled = false;
+    $('modal-save-btn').textContent = 'Save Password';
+  }
+});
+
+// ── Send reset link ──
+async function sendResetLink(id, name) {
+  if (!confirm(`Send a password reset email to ${name}?`)) return;
+  const res = await fetch(`/api/users/${id}/send-reset-link`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Failed to generate reset link', 'error'); return; }
+  if (data.email_sent) {
+    showToast(`Reset email sent to ${name}`, 'success');
+  } else {
+    // No SMTP configured — show link in a prompt so admin can copy it manually
+    const copied = await navigator.clipboard.writeText(data.reset_url).then(()=>true).catch(()=>false);
+    showToast(copied ? 'Reset link copied to clipboard! Share it with the user.' : 'Link generated — check console', 'success');
+    if (!copied) console.info('Password reset link:', data.reset_url);
+  }
+}
+</script>
+</body>
+</html>

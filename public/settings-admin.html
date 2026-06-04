@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Settings — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { visibility: hidden; background: var(--gray-100); }
+    .page-wrap { max-width: 780px; margin: 0 auto; padding: 24px 20px 48px; }
+    .page-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+    .page-sub   { font-size: 14px; color: var(--gray-500); margin-bottom: 24px; }
+    .section-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px; overflow: hidden; }
+    .section-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-100); font-size: 15px; font-weight: 700; }
+    .section-body { padding: 20px; }
+    .setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--gray-100); }
+    .setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .setting-label { font-size: 14px; font-weight: 600; }
+    .setting-hint  { font-size: 12px; color: var(--gray-500); margin-top: 3px; }
+    .setting-control { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+    .color-swatch { width: 36px; height: 36px; border-radius: 8px; border: 2px solid var(--gray-300); cursor: pointer; overflow: hidden; padding: 0; }
+    input[type=color] { width: 36px; height: 36px; padding: 2px; border: none; cursor: pointer; border-radius: 8px; background: none; }
+    .upload-btn { position: relative; overflow: hidden; }
+    .upload-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .preview-img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; border: 1px solid var(--gray-100); background: var(--gray-50); }
+    .grid-2s { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media(max-width:500px){ .setting-row { flex-direction: column; } .grid-2s { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<header class="app-header">
+  <div class="header-brand">
+    <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
+    <div class="header-title">
+      <span class="company">J&D Western Electric</span>
+      <span class="module">Settings</span>
+    </div>
+  </div>
+  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+    <a href="office.html">Dashboard</a>
+    <a href="team.html">Team</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page-wrap">
+  <div class="page-title">Settings</div>
+  <div class="page-sub">Customize the app appearance and configure integrations.</div>
+
+  <!-- Appearance -->
+  <div class="section-card">
+    <div class="section-header">Appearance</div>
+    <div class="section-body">
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Theme Color</div>
+          <div class="setting-hint">Primary accent color used across all pages (buttons, highlights, icons)</div>
+        </div>
+        <div class="setting-control">
+          <input type="color" id="theme-color" value="#F47920" title="Pick theme color"/>
+          <button class="btn btn-primary btn-sm" id="btn-save-color">Apply</button>
+          <button class="btn btn-secondary btn-sm" id="btn-reset-color">Reset</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">App Logo</div>
+          <div class="setting-hint">Replace the logo shown in headers and the home page (PNG, JPG, SVG — max 5MB)</div>
+        </div>
+        <div class="setting-control" style="align-items:center;">
+          <img id="logo-preview" src="/logo-bolt.png" class="preview-img" alt="Current logo"/>
+          <div class="upload-btn">
+            <button class="btn btn-ghost btn-sm">Upload Logo</button>
+            <input type="file" id="logo-upload" accept="image/*"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Home Page Background</div>
+          <div class="setting-hint">Custom background image for the home page (optional)</div>
+        </div>
+        <div class="setting-control">
+          <div class="upload-btn">
+            <button class="btn btn-ghost btn-sm">Upload Image</button>
+            <input type="file" id="bg-upload" accept="image/*"/>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-reset-bg">Reset</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Account -->
+  <div class="section-card">
+    <div class="section-header">My Account</div>
+    <div class="section-body">
+      <div id="account-info" style="margin-bottom:16px;font-size:14px;color:var(--gray-700);"></div>
+      <div class="grid-2s">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Current Password</label>
+          <input type="password" id="cur-pw" class="form-control" placeholder="••••••••"/>
+        </div>
+        <div></div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">New Password</label>
+          <input type="password" id="new-pw" class="form-control" placeholder="Min 8 characters"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Confirm New Password</label>
+          <input type="password" id="confirm-pw" class="form-control" placeholder="Re-enter new password"/>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary btn-sm" id="btn-change-pw">Change Password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMTP Email -->
+  <div class="section-card">
+    <div class="section-header">Email (SMTP for Invitations)</div>
+    <div class="section-body">
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">Configure SMTP to send invitation emails automatically. If not configured, invite links will be shown on screen instead.</p>
+      <div class="grid-2s">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">SMTP Host</label>
+          <input type="text" id="smtp-host" class="form-control" placeholder="smtp.gmail.com"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">SMTP Port</label>
+          <input type="number" id="smtp-port" class="form-control" placeholder="587" value="587"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">SMTP Username</label>
+          <input type="text" id="smtp-user" class="form-control" placeholder="user@gmail.com"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">SMTP Password</label>
+          <input type="password" id="smtp-pass" class="form-control" placeholder="App password"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">From Address</label>
+          <input type="email" id="smtp-from" class="form-control" placeholder="noreply@jdwesternelectric.ca"/>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary btn-sm" id="btn-save-smtp">Save Email Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function showToast(msg, type='') {
+  const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
+  setTimeout(()=>t.className='', 3200);
+}
+
+// ── Auth check ──
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  const u = await r.json();
+  if (u.role !== 'admin') { location.href = '/field.html'; return; }
+  document.body.style.visibility = 'visible';
+  $('account-info').innerHTML = `Signed in as <strong>${u.name}</strong> (${u.email})`;
+  loadSettings();
+})();
+
+$('logout-btn').addEventListener('click', async e => {
+  e.preventDefault();
+  await fetch('/api/auth/logout', {method:'POST'});
+  location.href = '/login.html';
+});
+
+async function loadSettings() {
+  const s = await fetch('/api/settings').then(r=>r.json());
+  if (s.theme_color) $('theme-color').value = s.theme_color;
+  if (s.smtp_host) $('smtp-host').value = s.smtp_host;
+  if (s.smtp_port) $('smtp-port').value = s.smtp_port;
+  if (s.smtp_user) $('smtp-user').value = s.smtp_user;
+  if (s.smtp_pass) $('smtp-pass').value = s.smtp_pass;
+  if (s.smtp_from) $('smtp-from').value = s.smtp_from;
+}
+
+// Theme color
+$('btn-save-color').addEventListener('click', async () => {
+  const color = $('theme-color').value;
+  const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({theme_color: color})});
+  if (r.ok) {
+    document.documentElement.style.setProperty('--orange', color);
+    // Force theme.css reload
+    const link = document.querySelector('link[href="/theme.css"]');
+    if (link) link.href = '/theme.css?t=' + Date.now();
+    showToast('Theme color saved — reload other pages to apply', 'success');
+  }
+});
+$('btn-reset-color').addEventListener('click', async () => {
+  await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({theme_color: '#F47920'})});
+  $('theme-color').value = '#F47920';
+  document.documentElement.style.setProperty('--orange', '#F47920');
+  showToast('Theme reset to default', 'success');
+});
+
+// Logo upload
+$('logo-upload').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  const fd = new FormData(); fd.append('logo', file);
+  const r = await fetch('/api/settings/logo', {method:'POST', body: fd});
+  const d = await r.json();
+  if (r.ok) { $('logo-preview').src = d.path + '?t=' + Date.now(); showToast('Logo updated — reload home page to see it', 'success'); }
+  else showToast(d.error, 'error');
+});
+
+// Home BG upload
+$('bg-upload').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  const fd = new FormData(); fd.append('home_bg', file);
+  const r = await fetch('/api/settings/home-bg', {method:'POST', body: fd});
+  if (r.ok) showToast('Home background updated', 'success');
+  else showToast('Upload failed', 'error');
+});
+$('btn-reset-bg').addEventListener('click', async () => {
+  await fetch('/api/settings/home-bg', {method:'DELETE'});
+  showToast('Home background reset to default', 'success');
+});
+
+// Change password
+$('btn-change-pw').addEventListener('click', async () => {
+  const cur = $('cur-pw').value, nw = $('new-pw').value, cf = $('confirm-pw').value;
+  if (!cur || !nw) { showToast('All password fields required', 'error'); return; }
+  if (nw !== cf) { showToast('New passwords do not match', 'error'); return; }
+  const r = await fetch('/api/auth/change-password', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({current_password: cur, new_password: nw})});
+  const d = await r.json();
+  if (r.ok) { showToast('Password changed successfully', 'success'); $('cur-pw').value=''; $('new-pw').value=''; $('confirm-pw').value=''; }
+  else showToast(d.error, 'error');
+});
+
+// Save SMTP
+$('btn-save-smtp').addEventListener('click', async () => {
+  const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    smtp_host: $('smtp-host').value, smtp_port: $('smtp-port').value,
+    smtp_user: $('smtp-user').value, smtp_pass: $('smtp-pass').value,
+    smtp_from: $('smtp-from').value,
+  })});
+  if (r.ok) showToast('Email settings saved', 'success');
+});
+</script>
+</body>
+</html>

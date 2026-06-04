@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Get PO — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { visibility: hidden; background: var(--gray-100); }
+
+    .page-container { max-width: 640px; margin: 0 auto; padding: 20px 16px 48px; }
+
+    /* Form card */
+    .form-header {
+      background: linear-gradient(135deg, var(--black) 55%, #1a1a1a 100%);
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 20px 24px 18px;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .form-header h1 { font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+    .form-header .sub { font-size: 12px; color: rgba(255,255,255,.6); margin-top: 2px; }
+    .form-body { background: white; border-radius: 0 0 var(--radius) var(--radius); box-shadow: var(--shadow); }
+
+    .form-section { padding: 20px 24px; border-bottom: 1px solid var(--gray-100); }
+    .form-section:last-of-type { border-bottom: none; }
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--orange); margin-bottom: 14px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--orange-light); }
+
+    /* Jobber field is extra prominent */
+    .jobber-field .form-label { font-size: 14px; color: var(--dark); }
+    .jobber-field .form-label .critical { color: var(--red); font-size: 12px; font-weight: 600; display: block; margin-top: 2px; }
+    .jobber-field .form-control {
+      font-size: 18px; font-weight: 700; padding: 14px 16px;
+      border: 2px solid var(--orange); border-radius: var(--radius-sm);
+      letter-spacing: .02em;
+    }
+    .jobber-field .form-control:focus { border-color: var(--orange-dark); box-shadow: 0 0 0 3px rgba(244,121,32,.2); }
+
+    .readonly-field { background: var(--gray-50); color: var(--gray-700); }
+    .submit-section { padding: 20px 24px 24px; }
+    .submit-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 14px; background: var(--orange-light); border-radius: var(--radius-sm); font-size: 13px; color: var(--orange-dark); }
+
+    /* ── Confirmation Screen ── */
+    #confirm-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--black);
+      z-index: 1000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    #confirm-screen.show { display: flex; }
+
+    .confirm-instruction {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.45);
+      margin-bottom: 20px;
+    }
+    .po-number-display {
+      font-size: clamp(36px, 10vw, 64px);
+      font-weight: 900;
+      color: var(--orange);
+      letter-spacing: .04em;
+      line-height: 1;
+      padding: 24px 32px;
+      background: #111;
+      border: 2px solid rgba(244,121,32,.3);
+      border-radius: 16px;
+      margin: 0 0 28px;
+      width: 100%;
+      max-width: 500px;
+      word-break: break-all;
+    }
+    .po-details {
+      width: 100%;
+      max-width: 500px;
+      text-align: left;
+      background: #111;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 32px;
+    }
+    .po-detail-row {
+      display: flex;
+      gap: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid #1a1a1a;
+      font-size: 14px;
+    }
+    .po-detail-row:last-child { border-bottom: none; }
+    .po-detail-row .dl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: rgba(255,255,255,.3); min-width: 90px; padding-top: 1px; }
+    .po-detail-row .dv { color: #fff; font-weight: 600; }
+
+    .confirm-actions { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 500px; }
+    .btn-confirm-another {
+      flex: 1;
+      padding: 16px 24px;
+      background: var(--orange);
+      color: #000;
+      font-size: 15px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      min-width: 160px;
+    }
+    .btn-confirm-home {
+      flex: 1;
+      padding: 16px 24px;
+      background: #1a1a1a;
+      color: rgba(255,255,255,.7);
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      cursor: pointer;
+      min-width: 160px;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .confirm-logo { width: 48px; height: 48px; object-fit: contain; background: white; border-radius: 10px; padding: 4px; margin-bottom: 20px; }
+
+    .btn-confirm-print {
+      flex: 1;
+      padding: 16px 24px;
+      background: #1c1c1e;
+      color: rgba(255,255,255,.8);
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border: 1px solid #333;
+      border-radius: 10px;
+      cursor: pointer;
+      min-width: 140px;
+    }
+    .btn-confirm-print:hover { background: #2a2a2a; }
+
+    @media (max-width: 480px) {
+      .form-section { padding: 16px 18px; }
+      .submit-section { padding: 16px 18px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-brand">
+    <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
+    <div class="header-title">
+      <span class="company">J&D Western Electric</span>
+      <span class="module">Get PO</span>
+    </div>
+  </div>
+  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+    <span id="header-user" style="font-size:12px;color:rgba(255,255,255,.45);padding:0 8px;"></span>
+    <a href="index.html">Home</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page-container">
+
+  <div id="form-card">
+    <div class="form-header">
+      <div>
+        <div class="form-header h1" style="font-size:18px;font-weight:800;">Purchase Order Request</div>
+        <div class="sub">Fill out all required fields, then tap Generate PO</div>
+      </div>
+    </div>
+
+    <form id="po-form" class="form-body" novalidate>
+
+      <!-- Job Info -->
+      <div class="form-section">
+        <div class="section-label">Job Information</div>
+
+        <!-- Jobber Job Number — extra prominent -->
+        <div class="form-group jobber-field">
+          <label class="form-label" for="jobber_job_number">
+            Jobber Job Number
+            <span class="required">*</span>
+            <span class="critical">⚠ If unknown, call the office — this must match exactly</span>
+          </label>
+          <input type="text" id="jobber_job_number" class="form-control" placeholder="e.g. 12345" required autocomplete="off"/>
+          <span class="form-error" id="err-jobber">Jobber Job Number is required</span>
+        </div>
+
+        <div class="form-group mt-12">
+          <label class="form-label" for="job_name">Job Name <span class="required">*</span></label>
+          <input type="text" id="job_name" class="form-control" placeholder="e.g. Jasper Lot 3 — Custom Home" required autocomplete="off"/>
+          <span class="form-error" id="err-jobname">Job Name is required</span>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label" for="supplier">Supplier / Wholesaler</label>
+          <input type="text" id="supplier" class="form-control" placeholder="e.g. EECOL, Wesco, Rona"/>
+        </div>
+      </div>
+
+      <!-- What are you picking up? -->
+      <div class="form-section">
+        <div class="section-label">Items</div>
+        <div class="form-group">
+          <label class="form-label" for="description">
+            What are you picking up?
+            <span class="required">*</span>
+          </label>
+          <textarea id="description" class="form-control" rows="4" placeholder="Rough description is fine — e.g. wire, breakers, conduit fittings for panel room" required></textarea>
+          <span class="form-hint">A rough description is fine — just give the office enough to recognize the order</span>
+          <span class="form-error" id="err-desc">Description is required</span>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label" for="estimated_amount">Estimated Amount <span style="font-weight:400;color:var(--gray-500);">(optional)</span></label>
+          <input type="number" id="estimated_amount" class="form-control" placeholder="0.00" min="0" step="0.01"/>
+        </div>
+      </div>
+
+      <!-- Who / When (readonly) -->
+      <div class="form-section">
+        <div class="section-label">Request Info</div>
+        <div class="grid-2" style="gap:14px;">
+          <div class="form-group">
+            <label class="form-label">Your Name</label>
+            <input type="text" id="req-name" class="form-control readonly-field" readonly/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input type="text" id="req-date" class="form-control readonly-field" readonly/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reimbursement -->
+      <div class="form-section">
+        <div class="section-label">Reimbursement</div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;font-weight:600;color:var(--dark);">
+          <input type="checkbox" id="needs-reimbursement" style="width:18px;height:18px;accent-color:var(--orange);cursor:pointer;"/>
+          Do you need to be reimbursed for this purchase?
+        </label>
+        <div id="reimbursement-section" style="display:none;margin-top:14px;">
+          <p style="font-size:13px;color:var(--orange-dark);background:var(--orange-light);padding:10px 14px;border-radius:6px;margin-bottom:12px;line-height:1.5;">
+            📎 Please upload a photo of your receipt below.<br/>
+            <strong>Also keep the physical receipt and give it to accounts payable for reimbursement.</strong>
+          </p>
+          <div class="form-group">
+            <label class="form-label" for="receipt-file">Receipt Photo / File</label>
+            <input type="file" id="receipt-file" class="form-control" accept="image/jpeg,image/png,image/heic,image/heif,application/pdf,.heic,.heif" capture="environment" style="padding:8px;"/>
+            <span class="form-hint">Photo, screenshot, or PDF — max 15MB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project Assignment (optional) -->
+      <div class="form-section">
+        <div class="section-label">Project</div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;font-weight:600;color:var(--dark);">
+          <input type="checkbox" id="assign-project" style="width:18px;height:18px;accent-color:var(--orange);cursor:pointer;"/>
+          Assign this PO to a project? <span style="font-weight:400;color:var(--gray-500);">(optional)</span>
+        </label>
+        <div id="project-section" style="display:none;margin-top:14px;">
+          <div class="form-group">
+            <label class="form-label" for="project_id">Project</label>
+            <select id="project_id" class="form-control">
+              <option value="">— Select a project —</option>
+            </select>
+            <p style="font-size:12px;color:var(--gray-500);margin-top:8px;">Don't see your project? Ask the office to create it.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <div class="submit-section">
+        <div class="submit-meta">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/></svg>
+          A notification will be sent to the office automatically
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+          <span id="submit-label">Generate PO</span>
+          <div class="spinner" id="submit-spinner"></div>
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+</div>
+
+<!-- ── Confirmation Screen ── -->
+<div id="confirm-screen">
+  <img class="confirm-logo" src="logo-bolt.png" alt=""/>
+  <div class="confirm-instruction">Show this screen to the supplier or read them your PO number</div>
+  <div class="po-number-display" id="conf-po-number">JD-PO-2026-0001</div>
+  <div class="po-details" id="conf-details"></div>
+  <div class="confirm-actions">
+    <button class="btn-confirm-another" id="btn-another">+ Generate Another PO</button>
+    <button class="btn-confirm-print" id="btn-print-po">🖨 Print / Save PDF</button>
+    <a href="index.html" class="btn-confirm-home">🏠 Home</a>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let currentUser = null;
+let lastPOData  = null; // stored after generation for print
+
+function showToast(msg, type = '') {
+  const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
+  setTimeout(() => t.className = '', 3200);
+}
+
+// ── Auth + permission check ──
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  currentUser = await r.json();
+  const perms = (currentUser.permissions || '').split(',');
+  if (!perms.includes('get_po') && currentUser.role !== 'admin') {
+    showToast('You do not have access to this feature', 'error');
+    setTimeout(() => location.href = '/index.html', 1500);
+    return;
+  }
+  document.body.style.visibility = 'visible';
+  $('header-user').textContent = currentUser.name;
+  $('req-name').value = currentUser.name;
+  $('req-date').value = new Date().toLocaleDateString('en-CA', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+})();
+
+$('logout-btn').addEventListener('click', async e => {
+  e.preventDefault();
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.href = '/login.html';
+});
+
+// ── Reimbursement toggle ──
+$('needs-reimbursement').addEventListener('change', e => {
+  $('reimbursement-section').style.display = e.target.checked ? 'block' : 'none';
+});
+
+// ── Project assignment ──
+$('assign-project').addEventListener('change', e => {
+  $('project-section').style.display = e.target.checked ? 'block' : 'none';
+});
+
+async function loadProjects() {
+  try {
+    const res = await fetch('/api/project-folders');
+    if (!res.ok) return;
+    const projects = await res.json();
+    const sel = $('project_id');
+    sel.innerHTML = '<option value="">— Select a project —</option>' +
+      projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  } catch {}
+}
+loadProjects();
+
+// ── Create a new project inline (field users) ──
+// Field users cannot create projects — dropdown only.
+
+// ── Validation ──
+function validateField(inputId, errId, condition) {
+  const el = $(inputId), err = $(errId);
+  if (condition) { el.classList.add('error'); err.style.display = 'block'; return false; }
+  el.classList.remove('error'); err.style.display = 'none'; return true;
+}
+
+// ── Submit ──
+$('po-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  let valid = true;
+  valid = validateField('jobber_job_number', 'err-jobber', !$('jobber_job_number').value.trim()) && valid;
+  valid = validateField('job_name',          'err-jobname', !$('job_name').value.trim()) && valid;
+  valid = validateField('description',       'err-desc',   !$('description').value.trim()) && valid;
+  if (!valid) {
+    showToast('Please fill in the required fields', 'error');
+    document.querySelector('.form-control.error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  const btn = $('submit-btn');
+  $('submit-label').textContent = 'Generating…';
+  $('submit-spinner').style.display = 'block';
+  btn.disabled = true;
+
+  const needsReimburse = $('needs-reimbursement').checked;
+  const payload = {
+    jobber_job_number: $('jobber_job_number').value.trim(),
+    job_name: $('job_name').value.trim(),
+    supplier: $('supplier').value.trim(),
+    description: $('description').value.trim(),
+    estimated_amount: $('estimated_amount').value || null,
+    needs_reimbursement: needsReimburse,
+    project_id: ($('assign-project').checked && $('project_id').value) ? $('project_id').value : null,
+  };
+
+  try {
+    // Step 1: create PO
+    const res = await fetch('/api/po', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    // Step 2: upload receipt if selected
+    const receiptFile = $('receipt-file').files[0];
+    if (needsReimburse && receiptFile) {
+      $('submit-label').textContent = 'Uploading receipt…';
+      const fd = new FormData();
+      fd.append('receipt', receiptFile);
+      await fetch(`/api/po/${data.id}/receipt`, { method: 'POST', body: fd });
+    }
+
+    // Store for print
+    lastPOData = {
+      po_number: data.po_number,
+      generated_at: new Date().toLocaleString('en-CA', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}),
+      generated_by: currentUser.name,
+      needs_reimbursement: needsReimburse,
+      ...payload
+    };
+    showConfirmation(data.po_number, payload, needsReimburse);
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+    $('submit-label').textContent = 'Generate PO';
+    $('submit-spinner').style.display = 'none';
+    btn.disabled = false;
+  }
+});
+
+function showConfirmation(poNumber, payload, needsReimburse) {
+  $('conf-po-number').textContent = poNumber;
+  $('conf-details').innerHTML = `
+    <div class="po-detail-row"><div class="dl">Jobber #</div><div class="dv">${esc(payload.jobber_job_number)}</div></div>
+    <div class="po-detail-row"><div class="dl">Job Name</div><div class="dv">${esc(payload.job_name)}</div></div>
+    ${payload.supplier ? `<div class="po-detail-row"><div class="dl">Supplier</div><div class="dv">${esc(payload.supplier)}</div></div>` : ''}
+    <div class="po-detail-row"><div class="dl">Items</div><div class="dv">${esc(payload.description)}</div></div>
+    ${payload.estimated_amount ? `<div class="po-detail-row"><div class="dl">Est. Amount</div><div class="dv">$${parseFloat(payload.estimated_amount).toFixed(2)}</div></div>` : ''}
+    ${needsReimburse ? `<div class="po-detail-row"><div class="dl" style="color:#c05621;">⚠ Reimburse</div><div class="dv" style="color:#c05621;font-weight:700;">Yes — receipt submitted</div></div>` : ''}
+    <div class="po-detail-row"><div class="dl">Generated By</div><div class="dv">${esc(currentUser.name)}</div></div>
+    <div class="po-detail-row"><div class="dl">Date</div><div class="dv">${new Date().toLocaleDateString('en-CA', {year:'numeric',month:'short',day:'numeric'})}</div></div>
+  `;
+  $('confirm-screen').classList.add('show');
+}
+
+$('btn-another').addEventListener('click', () => {
+  $('confirm-screen').classList.remove('show');
+  $('po-form').reset();
+  $('req-name').value = currentUser.name;
+  $('req-date').value = new Date().toLocaleDateString('en-CA', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+  $('reimbursement-section').style.display = 'none';
+  $('project-section').style.display = 'none';
+  hideCreateProject();
+  $('submit-label').textContent = 'Generate PO';
+  $('submit-spinner').style.display = 'none';
+  $('submit-btn').disabled = false;
+  $('jobber_job_number').focus();
+});
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Print PO ──
+function buildPOPrintWindow(d, officeNote) {
+  const w = window.open('', '_blank', 'width=640,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><title>PO ${d.po_number}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; padding: 48px 40px; color: #111; max-width: 600px; margin: 0 auto; }
+    .co-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #888; }
+    .doc-title { font-size: 14px; color: #555; margin-top: 4px; margin-bottom: 24px; }
+    .po-num { font-size: 52px; font-weight: 900; color: #F47920; letter-spacing: .04em; line-height: 1; margin-bottom: 28px; word-break: break-all; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #999; margin-bottom: 3px; }
+    .field .val { font-size: 15px; font-weight: 600; color: #111; line-height: 1.4; }
+    .divider { border: none; border-top: 1px solid #e5e5e5; margin: 24px 0; }
+    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 40px; }
+    @media print {
+      body { padding: 24px 20px; }
+      @page { margin: 1cm; }
+    }
+  </style></head><body>
+  <div class="co-name">J&amp;D Western Electric Ltd</div>
+  <div class="doc-title">Purchase Order</div>
+  <div class="po-num">${d.po_number}</div>
+  <div class="field"><label>Date &amp; Time Generated</label><div class="val">${d.generated_at || (d.created_at ? new Date(d.created_at).toLocaleString('en-CA',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—')}</div></div>
+  <div class="field"><label>Generated By</label><div class="val">${escPrint(d.generated_by || d.generated_by_name)}</div></div>
+  <hr class="divider"/>
+  <div class="field"><label>Jobber Job Number</label><div class="val" style="font-size:17px;">${escPrint(d.jobber_job_number)}</div></div>
+  ${(d.job_name||d.job_name_field) ? `<div class="field"><label>Job Name</label><div class="val">${escPrint(d.job_name||d.job_name_field)}</div></div>` : ''}
+  ${d.supplier ? `<div class="field"><label>Supplier / Wholesaler</label><div class="val">${escPrint(d.supplier)}</div></div>` : ''}
+  <div class="field"><label>Description of Items</label><div class="val" style="white-space:pre-wrap;">${escPrint(d.description)}</div></div>
+  ${d.estimated_amount ? `<div class="field"><label>Estimated Amount</label><div class="val">$${parseFloat(d.estimated_amount).toFixed(2)}</div></div>` : ''}
+  ${d.needs_reimbursement ? `<div class="field" style="background:#fff8f0;padding:8px 12px;border-radius:6px;border-left:3px solid #F47920;"><label style="color:#c05621;">Reimbursement Required</label><div class="val" style="color:#c05621;">Yes — receipt on file</div></div>` : ''}
+  ${officeNote ? `<hr class="divider"/><div class="field"><label>Office Notes</label><div class="val" style="white-space:pre-wrap;">${escPrint(officeNote)}</div></div>` : ''}
+  <div class="footer">J&amp;D Western Electric Ltd — jdwesternelectric.ca</div>
+  <script>window.onload = () => { window.print(); }<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+function escPrint(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+$('btn-print-po').addEventListener('click', () => {
+  if (!lastPOData) return;
+  buildPOPrintWindow(lastPOData, null);
+});
+</script>
+</body>
+</html>

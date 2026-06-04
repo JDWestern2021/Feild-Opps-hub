@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Field Operations Hub — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow-x: hidden;
+      color: #fff;
+    }
+
+    /* ── Diagonal slash background panels ── */
+    .bg-slash {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .bg-slash::before {
+      content: '';
+      position: absolute;
+      top: -10%;
+      right: -5%;
+      width: 55%;
+      height: 130%;
+      background: linear-gradient(135deg, #1a1a1a 0%, #111 60%, transparent 100%);
+      clip-path: polygon(25% 0%, 100% 0%, 100% 100%, 0% 100%);
+    }
+    .bg-slash::after {
+      content: '';
+      position: absolute;
+      top: -10%;
+      right: 0;
+      width: 38%;
+      height: 130%;
+      background: linear-gradient(160deg, #F47920 0%, #c1380a 50%, #8c2a08 100%);
+      clip-path: polygon(45% 0%, 100% 0%, 100% 100%, 10% 100%);
+      opacity: 0.18;
+    }
+
+    /* Extra angular accent lines */
+    .accent-line {
+      position: fixed;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .accent-line-1 {
+      top: 0; right: 28%;
+      width: 2px; height: 100vh;
+      background: linear-gradient(to bottom, transparent, #F47920 30%, #F47920 70%, transparent);
+      opacity: 0.15;
+      transform: rotate(8deg) translateX(40px);
+      transform-origin: top center;
+    }
+    .accent-line-2 {
+      top: 0; right: 22%;
+      width: 1px; height: 100vh;
+      background: linear-gradient(to bottom, transparent, #F47920 40%, #F47920 60%, transparent);
+      opacity: 0.08;
+      transform: rotate(8deg) translateX(20px);
+      transform-origin: top center;
+    }
+
+    /* Dot grid texture top-left */
+    .dot-grid {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 120px;
+      height: 80px;
+      pointer-events: none;
+      z-index: 0;
+      background-image: radial-gradient(circle, rgba(244,121,32,0.35) 1px, transparent 1px);
+      background-size: 14px 14px;
+      mask-image: linear-gradient(135deg, black 30%, transparent 100%);
+    }
+    .dot-grid-br {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 120px;
+      height: 80px;
+      pointer-events: none;
+      z-index: 0;
+      background-image: radial-gradient(circle, rgba(244,121,32,0.3) 1px, transparent 1px);
+      background-size: 14px 14px;
+      mask-image: linear-gradient(315deg, black 30%, transparent 100%);
+    }
+
+    /* ── Page layout ── */
+    .page {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px 32px;
+    }
+
+    /* ── Logo ── */
+    .logo-wrap {
+      margin-bottom: 28px;
+      display: flex;
+      justify-content: center;
+    }
+    .logo-wrap img {
+      width: 140px;
+      height: 140px;
+      object-fit: contain;
+      background: white;
+      border-radius: 20px;
+      padding: 10px;
+      box-shadow: 0 8px 40px rgba(244,121,32,0.25), 0 0 0 1px rgba(244,121,32,0.15);
+    }
+
+    /* ── Brand name ── */
+    .brand-block {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .brand-name {
+      font-size: clamp(22px, 5vw, 34px);
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      color: #fff;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+    .brand-name span {
+      color: #F47920;
+    }
+    .brand-ltd {
+      font-size: clamp(11px, 2vw, 13px);
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      color: rgba(255,255,255,0.45);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .brand-sub {
+      font-size: clamp(12px, 2.5vw, 14px);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #F47920;
+      margin-top: 6px;
+    }
+
+    /* ── Divider ── */
+    .divider-line {
+      width: 60px;
+      height: 3px;
+      background: linear-gradient(90deg, #F47920, #c1380a);
+      border-radius: 2px;
+      margin: 20px auto;
+    }
+
+    /* ── Hub title ── */
+    .hub-title {
+      font-size: clamp(13px, 2.5vw, 16px);
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .hub-title span { color: #C1380A; }
+
+    /* ── Nav cards ── */
+    .nav-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 720px;
+      margin-bottom: 40px;
+    }
+
+    .nav-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 22px 24px;
+      background: #F47920;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #000;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+      border: none;
+    }
+    .nav-card::before {
+      content: '';
+      position: absolute;
+      top: -30%;
+      right: -10%;
+      width: 60%;
+      height: 160%;
+      background: rgba(0,0,0,0.12);
+      clip-path: polygon(30% 0%, 100% 0%, 100% 100%, 0% 100%);
+      pointer-events: none;
+    }
+    .nav-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(244,121,32,0.45);
+      background: #ff7d28;
+    }
+    .nav-card-icon {
+      width: 40px; height: 40px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .nav-card-icon svg { width: 22px; height: 22px; fill: #fff; }
+    .nav-card h2 {
+      font-size: 16px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #fff;
+      line-height: 1.1;
+    }
+    .nav-card p {
+      font-size: 12px;
+      color: rgba(255,255,255,0.8);
+      line-height: 1.4;
+    }
+    .nav-card-arrow {
+      position: absolute;
+      bottom: 18px;
+      right: 20px;
+      font-size: 20px;
+      color: rgba(255,255,255,0.6);
+      font-weight: 700;
+    }
+
+    /* secondary card style */
+    .nav-card.secondary {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+    }
+    .nav-card.secondary::before { background: rgba(244,121,32,0.06); }
+    .nav-card.secondary:hover {
+      background: #222;
+      box-shadow: 0 12px 40px rgba(244,121,32,0.2);
+      border-color: rgba(244,121,32,0.3);
+    }
+    .nav-card.secondary .nav-card-icon { background: rgba(244,121,32,0.15); }
+    .nav-card.secondary h2 { color: #fff; }
+    .nav-card.secondary p { color: rgba(255,255,255,0.45); }
+    .nav-card.secondary .nav-card-arrow { color: rgba(244,121,32,0.5); }
+
+    /* ── Tagline ── */
+    .tagline {
+      font-size: clamp(10px, 2vw, 12px);
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      text-align: center;
+    }
+    .tagline span { color: #F47920; margin: 0 8px; font-size: 8px; vertical-align: middle; }
+
+    /* ── Contact footer ── */
+    .contact-footer {
+      margin-top: 20px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.2);
+      text-align: center;
+      letter-spacing: 0.04em;
+    }
+    .contact-footer a { color: rgba(255,255,255,0.25); text-decoration: none; }
+    .contact-footer a:hover { color: rgba(244,121,32,0.7); }
+
+    body { visibility: hidden; }
+    @media (max-width: 480px) {
+      .nav-cards { grid-template-columns: 1fr; max-width: 340px; }
+      .logo-wrap img { width: 110px; height: 110px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Background geometry -->
+<div class="bg-slash"></div>
+<div class="accent-line accent-line-1"></div>
+<div class="accent-line accent-line-2"></div>
+<div class="dot-grid"></div>
+<div class="dot-grid-br"></div>
+
+<main class="page">
+
+  <!-- Logo -->
+  <div class="logo-wrap">
+    <img src="logo-bolt.png" alt="J&D Western Electric"/>
+  </div>
+
+  <!-- Brand name -->
+  <div class="brand-block">
+    <div class="brand-name">J<span>&</span>D Western Electric</div>
+    <div class="brand-ltd">Ltd</div>
+    <div class="brand-sub">Commercial &amp; Residential</div>
+  </div>
+
+  <div class="divider-line"></div>
+
+  <!-- Hub label -->
+  <div class="hub-title">Field Operations <span>Hub</span></div>
+
+  <!-- Nav cards -->
+  <div class="nav-cards">
+    <a href="field.html" class="nav-card" id="card-tt">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>
+      </div>
+      <h2>Daily Time<br>Ticket</h2>
+      <p>Log crew hours &amp; work completed on site</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
+
+    <a href="get-po.html" class="nav-card" id="card-po">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+      </div>
+      <h2>Get PO</h2>
+      <p>Generate a purchase order at the supplier</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
+
+    <a href="office.html" class="nav-card secondary" id="card-od">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24" fill="#F47920"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+      </div>
+      <h2>Office<br>Dashboard</h2>
+      <p>View, filter &amp; export all time tickets</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
+  </div>
+
+  <!-- Tagline -->
+  <div class="tagline">
+    Power <span>●</span> Performance <span>●</span> Peace of Mind
+  </div>
+
+  <!-- Contact footer -->
+  <div class="contact-footer">
+    <a href="tel:5873434349">(587) 343-4349</a>
+    &nbsp;·&nbsp;
+    <a href="https://jdwesternelectric.ca" target="_blank">jdwesternelectric.ca</a>
+  </div>
+
+  <!-- Sign out link -->
+  <div style="margin-top:16px;">
+    <a href="#" id="logout-link" style="font-size:12px;color:rgba(255,255,255,0.2);text-decoration:none;">Sign out</a>
+  </div>
+
+</main>
+
+<script>
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  const u = await r.json();
+  const perms = (u.permissions || '').split(',');
+  const hasTT = u.role === 'admin' || perms.includes('time_ticket');
+  const hasPO = u.role === 'admin' || perms.includes('get_po');
+  const hasOD = u.role === 'admin';
+  if (!hasTT) document.getElementById('card-tt').style.display = 'none';
+  if (!hasPO) document.getElementById('card-po').style.display = 'none';
+  if (!hasOD) document.getElementById('card-od').style.display = 'none';
+
+  // Apply saved logo
+  const s = await fetch('/api/settings/public').then(r=>r.json()).catch(()=>({}));
+  if (s.logo_path) document.querySelector('.logo-wrap img').src = s.logo_path + '?t=' + Date.now();
+
+  document.body.style.visibility = 'visible';
+})();
+
+document.getElementById('logout-link').addEventListener('click', async e => {
+  e.preventDefault();
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.href = '/login.html';
+});
+</script>
+</body>
+</html>

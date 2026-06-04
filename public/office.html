@@ -1,0 +1,2697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Office Dashboard — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { visibility: hidden; background: var(--gray-100); }
+    /* Audit log */
+    .audit-log { margin-top: 16px; }
+    .audit-log .audit-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); margin-bottom: 8px; }
+    .audit-entry { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--gray-100); font-size: 12px; }
+    .audit-entry:last-child { border-bottom: none; }
+    .audit-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gray-300); flex-shrink: 0; margin-top: 5px; }
+    .audit-dot.submitted { background: var(--green); }
+    .audit-dot.viewed    { background: #2563eb; }
+    .audit-dot.archived  { background: var(--gray-500); }
+    .audit-dot.deleted   { background: var(--red); }
+    .audit-dot.exported  { background: var(--orange); }
+    .audit-text { color: var(--gray-700); line-height: 1.4; }
+    .audit-text strong { color: var(--dark); }
+
+    .page-wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+
+    /* Stats row */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .stat-icon {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .stat-icon svg { width: 22px; height: 22px; fill: white; }
+    .stat-icon.orange { background: var(--orange); }
+    .stat-icon.dark   { background: var(--dark); }
+    .stat-icon.green  { background: var(--green); }
+    .stat-icon.blue   { background: #2563eb; }
+    .stat-val  { font-size: 26px; font-weight: 800; line-height: 1; color: var(--dark); }
+    .stat-label{ font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+
+    /* Filters */
+    .filter-bar {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .filter-bar .form-group { flex: 1; min-width: 140px; margin: 0; }
+    .filter-bar .form-label { font-size: 11px; }
+    .filter-bar .form-control { padding: 8px 10px; font-size: 13px; }
+    .filter-actions { display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+
+    /* Ticket list */
+    .tickets-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .tickets-header h2 { font-size: 16px; font-weight: 700; }
+    .tickets-count { font-size: 13px; color: var(--gray-500); }
+
+    .ticket-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .ticket-row {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 110px 1fr 160px 130px 80px;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 18px;
+      cursor: pointer;
+      transition: box-shadow 0.15s, transform 0.1s;
+      border-left: 3px solid transparent;
+    }
+    .ticket-row:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); border-left-color: var(--orange); }
+    .ticket-date { font-size: 13px; font-weight: 700; color: var(--dark); }
+    .ticket-date .day { font-size: 11px; color: var(--gray-500); font-weight: 400; }
+    .ticket-job { }
+    .ticket-job .job-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ticket-job .job-num  { font-size: 12px; color: var(--gray-500); }
+    /* Subtle project / job number subheading on each ticket */
+    .ticket-subhead { font-size: 11px; color: var(--gray-500); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ticket-subhead .sep { color: var(--gray-300); margin: 0 6px; }
+    .ticket-detail-subhead { font-size: 12px; color: var(--gray-500); margin-bottom: 14px; }
+    .ticket-detail-subhead .sep { color: var(--gray-300); margin: 0 8px; }
+    .ticket-supervisor { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ticket-hrs { text-align: center; }
+    .ticket-hrs .hrs-big { font-size: 18px; font-weight: 800; color: var(--dark); }
+    .ticket-hrs .hrs-sub { font-size: 11px; color: var(--gray-500); }
+    .ticket-hrs .ot-badge { color: var(--orange); font-weight: 700; font-size: 11px; }
+    .ticket-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    .empty-state {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 60px 24px;
+      text-align: center;
+    }
+    .empty-state svg { width: 48px; height: 48px; fill: var(--gray-300); margin-bottom: 16px; }
+    .empty-state h3 { font-size: 18px; font-weight: 700; color: var(--gray-700); }
+    .empty-state p  { color: var(--gray-500); margin-top: 6px; font-size: 14px; }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .page-btn {
+      width: 36px; height: 36px;
+      border: 1.5px solid var(--gray-300);
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--dark);
+      transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .page-btn:hover { border-color: var(--orange); color: var(--orange); }
+    .page-btn.active { background: var(--orange); border-color: var(--orange); color: white; }
+    .page-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+    /* Detail Modal */
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .detail-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-500); display: block; margin-bottom: 4px; }
+    .detail-field .val { font-size: 14px; color: var(--dark); font-weight: 500; }
+    .detail-field.full { grid-column: 1 / -1; }
+
+    .crew-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .crew-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500); font-weight: 700; padding: 6px 10px; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); text-align: left; }
+    .crew-table td { padding: 8px 10px; border-bottom: 1px solid var(--gray-100); }
+    .crew-table tr:last-child td { border-bottom: none; }
+    .crew-table .total-row td { font-weight: 700; background: var(--gray-50); color: var(--orange); }
+
+    .ticket-number-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      background: var(--gray-100);
+      color: var(--gray-700);
+      padding: 3px 10px;
+      border-radius: 12px;
+      margin-bottom: 4px;
+    }
+
+    /* Loading skeleton */
+    .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .skeleton-row { height: 62px; margin-bottom: 10px; border-radius: var(--radius); }
+
+    /* PO Management */
+    .po-table-wrap { overflow-x: auto; }
+    .po-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .po-table th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); padding: 8px 12px; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); text-align: left; white-space: nowrap; }
+    .po-table td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+    .po-table tr:last-child td { border-bottom: none; }
+    .po-table tr { cursor: pointer; transition: background .1s; }
+    .po-table tr:hover td { background: var(--gray-50); }
+    .po-status { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+    .po-status.Open     { background: #fff3cd; color: #856404; }
+    .po-status.Entered  { background: #d4edda; color: #155724; }
+    .po-status.Archived { background: var(--gray-100); color: var(--gray-500); }
+    .po-filter-bar { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 18px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .po-filter-bar .form-group { flex: 1; min-width: 130px; margin: 0; }
+    .po-filter-bar .form-label { font-size: 11px; }
+    .po-filter-bar .form-control { padding: 7px 10px; font-size: 13px; }
+
+    /* PO bulk actions bar */
+    .po-bulk-bar { background: var(--orange-light); border: 1px solid rgba(244,121,32,.3); border-radius: var(--radius); padding: 10px 16px; margin-bottom: 12px; display: none; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .po-bulk-bar.visible { display: flex; }
+    .po-bulk-bar .sel-count { font-size: 13px; font-weight: 700; color: var(--orange-dark); margin-right: auto; }
+    /* Checkbox col */
+    .po-table .cb-col { width: 36px; text-align: center; }
+    .po-cb { width: 15px; height: 15px; accent-color: var(--orange); cursor: pointer; }
+    /* Reimbursement badge */
+    .reimb-badge { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; background: #fff3cd; color: #856404; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    /* Archived POs section */
+    .archived-toggle { background: none; border: 1px solid var(--gray-300); border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--gray-700); cursor: pointer; transition: all .15s; }
+    .archived-toggle:hover { border-color: var(--orange); color: var(--orange); }
+
+    /* ── Home view ── */
+    .home-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
+    @media(max-width:900px){ .home-cards { grid-template-columns:1fr; } }
+    .home-card { background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); padding:20px 22px; }
+    .home-card-title { font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--orange); margin-bottom:14px; display:flex; align-items:center; gap:6px; }
+    .home-stat-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--gray-100); font-size:13px; }
+    .home-stat-row:last-of-type { border-bottom:none; }
+    .home-stat-num { font-size:22px; font-weight:800; color:var(--dark); min-width:36px; text-align:right; }
+    .home-stat-num.orange { color:var(--orange); }
+    .home-card .view-link { display:block; margin-top:14px; font-size:12px; font-weight:700; color:var(--orange); text-decoration:none; letter-spacing:.03em; }
+    .home-card .view-link:hover { text-decoration:underline; }
+    .activity-feed { background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); padding:20px 22px; }
+    .activity-feed h3 { font-size:14px; font-weight:800; margin-bottom:14px; }
+    .activity-item { display:flex; gap:12px; align-items:flex-start; padding:7px 0; border-bottom:1px solid var(--gray-100); font-size:13px; }
+    .activity-item:last-child { border-bottom:none; }
+    .activity-dot { width:8px; height:8px; border-radius:50%; background:var(--gray-300); flex-shrink:0; margin-top:4px; }
+    .activity-dot.ticket { background:var(--orange); }
+    .activity-dot.po { background:#2563eb; }
+    .activity-dot.project { background:var(--green); }
+
+    /* ── Interactive stat cards ── */
+    .stat-card { cursor:pointer; transition:box-shadow .15s, transform .1s; }
+    .stat-card:hover { box-shadow:var(--shadow-lg); transform:translateY(-1px); }
+    .stat-card.stat-active { border:2px solid var(--orange); box-shadow:0 0 0 3px rgba(244,121,32,.15); }
+    .clear-filter-btn { background:var(--orange-light); color:var(--orange-dark); border:none; border-radius:16px; padding:3px 12px; font-size:12px; font-weight:700; cursor:pointer; display:none; }
+    .clear-filter-btn.visible { display:inline-block; }
+
+    /* ── Inline status quick-edit ── */
+    .status-quick-btn { cursor:pointer; border:none; background:none; padding:0; }
+    .status-quick-btn:hover { opacity:.8; }
+    .status-inline-select { padding:2px 4px; font-size:11px; font-weight:700; border:1.5px solid var(--orange); border-radius:6px; background:#fff; cursor:pointer; }
+
+    /* ── Status badge color system ── */
+    .spill { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+    /* Ticket statuses */
+    .spill-pending  { background:#fde8e8; color:#9b1c1c; }
+    .spill-reviewed { background:#fef9c3; color:#92400e; }
+    .spill-entered  { background:#dcfce7; color:#166534; }
+    /* PO statuses */
+    .spill-open     { background:#fde8e8; color:#9b1c1c; }
+    .spill-po-entered { background:#dcfce7; color:#166534; }
+    .spill-archived { background:#f3f4f6; color:#4b5563; }
+
+    /* Main ticket row - wider to fit status + project */
+    .ticket-row { grid-template-columns: 100px 1fr 110px 110px 80px !important; }
+    .ticket-status-col { display:flex; flex-direction:column; gap:4px; }
+
+    /* Outstanding notification styles */
+    .outstanding-badge { display:inline-flex; align-items:center; gap:4px; background:var(--orange); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+    .all-ok-badge { display:inline-flex; align-items:center; gap:4px; background:#d4edda; color:#155724; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; }
+    .proj-outstanding-bar { padding:10px 16px; font-size:13px; border-bottom:1px solid var(--gray-100); background:var(--gray-50); }
+    tr.row-outstanding td:first-child { border-left:3px solid var(--orange); }
+    tr.row-outstanding { background: rgba(244,121,32,0.04); }
+    tr.row-ok td:first-child { border-left:3px solid transparent; }
+    .inline-status-form { display:flex; align-items:center; gap:6px; }
+    .inline-status-select { padding:4px 6px; font-size:12px; border:1.5px solid var(--gray-300); border-radius:6px; background:#fff; color:var(--dark); cursor:pointer; }
+    .inline-status-select:focus { outline:none; border-color:var(--orange); }
+    .inline-save-btn { padding:4px 10px; font-size:12px; font-weight:700; background:var(--orange); color:#fff; border:none; border-radius:6px; cursor:pointer; white-space:nowrap; }
+    .inline-save-btn:hover { background:var(--orange-dark); }
+    .status-pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+    .status-pill.Pending  { background:#fff3cd; color:#856404; }
+    .status-pill.Reviewed { background:#d1ecf1; color:#0c5460; }
+    .status-pill.Entered  { background:#d4edda; color:#155724; }
+    .status-pill.Open     { background:#fff3cd; color:#856404; }
+    .status-pill.Archived { background:#e0e0e0; color:#555; }
+
+    /* Project cards */
+    .project-card {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 20px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .project-card:hover { border-left-color: var(--orange); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    .project-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .project-card .meta { font-size: 12px; color: var(--gray-500); display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; }
+    .project-card .meta span { display:flex; align-items:center; gap:4px; }
+    .project-card .job-tags { margin-top:8px; }
+
+    /* Project list tabs (Active / Completed) and inner sub-tabs (Tickets / POs) */
+    .proj-tab, .proj-subtab {
+      background: none; border: 1px solid var(--gray-300); border-radius: 8px;
+      padding: 7px 16px; font-size: 13px; font-weight: 600; color: var(--gray-700);
+      cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .proj-tab:hover, .proj-subtab:hover { border-color: var(--orange); color: var(--orange); }
+    .proj-tab.active, .proj-subtab.active { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .proj-subcount { font-size: 11px; background: rgba(0,0,0,.12); border-radius: 10px; padding: 0 7px; font-weight: 700; }
+    .proj-subtab.active .proj-subcount { background: rgba(255,255,255,.25); }
+
+    /* Job-number reference tags */
+    .job-tag { display:inline-block; background: var(--gray-100); color: var(--gray-700); font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin: 0 4px 4px 0; }
+
+    /* Grey "archived on main dashboard" label inside the project view */
+    .archived-label { display:inline-block; font-size:10px; background:#e0e0e0; color:#666; padding:1px 7px; border-radius:8px; font-weight:600; vertical-align:middle; margin-left:6px; }
+
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .ticket-row { grid-template-columns: 90px 1fr 1fr 70px; }
+      .ticket-supervisor { display: none; }
+    }
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .ticket-row { grid-template-columns: 80px 1fr 60px 36px; gap: 10px; padding: 12px 14px; }
+      .ticket-supervisor, .ticket-job .job-num { display: none; }
+      .filter-bar { flex-direction: column; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-brand">
+    <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
+    <div class="header-title">
+      <span class="company">J&D Western Electric</span>
+      <span class="module">Office Dashboard</span>
+    </div>
+  </div>
+  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+    <a href="#" id="nav-home">Home</a>
+    <a href="#" id="nav-tickets">Time Tickets</a>
+    <a href="#" id="nav-projects">Projects</a>
+    <a href="#" id="nav-pos">Purchase Orders</a>
+    <a href="field.html" style="font-size:12px;opacity:.7;">+ New Ticket</a>
+    <a href="team.html">Team</a>
+    <a href="settings-admin.html">Settings</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page-wrap">
+
+  <!-- HOME VIEW (default) -->
+  <div id="home-view">
+    <div class="home-cards" id="home-cards-grid">
+      <div class="home-card">
+        <div class="home-card-title">📋 Time Tickets</div>
+        <div class="home-stat-row"><span>Submitted today</span><span class="home-stat-num" id="hm-tt-today">—</span></div>
+        <div class="home-stat-row"><span>This week</span><span class="home-stat-num" id="hm-tt-week">—</span></div>
+        <div class="home-stat-row"><span>Pending</span><span class="home-stat-num orange" id="hm-tt-pending">—</span></div>
+        <div class="home-stat-row"><span>Reviewed</span><span class="home-stat-num" id="hm-tt-reviewed">—</span></div>
+        <div class="home-stat-row"><span>Entered</span><span class="home-stat-num" id="hm-tt-entered">—</span></div>
+        <a href="#" class="view-link" id="hm-link-tt">→ View All Time Tickets</a>
+      </div>
+      <div class="home-card">
+        <div class="home-card-title">📁 Projects</div>
+        <div class="home-stat-row"><span>Active projects</span><span class="home-stat-num" id="hm-proj-active">—</span></div>
+        <div class="home-stat-row"><span>Need attention</span><span class="home-stat-num orange" id="hm-proj-outstanding">—</span></div>
+        <div class="home-stat-row"><span>Completed / Archived</span><span class="home-stat-num" id="hm-proj-done">—</span></div>
+        <a href="#" class="view-link" id="hm-link-proj">→ View All Projects</a>
+      </div>
+      <div class="home-card">
+        <div class="home-card-title">🧾 Purchase Orders</div>
+        <div class="home-stat-row"><span>Open</span><span class="home-stat-num orange" id="hm-po-open">—</span></div>
+        <div class="home-stat-row"><span>Entered this week</span><span class="home-stat-num" id="hm-po-week">—</span></div>
+        <div class="home-stat-row"><span>Pending reimbursement</span><span class="home-stat-num orange" id="hm-po-reimburse">—</span></div>
+        <a href="#" class="view-link" id="hm-link-po">→ View All Purchase Orders</a>
+      </div>
+    </div>
+    <div class="activity-feed">
+      <h3>Recent Activity</h3>
+      <div id="activity-list"><div style="color:var(--gray-500);font-size:13px;">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div id="tt-dashboard" style="display:none;">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon orange">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+      </div>
+      <div><div class="stat-val" id="stat-total">—</div><div class="stat-label">Total Tickets</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">
+        <svg viewBox="0 0 24 24"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>
+      </div>
+      <div><div class="stat-val" id="stat-today">—</div><div class="stat-label">Today</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon dark">
+        <svg viewBox="0 0 24 24"><path d="M7 11H5v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5C3.89 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>
+      </div>
+      <div><div class="stat-val" id="stat-week">—</div><div class="stat-label">This Week</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon blue">
+        <svg viewBox="0 0 24 24"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
+      </div>
+      <div><div class="stat-val" id="stat-jobs">—</div><div class="stat-label">Active Jobs</div></div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;" id="stat-archive-card" title="View archived tickets">
+      <div class="stat-icon" style="background:#6e6e6e;">
+        <svg viewBox="0 0 24 24"><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/></svg>
+      </div>
+      <div><div class="stat-val" id="stat-archived">—</div><div class="stat-label">Archived</div></div>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filter-bar">
+    <div class="form-group">
+      <label class="form-label">Search</label>
+      <input type="text" id="f-search" class="form-control" placeholder="Job, supervisor, ticket #…"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Job Name / #</label>
+      <input type="text" id="f-job" class="form-control" placeholder="Filter by job"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date From</label>
+      <input type="date" id="f-date-from" class="form-control"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date To</label>
+      <input type="date" id="f-date-to" class="form-control"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Supervisor</label>
+      <input type="text" id="f-supervisor" class="form-control" placeholder="Name"/>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-primary" id="btn-filter">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+        Filter
+      </button>
+      <button class="btn btn-secondary" id="btn-clear">Clear</button>
+      <button class="btn btn-ghost" id="btn-export" title="Export CSV">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        CSV
+      </button>
+    </div>
+  </div>
+
+  <!-- TICKET LIST -->
+  <div class="tickets-header">
+    <h2>Time Tickets</h2>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="tickets-count" id="tickets-count"></span>
+      <button class="clear-filter-btn" id="btn-clear-stat-filter">✕ Clear Filter</button>
+      <button class="btn btn-secondary btn-sm" id="btn-show-ticket-archive">Archived Tickets</button>
+    </div>
+  </div>
+
+  <div id="ticket-list" class="ticket-list">
+    <!-- Skeleton placeholders -->
+    <div class="skeleton skeleton-row"></div>
+    <div class="skeleton skeleton-row"></div>
+    <div class="skeleton skeleton-row"></div>
+  </div>
+
+  <div class="pagination" id="pagination"></div>
+  </div><!-- end #tt-dashboard -->
+
+  <!-- PURCHASE ORDERS VIEW -->
+  <div id="pos-view" style="display:none;">
+    <div class="flex-between" style="margin-bottom:14px;">
+      <h2 style="font-size:18px;font-weight:800;">Purchase Orders</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" id="btn-export-pos" style="background:#1a6e35;color:white;">Export All to Excel</button>
+        <button class="btn btn-secondary btn-sm" id="btn-close-pos">← Back</button>
+      </div>
+    </div>
+
+    <!-- PO Filters -->
+    <div class="po-filter-bar">
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select id="pf-status" class="form-control">
+          <option value="Open">Open (default)</option>
+          <option value="">All Statuses</option>
+          <option value="Entered">Entered</option>
+          <option value="Archived">Archived</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Job Name</label>
+        <input type="text" id="pf-job-name" class="form-control" placeholder="Search job name"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Employee</label>
+        <input type="text" id="pf-employee" class="form-control" placeholder="Name"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date From</label>
+        <input type="date" id="pf-date-from" class="form-control"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date To</label>
+        <input type="date" id="pf-date-to" class="form-control"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reimbursement</label>
+        <select id="pf-reimbursement" class="form-control">
+          <option value="">All</option>
+          <option value="1">Needs Reimbursement</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-shrink:0;">
+        <button class="btn btn-primary btn-sm" id="btn-po-filter">Filter</button>
+        <button class="btn btn-secondary btn-sm" id="btn-po-clear">Clear</button>
+      </div>
+    </div>
+
+    <!-- Bulk actions (shown when rows selected) -->
+    <div class="po-bulk-bar" id="po-bulk-bar">
+      <span class="sel-count" id="po-sel-count">0 selected</span>
+      <button class="btn btn-sm" id="btn-print-selected" style="background:#1c1c1e;color:white;">🖨 Print Selected</button>
+      <button class="btn btn-sm" id="btn-export-selected" style="background:#1a6e35;color:white;">📊 Export Selected to Excel</button>
+      <button class="btn btn-sm" id="btn-archive-selected" style="background:#6e6e6e;color:white;">Archive Selected</button>
+    </div>
+
+    <!-- Open POs table -->
+    <div class="card">
+      <div class="card-header">
+        <span id="po-count" style="font-size:13px;color:var(--gray-500);">— purchase orders</span>
+      </div>
+      <div class="po-table-wrap">
+        <table class="po-table">
+          <thead>
+            <tr>
+              <th class="cb-col"><input type="checkbox" class="po-cb" id="po-select-all" title="Select all"/></th>
+              <th>PO Number</th>
+              <th>Date</th>
+              <th>Generated By</th>
+              <th>Jobber Job #</th>
+              <th>Job Name</th>
+              <th>Supplier</th>
+              <th>Description</th>
+              <th>Est. Amount</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="po-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Archived POs section (Entered + Archived status) -->
+    <div style="margin-top:24px;" id="po-archived-section">
+      <div class="flex-between" style="margin-bottom:10px;">
+        <h3 style="font-size:15px;font-weight:700;">Archived POs <span style="font-size:12px;color:var(--gray-500);font-weight:400;">(Entered &amp; Archived)</span></h3>
+        <button class="archived-toggle" id="btn-toggle-archived-pos">Show ▼</button>
+      </div>
+      <div id="po-archived-wrap" style="display:none;">
+        <div class="po-table-wrap card" style="box-shadow:var(--shadow);">
+          <table class="po-table">
+            <thead>
+              <tr>
+                <th class="cb-col"><input type="checkbox" class="po-cb" id="po-arch-select-all" title="Select all archived"/></th>
+                <th>PO Number</th><th>Date</th><th>Generated By</th><th>Jobber Job #</th><th>Job Name</th><th>Supplier</th><th>Description</th><th>Est. Amount</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="po-archived-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PROJECTS VIEW -->
+  <div id="projects-view" style="display:none;">
+    <div class="flex-between" style="margin-bottom:16px;">
+      <h2 style="font-size:18px;font-weight:800;">Projects</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm" id="btn-new-project">+ New Project</button>
+        <button class="btn btn-secondary btn-sm" id="btn-close-projects">← Back to Tickets</button>
+      </div>
+    </div>
+
+    <!-- Project list (active / completed) -->
+    <div id="project-list-wrap">
+      <div style="display:flex;gap:6px;margin-bottom:16px;">
+        <button class="proj-tab active" id="ptab-active" data-status="active">Active Projects</button>
+        <button class="proj-tab" id="ptab-complete" data-status="complete">Completed Projects</button>
+        <button class="proj-tab" id="ptab-archived-proj" data-status="archived">Archived Projects</button>
+      </div>
+      <div id="project-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
+    </div>
+
+    <!-- Project detail (hidden until a project is opened) -->
+    <div id="project-detail" style="display:none;">
+      <div class="card">
+        <div class="card-header" style="align-items:flex-start;">
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);margin-bottom:2px;">Project</div>
+            <h2 id="project-detail-name" style="font-size:18px;"></h2>
+            <div id="project-detail-jobs" style="margin-top:8px;"></div>
+            <div id="project-detail-status" style="margin-top:6px;font-size:12px;color:var(--gray-500);"></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="btn btn-secondary btn-sm" id="btn-edit-project">Edit</button>
+            <button class="btn btn-sm" id="btn-complete-project" style="background:#6e6e6e;color:white;">Mark Complete</button>
+            <button class="btn btn-sm" id="btn-archive-project" style="background:#555;color:white;">Archive Project</button>
+            <button class="btn btn-sm" id="btn-restore-project" style="display:none;background:#2563eb;color:white;">Restore Project</button>
+            <button class="btn btn-danger btn-sm" id="btn-delete-project" style="display:none;">Delete Permanently</button>
+            <button class="btn btn-sm" id="btn-export-project" style="background:#1a6e35;color:white;">Export Project to Excel</button>
+            <button class="btn btn-secondary btn-sm" id="btn-back-projects">All Projects</button>
+          </div>
+        </div>
+        <div class="proj-outstanding-bar" id="project-outstanding-summary"></div>
+        <div class="card-body">
+          <div style="display:flex;gap:6px;margin-bottom:14px;">
+            <button class="proj-subtab active" id="psub-tickets" data-tab="tickets">Time Tickets <span class="proj-subcount" id="psub-tickets-count">0</span></button>
+            <button class="proj-subtab" id="psub-pos" data-tab="pos">Purchase Orders <span class="proj-subcount" id="psub-pos-count">0</span></button>
+            <button class="proj-subtab" id="psub-proj-archived" data-tab="proj-archived">Archived <span class="proj-subcount" id="psub-archived-count">0</span></button>
+          </div>
+          <div id="ptab-panel-tickets"></div>
+          <div id="ptab-panel-pos" style="display:none;"></div>
+          <div id="ptab-panel-proj-archived" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHIVED JOBS SECTION -->
+  <div id="archive-section" style="margin-top:40px;display:none;">
+    <div class="flex-between" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h2 style="font-size:16px;font-weight:700;">Archived Tickets</h2>
+        <span class="badge badge-gray" id="archived-count-badge">0</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="btn-hide-archive">Hide Archived</button>
+    </div>
+    <div id="archive-list" class="ticket-list"></div>
+    <div class="pagination" id="archive-pagination"></div>
+  </div>
+
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="ticket-number-badge" id="modal-ticket-num">—</div>
+        <h3 id="modal-title">Ticket Details</h3>
+        <div id="modal-ticket-status-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;"></div>
+      </div>
+      <button class="modal-close" id="modal-close">×</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <!-- populated by JS -->
+    </div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn btn-danger btn-sm" id="modal-delete">Delete</button>
+      <button class="btn btn-sm" id="modal-archive" style="background:#6e6e6e;color:white;">Archive</button>
+      <button class="btn btn-secondary btn-sm" id="modal-edit-btn">Edit</button>
+      <button class="btn btn-sm" id="modal-print" style="background:#1c1c1e;color:white;">Print</button>
+      <button class="btn btn-sm" id="modal-export" style="background:#1a6e35;color:white;">Export XLSX</button>
+      <button class="btn btn-secondary btn-sm" id="modal-close-2">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header" style="border-bottom:2px solid var(--red);">
+      <h3 style="color:var(--red);">⚠ Permanently Delete Ticket?</h3>
+      <button class="modal-close" id="confirm-cancel">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--gray-700);">You are about to permanently delete ticket <strong id="confirm-ref"></strong>.</p>
+      <p style="font-size:13px;color:var(--red);font-weight:700;margin-top:10px;">This cannot be undone. The ticket and all its data will be gone forever.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="confirm-yes">Yes, Delete Permanently</button>
+      <button class="btn btn-secondary btn-sm" id="confirm-no">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- PO Detail Modal -->
+<div class="modal-overlay" id="po-modal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);margin-bottom:2px;">Purchase Order</div>
+        <h3 id="po-modal-number" style="font-size:17px;letter-spacing:.04em;"></h3>
+      </div>
+      <button class="modal-close" id="po-modal-close">×</button>
+    </div>
+    <div class="modal-body" id="po-modal-body">Loading…</div>
+    <div class="modal-footer">
+      <select id="po-status-select" class="form-control" style="font-size:13px;padding:7px 10px;width:auto;">
+        <option value="Open">Open</option>
+        <option value="Entered">Entered</option>
+        <option value="Archived">Archived</option>
+      </select>
+      <button class="btn btn-primary btn-sm" id="po-save-btn">Save Changes</button>
+      <button class="btn btn-secondary btn-sm" id="po-edit-btn">Edit</button>
+      <button class="btn btn-sm" id="po-print-btn" style="background:#1c1c1e;color:white;">Print</button>
+      <button class="btn btn-danger btn-sm" id="po-delete-btn">Delete</button>
+      <button class="btn btn-secondary btn-sm" id="po-modal-close-2">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create / Edit Project Modal -->
+<div class="modal-overlay" id="project-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <h3 id="project-modal-title">New Project</h3>
+      <button class="modal-close" id="project-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="project-name-input">Project Name <span class="required">*</span></label>
+        <input type="text" id="project-name-input" class="form-control" placeholder="e.g. Smith Landing Building 2" autocomplete="off"/>
+      </div>
+      <div class="form-group" style="margin-top:14px;">
+        <label class="form-label" for="project-jobs-input">Associated Job Numbers <span style="font-weight:400;color:var(--gray-500);">(optional)</span></label>
+        <input type="text" id="project-jobs-input" class="form-control" placeholder="e.g. 1042, 1043, 1044" autocomplete="off"/>
+        <span class="form-hint" style="display:block;margin-top:6px;">Reference tags only — separate multiple job numbers with commas.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" id="project-save-btn">Save Project</button>
+      <button class="btn btn-secondary btn-sm" id="project-modal-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let currentPage = 1;
+let archivePage = 1;
+const PAGE_SIZE = 20;
+let totalTickets = 0;
+let activeTicketId = null;
+let activeTicketArchived = false;
+let archiveVisible = false;
+let currentUser = null;
+
+// ── Auth check ──
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  currentUser = await r.json();
+  if (currentUser.role !== 'admin') { location.href = '/field.html'; return; }
+  document.body.style.visibility = 'visible';
+  showHomeView();               // Home is the default landing
+  setInterval(loadStats, 60000);
+  setInterval(loadHomeOverview, 30000); // auto-refresh home every 30s
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+  $('logout-btn')?.addEventListener('click', async e => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method:'POST'});
+    location.href = '/login.html';
+  });
+});
+
+// ── Toast ──
+function showToast(msg, type = '') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  setTimeout(() => t.className = '', 3200);
+}
+
+// ── Stats ──
+async function loadStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    $('stat-total').textContent   = d.total;
+    $('stat-today').textContent   = d.today;
+    $('stat-week').textContent    = d.this_week;
+    $('stat-jobs').textContent    = d.active_jobs;
+    $('stat-archived').textContent = d.archived;
+  } catch {}
+}
+
+// ── Build query string from filters ──
+let statFilterOverride = null; // {date_from?, date_to?} or null
+let activeStatCard = null;     // id of highlighted stat card
+
+function buildQuery(page = 1, archived = false) {
+  const params = new URLSearchParams();
+  const search = $('f-search').value.trim();
+  const job    = $('f-job').value.trim();
+  const from   = $('f-date-from').value;
+  const to     = $('f-date-to').value;
+  const sup    = $('f-supervisor').value.trim();
+  if (!archived) {
+    if (search) params.set('search', search);
+    if (job)    params.set('job', job);
+    // Stat filter overrides the manual date inputs when active
+    if (statFilterOverride) {
+      if (statFilterOverride.date_from) params.set('date_from', statFilterOverride.date_from);
+      if (statFilterOverride.date_to)   params.set('date_to',   statFilterOverride.date_to);
+    } else {
+      if (from) params.set('date_from', from);
+      if (to)   params.set('date_to',   to);
+    }
+    if (sup) params.set('supervisor', sup);
+  }
+  if (archived) params.set('archived', '1');
+  params.set('limit', PAGE_SIZE);
+  params.set('offset', (page - 1) * PAGE_SIZE);
+  return params.toString();
+}
+
+function setStatFilter(cardId, override) {
+  // Toggle off if same card clicked again
+  if (activeStatCard === cardId) {
+    clearStatFilter(); return;
+  }
+  // Remove highlight from previous
+  if (activeStatCard) $(activeStatCard)?.classList.remove('stat-active');
+  activeStatCard = cardId;
+  statFilterOverride = override;
+  $(cardId)?.classList.add('stat-active');
+  $('btn-clear-stat-filter').classList.add('visible');
+  loadTickets(1);
+}
+
+function clearStatFilter() {
+  if (activeStatCard) $(activeStatCard)?.classList.remove('stat-active');
+  activeStatCard = null;
+  statFilterOverride = null;
+  $('btn-clear-stat-filter').classList.remove('visible');
+  loadTickets(1);
+}
+
+// ── Format date ──
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function fmtDay(d) {
+  if (!d) return '';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-CA', { weekday: 'short' });
+}
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// ── Render ticket rows ──
+function renderTickets(tickets, isArchived = false, listId = 'ticket-list') {
+  const list = $(listId);
+  if (tickets.length === 0) {
+    list.innerHTML = isArchived
+      ? `<div class="empty-state" style="padding:32px 24px;"><h3>No archived tickets</h3><p>Tickets you archive will appear here.</p></div>`
+      : `<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-5-5H9v-2h4v2zm2-4H9v-2h6v2z"/></svg><h3>No tickets found</h3><p>Try adjusting your filters or <a href="field.html" style="color:var(--orange);">submit a new ticket</a></p></div>`;
+    return;
+  }
+
+  list.innerHTML = tickets.map(t => {
+    const totalReg = t.employees.reduce((s, e) => s + e.regular_hours, 0);
+    const totalOT  = t.employees.reduce((s, e) => s + e.overtime_hours, 0);
+    const totalAll = totalReg + totalOT;
+    return `
+    <div class="ticket-row${isArchived ? ' archived-row' : ''}" data-id="${t.id}" data-archived="${isArchived ? 1 : 0}" role="button" tabindex="0" style="${isArchived ? 'opacity:0.75;' : ''}">
+      <div class="ticket-date">
+        <div>${fmtDate(t.date)}</div>
+        <div class="day">${fmtDay(t.date)}</div>
+      </div>
+      <div class="ticket-job">
+        <div class="job-name">${esc(t.job_name)}${isArchived ? ' <span style="font-size:10px;background:#e0e0e0;color:#666;padding:1px 6px;border-radius:8px;font-weight:600;vertical-align:middle;">ARCHIVED</span>' : ''}</div>
+        <div class="job-num">${t.job_number ? '#' + esc(t.job_number) : ''}&nbsp;<span style="color:var(--gray-300);">·</span>&nbsp;${t.employees.length} worker${t.employees.length !== 1 ? 's' : ''}</div>
+        <div class="ticket-subhead">Project: ${t.project_name ? esc(t.project_name) : 'No Project Assigned'}<span class="sep">·</span>Job #: ${t.job_number ? esc(t.job_number) : '—'}</div>
+      </div>
+      <div class="ticket-status-col" onclick="event.stopPropagation()">
+        <button class="status-quick-btn" data-id="${t.id}" data-status="${t.ticket_status||'Pending'}" title="Click to change status">${ticketStatusBadge(t.ticket_status)}</button>
+        ${t.project_name ? `<span style="font-size:11px;color:var(--gray-500);">${esc(t.project_name)}</span>` : `<span style="font-size:11px;color:var(--gray-300);font-style:italic;">No project</span>`}
+      </div>
+      <div class="ticket-hrs">
+        <div class="hrs-big">${totalAll.toFixed(1)}</div>
+        <div class="hrs-sub">hrs${totalOT > 0 ? `&nbsp;<span class="ot-badge">+${totalOT.toFixed(1)}OT</span>` : ''}</div>
+      </div>
+      <div class="ticket-actions">
+        <button class="btn btn-ghost btn-sm" data-id="${t.id}" data-archived="${isArchived ? 1 : 0}" data-action="view">View</button>
+        ${isArchived ? `
+          <button class="btn btn-sm" data-id="${t.id}" data-action="restore" style="background:#2563eb;color:white;font-size:12px;">Restore</button>
+          <button class="btn btn-danger btn-sm" data-id="${t.id}" data-num="${esc(t.ticket_number)}" data-action="delete-perm" style="font-size:12px;">Delete</button>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.ticket-row').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('[data-action]')) return;
+      openDetail(row.dataset.id, row.dataset.archived === '1');
+    });
+    row.addEventListener('keydown', e => { if (e.key === 'Enter') openDetail(row.dataset.id, row.dataset.archived === '1'); });
+  });
+  list.querySelectorAll('[data-action="view"]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); openDetail(btn.dataset.id, btn.dataset.archived === '1'); });
+  });
+  list.querySelectorAll('[data-action="restore"]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); restoreTicket(btn.dataset.id); });
+  });
+  list.querySelectorAll('[data-action="delete-perm"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!confirm(`⚠ Permanently delete ticket ${btn.dataset.num}?\n\nThis cannot be undone. All ticket data will be gone forever.`)) return;
+      permanentDeleteTicket(btn.dataset.id);
+    });
+  });
+}
+
+// ── Quick inline status change on ticket list ──
+document.addEventListener('click', e => {
+  // Close any open inline selects first
+  document.querySelectorAll('.status-inline-select').forEach(s => {
+    if (!s.contains(e.target)) s.replaceWith(s._origBtn);
+  });
+
+  const btn = e.target.closest('.status-quick-btn');
+  if (!btn) return;
+  e.stopPropagation();
+  const id = btn.dataset.id;
+  const cur = btn.dataset.status || 'Pending';
+  const sel = document.createElement('select');
+  sel.className = 'status-inline-select';
+  sel._origBtn = btn;
+  ['Pending','Reviewed','Entered'].forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s; if (s === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', async () => {
+    const newStatus = sel.value;
+    try {
+      const res = await fetch(`/api/tickets/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket_status:newStatus})});
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.auto_archived) {
+        showToast('Ticket marked Entered and moved to Archived Tickets', 'success');
+        loadTickets(currentPage);
+        loadStats();
+      } else {
+        // Replace select with new badge
+        const newBtn = document.createElement('button');
+        newBtn.className = 'status-quick-btn';
+        newBtn.dataset.id = id; newBtn.dataset.status = newStatus;
+        newBtn.title = 'Click to change status';
+        newBtn.innerHTML = ticketStatusBadge(newStatus);
+        sel.replaceWith(newBtn);
+        showToast('Status updated', 'success');
+      }
+      refreshProjectIfOpen();
+    } catch { showToast('Failed to update', 'error'); sel.replaceWith(btn); }
+  });
+  sel.addEventListener('blur', () => { setTimeout(() => { if(document.contains(sel)) sel.replaceWith(btn); }, 200); });
+  btn.replaceWith(sel);
+  sel.focus();
+});
+
+async function restoreTicket(id) {
+  try {
+    const res = await fetch('/api/tickets/' + id + '/unarchive', { method: 'PATCH' });
+    if (!res.ok) throw new Error();
+    showToast('Ticket restored to main dashboard', 'success');
+    loadTickets(currentPage);
+    loadArchived(currentPage);
+    loadStats();
+    refreshProjectIfOpen();
+  } catch { showToast('Failed to restore ticket', 'error'); }
+}
+
+async function permanentDeleteTicket(id) {
+  try {
+    const res = await fetch('/api/tickets/' + id, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || d.message); }
+    showToast('Ticket permanently deleted', 'success');
+    loadArchived(currentPage);
+    loadStats();
+  } catch (err) { showToast(err.message || 'Delete failed', 'error'); }
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Status badge helpers ──
+function ticketStatusBadge(s) {
+  const map = { Pending:'spill-pending', Reviewed:'spill-reviewed', Entered:'spill-entered' };
+  const st = s || 'Pending';
+  return `<span class="spill ${map[st]||'spill-pending'}">${st}</span>`;
+}
+function poStatusBadge(s) {
+  const map = { Open:'spill-open', Entered:'spill-po-entered', Archived:'spill-archived' };
+  const st = s || 'Open';
+  return `<span class="spill ${map[st]||'spill-open'}">${st}</span>`;
+}
+
+// ── Pagination ──
+function renderPagination(total, page, elId, loadFn) {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const el = $(elId);
+  if (pages <= 1) { el.innerHTML = ''; return; }
+
+  let html = `<button class="page-btn" data-pg="${page - 1}" ${page <= 1 ? 'disabled' : ''}>&#8592;</button>`;
+  const range = [];
+  for (let i = 1; i <= pages; i++) {
+    if (i === 1 || i === pages || Math.abs(i - page) <= 2) range.push(i);
+    else if (range[range.length - 1] !== '…') range.push('…');
+  }
+  range.forEach(p => {
+    if (p === '…') html += `<span style="padding:0 4px;color:var(--gray-500);">…</span>`;
+    else html += `<button class="page-btn ${p === page ? 'active' : ''}" data-pg="${p}">${p}</button>`;
+  });
+  html += `<button class="page-btn" data-pg="${page + 1}" ${page >= pages ? 'disabled' : ''}>&#8594;</button>`;
+  el.innerHTML = html;
+  el.querySelectorAll('[data-pg]:not([disabled])').forEach(b => b.addEventListener('click', () => loadFn(parseInt(b.dataset.pg))));
+}
+
+// ── Load tickets ──
+async function loadTickets(page = 1) {
+  currentPage = page;
+  $('ticket-list').innerHTML = `<div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div>`;
+  try {
+    const res = await fetch('/api/tickets?' + buildQuery(page, false));
+    const data = await res.json();
+    totalTickets = data.total;
+    $('tickets-count').textContent = `${data.total} ticket${data.total !== 1 ? 's' : ''}`;
+    renderTickets(data.tickets, false);
+    renderPagination(data.total, page, 'pagination', loadTickets);
+  } catch {
+    $('ticket-list').innerHTML = `<div class="empty-state"><h3>Error loading tickets</h3><p>Check that the server is running.</p></div>`;
+  }
+}
+
+// ── Load archived tickets ──
+async function loadArchived(page = 1) {
+  archivePage = page;
+  $('archive-list').innerHTML = `<div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div>`;
+  try {
+    const res = await fetch('/api/tickets?' + buildQuery(page, true));
+    const data = await res.json();
+    $('archived-count-badge').textContent = data.total;
+    renderTickets(data.tickets, true, 'archive-list');
+    renderPagination(data.total, page, 'archive-pagination', loadArchived);
+  } catch {
+    $('archive-list').innerHTML = `<div class="empty-state"><h3>Error loading archived tickets</h3></div>`;
+  }
+}
+
+// ── Detail modal ──
+async function openDetail(id, isArchived = false) {
+  activeTicketId = id;
+  activeTicketArchived = isArchived;
+  const overlay = $('detail-modal');
+  overlay.classList.add('open');
+  $('modal-body').innerHTML = `<div style="padding:32px;text-align:center;color:var(--gray-500);">Loading…</div>`;
+
+  try {
+    const res = await fetch('/api/tickets/' + id);
+    const t = await res.json();
+
+    currentTicketData = t;
+    $('modal-ticket-num').textContent = t.ticket_number;
+    $('modal-title').textContent = t.job_name;
+    // Status quick-edit always visible in modal
+    const tsEl = $('modal-ticket-status-row');
+    if (tsEl) {
+      const ts = t.ticket_status || 'Pending';
+      tsEl.innerHTML = `${ticketStatusBadge(ts)}
+        <select id="modal-ts-select" class="inline-status-select" style="margin-left:8px;">
+          <option ${ts==='Pending'?'selected':''}>Pending</option>
+          <option ${ts==='Reviewed'?'selected':''}>Reviewed</option>
+          <option ${ts==='Entered'?'selected':''}>Entered</option>
+        </select>
+        <button class="inline-save-btn" id="modal-ts-save" style="padding:4px 10px;">Save Status</button>`;
+      $('modal-ts-save').onclick = async () => {
+        const ns = $('modal-ts-select').value;
+        const res = await fetch('/api/tickets/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket_status:ns})});
+        const data = await res.json();
+        if (data.auto_archived) {
+          showToast('Ticket marked Entered and moved to Archived Tickets', 'success');
+          closeDetail();
+        } else {
+          showToast('Status updated','success');
+        }
+        loadTickets(currentPage); loadStats(); refreshProjectIfOpen();
+      };
+    }
+
+    const totalReg = t.employees.reduce((s, e) => s + e.regular_hours, 0);
+    const totalOT  = t.employees.reduce((s, e) => s + e.overtime_hours, 0);
+
+    $('modal-body').innerHTML = `
+      <div class="ticket-detail-subhead">Project: ${t.project_name ? esc(t.project_name) : 'No Project Assigned'}<span class="sep">·</span>Job Number: ${t.job_number ? esc(t.job_number) : '—'}</div>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <label>Date</label>
+          <div class="val">${fmtDate(t.date)} (${fmtDay(t.date)})</div>
+        </div>
+        <div class="detail-field">
+          <label>Job Number</label>
+          <div class="val">${t.job_number ? esc(t.job_number) : '<span style="color:var(--gray-300);">—</span>'}</div>
+        </div>
+        <div class="detail-field full">
+          <label>Job Name / Site</label>
+          <div class="val">${esc(t.job_name)}</div>
+        </div>
+        <div class="detail-field">
+          <label>Supervisor</label>
+          <div class="val">${esc(t.supervisor)}</div>
+        </div>
+        <div class="detail-field">
+          <label>Submitted</label>
+          <div class="val">${fmtDateTime(t.submitted_at)}</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--orange);margin-bottom:10px;">Crew & Hours</div>
+      <table class="crew-table">
+        <thead>
+          <tr><th>Employee</th><th>Level</th><th>Regular Hrs</th><th>OT Hrs</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+          ${t.employees.map(e => `
+            <tr>
+              <td>${esc(e.employee_name)}</td>
+              <td style="font-size:12px;color:var(--gray-500);">${esc(e.level || 'Journeyman')}</td>
+              <td>${e.regular_hours.toFixed(1)}</td>
+              <td>${e.overtime_hours > 0 ? `<span style="color:var(--orange);font-weight:600;">${e.overtime_hours.toFixed(1)}</span>` : '0.0'}</td>
+              <td><strong>${(e.regular_hours + e.overtime_hours).toFixed(1)}</strong></td>
+            </tr>`).join('')}
+          <tr class="total-row">
+            <td>TOTAL</td><td></td>
+            <td>${totalReg.toFixed(1)}</td>
+            <td>${totalOT.toFixed(1)}</td>
+            <td>${(totalReg + totalOT).toFixed(1)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="divider"></div>
+      <div class="detail-field full" style="margin-bottom:14px;">
+        <label>Work Description</label>
+        <div class="val" style="white-space:pre-wrap;line-height:1.6;">${esc(t.work_description)}</div>
+      </div>
+      ${t.equipment_used ? `
+      <div class="detail-field full" style="margin-bottom:14px;">
+        <label>Equipment Used</label>
+        <div class="val">${esc(t.equipment_used)}</div>
+      </div>` : ''}
+      ${t.notes ? `
+      <div class="detail-field full">
+        <label>Site Conditions / Notes</label>
+        <div class="val" style="white-space:pre-wrap;line-height:1.6;">${esc(t.notes)}</div>
+      </div>` : ''}
+      ${t.updated_at ? `<p class="text-xs text-muted" style="margin-top:16px;">Last updated: ${fmtDateTime(t.updated_at)}</p>` : ''}
+      ${t.archived_at ? `<p class="text-xs text-muted" style="margin-top:8px;">Archived: ${fmtDateTime(t.archived_at)}</p>` : ''}
+      <div class="audit-log" id="audit-log-section"><div class="audit-title">Activity Log</div><div id="audit-entries"><span class="text-xs text-muted">Loading…</span></div></div>
+    `;
+
+    loadAuditLog(id);
+
+    // Delete only available on archived tickets (set above in isArchived block)
+    // Update archive button label depending on state
+    const archiveBtn = $('modal-archive');
+    if (isArchived) {
+      archiveBtn.textContent = 'Unarchive';
+      archiveBtn.style.background = '#2563eb';
+    } else {
+      archiveBtn.textContent = 'Archive';
+      archiveBtn.style.background = '#6e6e6e';
+    }
+    // Delete only available on already-archived tickets
+    $('modal-delete').style.display = isArchived ? '' : 'none';
+  } catch {
+    $('modal-body').innerHTML = `<p style="color:var(--red);">Failed to load ticket details.</p>`;
+  }
+}
+
+function closeDetail() {
+  $('detail-modal').classList.remove('open');
+  activeTicketId = null;
+  activeTicketArchived = false;
+}
+
+$('modal-close').addEventListener('click', closeDetail);
+$('modal-close-2').addEventListener('click', closeDetail);
+$('detail-modal').addEventListener('click', e => { if (e.target === $('detail-modal')) closeDetail(); });
+
+// ── Archive / Unarchive ──
+$('modal-archive').addEventListener('click', async () => {
+  const action = activeTicketArchived ? 'unarchive' : 'archive';
+  try {
+    const res = await fetch(`/api/tickets/${activeTicketId}/${action}`, { method: 'PATCH' });
+    if (!res.ok) throw new Error();
+    closeDetail();
+    showToast(action === 'archive' ? 'Ticket archived' : 'Ticket restored', 'success');
+    loadTickets(currentPage);
+    if (archiveVisible) loadArchived(archivePage);
+    loadStats();
+    refreshProjectIfOpen();
+  } catch {
+    showToast('Action failed', 'error');
+  }
+});
+
+// ── Delete ──
+$('modal-delete').addEventListener('click', () => {
+  $('confirm-ref').textContent = $('modal-ticket-num').textContent;
+  $('confirm-modal').classList.add('open');
+});
+$('confirm-cancel').addEventListener('click', () => $('confirm-modal').classList.remove('open'));
+$('confirm-no').addEventListener('click',     () => $('confirm-modal').classList.remove('open'));
+$('confirm-modal').addEventListener('click',  e => { if (e.target === $('confirm-modal')) $('confirm-modal').classList.remove('open'); });
+
+$('confirm-yes').addEventListener('click', async () => {
+  $('confirm-modal').classList.remove('open');
+  try {
+    const res = await fetch('/api/tickets/' + activeTicketId, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    closeDetail();
+    showToast('Ticket deleted', 'success');
+    loadTickets(currentPage);
+    if (archiveVisible) loadArchived(archivePage);
+    loadStats();
+    refreshProjectIfOpen();
+  } catch {
+    showToast('Failed to delete ticket', 'error');
+  }
+});
+
+// ── Edit Ticket (full inline edit) ──
+$('modal-edit-btn').addEventListener('click', () => openTicketEdit(activeTicketId));
+
+async function openTicketEdit(id) {
+  const res = await fetch('/api/tickets/' + id);
+  const t = await res.json();
+  // Load active projects for dropdown
+  const projRes = await fetch('/api/project-folders');
+  const projects = await projRes.json();
+  const projOpts = `<option value="">— No Project —</option>` +
+    projects.map(p => `<option value="${p.id}" ${t.project_id==p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  const levOpts = ['Journeyman','4th Year Apprentice','3rd Year Apprentice','2nd Year Apprentice','1st Year Apprentice'];
+  const empRows = (t.employees||[]).map((e,i) => `
+    <tr class="edit-emp-row">
+      <td><input type="text" class="form-control edit-emp-name" style="padding:6px;font-size:13px;" value="${esc(e.employee_name||e.name||'')}"/></td>
+      <td><select class="form-control edit-emp-level" style="padding:6px;font-size:12px;">${levOpts.map(l=>`<option ${l===(e.level||'Journeyman')?'selected':''}>${l}</option>`).join('')}</select></td>
+      <td><input type="number" class="form-control edit-emp-reg" style="padding:6px;font-size:13px;text-align:center;" value="${e.regular_hours||0}" min="0" max="24" step="0.5"/></td>
+      <td><input type="number" class="form-control edit-emp-ot" style="padding:6px;font-size:13px;text-align:center;" value="${e.overtime_hours||0}" min="0" max="24" step="0.5"/></td>
+      <td><button type="button" style="background:none;border:none;color:#c0392b;font-size:18px;cursor:pointer;" onclick="this.closest('tr').remove()">×</button></td>
+    </tr>`).join('');
+
+  $('modal-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="form-group"><label class="form-label">Date</label><input type="date" id="edit-date" class="form-control" value="${t.date||''}"/></div>
+      <div class="form-group"><label class="form-label">Job Number</label><input type="text" id="edit-job-num" class="form-control" value="${esc(t.job_number||'')}"/></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Job Name / Site</label><input type="text" id="edit-job-name" class="form-control" value="${esc(t.job_name||'')}"/></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Supervisor</label><input type="text" id="edit-supervisor" class="form-control" value="${esc(t.supervisor||'')}"/></div>
+    <div style="margin-bottom:10px;">
+      <label class="form-label">Crew &amp; Hours</label>
+      <table class="po-table" style="font-size:13px;"><thead><tr><th>Name</th><th>Level</th><th>Reg Hrs</th><th>OT Hrs</th><th></th></tr></thead>
+      <tbody id="edit-emp-tbody">${empRows}</tbody></table>
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="document.getElementById('edit-emp-tbody').insertAdjacentHTML('beforeend','<tr class=\\'edit-emp-row\\'><td><input type=\\'text\\' class=\\'form-control edit-emp-name\\' style=\\'padding:6px;font-size:13px;\\' placeholder=\\'Name\\'/></td><td><select class=\\'form-control edit-emp-level\\' style=\\'padding:6px;font-size:12px;\\'>${levOpts.map(l=>`<option>${l}</option>`).join('')}</select></td><td><input type=\\'number\\' class=\\'form-control edit-emp-reg\\' style=\\'padding:6px;font-size:13px;text-align:center;\\' value=\\'0\\' min=\\'0\\' max=\\'24\\' step=\\'0.5\\'/></td><td><input type=\\'number\\' class=\\'form-control edit-emp-ot\\' style=\\'padding:6px;font-size:13px;text-align:center;\\' value=\\'0\\' min=\\'0\\' max=\\'24\\' step=\\'0.5\\'/></td><td><button type=\\'button\\' style=\\'background:none;border:none;color:#c0392b;font-size:18px;cursor:pointer;\\' onclick=\\'this.closest(\\'tr\\').remove()\\'>×</button></td></tr>')">+ Add Employee</button>
+    </div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Work Description</label><textarea id="edit-work-desc" class="form-control" rows="3">${esc(t.work_description||'')}</textarea></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Equipment Used</label><input type="text" id="edit-equipment" class="form-control" value="${esc(t.equipment_used||'')}"/></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Notes</label><textarea id="edit-notes" class="form-control" rows="2">${esc(t.notes||'')}</textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Ticket Status</label>
+        <select id="edit-ticket-status" class="form-control">
+          <option ${(t.ticket_status||'Pending')==='Pending'?'selected':''}>Pending</option>
+          <option ${t.ticket_status==='Reviewed'?'selected':''}>Reviewed</option>
+          <option ${t.ticket_status==='Entered'?'selected':''}>Entered</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Project</label><select id="edit-project" class="form-control">${projOpts}</select></div>
+    </div>`;
+
+  // Swap footer buttons
+  $('modal-footer').innerHTML = `
+    <button class="btn btn-primary btn-sm" id="modal-save-edit">Save Changes</button>
+    <button class="btn btn-secondary btn-sm" id="modal-cancel-edit">Cancel</button>`;
+  $('modal-save-edit').addEventListener('click', () => saveTicketEdit(id, t.ticket_number));
+  $('modal-cancel-edit').addEventListener('click', () => openDetail(id, activeTicketArchived));
+}
+
+async function saveTicketEdit(id, ticketNumber) {
+  const employees = Array.from(document.querySelectorAll('#edit-emp-tbody .edit-emp-row')).map(row => ({
+    name: row.querySelector('.edit-emp-name').value.trim(),
+    level: row.querySelector('.edit-emp-level').value,
+    regular_hours: parseFloat(row.querySelector('.edit-emp-reg').value)||0,
+    overtime_hours: parseFloat(row.querySelector('.edit-emp-ot').value)||0,
+  })).filter(e => e.name);
+  const payload = {
+    date: document.getElementById('edit-date').value,
+    job_name: document.getElementById('edit-job-name').value.trim(),
+    job_number: document.getElementById('edit-job-num').value.trim(),
+    supervisor: document.getElementById('edit-supervisor').value.trim(),
+    work_description: document.getElementById('edit-work-desc').value.trim(),
+    equipment_used: document.getElementById('edit-equipment').value.trim(),
+    notes: document.getElementById('edit-notes').value.trim(),
+    ticket_status: document.getElementById('edit-ticket-status').value,
+    project_id: document.getElementById('edit-project').value || null,
+    employees
+  };
+  try {
+    const res = await fetch('/api/tickets/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if (!res.ok) throw new Error((await res.json()).error);
+    showToast('Ticket updated', 'success');
+    openDetail(id, activeTicketArchived);
+    refreshProjectIfOpen();
+  } catch(err) { showToast('Save failed: '+err.message, 'error'); }
+}
+
+// ── Edit PO (full inline edit) ──
+$('po-edit-btn').addEventListener('click', () => openPOEdit(activePOId));
+
+async function openPOEdit(id) {
+  const po = currentPOData;
+  if (!po) return;
+  const projRes = await fetch('/api/project-folders');
+  const projects = await projRes.json();
+  const projOpts = `<option value="">— No Project —</option>` +
+    projects.map(p => `<option value="${p.id}" ${po.project_id==p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+
+  $('po-modal-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="form-group"><label class="form-label">Date</label><input type="date" id="pe-date" class="form-control" value="${po.date||''}"/></div>
+      <div class="form-group"><label class="form-label">Generated By</label><input type="text" id="pe-by" class="form-control" value="${esc(po.generated_by_name||'')}"/></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Jobber Job Number</label><input type="text" id="pe-jobber" class="form-control" value="${esc(po.jobber_job_number||'')}"/></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Job Name</label><input type="text" id="pe-jobname" class="form-control" value="${esc(po.job_name||'')}"/></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Supplier</label><input type="text" id="pe-supplier" class="form-control" value="${esc(po.supplier||'')}"/></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Description</label><textarea id="pe-desc" class="form-control" rows="3">${esc(po.description||'')}</textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+      <div class="form-group"><label class="form-label">Estimated Amount</label><input type="number" id="pe-amount" class="form-control" value="${po.estimated_amount!=null?po.estimated_amount:''}" step="0.01" min="0"/></div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select id="pe-status" class="form-control">
+          <option ${po.status==='Open'?'selected':''}>Open</option>
+          <option ${po.status==='Entered'?'selected':''}>Entered</option>
+          <option ${po.status==='Archived'?'selected':''}>Archived</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+      <div class="form-group"><label class="form-label">Project</label><select id="pe-project" class="form-control">${projOpts}</select></div>
+      <div class="form-group"><label class="form-label">Reimbursement</label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;">
+          <input type="checkbox" id="pe-reimburse" ${po.needs_reimbursement?'checked':''} style="width:16px;height:16px;"/>
+          Needs reimbursement
+        </label>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Office Notes</label><textarea id="pe-notes" class="form-control" rows="2">${esc(po.office_note||'')}</textarea></div>`;
+
+  // Swap footer
+  const origFooter = $('po-modal').querySelector('.modal-footer').innerHTML;
+  $('po-modal').querySelector('.modal-footer').innerHTML = `
+    <button class="btn btn-primary btn-sm" id="po-save-full-edit">Save Changes</button>
+    <button class="btn btn-secondary btn-sm" id="po-cancel-edit">Cancel</button>`;
+  document.getElementById('po-save-full-edit').addEventListener('click', () => savePOEdit(id));
+  document.getElementById('po-cancel-edit').addEventListener('click', () => { openPODetail(id); });
+}
+
+async function savePOEdit(id) {
+  const payload = {
+    date: document.getElementById('pe-date').value,
+    generated_by_name: document.getElementById('pe-by').value.trim(),
+    jobber_job_number: document.getElementById('pe-jobber').value.trim(),
+    job_name: document.getElementById('pe-jobname').value.trim(),
+    supplier: document.getElementById('pe-supplier').value.trim(),
+    description: document.getElementById('pe-desc').value.trim(),
+    estimated_amount: document.getElementById('pe-amount').value || null,
+    status: document.getElementById('pe-status').value,
+    needs_reimbursement: document.getElementById('pe-reimburse').checked,
+    office_note: document.getElementById('pe-notes').value.trim(),
+    project_id: document.getElementById('pe-project').value || null,
+  };
+  try {
+    const res = await fetch('/api/po/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok) throw new Error((await res.json()).error);
+    showToast('PO updated','success');
+    openPODetail(id);
+    loadPOs();
+    refreshProjectIfOpen();
+  } catch(err) { showToast('Save failed: '+err.message,'error'); }
+}
+
+// ── Print ticket ──
+let currentTicketData = null;
+$('modal-print').addEventListener('click', () => {
+  if (!currentTicketData) return;
+  const t = currentTicketData;
+  const totalReg = t.employees.reduce((s,e) => s + e.regular_hours, 0);
+  const totalOT  = t.employees.reduce((s,e) => s + e.overtime_hours, 0);
+  const w = window.open('', '_blank', 'width=800,height=600');
+  w.document.write(`<!DOCTYPE html><html><head><title>${t.ticket_number}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 32px; color: #111; font-size: 13px; }
+    h1 { font-size: 20px; margin: 0 0 4px; } .sub { color: #666; font-size: 12px; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 20px; }
+    .field label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #888; display: block; margin-bottom: 2px; }
+    .field .val { font-size: 13px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th { font-size: 10px; text-transform: uppercase; background: #f5f5f5; padding: 6px 8px; border: 1px solid #ddd; text-align: left; }
+    td { padding: 6px 8px; border: 1px solid #ddd; }
+    .total-row td { font-weight: 700; background: #f9f9f9; }
+    .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #F47920; margin: 20px 0 6px; letter-spacing: .06em; }
+    .desc { white-space: pre-wrap; line-height: 1.6; }
+    hr { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+    @media print { body { padding: 16px; } }
+  </style></head><body>
+  <h1>J&D Western Electric Ltd</h1>
+  <div class="sub">Daily Time Ticket — ${t.ticket_number}</div>
+  <div class="grid">
+    <div class="field"><label>Date</label><div class="val">${fmtDate(t.date)}</div></div>
+    <div class="field"><label>Job #</label><div class="val">${t.job_number || '—'}</div></div>
+    <div class="field" style="grid-column:1/-1"><label>Job Name / Site</label><div class="val">${esc(t.job_name)}</div></div>
+    <div class="field"><label>Supervisor</label><div class="val">${esc(t.supervisor)}</div></div>
+    <div class="field"><label>Submitted</label><div class="val">${fmtDateTime(t.submitted_at)}</div></div>
+  </div>
+  <div class="section-title">Crew & Hours</div>
+  <table>
+    <thead><tr><th>Employee</th><th>Level</th><th>Regular Hrs</th><th>OT Hrs</th><th>Total</th></tr></thead>
+    <tbody>
+      ${t.employees.map(e => `<tr><td>${esc(e.employee_name)}</td><td>${esc(e.level||'Journeyman')}</td><td>${e.regular_hours.toFixed(1)}</td><td>${e.overtime_hours.toFixed(1)}</td><td>${(e.regular_hours+e.overtime_hours).toFixed(1)}</td></tr>`).join('')}
+      <tr class="total-row"><td>TOTAL</td><td></td><td>${totalReg.toFixed(1)}</td><td>${totalOT.toFixed(1)}</td><td>${(totalReg+totalOT).toFixed(1)}</td></tr>
+    </tbody>
+  </table>
+  <div class="section-title">Work Description</div>
+  <div class="desc">${esc(t.work_description)}</div>
+  ${t.equipment_used ? `<div class="section-title">Equipment Used</div><div>${esc(t.equipment_used)}</div>` : ''}
+  ${t.notes ? `<div class="section-title">Notes</div><div class="desc">${esc(t.notes)}</div>` : ''}
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  w.document.close();
+});
+
+// ── Export single ticket XLSX ──
+$('modal-export').addEventListener('click', () => {
+  if (!activeTicketId) return;
+  window.location = `/api/tickets/${activeTicketId}/export/xlsx`;
+});
+
+// ── Projects (real admin-managed folders) ──
+let currentProjectId = null;
+let currentProjectStatus = 'active';
+let projectListStatus = 'active';
+let currentProjectData = { tickets: [], purchase_orders: [] }; // live copy updated on status saves
+let editingProjectId = null;
+
+// List tabs: Active vs Completed
+$('ptab-active').addEventListener('click', () => switchProjectListTab('active'));
+$('ptab-complete').addEventListener('click', () => switchProjectListTab('complete'));
+$('ptab-archived-proj').addEventListener('click', () => switchProjectListTab('archived'));
+function switchProjectListTab(status) {
+  projectListStatus = status;
+  $('ptab-active').classList.toggle('active', status === 'active');
+  $('ptab-complete').classList.toggle('active', status === 'complete');
+  $('ptab-archived-proj').classList.toggle('active', status === 'archived');
+  loadProjects();
+}
+
+function jobTags(str) {
+  if (!str) return '';
+  return str.split(',').map(j => j.trim()).filter(Boolean).map(j => `<span class="job-tag">#${esc(j)}</span>`).join('');
+}
+
+async function loadProjects() {
+  $('project-cards').innerHTML = `<div class="skeleton skeleton-row" style="height:110px;"></div><div class="skeleton skeleton-row" style="height:110px;"></div><div class="skeleton skeleton-row" style="height:110px;"></div>`;
+  try {
+    const res = await fetch('/api/project-folders/all?status=' + projectListStatus);
+    const projects = await res.json();
+    if (!projects.length) {
+      const msgs = { active: ['No active projects', 'Click “+ New Project” to create one.'], complete: ['No completed projects', 'Projects you mark complete will appear here.'], archived: ['No archived projects', 'Projects you archive will appear here.'] };
+      const [h, p] = msgs[projectListStatus] || msgs.active;
+      $('project-cards').innerHTML = `<div class=”empty-state” style=”grid-column:1/-1;”><h3>${h}</h3><p>${p}</p></div>`;
+      return;
+    }
+    $('project-cards').innerHTML = projects.map(p => {
+      const outstanding = (p.pending_tickets || 0) + (p.open_pos || 0);
+      const badge = outstanding > 0
+        ? `<span class="outstanding-badge">${outstanding} outstanding</span>`
+        : (p.ticket_count + p.po_count > 0 ? `<span class="all-ok-badge">✓ All up to date</span>` : '');
+      return `
+      <div class="project-card" data-id="${p.id}" style="cursor:pointer;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <h3 style="flex:1;">${esc(p.name)}</h3>
+          ${badge}
+        </div>
+        ${p.job_numbers ? `<div class="job-tags">${jobTags(p.job_numbers)}</div>` : ''}
+        <div class="meta">
+          <span><strong>${p.ticket_count}</strong> ticket${p.ticket_count !== 1 ? 's' : ''}</span>
+          <span><strong>${p.po_count}</strong> PO${p.po_count !== 1 ? 's' : ''}</span>
+          ${p.status === 'complete' && p.completed_at ? `<span>Completed ${fmtDate(p.completed_at.slice(0,10))}</span>` : ''}
+          ${p.status === 'archived' ? `<span style="color:#888;">Archived</span>` : ''}
+        </div>
+        ${projectListStatus === 'archived' ? `
+          <div style="margin-top:10px;display:flex;gap:8px;" onclick="event.stopPropagation()">
+            <button class="btn btn-sm" data-proj-id="${p.id}" data-action="proj-restore" style="background:#2563eb;color:white;font-size:12px;">Restore</button>
+            <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-open" style="font-size:12px;">View</button>
+          </div>` : ''}
+      </div>`;
+    }).join('');
+    $('project-cards').querySelectorAll('.project-card').forEach(card => {
+      card.addEventListener('click', e => {
+        if (e.target.closest('[data-action]')) return;
+        openProject(parseInt(card.dataset.id));
+      });
+    });
+    $('project-cards').querySelectorAll('[data-action="proj-restore"]').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); restoreProject(parseInt(btn.dataset.projId)); });
+    });
+    $('project-cards').querySelectorAll('[data-action="proj-open"]').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); openProject(parseInt(btn.dataset.projId)); });
+    });
+  } catch {
+    $('project-cards').innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>Error loading projects</h3></div>`;
+  }
+}
+
+async function openProject(id) {
+  currentProjectId = id;
+  $('project-list-wrap').style.display = 'none';
+  $('project-detail').style.display = 'block';
+  setProjectSubTab('tickets');
+  $('ptab-panel-tickets').innerHTML = `<div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div>`;
+  $('ptab-panel-pos').innerHTML = '';
+  try {
+    const res = await fetch('/api/project-folders/' + id);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    currentProjectStatus = data.project.status;
+    $('project-detail-name').textContent = data.project.name;
+    $('project-detail-jobs').innerHTML = data.project.job_numbers
+      ? jobTags(data.project.job_numbers)
+      : '<span style="font-size:12px;color:var(--gray-300);">No job numbers associated</span>';
+    const statusLabels = { active: 'Active', complete: 'Completed', archived: '📦 Archived' };
+    $('project-detail-status').textContent = statusLabels[data.project.status] || 'Active';
+
+    // Adjust header buttons based on project status
+    const isArchived = data.project.status === 'archived';
+    const cbtn = $('btn-complete-project');
+    $('btn-archive-project').style.display  = isArchived ? 'none' : '';
+    $('btn-restore-project').style.display  = isArchived ? '' : 'none';
+    $('btn-delete-project').style.display   = isArchived ? '' : 'none';
+    $('btn-complete-project').style.display = isArchived ? 'none' : '';
+    if (data.project.status === 'complete') { cbtn.textContent = 'Reactivate'; cbtn.style.background = '#2563eb'; }
+    else { cbtn.textContent = 'Mark Complete'; cbtn.style.background = '#6e6e6e'; }
+    currentProjectData = {
+      tickets: data.tickets, purchase_orders: data.purchase_orders,
+      archived_tickets: data.archived_tickets||[], archived_pos: data.archived_pos||[]
+    };
+    renderProjectTickets(data.tickets);
+    renderProjectPOs(data.purchase_orders);
+    renderProjectArchived(data.archived_tickets||[], data.archived_pos||[]);
+    $('psub-tickets-count').textContent = data.tickets.length;
+    $('psub-pos-count').textContent = data.purchase_orders.length;
+    $('psub-archived-count').textContent = (data.archived_tickets||[]).length + (data.archived_pos||[]).length;
+    updateProjectOutstandingSummary();
+  } catch {
+    $('ptab-panel-tickets').innerHTML = `<div class="empty-state"><h3>Error loading project</h3></div>`;
+  }
+}
+
+// ── Project sub-tab rendering helpers ──
+
+function projTicketRow(t, showArchiveBtn = true) {
+  const reg = t.employees ? t.employees.reduce((s,e)=>s+e.regular_hours,0) : 0;
+  const ot  = t.employees ? t.employees.reduce((s,e)=>s+e.overtime_hours,0) : 0;
+  const ts  = t.ticket_status || 'Pending';
+  const isOutstanding = ts === 'Pending';
+  return `<tr data-id="${t.id}" data-archived="${t.archived ? 1 : 0}" class="${isOutstanding&&showArchiveBtn ? 'row-outstanding' : 'row-ok'}">
+    <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb proj-tt-cb" data-id="${t.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
+    <td>${fmtDate(t.date)}</td>
+    <td><strong style="color:var(--orange);font-size:12px;">${esc(t.ticket_number)}</strong></td>
+    <td>${esc(t.job_name)}${t.archived ? ' <span class="archived-label">ARCHIVED</span>' : ''}</td>
+    <td>${t.job_number ? esc(t.job_number) : '—'}</td>
+    <td>${esc(t.supervisor)}</td>
+    <td><strong>${(reg+ot).toFixed(1)}</strong>${ot>0?` <span style="color:var(--orange);font-size:11px;font-weight:700;">+${ot.toFixed(1)}OT</span>`:''}</td>
+    <td onclick="event.stopPropagation()">
+      <div class="inline-status-form">
+        <select class="inline-status-select" data-ticket-id="${t.id}">
+          <option value="Pending"  ${ts==='Pending'  ?'selected':''}>Pending</option>
+          <option value="Reviewed" ${ts==='Reviewed' ?'selected':''}>Reviewed</option>
+          <option value="Entered"  ${ts==='Entered'  ?'selected':''}>Entered</option>
+        </select>
+        <button class="inline-save-btn" data-ticket-id="${t.id}" data-action="save-ticket-status">Save</button>
+      </div>
+    </td>
+    ${showArchiveBtn ? `<td onclick="event.stopPropagation()"><button class="btn btn-sm" data-tid="${t.id}" data-action="proj-archive-ticket" style="background:#6e6e6e;color:#fff;font-size:11px;padding:3px 8px;" title="Move to project archive">Archive</button></td>` : `<td onclick="event.stopPropagation()"><button class="btn btn-sm" data-tid="${t.id}" data-action="proj-unarchive-ticket" style="background:#2563eb;color:#fff;font-size:11px;padding:3px 8px;">Restore</button></td>`}
+  </tr>`;
+}
+
+function projPORow(po, showArchiveBtn = true) {
+  const isOutstanding = po.status === 'Open';
+  return `<tr data-poid="${po.id}" class="${isOutstanding&&showArchiveBtn ? 'row-outstanding' : 'row-ok'}">
+    <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb proj-po-cb" data-id="${po.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
+    <td><strong style="color:var(--orange);font-size:12px;">${esc(po.po_number)}</strong></td>
+    <td>${fmtDate(po.date)}</td>
+    <td>${esc(po.generated_by_name)}</td>
+    <td><strong>${esc(po.jobber_job_number)}</strong></td>
+    <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(po.job_name||'—')}</td>
+    <td>${esc(po.supplier||'—')}</td>
+    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(po.description)}</td>
+    <td>${po.estimated_amount!=null?'$'+parseFloat(po.estimated_amount).toFixed(2):'—'}</td>
+    <td onclick="event.stopPropagation()">
+      <div class="inline-status-form">
+        <select class="inline-status-select" data-po-id="${po.id}">
+          <option value="Open"     ${po.status==='Open'    ?'selected':''}>Open</option>
+          <option value="Entered"  ${po.status==='Entered' ?'selected':''}>Entered</option>
+          <option value="Archived" ${po.status==='Archived'?'selected':''}>Archived</option>
+        </select>
+        <button class="inline-save-btn" data-po-id="${po.id}" data-action="save-po-status">Save</button>
+      </div>
+    </td>
+    ${showArchiveBtn ? `<td onclick="event.stopPropagation()"><button class="btn btn-sm" data-poid="${po.id}" data-action="proj-archive-po" style="background:#6e6e6e;color:#fff;font-size:11px;padding:3px 8px;" title="Move to project archive">Archive</button></td>` : `<td onclick="event.stopPropagation()"><button class="btn btn-sm" data-poid="${po.id}" data-action="proj-unarchive-po" style="background:#2563eb;color:#fff;font-size:11px;padding:3px 8px;">Restore</button></td>`}
+  </tr>`;
+}
+
+function attachProjTableEvents(panel) {
+  panel.querySelectorAll('tr[data-id]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('[data-action]')||e.target.closest('.inline-status-select')||e.target.closest('.po-cb')) return;
+      openDetail(row.dataset.id, row.dataset.archived==='1');
+    });
+  });
+  panel.querySelectorAll('tr[data-poid]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('[data-action]')||e.target.closest('.inline-status-select')||e.target.closest('.po-cb')) return;
+      openPODetail(row.dataset.poid);
+    });
+  });
+  panel.querySelectorAll('[data-action="save-ticket-status"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const id=btn.dataset.ticketId;
+      const sel=panel.querySelector(`.inline-status-select[data-ticket-id="${id}"]`);
+      await saveTicketStatus(id, sel.value, btn.closest('tr'));
+    });
+  });
+  panel.querySelectorAll('[data-action="save-po-status"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const id=btn.dataset.poId;
+      const sel=panel.querySelector(`.inline-status-select[data-po-id="${id}"]`);
+      await saveProjectPOStatus(id, sel.value, btn.closest('tr'));
+    });
+  });
+  panel.querySelectorAll('[data-action="proj-archive-ticket"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      await projArchiveTicket(btn.dataset.tid);
+    });
+  });
+  panel.querySelectorAll('[data-action="proj-unarchive-ticket"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      await projUnarchiveTicket(btn.dataset.tid);
+    });
+  });
+  panel.querySelectorAll('[data-action="proj-archive-po"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      await projArchivePO(btn.dataset.poid);
+    });
+  });
+  panel.querySelectorAll('[data-action="proj-unarchive-po"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      await projUnarchivePO(btn.dataset.poid);
+    });
+  });
+}
+
+const PROJ_TT_HEAD  = `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-tt-select-all" title="Select all"/></th><th>Date</th><th>Ticket #</th><th>Job Name</th><th>Job #</th><th>Supervisor</th><th>Hours</th><th>Status</th><th></th>`;
+const PROJ_PO_HEAD  = `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-po-select-all" title="Select all"/></th><th>PO #</th><th>Date</th><th>By</th><th>Jobber #</th><th>Job Name</th><th>Supplier</th><th>Description</th><th>Amount</th><th>Status</th><th></th>`;
+
+function projBulkBar(type) {
+  return `<div class="po-bulk-bar" id="proj-bulk-bar-${type}" style="margin-bottom:8px;">
+    <span class="sel-count" id="proj-bulk-count-${type}">0 selected</span>
+    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-export" style="background:#1a6e35;color:white;">Export to Excel</button>
+    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-print" style="background:#1c1c1e;color:white;">Print Selected</button>
+    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-archive" style="background:#6e6e6e;color:white;">Archive Selected</button>
+  </div>`;
+}
+
+function renderProjectTickets(tickets) {
+  const panel = $('ptab-panel-tickets');
+  if (!tickets.length) {
+    panel.innerHTML = `<div class="empty-state" style="padding:32px 24px;"><h3>No time tickets</h3><p>Time tickets assigned to this project will appear here.</p></div>`;
+    return;
+  }
+  const rows = tickets.map(t => projTicketRow(t, true)).join('');
+  panel.innerHTML = projBulkBar('tt') + `<div class="po-table-wrap"><table class="po-table">
+    <thead><tr>${PROJ_TT_HEAD}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  attachProjTableEvents(panel);
+  panel.querySelector('#proj-tt-select-all')?.addEventListener('change', e => {
+    panel.querySelectorAll('.proj-tt-cb').forEach(cb=>cb.checked=e.target.checked);
+    updateProjBulk();
+  });
+  wireProjBulkBar(panel, 'tt');
+}
+
+function renderProjectPOs(pos) {
+  const panel = $('ptab-panel-pos');
+  if (!pos.length) {
+    panel.innerHTML = `<div class="empty-state" style="padding:32px 24px;"><h3>No purchase orders</h3><p>POs assigned to this project will appear here.</p></div>`;
+    return;
+  }
+  const rows = pos.map(po => projPORow(po, true)).join('');
+  panel.innerHTML = projBulkBar('po') + `<div class="po-table-wrap"><table class="po-table">
+    <thead><tr>${PROJ_PO_HEAD}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  attachProjTableEvents(panel);
+  panel.querySelector('#proj-po-select-all')?.addEventListener('change', e => {
+    panel.querySelectorAll('.proj-po-cb').forEach(cb=>cb.checked=e.target.checked);
+    updateProjBulk();
+  });
+  wireProjBulkBar(panel, 'po');
+}
+
+function renderProjectArchived(archivedTickets, archivedPOs) {
+  const panel = $('ptab-panel-proj-archived');
+  if (!archivedTickets.length && !archivedPOs.length) {
+    panel.innerHTML = `<div class="empty-state" style="padding:32px 24px;"><h3>No archived records</h3><p>Records you archive within this project will appear here.</p></div>`;
+    return;
+  }
+  let html = '';
+  if (archivedTickets.length) {
+    const rows = archivedTickets.map(t => projTicketRow(t, false)).join('');
+    html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Time Tickets (${archivedTickets.length})</div>
+    <div class="po-table-wrap"><table class="po-table"><thead><tr>${PROJ_TT_HEAD}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }
+  if (archivedPOs.length) {
+    const rows = archivedPOs.map(po => projPORow(po, false)).join('');
+    html += `<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Purchase Orders (${archivedPOs.length})</div>
+    <div class="po-table-wrap"><table class="po-table"><thead><tr>${PROJ_PO_HEAD}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }
+  panel.innerHTML = html;
+  attachProjTableEvents(panel);
+}
+
+function updateProjBulk() {
+  for (const type of ['tt','po']) {
+    const checked = document.querySelectorAll(`.proj-${type}-cb:checked`);
+    const bar = $(`proj-bulk-bar-${type}`);
+    if (!bar) continue;
+    if (checked.length > 0) {
+      bar.classList.add('visible');
+      $(`proj-bulk-count-${type}`).textContent = `${checked.length} selected`;
+    } else {
+      bar.classList.remove('visible');
+    }
+  }
+}
+
+function wireProjBulkBar(panel, type) {
+  panel.querySelectorAll(`[data-bulk="${type}"][data-action]`).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ids = Array.from(document.querySelectorAll(`.proj-${type}-cb:checked`)).map(cb=>cb.dataset.id);
+      if (!ids.length) return;
+      const action = btn.dataset.action;
+      const projName = $('project-detail-name').textContent;
+      const today = new Date().toISOString().slice(0,10);
+      if (action === 'proj-bulk-export') {
+        if (type === 'po') window.location = `/api/po/export/xlsx?ids=${ids.join(',')}`;
+        else {
+          // Export selected tickets — build a downloadable xlsx via the project export endpoint isn't available, use CSV approach
+          const tickData = currentProjectData.tickets.filter(t=>ids.includes(String(t.id)));
+          exportTicketsToXlsx(tickData, `JD-Tickets-${projName.replace(/[^a-z0-9]/gi,'_')}-${today}.xlsx`);
+        }
+      } else if (action === 'proj-bulk-print') {
+        const items = type==='po'
+          ? currentProjectData.purchase_orders.filter(p=>ids.includes(String(p.id)))
+          : currentProjectData.tickets.filter(t=>ids.includes(String(t.id)));
+        if (type==='po') printMultiplePOs(items);
+        else printMultipleTickets(items, projName);
+      } else if (action === 'proj-bulk-archive') {
+        if (!confirm(`Archive ${ids.length} selected ${type==='po'?'PO':'ticket'}${ids.length!==1?'s':''} in this project?`)) return;
+        await Promise.all(ids.map(id => type==='po'
+          ? fetch(`/api/po/${id}/project-archive`,{method:'PATCH'})
+          : fetch(`/api/tickets/${id}/project-archive`,{method:'PATCH'})
+        ));
+        showToast(`${ids.length} ${type==='po'?'PO':'ticket'}${ids.length!==1?'s':''} archived in project`, 'success');
+        if (currentProjectId) openProject(currentProjectId);
+      }
+    });
+  });
+}
+
+// ── Project-level archive / unarchive helpers ──
+async function projArchiveTicket(id) {
+  await fetch(`/api/tickets/${id}/project-archive`,{method:'PATCH'});
+  showToast('Ticket moved to project archive','success');
+  if(currentProjectId) openProject(currentProjectId);
+}
+async function projUnarchiveTicket(id) {
+  await fetch(`/api/tickets/${id}/project-unarchive`,{method:'PATCH'});
+  showToast('Ticket restored to active tab','success');
+  if(currentProjectId) openProject(currentProjectId);
+}
+async function projArchivePO(id) {
+  await fetch(`/api/po/${id}/project-archive`,{method:'PATCH'});
+  showToast('PO moved to project archive','success');
+  if(currentProjectId) openProject(currentProjectId);
+}
+async function projUnarchivePO(id) {
+  await fetch(`/api/po/${id}/project-unarchive`,{method:'PATCH'});
+  showToast('PO restored to active tab','success');
+  if(currentProjectId) openProject(currentProjectId);
+}
+
+// ── Outstanding summary ──
+function updateProjectOutstandingSummary() {
+  const div = $('project-outstanding-summary');
+  if (!div) return;
+  const pending = currentProjectData.tickets.filter(t => !t.ticket_status || t.ticket_status==='Pending').length;
+  const openPos = currentProjectData.purchase_orders.filter(p => p.status==='Open').length;
+  const total   = currentProjectData.tickets.length + currentProjectData.purchase_orders.length;
+  if (total === 0) { div.innerHTML=''; return; }
+  if (pending+openPos === 0) {
+    div.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ All records up to date</span>`;
+  } else {
+    const parts=[];
+    if(pending>0) parts.push(`${pending} Time Ticket${pending!==1?'s':''} pending`);
+    if(openPos>0) parts.push(`${openPos} PO${openPos!==1?'s':''} open`);
+    div.innerHTML=`<span style="color:var(--orange);font-weight:700;">${parts.join(' · ')}</span>
+      <span style="color:var(--gray-500);font-size:12px;margin-left:8px;">(${pending+openPos} of ${total} need attention)</span>`;
+  }
+}
+
+// ── Inline status saves ──
+async function saveTicketStatus(id, newStatus, row) {
+  try {
+    const res = await fetch('/api/tickets/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket_status:newStatus})});
+    if(!res.ok) throw new Error();
+    const data = await res.json();
+    if (data.auto_project_archived && currentProjectId) {
+      // Reload the project so ticket moves from active to Archived tab automatically
+      showToast('Ticket marked Entered — moved to Archived Tickets and project archive', 'success');
+      openProject(currentProjectId);
+    } else {
+      const t = currentProjectData.tickets.find(x=>x.id==id);
+      if(t) t.ticket_status=newStatus;
+      if(row) row.className = newStatus==='Pending'?'row-outstanding':'row-ok';
+      updateProjectOutstandingSummary();
+      showToast(data.auto_archived ? 'Ticket marked Entered and moved to Archived Tickets' : 'Ticket status updated','success');
+    }
+  } catch { showToast('Failed to update status','error'); }
+}
+async function saveProjectPOStatus(id, newStatus, row) {
+  try {
+    const res = await fetch('/api/po/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})});
+    if(!res.ok) throw new Error();
+    const data = await res.json();
+    if (data.auto_project_archived && currentProjectId) {
+      showToast('PO marked Entered — moved to project archive', 'success');
+      openProject(currentProjectId);
+    } else {
+      const po = currentProjectData.purchase_orders.find(x=>x.id==id);
+      if(po) po.status=newStatus;
+      if(row) row.className = newStatus==='Open'?'row-outstanding':'row-ok';
+      updateProjectOutstandingSummary();
+      showToast('PO status updated','success');
+    }
+  } catch { showToast('Failed to update status','error'); }
+}
+
+// ── Print multiple tickets ──
+function printMultipleTickets(tickets, projName) {
+  const w = window.open('','_blank','width=700,height=800');
+  const style = `body{font-family:Arial,sans-serif;}
+    .pg{padding:32px;max-width:600px;margin:0 auto;page-break-after:always;}
+    .pg:last-child{page-break-after:auto;}
+    h2{font-size:16px;color:#F47920;margin:0 0 4px;}
+    .lbl{font-size:10px;font-weight:700;text-transform:uppercase;color:#999;margin-top:10px;}
+    .val{font-size:14px;font-weight:600;}
+    table{width:100%;border-collapse:collapse;margin-top:8px;}
+    th{font-size:10px;background:#f5f5f5;padding:5px 8px;border:1px solid #ddd;text-align:left;}
+    td{padding:5px 8px;border:1px solid #ddd;}
+    .footer{font-size:11px;color:#aaa;text-align:center;margin-top:24px;}
+    @media print{.pg{padding:16px;}@page{margin:1cm;}}`;
+  const pages = tickets.map(t=>{
+    const reg=t.employees?t.employees.reduce((s,e)=>s+e.regular_hours,0):0;
+    const ot=t.employees?t.employees.reduce((s,e)=>s+e.overtime_hours,0):0;
+    return `<div class="pg">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.1em;">J&D Western Electric${projName?` · ${projName}`:''}</div>
+      <h2>${esc(t.ticket_number)}</h2>
+      <div class="lbl">Date</div><div class="val">${fmtDate(t.date)}</div>
+      <div class="lbl">Job</div><div class="val">${esc(t.job_name)}${t.job_number?' (#'+esc(t.job_number)+')':''}</div>
+      <div class="lbl">Supervisor</div><div class="val">${esc(t.supervisor)}</div>
+      <table><thead><tr><th>Employee</th><th>Level</th><th>Reg Hrs</th><th>OT Hrs</th></tr></thead>
+      <tbody>${(t.employees||[]).map(e=>`<tr><td>${esc(e.name||e.employee_name)}</td><td>${esc(e.level||'')}</td><td>${e.regular_hours}</td><td>${e.overtime_hours}</td></tr>`).join('')}
+      <tr><td><strong>TOTAL</strong></td><td></td><td>${reg.toFixed(1)}</td><td>${ot.toFixed(1)}</td></tr></tbody></table>
+      <div class="lbl">Work Description</div><div class="val" style="white-space:pre-wrap;">${esc(t.work_description)}</div>
+      ${t.equipment_used?`<div class="lbl">Equipment</div><div class="val">${esc(t.equipment_used)}</div>`:''}
+      ${t.notes?`<div class="lbl">Notes</div><div class="val">${esc(t.notes)}</div>`:''}
+      <div class="footer">J&D Western Electric Ltd — jdwesternelectric.ca</div>
+    </div>`;
+  }).join('');
+  w.document.write(`<!DOCTYPE html><html><head><title>Selected Tickets</title><style>${style}</style></head><body>${pages}<script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+
+// ── Export tickets to xlsx (client helper for project bulk export) ──
+function exportTicketsToXlsx(tickets, filename) {
+  // Build CSV as fallback (XLSX lib is server-side only); use server export
+  // Route through a dedicated tickets export endpoint
+  const ids = tickets.map(t=>t.id).join(',');
+  window.location = `/api/tickets/export/xlsx?ids=${ids}&filename=${encodeURIComponent(filename)}`;
+}
+
+function setProjectSubTab(tab) {
+  $('psub-tickets').classList.toggle('active', tab === 'tickets');
+  $('psub-pos').classList.toggle('active', tab === 'pos');
+  $('psub-proj-archived').classList.toggle('active', tab === 'proj-archived');
+  $('ptab-panel-tickets').style.display = tab === 'tickets' ? 'block' : 'none';
+  $('ptab-panel-pos').style.display = tab === 'pos' ? 'block' : 'none';
+  $('ptab-panel-proj-archived').style.display = tab === 'proj-archived' ? 'block' : 'none';
+}
+$('psub-tickets').addEventListener('click', () => setProjectSubTab('tickets'));
+$('psub-pos').addEventListener('click', () => setProjectSubTab('pos'));
+$('psub-proj-archived').addEventListener('click', () => setProjectSubTab('proj-archived'));
+
+// Refresh the open project after a record changes (keeps archived labels current)
+function refreshProjectIfOpen() {
+  if (currentProjectId && $('project-detail').style.display !== 'none') openProject(currentProjectId);
+}
+
+$('btn-back-projects').addEventListener('click', () => {
+  $('project-detail').style.display = 'none';
+  $('project-list-wrap').style.display = 'block';
+  currentProjectId = null;
+  loadProjects();
+});
+
+$('btn-export-project').addEventListener('click', () => {
+  if (!currentProjectId) return;
+  window.location = '/api/project-folders/' + currentProjectId + '/export/xlsx';
+});
+
+// ── Create / Edit project modal ──
+function openProjectModal(project) {
+  editingProjectId = project ? project.id : null;
+  $('project-modal-title').textContent = project ? 'Edit Project' : 'New Project';
+  $('project-name-input').value = project ? project.name : '';
+  $('project-jobs-input').value = project ? (project.job_numbers || '') : '';
+  $('project-modal').classList.add('open');
+  setTimeout(() => $('project-name-input').focus(), 50);
+}
+function closeProjectModal() { $('project-modal').classList.remove('open'); editingProjectId = null; }
+
+$('btn-new-project').addEventListener('click', () => openProjectModal(null));
+$('project-modal-close').addEventListener('click', closeProjectModal);
+$('project-modal-cancel').addEventListener('click', closeProjectModal);
+$('project-modal').addEventListener('click', e => { if (e.target === $('project-modal')) closeProjectModal(); });
+
+$('btn-edit-project').addEventListener('click', async () => {
+  if (!currentProjectId) return;
+  try {
+    const res = await fetch('/api/project-folders/' + currentProjectId);
+    const data = await res.json();
+    openProjectModal(data.project);
+  } catch { showToast('Could not load project', 'error'); }
+});
+
+$('project-save-btn').addEventListener('click', async () => {
+  const name = $('project-name-input').value.trim();
+  const job_numbers = $('project-jobs-input').value.trim();
+  if (!name) { showToast('Project name is required', 'error'); return; }
+  const wasEditing = !!editingProjectId;
+  try {
+    const res = wasEditing
+      ? await fetch('/api/project-folders/' + editingProjectId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers }) })
+      : await fetch('/api/project-folders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers }) });
+    if (!res.ok) throw new Error();
+    closeProjectModal();
+    showToast(wasEditing ? 'Project updated' : 'Project created', 'success');
+    if (wasEditing && currentProjectId && $('project-detail').style.display !== 'none') openProject(currentProjectId);
+    else loadProjects();
+  } catch { showToast('Failed to save project', 'error'); }
+});
+
+$('btn-complete-project').addEventListener('click', async () => {
+  if (!currentProjectId) return;
+  const makeComplete = currentProjectStatus !== 'complete';
+  if (makeComplete && !confirm('Mark this project as complete? It moves to Completed Projects but all of its records stay intact and accessible.')) return;
+  try {
+    const res = await fetch('/api/project-folders/' + currentProjectId + '/status', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: makeComplete ? 'complete' : 'active' })
+    });
+    if (!res.ok) throw new Error();
+    showToast(makeComplete ? 'Project marked complete' : 'Project reactivated', 'success');
+    openProject(currentProjectId);
+  } catch { showToast('Action failed', 'error'); }
+});
+
+// ── Restore Project ──
+async function restoreProject(id) {
+  try {
+    const res = await fetch('/api/project-folders/' + id + '/status', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'active' })
+    });
+    if (!res.ok) throw new Error();
+    showToast('Project restored to active projects', 'success');
+    // If viewing detail, refresh it; otherwise refresh list
+    if (currentProjectId === id && $('project-detail').style.display !== 'none') openProject(id);
+    else { loadProjects(); }
+  } catch { showToast('Failed to restore project', 'error'); }
+}
+
+$('btn-restore-project').addEventListener('click', async () => {
+  if (!currentProjectId) return;
+  try {
+    const res = await fetch('/api/project-folders/' + currentProjectId + '/status', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'active' })
+    });
+    if (!res.ok) throw new Error();
+    showToast('Project restored to active projects', 'success');
+    $('project-detail').style.display = 'none';
+    $('project-list-wrap').style.display = 'block';
+    switchProjectListTab('active');
+  } catch { showToast('Failed to restore project', 'error'); }
+});
+
+// ── Archive Project ──
+$('btn-archive-project').addEventListener('click', async () => {
+  if (!currentProjectId) return;
+  if (!confirm(`Archive this project?\n\nIt will be removed from your active projects list but all time tickets and POs linked to it will remain intact and accessible in the Project Archives.`)) return;
+  try {
+    const res = await fetch('/api/project-folders/' + currentProjectId + '/status', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'archived' })
+    });
+    if (!res.ok) throw new Error();
+    showToast('Project archived', 'success');
+    $('project-detail').style.display = 'none';
+    $('project-list-wrap').style.display = 'block';
+    switchProjectListTab('archived');
+  } catch { showToast('Action failed', 'error'); }
+});
+
+// ── Delete Project Permanently ──
+$('btn-delete-project').addEventListener('click', async () => {
+  if (!currentProjectId) return;
+  const name = $('project-detail-name').textContent;
+  if (!confirm(`⚠ PERMANENTLY DELETE project "${name}"?\n\nTime tickets and POs linked to this project will not be deleted but will lose their project association.\n\nThis cannot be undone. Are you sure?`)) return;
+  try {
+    const res = await fetch('/api/project-folders/' + currentProjectId, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+    showToast('Project permanently deleted', 'success');
+    $('project-detail').style.display = 'none';
+    $('project-list-wrap').style.display = 'block';
+    currentProjectId = null;
+    switchProjectListTab('archived');
+  } catch (err) { showToast(err.message || 'Delete failed', 'error'); }
+});
+
+function showProjectsView() {
+  hideAllSpecialViews();
+  $('projects-view').style.display = 'block';
+  setNavActive('nav-projects');
+  $('project-detail').style.display = 'none';
+  $('project-list-wrap').style.display = 'block';
+  switchProjectListTab('active');
+}
+
+function hideProjectsView() {
+  showTTDashboard();
+}
+
+// ── Home view ──
+function showHomeView() {
+  hideAllSpecialViews();
+  $('home-view').style.display = 'block';
+  $('tt-dashboard').style.display = 'none';
+  setNavActive('nav-home');
+  loadHomeOverview();
+  loadStats();
+}
+function hideHomeView() {
+  $('home-view').style.display = 'none';
+}
+
+async function loadHomeOverview() {
+  try {
+    const d = await fetch('/api/dashboard/overview').then(r=>r.json());
+    // Time Tickets
+    $('hm-tt-today').textContent    = d.tickets.today;
+    $('hm-tt-week').textContent     = d.tickets.week;
+    $('hm-tt-pending').textContent  = d.tickets.pending;
+    $('hm-tt-reviewed').textContent = d.tickets.reviewed;
+    $('hm-tt-entered').textContent  = d.tickets.entered;
+    // Projects
+    $('hm-proj-active').textContent      = d.projects.active;
+    $('hm-proj-outstanding').textContent = d.projects.outstanding;
+    $('hm-proj-done').textContent        = d.projects.done;
+    // POs
+    $('hm-po-open').textContent      = d.pos.open;
+    $('hm-po-week').textContent      = d.pos.entered_week;
+    $('hm-po-reimburse').textContent = d.pos.reimbursement;
+    // Activity feed
+    const actionLabel = {
+      ticket_submitted:'Submitted ticket', ticket_viewed:'Viewed ticket',
+      ticket_archived:'Archived ticket', ticket_unarchived:'Restored ticket',
+      ticket_deleted:'Deleted ticket', ticket_updated:'Edited ticket',
+      ticket_status_changed:'Changed ticket status',
+      po_created:'Created PO', po_viewed:'Viewed PO', status_changed:'Changed PO status',
+      po_edited:'Edited PO', po_deleted:'Deleted PO',
+      ticket_project_archived:'Project-archived ticket',
+      po_project_archived:'Project-archived PO',
+    };
+    const dotCls = { ticket:'ticket', po:'po' };
+    $('activity-list').innerHTML = d.activity.length ? d.activity.map(a => `
+      <div class="activity-item">
+        <div class="activity-dot ${dotCls[a.src]||''}"></div>
+        <div>
+          <span style="font-weight:600;">${actionLabel[a.action]||a.action}</span>
+          ${a.ref ? `<span style="color:var(--orange);font-size:12px;margin-left:4px;">${esc(a.ref)}</span>` : ''}
+          ${a.details ? `<span class="text-muted text-sm"> — ${esc(a.details)}</span>` : ''}
+          <div style="font-size:11px;color:var(--gray-500);">by <strong>${esc(a.user_name)}</strong> · ${fmtDateTime(a.created_at)}</div>
+        </div>
+      </div>`).join('') : '<div style="color:var(--gray-400);font-size:13px;padding:8px 0;">No activity yet.</div>';
+  } catch { $('activity-list').innerHTML = '<div style="color:var(--red);font-size:13px;">Error loading activity.</div>'; }
+}
+
+// Home "View All" links
+$('hm-link-tt').addEventListener('click',   e => { e.preventDefault(); showTTDashboard(); });
+$('hm-link-proj').addEventListener('click', e => { e.preventDefault(); showProjectsView(); });
+$('hm-link-po').addEventListener('click',   e => { e.preventDefault(); showPOsView(); });
+
+function hideAllSpecialViews() {
+  ['home-view','tt-dashboard','pos-view','projects-view','archive-section'].forEach(id => {
+    const el = $(id); if (el) el.style.display = 'none';
+  });
+}
+
+function setNavActive(navId) {
+  document.querySelectorAll('.header-nav a').forEach(a => a.classList.remove('active'));
+  $(navId)?.classList.add('active');
+}
+
+function showTTDashboard() {
+  hideAllSpecialViews();
+  $('tt-dashboard').style.display = 'block';
+  if (archiveVisible) $('archive-section').style.display = 'block';
+  setNavActive('nav-tickets');
+  loadStats();
+  loadTickets(1);
+}
+
+// ── Stat card click handlers ──
+document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date().toISOString().slice(0,10);
+  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const ws = weekStart.toISOString().slice(0,10);
+
+  // Today card
+  const todayCard = $('stat-today')?.closest('.stat-card');
+  if (todayCard && !todayCard.id) {
+    todayCard.addEventListener('click', () => {
+      showTTDashboard();
+      setStatFilter('stat-today-card', {date_from: today, date_to: today});
+    });
+    todayCard.id = 'stat-today-card';
+  }
+  // This Week card
+  const weekCard = $('stat-week')?.closest('.stat-card');
+  if (weekCard && !weekCard.id) {
+    weekCard.addEventListener('click', () => {
+      showTTDashboard();
+      setStatFilter('stat-week-card', {date_from: ws});
+    });
+    weekCard.id = 'stat-week-card';
+  }
+  // Active Jobs card
+  const jobsCard = $('stat-jobs')?.closest('.stat-card');
+  if (jobsCard && !jobsCard.id) {
+    jobsCard.addEventListener('click', () => {
+      showTTDashboard();
+      setStatFilter('stat-jobs-card', {});
+    });
+    jobsCard.id = 'stat-jobs-card';
+  }
+
+  $('btn-clear-stat-filter').addEventListener('click', clearStatFilter);
+});
+
+$('nav-home').addEventListener('click', e => { e.preventDefault(); showHomeView(); });
+
+$('nav-projects').addEventListener('click', e => {
+  e.preventDefault();
+  showProjectsView();
+});
+
+$('btn-close-projects').addEventListener('click', hideProjectsView);
+
+// ── Time Tickets nav ──
+$('nav-tickets').addEventListener('click', e => {
+  e.preventDefault();
+  showTTDashboard();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// ── Show/hide archive section ──
+$('stat-archive-card').addEventListener('click', () => {
+  showTTDashboard();
+  archiveVisible = true;
+  $('archive-section').style.display = 'block';
+  loadArchived(1);
+  setTimeout(() => $('archive-section').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+});
+$('btn-hide-archive').addEventListener('click', () => {
+  archiveVisible = false;
+  $('archive-section').style.display = 'none';
+  if ($('btn-show-ticket-archive')) $('btn-show-ticket-archive').textContent = 'Archived Tickets';
+});
+
+$('btn-show-ticket-archive').addEventListener('click', () => {
+  if (!archiveVisible) {
+    archiveVisible = true;
+    $('archive-section').style.display = 'block';
+    $('btn-show-ticket-archive').textContent = 'Hide Archived';
+    loadArchived(1);
+    $('archive-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    archiveVisible = false;
+    $('archive-section').style.display = 'none';
+    $('btn-show-ticket-archive').textContent = 'Archived Tickets';
+  }
+});
+
+// ── Filters ──
+$('btn-filter').addEventListener('click', () => loadTickets(1));
+$('btn-clear').addEventListener('click', () => {
+  ['f-search','f-job','f-date-from','f-date-to','f-supervisor'].forEach(id => $(id).value = '');
+  loadTickets(1);
+});
+['f-search','f-job','f-supervisor'].forEach(id => {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadTickets(1); });
+});
+
+// ── CSV Export ──
+$('btn-export').addEventListener('click', () => {
+  const params = new URLSearchParams();
+  const job  = $('f-job').value.trim();
+  const from = $('f-date-from').value;
+  const to   = $('f-date-to').value;
+  if (job)  params.set('job', job);
+  if (from) params.set('date_from', from);
+  if (to)   params.set('date_to', to);
+  window.location = '/api/export/csv?' + params.toString();
+});
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeDetail();
+    $('confirm-modal').classList.remove('open');
+    $('po-modal').classList.remove('open');
+    $('project-modal').classList.remove('open');
+  }
+});
+
+// ─────────────────────────────────────────────
+// PURCHASE ORDERS
+// ─────────────────────────────────────────────
+
+let activePOId    = null;
+let currentPOData = null;
+let allLoadedPOs  = [];
+let allArchivedPOs = [];
+
+function poFilterParams(includeArchived = false) {
+  const p = new URLSearchParams();
+  const s  = includeArchived ? '' : ($('pf-status').value || 'Open');
+  const f  = $('pf-date-from').value;
+  const t  = $('pf-date-to').value;
+  const e  = $('pf-employee').value.trim();
+  const jn = $('pf-job-name').value.trim();
+  const r  = $('pf-reimbursement').value;
+  if (s)  p.set('status', s);
+  if (f)  p.set('date_from', f);
+  if (t)  p.set('date_to', t);
+  if (e)  p.set('employee', e);
+  if (jn) p.set('job_name', jn);
+  if (r)  p.set('reimbursement', r);
+  return p;
+}
+
+function renderPORows(pos, tbodyId, isArchivedSection = false) {
+  const tbody = $(tbodyId);
+  if (!pos.length) {
+    const cols = isArchivedSection ? 11 : 10;
+    tbody.innerHTML = `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--gray-500);">No purchase orders found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = pos.map(po => `
+    <tr data-poid="${po.id}">
+      <td class="cb-col" onclick="event.stopPropagation()">
+        <input type="checkbox" class="po-cb po-row-cb" data-id="${po.id}" onclick="event.stopPropagation();updateBulkBar()"/>
+      </td>
+      <td><strong style="color:var(--orange);font-size:13px;">${esc(po.po_number)}</strong></td>
+      <td>${fmtDate(po.date)}</td>
+      <td>${esc(po.generated_by_name)}</td>
+      <td><strong>${esc(po.jobber_job_number)}</strong></td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(po.job_name || '—')}</td>
+      <td>${esc(po.supplier || '—')}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(po.description)}</td>
+      <td>${po.estimated_amount != null ? '$' + parseFloat(po.estimated_amount).toFixed(2) : '—'}</td>
+      <td>
+        ${poStatusBadge(po.status)}
+        ${po.needs_reimbursement ? ' <span class="reimb-badge">⚠ Reimburse</span>' : ''}
+      </td>
+      ${isArchivedSection ? `<td style="white-space:nowrap;" onclick="event.stopPropagation()">
+        <button class="btn btn-sm" data-poid="${po.id}" data-action="po-restore" style="background:#2563eb;color:white;font-size:12px;padding:4px 10px;">Restore</button>
+        <button class="btn btn-danger btn-sm" data-poid="${po.id}" data-num="${esc(po.po_number)}" data-action="po-delete-perm" style="font-size:12px;padding:4px 10px;margin-left:4px;">Delete</button>
+      </td>` : ''}
+    </tr>`).join('');
+  tbody.querySelectorAll('tr[data-poid]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('[data-action]')) return;
+      openPODetail(row.dataset.poid);
+    });
+  });
+  tbody.querySelectorAll('[data-action="po-restore"]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); restorePO(btn.dataset.poid); });
+  });
+  tbody.querySelectorAll('[data-action="po-delete-perm"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!confirm(`⚠ Permanently delete PO ${btn.dataset.num}?\n\nThis cannot be undone. The PO and all its data will be gone forever.`)) return;
+      permanentDeletePO(btn.dataset.poid);
+    });
+  });
+}
+
+async function restorePO(id) {
+  try {
+    const res = await fetch('/api/po/' + id, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'Open' })
+    });
+    if (!res.ok) throw new Error();
+    showToast('PO restored to main dashboard', 'success');
+    loadPOs();
+    loadStats();
+    refreshProjectIfOpen();
+  } catch { showToast('Failed to restore PO', 'error'); }
+}
+
+async function permanentDeletePO(id) {
+  try {
+    const res = await fetch('/api/po/' + id, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || ''); }
+    showToast('PO permanently deleted', 'success');
+    loadArchivedPOs();
+    loadStats();
+  } catch (err) { showToast(err.message || 'Delete failed', 'error'); }
+}
+
+async function loadPOs() {
+  $('po-tbody').innerHTML = `<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--gray-500);">Loading…</td></tr>`;
+  const res = await fetch('/api/po?' + poFilterParams(false));
+  const data = await res.json();
+  allLoadedPOs = data.purchase_orders;
+  $('po-count').textContent = `${data.total} open purchase order${data.total !== 1 ? 's' : ''}`;
+  renderPORows(data.purchase_orders, 'po-tbody');
+  updateBulkBar();
+  // Also reload archived if visible
+  if ($('po-archived-wrap').style.display !== 'none') loadArchivedPOs();
+}
+
+async function loadArchivedPOs() {
+  $('po-archived-tbody').innerHTML = `<tr><td colspan="10" style="padding:16px;text-align:center;color:var(--gray-500);">Loading…</td></tr>`;
+  const p = new URLSearchParams();
+  const f = $('pf-date-from').value, t = $('pf-date-to').value, e = $('pf-employee').value.trim(), jn = $('pf-job-name').value.trim();
+  // Show Entered + Archived (all non-Open)
+  if (f)  p.set('date_from', f);
+  if (t)  p.set('date_to', t);
+  if (e)  p.set('employee', e);
+  if (jn) p.set('job_name', jn);
+  // Fetch Entered
+  const [r1, r2] = await Promise.all([
+    fetch('/api/po?' + p + '&status=Entered').then(r=>r.json()),
+    fetch('/api/po?' + p + '&status=Archived').then(r=>r.json()),
+  ]);
+  const combined = [...(r1.purchase_orders||[]), ...(r2.purchase_orders||[])].sort((a,b)=>b.created_at.localeCompare(a.created_at));
+  allArchivedPOs = combined;
+  renderPORows(combined, 'po-archived-tbody', true);
+}
+
+async function openPODetail(id) {
+  activePOId = id;
+  $('po-modal').classList.add('open');
+  $('po-modal-body').innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-500);">Loading…</div>`;
+
+  const res = await fetch('/api/po/' + id);
+  const po = await res.json();
+  currentPOData = po; // store for print
+
+  $('po-modal-number').textContent = po.po_number;
+  $('po-status-select').value = po.status;
+
+  // Delete only available once PO is Archived
+  $('po-delete-btn').style.display = po.status === 'Archived' ? '' : 'none';
+
+  const actionLabel = { po_created:'Created', po_viewed:'Viewed', status_changed:'Status Changed', note_updated:'Note Updated', po_deleted:'Deleted' };
+  const auditHtml = po.audit?.length
+    ? po.audit.map(a => `<div class="audit-entry"><div class="audit-dot ${a.action === 'po_created' ? 'submitted' : a.action === 'po_deleted' ? 'deleted' : 'viewed'}"></div><div class="audit-text"><strong>${actionLabel[a.action]||a.action}</strong>${a.details ? ' — ' + esc(a.details) : ''} by <strong>${esc(a.user_name)}</strong> — ${fmtDateTime(a.created_at)}</div></div>`).join('')
+    : '<span class="text-xs text-muted">No activity recorded.</span>';
+
+  $('po-modal-body').innerHTML = `
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-field"><label>Date</label><div class="val">${fmtDate(po.date)}</div></div>
+      <div class="detail-field"><label>Generated By</label><div class="val">${esc(po.generated_by_name)}</div></div>
+      <div class="detail-field full"><label>Jobber Job Number</label><div class="val" style="font-size:16px;font-weight:800;color:var(--orange);">${esc(po.jobber_job_number)}</div></div>
+      <div class="detail-field full"><label>Job Name</label><div class="val">${esc(po.job_name || '—')}</div></div>
+      <div class="detail-field"><label>Supplier</label><div class="val">${esc(po.supplier || '—')}</div></div>
+      <div class="detail-field"><label>Estimated Amount</label><div class="val">${po.estimated_amount != null ? '$' + parseFloat(po.estimated_amount).toFixed(2) : '—'}</div></div>
+      <div class="detail-field full"><label>Description</label><div class="val" style="white-space:pre-wrap;">${esc(po.description)}</div></div>
+      ${po.needs_reimbursement ? `<div class="detail-field full" style="background:#fff8f0;padding:10px 12px;border-radius:8px;border-left:3px solid var(--orange);"><label style="color:var(--orange-dark);">⚠ Reimbursement Required</label><div class="val" style="color:var(--orange-dark);">Yes — tech requires reimbursement for this purchase</div></div>` : ''}
+      ${po.receipt_path ? `<div class="detail-field full"><label>Receipt</label><div class="val"><a href="${po.receipt_path}" target="_blank" class="btn btn-ghost btn-sm">📎 View Receipt</a></div></div>` : ''}
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label class="form-label">Office Note</label>
+      <textarea id="po-note-input" class="form-control" rows="2" placeholder="Internal notes, actual amount, invoice number…">${esc(po.office_note || '')}</textarea>
+    </div>
+    <div class="divider"></div>
+    <div class="audit-log"><div class="audit-title">Activity Log</div><div>${auditHtml}</div></div>
+  `;
+}
+
+$('po-save-btn').addEventListener('click', async () => {
+  if (!activePOId) return;
+  const status = $('po-status-select').value;
+  const office_note = document.getElementById('po-note-input')?.value || '';
+  const res = await fetch('/api/po/' + activePOId, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ status, office_note })
+  });
+  if (res.ok) {
+    const data = await res.json();
+    const movedToArchive = (status === 'Entered' || status === 'Archived') && (!currentPOData || currentPOData.status === 'Open');
+    const msg = data.auto_project_archived
+      ? `PO marked as ${status} — moved to PO archive and project archive`
+      : (movedToArchive ? `PO marked as ${status} and moved to Archived POs` : 'PO updated');
+    showToast(msg, 'success');
+    $('po-modal').classList.remove('open');
+    loadPOs();
+    if (data.auto_project_archived && currentProjectId) openProject(currentProjectId);
+    else refreshProjectIfOpen();
+  } else {
+    showToast('Failed to update PO', 'error');
+  }
+});
+
+$('po-delete-btn').addEventListener('click', async () => {
+  if (!activePOId) return;
+  if (!confirm(`⚠ Permanently delete PO ${currentPOData?.po_number || ''}?\n\nThis cannot be undone. The PO and all its data will be gone forever.`)) return;
+  const res = await fetch('/api/po/' + activePOId, { method: 'DELETE' });
+  if (res.ok) {
+    showToast('PO deleted', 'success');
+    $('po-modal').classList.remove('open');
+    loadPOs();
+    refreshProjectIfOpen();
+  }
+});
+
+$('po-modal-close').addEventListener('click',   () => $('po-modal').classList.remove('open'));
+$('po-modal-close-2').addEventListener('click', () => $('po-modal').classList.remove('open'));
+$('po-modal').addEventListener('click', e => { if (e.target === $('po-modal')) $('po-modal').classList.remove('open'); });
+
+// ── Print PO from office modal ──
+function escPrint(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function buildPOPrintWindow(po) {
+  const officeNote = document.getElementById('po-note-input')?.value || po.office_note || '';
+  const generatedAt = fmtDateTime(po.created_at);
+  const w = window.open('', '_blank', 'width=640,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><title>PO ${po.po_number}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; padding: 48px 40px; color: #111; max-width: 600px; margin: 0 auto; }
+    .co-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #888; }
+    .doc-title { font-size: 14px; color: #555; margin-top: 4px; margin-bottom: 24px; }
+    .po-num { font-size: 52px; font-weight: 900; color: #F47920; letter-spacing: .04em; line-height: 1; margin-bottom: 28px; word-break: break-all; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #999; margin-bottom: 3px; }
+    .field .val { font-size: 15px; font-weight: 600; color: #111; line-height: 1.4; }
+    .status-tag { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; background: #fff3cd; color: #856404; }
+    .divider { border: none; border-top: 1px solid #e5e5e5; margin: 24px 0; }
+    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 40px; }
+    @media print { body { padding: 24px 20px; } @page { margin: 1cm; } }
+  </style></head><body>
+  <div class="co-name">J&amp;D Western Electric Ltd</div>
+  <div class="doc-title">Purchase Order</div>
+  <div class="po-num">${po.po_number}</div>
+  <div class="field"><label>Date &amp; Time Generated</label><div class="val">${generatedAt}</div></div>
+  <div class="field"><label>Generated By</label><div class="val">${escPrint(po.generated_by_name)}</div></div>
+  <div class="field"><label>Status</label><div class="val"><span class="status-tag">${po.status}</span></div></div>
+  <hr class="divider"/>
+  <div class="field"><label>Jobber Job Number</label><div class="val" style="font-size:17px;">${escPrint(po.jobber_job_number)}</div></div>
+  ${po.job_name ? `<div class="field"><label>Job Name</label><div class="val">${escPrint(po.job_name)}</div></div>` : ''}
+  ${po.supplier ? `<div class="field"><label>Supplier / Wholesaler</label><div class="val">${escPrint(po.supplier)}</div></div>` : ''}
+  <div class="field"><label>Description of Items</label><div class="val" style="white-space:pre-wrap;">${escPrint(po.description)}</div></div>
+  ${po.estimated_amount != null ? `<div class="field"><label>Estimated Amount</label><div class="val">$${parseFloat(po.estimated_amount).toFixed(2)}</div></div>` : ''}
+  ${officeNote ? `<hr class="divider"/><div class="field"><label>Office Notes</label><div class="val" style="white-space:pre-wrap;">${escPrint(officeNote)}</div></div>` : ''}
+  <div class="footer">J&amp;D Western Electric Ltd — jdwesternelectric.ca</div>
+  <script>window.onload = () => { window.print(); }<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+$('po-print-btn').addEventListener('click', () => {
+  if (!currentPOData) return;
+  buildPOPrintWindow(currentPOData);
+});
+
+$('btn-po-filter').addEventListener('click', loadPOs);
+$('btn-po-clear').addEventListener('click', () => {
+  ['pf-status','pf-date-from','pf-date-to','pf-employee','pf-job-name','pf-reimbursement'].forEach(id => $(id).value = '');
+  $('pf-status').value = 'Open'; // reset to default
+  loadPOs();
+});
+['pf-employee','pf-date-from','pf-date-to','pf-job-name'].forEach(id => {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadPOs(); });
+});
+
+// ── Checkboxes / select-all ──
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.po-row-cb:checked');
+  const bar = $('po-bulk-bar');
+  if (checked.length > 0) {
+    bar.classList.add('visible');
+    $('po-sel-count').textContent = `${checked.length} selected`;
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+
+$('po-select-all').addEventListener('change', e => {
+  document.querySelectorAll('#po-tbody .po-row-cb').forEach(cb => cb.checked = e.target.checked);
+  updateBulkBar();
+});
+
+$('po-arch-select-all').addEventListener('change', e => {
+  document.querySelectorAll('#po-archived-tbody .po-row-cb').forEach(cb => cb.checked = e.target.checked);
+  updateBulkBar();
+});
+
+// ── Print Selected ──
+$('btn-print-selected').addEventListener('click', () => {
+  const ids = Array.from(document.querySelectorAll('.po-row-cb:checked')).map(cb => parseInt(cb.dataset.id));
+  const pos = [...allLoadedPOs, ...allArchivedPOs].filter(po => ids.includes(po.id));
+  if (!pos.length) return;
+
+  const w = window.open('', '_blank', 'width=700,height=800');
+  const pageStyle = `* { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; }
+    .po-page { padding: 40px; max-width: 600px; margin: 0 auto; page-break-after: always; }
+    .po-page:last-child { page-break-after: auto; }
+    .co-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #888; }
+    .doc-title { font-size: 13px; color: #555; margin-top: 4px; margin-bottom: 20px; }
+    .po-num { font-size: 44px; font-weight: 900; color: #F47920; letter-spacing: .04em; line-height: 1; margin-bottom: 24px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #999; margin-bottom: 2px; }
+    .field .val { font-size: 14px; font-weight: 600; color: #111; line-height: 1.4; }
+    hr { border: none; border-top: 1px solid #e5e5e5; margin: 16px 0; }
+    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 32px; }
+    .reimb { background:#fff8f0; padding:6px 10px; border-radius:5px; border-left:3px solid #F47920; font-size:13px; color:#c05621; font-weight:700; margin-bottom:12px; }
+    @media print { .po-page { padding: 20px; } @page { margin: 1cm; } }`;
+
+  const pages = pos.map(po => `
+    <div class="po-page">
+      <div class="co-name">J&amp;D Western Electric Ltd</div>
+      <div class="doc-title">Purchase Order</div>
+      <div class="po-num">${esc(po.po_number)}</div>
+      <div class="field"><label>Date Generated</label><div class="val">${fmtDate(po.date)}</div></div>
+      <div class="field"><label>Generated By</label><div class="val">${esc(po.generated_by_name)}</div></div>
+      <hr/>
+      <div class="field"><label>Jobber Job Number</label><div class="val" style="font-size:16px;">${esc(po.jobber_job_number)}</div></div>
+      ${po.job_name ? `<div class="field"><label>Job Name</label><div class="val">${esc(po.job_name)}</div></div>` : ''}
+      ${po.supplier ? `<div class="field"><label>Supplier</label><div class="val">${esc(po.supplier)}</div></div>` : ''}
+      <div class="field"><label>Description</label><div class="val" style="white-space:pre-wrap;">${esc(po.description)}</div></div>
+      ${po.estimated_amount != null ? `<div class="field"><label>Est. Amount</label><div class="val">$${parseFloat(po.estimated_amount).toFixed(2)}</div></div>` : ''}
+      ${po.needs_reimbursement ? `<div class="reimb">⚠ Reimbursement Required</div>` : ''}
+      ${po.office_note ? `<hr/><div class="field"><label>Office Notes</label><div class="val" style="white-space:pre-wrap;">${esc(po.office_note)}</div></div>` : ''}
+      <div class="footer">J&amp;D Western Electric Ltd — jdwesternelectric.ca</div>
+    </div>`).join('');
+
+  w.document.write(`<!DOCTYPE html><html><head><title>Selected POs</title><style>${pageStyle}</style></head><body>${pages}<script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  w.document.close();
+});
+
+// ── Export Selected ──
+$('btn-export-selected').addEventListener('click', () => {
+  const ids = Array.from(document.querySelectorAll('.po-row-cb:checked')).map(cb => cb.dataset.id).join(',');
+  if (!ids) return;
+  window.location = `/api/po/export/xlsx?ids=${ids}`;
+});
+
+// ── Archive Selected ──
+$('btn-archive-selected').addEventListener('click', async () => {
+  const checked = Array.from(document.querySelectorAll('.po-row-cb:checked'));
+  if (!checked.length) return;
+  const count = checked.length;
+  if (!confirm(`Archive ${count} selected PO${count !== 1 ? 's' : ''}? They will be removed from the main dashboard but remain visible inside their assigned projects.`)) return;
+
+  const ids = checked.map(cb => cb.dataset.id);
+  let done = 0;
+  await Promise.all(ids.map(id =>
+    fetch('/api/po/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Archived' })
+    }).then(r => { if (r.ok) done++; })
+  ));
+
+  // Uncheck select-all and clear bulk bar
+  $('po-select-all').checked = false;
+  updateBulkBar();
+
+  showToast(`${done} PO${done !== 1 ? 's' : ''} archived`, 'success');
+  loadPOs();
+  if ($('po-archived-wrap').style.display !== 'none') loadArchivedPOs();
+});
+
+// ── Archived POs toggle ──
+$('btn-toggle-archived-pos').addEventListener('click', () => {
+  const wrap = $('po-archived-wrap');
+  const btn  = $('btn-toggle-archived-pos');
+  if (wrap.style.display === 'none') {
+    wrap.style.display = 'block';
+    btn.textContent = 'Hide ▲';
+    loadArchivedPOs();
+  } else {
+    wrap.style.display = 'none';
+    btn.textContent = 'Show ▼';
+  }
+});
+
+$('btn-export-pos').addEventListener('click', () => {
+  window.location = '/api/po/export/xlsx?' + poFilterParams();
+});
+
+function showPOsView() {
+  hideAllSpecialViews();
+  $('pos-view').style.display = 'block';
+  setNavActive('nav-pos');
+  loadPOs();
+}
+
+function hidePOsView() {
+  showTTDashboard();
+}
+
+$('nav-pos').addEventListener('click', e => {
+  e.preventDefault();
+  showPOsView();
+});
+$('btn-close-pos').addEventListener('click', hidePOsView);
+
+// ── Audit log ──
+async function loadAuditLog(ticketId) {
+  try {
+    const logs = await fetch(`/api/tickets/${ticketId}/audit`).then(r=>r.json());
+    const dotClass = { ticket_submitted:'submitted', ticket_viewed:'viewed', ticket_archived:'archived', ticket_unarchived:'viewed', ticket_deleted:'deleted', ticket_exported:'exported', ticket_updated:'viewed' };
+    const actionLabel = { ticket_submitted:'Submitted', ticket_viewed:'Viewed', ticket_archived:'Archived', ticket_unarchived:'Unarchived', ticket_deleted:'Deleted', ticket_exported:'Exported', ticket_updated:'Updated' };
+    $('audit-entries').innerHTML = logs.length === 0 ? '<span class="text-xs text-muted">No activity recorded yet.</span>' :
+      logs.map(l => `<div class="audit-entry"><div class="audit-dot ${dotClass[l.action]||''}"></div><div class="audit-text"><strong>${actionLabel[l.action]||l.action}</strong> by <strong>${esc(l.user_name)}</strong> — ${fmtDateTime(l.created_at)}</div></div>`).join('');
+  } catch { $('audit-entries').innerHTML = ''; }
+}
+</script>
+</body>
+</html>

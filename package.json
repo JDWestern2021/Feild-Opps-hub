@@ -1,0 +1,18 @@
+{
+  "name": "field-ops-hub",
+  "version": "1.0.0",
+  "description": "J&D Western Electric Field Operations Hub",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --experimental-sqlite server.js",
+    "dev": "node --experimental-sqlite server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^4.18.2",
+    "express-session": "^1.19.0",
+    "multer": "^2.1.1",
+    "nodemailer": "^8.0.10",
+    "xlsx": "^0.18.5"
+  }
+}

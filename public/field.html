@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Daily Time Ticket — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style> body { visibility: hidden; } </style>
+  <style>
+    body { background: var(--gray-100); }
+
+    .page-container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    /* Ticket header accent */
+    .ticket-header-bar {
+      background: linear-gradient(135deg, var(--black) 60%, var(--orange) 100%);
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 20px 24px 18px;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .ticket-header-bar h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+    .ticket-header-bar .sub { font-size: 12px; color: rgba(255,255,255,0.65); margin-top: 2px; }
+    .ticket-icon { width: 44px; height: 44px; }
+
+    .ticket-form {
+      background: white;
+      border-radius: 0 0 var(--radius) var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .form-section {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .form-section:last-of-type { border-bottom: none; }
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--orange-light);
+    }
+
+    /* Employee table */
+    .employee-table { width: 100%; border-collapse: collapse; }
+    .employee-table thead th {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0 8px 8px 0;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .employee-table thead th:last-child { width: 36px; }
+    .employee-table thead th.hrs-col { width: 90px; }
+    .employee-row td { padding: 6px 8px 6px 0; vertical-align: middle; }
+    .employee-row td:last-child { padding-right: 0; }
+    .employee-row .form-control { padding: 9px 10px; font-size: 14px; }
+    .hrs-input { text-align: center; }
+    .btn-remove-emp {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--gray-300);
+      font-size: 20px;
+      line-height: 1;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+    .btn-remove-emp:hover { color: var(--red); }
+
+    .add-employee-row {
+      padding: 10px 0 4px;
+    }
+
+    /* Hours total */
+    .hours-summary {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: var(--gray-50);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+    .hours-summary span { color: var(--gray-500); }
+    .hours-summary strong { color: var(--dark); }
+    .hours-summary .ot { color: var(--orange); }
+
+    /* Submit area */
+    .submit-section {
+      padding: 20px 24px 24px;
+    }
+    .submit-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      background: var(--orange-light);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--orange-dark);
+    }
+
+    /* Success screen */
+    #success-screen {
+      display: none;
+      text-align: center;
+      padding: 48px 24px;
+    }
+    .success-icon {
+      width: 72px; height: 72px;
+      background: var(--green);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .success-icon svg { width: 40px; height: 40px; fill: white; }
+    #success-screen h2 { font-size: 22px; font-weight: 800; }
+    #success-screen .ticket-ref {
+      display: inline-block;
+      margin: 10px 0 24px;
+      padding: 8px 18px;
+      background: var(--gray-100);
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-700);
+      letter-spacing: 0.04em;
+    }
+
+    @media (max-width: 480px) {
+      .ticket-header-bar { padding: 16px 18px; }
+      .form-section { padding: 16px 18px; }
+      .submit-section { padding: 16px 18px 24px; }
+      .employee-table thead th.hrs-col { width: 72px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-brand">
+    <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
+    <div class="header-title">
+      <span class="company">J&D Western Electric</span>
+      <span class="module">Daily Time Ticket</span>
+    </div>
+  </div>
+  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+    <span id="header-user" style="font-size:12px;color:rgba(255,255,255,0.45);padding:0 8px;"></span>
+    <a href="index.html">Home</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page-container">
+
+  <!-- FORM CARD -->
+  <div id="form-card">
+    <div class="ticket-header-bar">
+      <div>
+        <div class="h1" style="font-size:18px;font-weight:800;">Daily Time Ticket</div>
+        <div class="sub">Fill out completely before end of shift</div>
+      </div>
+      <svg class="ticket-icon" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="3" width="18" height="18" rx="3" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <path d="M7 8h10M7 12h10M7 16h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <form id="ticket-form" class="ticket-form" novalidate>
+
+      <!-- SECTION: Job Info -->
+      <div class="form-section">
+        <div class="section-label">Job Information</div>
+        <div class="grid-2" style="gap:14px;">
+          <div class="form-group">
+            <label class="form-label" for="date">Date <span class="required">*</span></label>
+            <input type="date" id="date" name="date" class="form-control" required/>
+            <span class="form-error" id="err-date">Required</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="job_number">Job Number</label>
+            <input type="text" id="job_number" name="job_number" class="form-control" placeholder="e.g. 2024-042"/>
+          </div>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label" for="job_name">Job Name / Site <span class="required">*</span></label>
+          <input type="text" id="job_name" name="job_name" class="form-control" placeholder="e.g. Jasper Lot 3 — Custom Home" list="project-suggestions" autocomplete="off" required/>
+          <datalist id="project-suggestions"></datalist>
+          <span class="form-error" id="err-job">Required</span>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label" for="supervisor">Supervisor Name <span class="required">*</span></label>
+          <input type="text" id="supervisor" name="supervisor" class="form-control" placeholder="Your name" required/>
+          <span class="form-error" id="err-supervisor">Required</span>
+        </div>
+      </div>
+
+      <!-- SECTION: Crew & Hours -->
+      <div class="form-section">
+        <div class="section-label">Crew & Hours</div>
+
+        <div style="overflow-x:auto;">
+          <table class="employee-table">
+            <thead>
+              <tr>
+                <th>Employee Name</th>
+                <th class="hrs-col" style="text-align:center;">Level</th>
+                <th class="hrs-col" style="text-align:center;">Reg Hrs</th>
+                <th class="hrs-col" style="text-align:center;">OT Hrs</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="employee-rows">
+              <!-- rows injected by JS -->
+            </tbody>
+          </table>
+        </div>
+        <span class="form-error" id="err-employees" style="display:none;">Add at least one employee with a name</span>
+
+        <div class="add-employee-row">
+          <button type="button" class="btn btn-ghost btn-sm" id="add-employee-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            Add Employee
+          </button>
+        </div>
+
+        <div class="hours-summary" id="hours-summary" style="display:none;">
+          <div><span>Regular: </span><strong id="total-reg">0.0</strong> hrs</div>
+          <div><span>Overtime: </span><strong id="total-ot" class="ot">0.0</strong> hrs</div>
+          <div><span>Total: </span><strong id="total-all">0.0</strong> hrs</div>
+        </div>
+      </div>
+
+      <!-- SECTION: Work Details -->
+      <div class="form-section">
+        <div class="section-label">Work Details</div>
+        <div class="form-group">
+          <label class="form-label" for="work_description">Work Description / Scope Performed <span class="required">*</span></label>
+          <textarea id="work_description" name="work_description" class="form-control" rows="4" placeholder="Describe the work completed today — tasks, areas, scope..." required></textarea>
+          <span class="form-error" id="err-work">Required</span>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label" for="equipment_used">Equipment Used</label>
+          <input type="text" id="equipment_used" name="equipment_used" class="form-control" placeholder="e.g. Conduit bender, scissor lift, cable puller"/>
+          <span class="form-hint">Optional — list tools or equipment used on site</span>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label" for="notes">Site Conditions / Notes</label>
+          <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Weather, delays, safety concerns, materials needed..."></textarea>
+        </div>
+      </div>
+
+      <!-- SECTION: Project Assignment (optional) -->
+      <div class="form-section">
+        <div class="section-label">Project</div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;font-weight:600;color:var(--dark);">
+          <input type="checkbox" id="assign-project" style="width:18px;height:18px;accent-color:var(--orange);cursor:pointer;"/>
+          Assign this time ticket to a project? <span style="font-weight:400;color:var(--gray-500);">(optional)</span>
+        </label>
+        <div id="project-section" style="display:none;margin-top:14px;">
+          <div class="form-group">
+            <label class="form-label" for="project_id">Project</label>
+            <select id="project_id" class="form-control">
+              <option value="">— Select a project —</option>
+            </select>
+            <p style="font-size:12px;color:var(--gray-500);margin-top:8px;">Don't see your project? Ask the office to create it.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBMIT -->
+      <div class="submit-section">
+        <div class="submit-meta">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/></svg>
+          Tickets are saved immediately and visible to the office
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+          <span id="submit-label">Submit Time Ticket</span>
+          <div class="spinner" id="submit-spinner"></div>
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- SUCCESS STATE -->
+  <div class="card" id="success-screen">
+    <div class="success-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+    </div>
+    <h2>Ticket Submitted!</h2>
+    <div class="ticket-ref" id="success-ref">JDW-XXXXXXXX-XXXX</div>
+    <p class="text-muted text-sm" style="margin-bottom:28px;">The office has been notified. Your ticket is saved.</p>
+    <div class="flex gap-12" style="justify-content:center;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="new-ticket-btn">Submit Another Ticket</button>
+      <a href="office.html" class="btn btn-secondary">View in Office</a>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── Utilities ──
+  const $ = id => document.getElementById(id);
+  let empCount = 0;
+
+  // ── Auth check ──
+  (async () => {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href = '/login.html'; return; }
+    const u = await r.json();
+    document.body.style.visibility = 'visible';
+    $('header-user').textContent = u.name;
+    // Pre-fill supervisor with logged-in user's name if empty
+    if (!$('supervisor').value) $('supervisor').value = u.name;
+  })();
+
+  $('logout-btn').addEventListener('click', async e => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method:'POST'});
+    location.href = '/login.html';
+  });
+
+  function showToast(msg, type = '') {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = `show ${type}`;
+    setTimeout(() => t.className = '', 3200);
+  }
+
+  // ── Set today's date ──
+  $('date').value = new Date().toISOString().slice(0, 10);
+
+  // ── Load project suggestions for combo box ──
+  async function loadProjectSuggestions() {
+    try {
+      const res = await fetch('/api/projects');
+      const projects = await res.json();
+      const list = $('project-suggestions');
+      list.innerHTML = projects.map(p => `<option value="${p.job_name.replace(/"/g,'&quot;')}">`).join('');
+    } catch {}
+  }
+  loadProjectSuggestions();
+
+  // ── Project assignment dropdown (real project folders) ──
+  $('assign-project').addEventListener('change', e => {
+    $('project-section').style.display = e.target.checked ? 'block' : 'none';
+  });
+
+  async function loadProjectFolders() {
+    try {
+      const res = await fetch('/api/project-folders');
+      if (!res.ok) return;
+      const projects = await res.json();
+      const escq = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const sel = $('project_id');
+      sel.innerHTML = '<option value="">— Select a project —</option>' +
+        projects.map(p => `<option value="${p.id}">${escq(p.name)}</option>`).join('');
+    } catch {}
+  }
+  loadProjectFolders();
+
+  // Field users cannot create projects — they see the dropdown only.
+
+  // ── Employee rows ──
+  const LEVELS = ['Journeyman','4th Year Apprentice','3rd Year Apprentice','2nd Year Apprentice','1st Year Apprentice'];
+
+  function addEmployeeRow(name = '', reg = '', ot = '', level = 'Journeyman') {
+    empCount++;
+    const id = empCount;
+    const tbody = $('employee-rows');
+    const tr = document.createElement('tr');
+    tr.className = 'employee-row';
+    tr.dataset.id = id;
+    tr.innerHTML = `
+      <td>
+        <input type="text" class="form-control emp-name" placeholder="Employee name" value="${name}" autocomplete="off"/>
+      </td>
+      <td>
+        <select class="form-control emp-level" style="padding:9px 6px;font-size:13px;">
+          ${LEVELS.map(l => `<option value="${l}"${l === level ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <input type="number" class="form-control hrs-input emp-reg" placeholder="0" min="0" max="24" step="0.5" value="${reg}"/>
+      </td>
+      <td>
+        <input type="number" class="form-control hrs-input emp-ot" placeholder="0" min="0" max="24" step="0.5" value="${ot}"/>
+      </td>
+      <td>
+        <button type="button" class="btn-remove-emp" title="Remove row">×</button>
+      </td>
+    `;
+    tr.querySelector('.btn-remove-emp').addEventListener('click', () => {
+      tr.remove();
+      updateHoursSummary();
+    });
+    tr.querySelectorAll('.emp-reg, .emp-ot').forEach(i => i.addEventListener('input', updateHoursSummary));
+    tbody.appendChild(tr);
+    updateHoursSummary();
+    return tr;
+  }
+
+  function updateHoursSummary() {
+    const rows = document.querySelectorAll('.employee-row');
+    let reg = 0, ot = 0;
+    rows.forEach(r => {
+      reg += parseFloat(r.querySelector('.emp-reg').value) || 0;
+      ot  += parseFloat(r.querySelector('.emp-ot').value)  || 0;
+    });
+    const summary = $('hours-summary');
+    if (rows.length > 0) {
+      summary.style.display = 'flex';
+      $('total-reg').textContent = reg.toFixed(1);
+      $('total-ot').textContent  = ot.toFixed(1);
+      $('total-all').textContent = (reg + ot).toFixed(1);
+    } else {
+      summary.style.display = 'none';
+    }
+  }
+
+  $('add-employee-btn').addEventListener('click', () => {
+    const row = addEmployeeRow();
+    row.querySelector('.emp-name').focus();
+  });
+
+  // Start with 2 rows
+  addEmployeeRow();
+  addEmployeeRow();
+
+  // ── Validation ──
+  function validateField(inputId, errId, condition) {
+    const el = $(inputId);
+    const err = $(errId);
+    if (condition) {
+      el.classList.add('error');
+      err.style.display = 'block';
+      return false;
+    } else {
+      el.classList.remove('error');
+      err.style.display = 'none';
+      return true;
+    }
+  }
+
+  // ── Submit ──
+  $('ticket-form').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    let valid = true;
+    valid = validateField('date', 'err-date', !$('date').value) && valid;
+    valid = validateField('job_name', 'err-job', !$('job_name').value.trim()) && valid;
+    valid = validateField('supervisor', 'err-supervisor', !$('supervisor').value.trim()) && valid;
+    valid = validateField('work_description', 'err-work', !$('work_description').value.trim()) && valid;
+
+    const empRows = document.querySelectorAll('.employee-row');
+    const employees = [];
+    empRows.forEach(r => {
+      const name = r.querySelector('.emp-name').value.trim();
+      if (name) employees.push({
+        name,
+        level: r.querySelector('.emp-level').value,
+        regular_hours: parseFloat(r.querySelector('.emp-reg').value) || 0,
+        overtime_hours: parseFloat(r.querySelector('.emp-ot').value) || 0
+      });
+    });
+    const empErr = $('err-employees');
+    if (employees.length === 0) {
+      empErr.style.display = 'block';
+      valid = false;
+    } else {
+      empErr.style.display = 'none';
+    }
+
+    if (!valid) {
+      showToast('Please fill in all required fields', 'error');
+      // scroll to first error
+      document.querySelector('.form-control.error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    const btn = $('submit-btn');
+    const label = $('submit-label');
+    const spinner = $('submit-spinner');
+    btn.disabled = true;
+    label.textContent = 'Submitting…';
+    spinner.style.display = 'block';
+
+    const payload = {
+      date: $('date').value,
+      job_name: $('job_name').value.trim(),
+      job_number: $('job_number').value.trim(),
+      supervisor: $('supervisor').value.trim(),
+      work_description: $('work_description').value.trim(),
+      equipment_used: $('equipment_used').value.trim(),
+      notes: $('notes').value.trim(),
+      project_id: ($('assign-project').checked && $('project_id').value) ? $('project_id').value : null,
+      employees
+    };
+
+    try {
+      const res = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error');
+
+      $('success-ref').textContent = data.ticket_number;
+      $('form-card').style.display = 'none';
+      $('success-screen').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+      btn.disabled = false;
+      label.textContent = 'Submit Time Ticket';
+      spinner.style.display = 'none';
+    }
+  });
+
+  $('new-ticket-btn').addEventListener('click', () => {
+    $('ticket-form').reset();
+    $('date').value = new Date().toISOString().slice(0, 10);
+    $('project-section').style.display = 'none';
+    hideCreateProject();
+    document.getElementById('employee-rows').innerHTML = '';
+    empCount = 0;
+    addEmployeeRow();
+    addEmployeeRow();
+    $('form-card').style.display = 'block';
+    $('success-screen').style.display = 'none';
+    const btn = $('submit-btn');
+    $('submit-label').textContent = 'Submit Time Ticket';
+    $('submit-spinner').style.display = 'none';
+    btn.disabled = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+</script>
+</body>
+</html>

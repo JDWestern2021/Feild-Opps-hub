@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign In — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { background: #000; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden; }
+    .bg-slash { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .bg-slash::after { content: ''; position: absolute; top: -10%; right: 0; width: 40%; height: 130%; background: linear-gradient(160deg, #F47920 0%, #c1380a 60%, #8c2a08 100%); clip-path: polygon(40% 0%, 100% 0%, 100% 100%, 8% 100%); opacity: 0.15; }
+    .dot-grid { position: fixed; top: 20px; left: 20px; width: 120px; height: 80px; pointer-events: none; background-image: radial-gradient(circle, rgba(244,121,32,0.35) 1px, transparent 1px); background-size: 14px 14px; mask-image: linear-gradient(135deg, black 30%, transparent 100%); }
+
+    .login-wrap { position: relative; z-index: 1; width: 100%; max-width: 400px; }
+    .login-brand { text-align: center; margin-bottom: 32px; }
+    .login-brand img { width: 80px; height: 80px; object-fit: contain; background: white; border-radius: 16px; padding: 8px; box-shadow: 0 8px 32px rgba(244,121,32,0.25); }
+    .login-brand h1 { color: #fff; font-size: 20px; font-weight: 900; margin-top: 16px; text-transform: uppercase; letter-spacing: 0.02em; }
+    .login-brand p { color: rgba(255,255,255,0.4); font-size: 12px; margin-top: 4px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+    .login-card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 32px 28px; box-shadow: 0 24px 64px rgba(0,0,0,0.6); }
+    .login-card h2 { color: #fff; font-size: 18px; font-weight: 800; margin-bottom: 24px; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+    .form-control { width: 100%; padding: 12px 14px; background: #1a1a1a; border: 1.5px solid #2a2a2a; border-radius: 8px; color: #fff; font-size: 15px; transition: border-color 0.15s; }
+    .form-control:focus { outline: none; border-color: var(--orange, #F47920); }
+    .form-control::placeholder { color: rgba(255,255,255,0.2); }
+
+    .btn-login { width: 100%; padding: 14px; background: var(--orange, #F47920); color: #000; font-size: 15px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; border: none; border-radius: 8px; cursor: pointer; margin-top: 8px; transition: opacity 0.15s; }
+    .btn-login:hover { opacity: 0.9; }
+    .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error-msg { background: rgba(217,52,43,0.15); border: 1px solid rgba(217,52,43,0.3); color: #f87171; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+
+    .default-creds { margin-top: 20px; padding: 14px; background: rgba(244,121,32,0.08); border: 1px solid rgba(244,121,32,0.2); border-radius: 8px; font-size: 12px; color: rgba(255,255,255,0.5); display: none; }
+    .default-creds strong { color: var(--orange, #F47920); }
+    .tagline { text-align: center; margin-top: 28px; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.2); }
+    .tagline span { color: rgba(244,121,32,0.5); margin: 0 6px; font-size: 8px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+<div class="bg-slash"></div>
+<div class="dot-grid"></div>
+
+<div class="login-wrap">
+  <div class="login-brand">
+    <img src="logo-bolt.png" alt="J&D Western Electric"/>
+    <h1>J&D Western Electric</h1>
+    <p>Field Operations Hub</p>
+  </div>
+
+  <div class="login-card">
+    <h2>Sign In</h2>
+    <div class="error-msg" id="error-msg"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="email" class="form-control" placeholder="you@jdwesternelectric.ca" autocomplete="email" required/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="password" class="form-control" placeholder="••••••••" autocomplete="current-password" required/>
+      </div>
+      <button type="submit" class="btn-login" id="login-btn">Sign In</button>
+    </form>
+
+    <div class="default-creds" id="default-creds">
+      <strong>First-time login:</strong><br/>
+      Email: <strong>admin@jdwesternelectric.ca</strong><br/>
+      Password: <strong>JDAdmin2026!</strong><br/>
+      Please change your password after logging in.
+    </div>
+  </div>
+
+  <div class="tagline">
+    Power <span>●</span> Performance <span>●</span> Peace of Mind
+  </div>
+</div>
+
+<script>
+(async () => {
+  // Already logged in?
+  const me = await fetch('/api/auth/me');
+  if (me.ok) {
+    const u = await me.json();
+    location.href = u.role === 'admin' ? '/office.html' : '/field.html';
+    return;
+  }
+  // Show default creds hint if first-time
+  const setup = await fetch('/api/auth/setup-needed');
+  if ((await setup.json()).needed === false) {
+    const cnt = await fetch('/api/settings/public').then(r=>r.json()).catch(()=>({}));
+    // Show hint only briefly for admin
+  }
+  document.getElementById('default-creds').style.display = 'block';
+})();
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('error-msg');
+  btn.disabled = true; btn.textContent = 'Signing in…'; err.style.display = 'none';
+  const res = await fetch('/api/auth/login', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    location.href = data.role === 'admin' ? '/office.html' : '/field.html';
+  } else {
+    err.textContent = data.error;
+    err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+});
+</script>
+</body>
+</html>
