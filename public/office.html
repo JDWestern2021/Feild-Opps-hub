@@ -208,6 +208,26 @@
     .archived-toggle { background: none; border: 1px solid var(--gray-300); border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--gray-700); cursor: pointer; transition: all .15s; }
     .archived-toggle:hover { border-color: var(--orange); color: var(--orange); }
 
+    /* ── Nav notification badges ── */
+    .nav-badge {
+      position: absolute;
+      top: -6px;
+      right: -10px;
+      min-width: 17px;
+      height: 17px;
+      background: #e53e3e;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      line-height: 1;
+      pointer-events: none;
+    }
+
     /* ── Home view ── */
     .home-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
     @media(max-width:900px){ .home-cards { grid-template-columns:1fr; } }
@@ -333,9 +353,9 @@
   </div>
   <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
     <a href="#" id="nav-home">Home</a>
-    <a href="#" id="nav-tickets">Time Tickets</a>
-    <a href="#" id="nav-projects">Projects</a>
-    <a href="#" id="nav-pos">Purchase Orders</a>
+    <a href="#" id="nav-tickets" style="position:relative;">Time Tickets<span class="nav-badge" id="badge-tickets" style="display:none;"></span></a>
+    <a href="#" id="nav-projects" style="position:relative;">Projects<span class="nav-badge" id="badge-projects" style="display:none;"></span></a>
+    <a href="#" id="nav-pos" style="position:relative;">Purchase Orders<span class="nav-badge" id="badge-pos" style="display:none;"></span></a>
     <a href="field.html" style="font-size:12px;opacity:.7;">+ New Ticket</a>
     <a href="team.html">Team</a>
     <a href="settings-admin.html">Settings</a>
@@ -761,8 +781,10 @@ let currentUser = null;
   if (currentUser.role !== 'admin') { location.href = '/field.html'; return; }
   document.body.style.visibility = 'visible';
   showHomeView();               // Home is the default landing
+  loadNavBadges();              // show outstanding counts immediately
   setInterval(loadStats, 60000);
-  setInterval(loadHomeOverview, 30000); // auto-refresh home every 30s
+  setInterval(loadHomeOverview, 30000);
+  setInterval(loadNavBadges, 30000); // refresh badges every 30s
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -791,12 +813,37 @@ async function loadStats() {
     $('stat-week').textContent    = d.this_week;
     $('stat-jobs').textContent    = d.active_jobs;
     $('stat-archived').textContent = d.archived;
+    loadNavBadges(); // keep badges in sync with stats refresh
   } catch {}
 }
 
 // ── Build query string from filters ──
 let statFilterOverride = null; // {date_from?, date_to?} or null
 let activeStatCard = null;     // id of highlighted stat card
+
+// ── Nav notification badges ──
+function setNavBadge(id, count) {
+  const el = $(id);
+  if (!el) return;
+  if (count > 0) {
+    el.textContent = count > 99 ? '99+' : count;
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+async function loadNavBadges() {
+  try {
+    const d = await fetch('/api/dashboard/overview').then(r => r.json());
+    // Time Tickets: Pending + Reviewed (not yet Entered)
+    setNavBadge('badge-tickets', (d.tickets.pending || 0) + (d.tickets.reviewed || 0));
+    // Projects: total outstanding records across all active projects
+    setNavBadge('badge-projects', d.projects.outstanding_records || d.projects.outstanding || 0);
+    // Purchase Orders: Open POs
+    setNavBadge('badge-pos', d.pos.open || 0);
+  } catch {}
+}
 
 function buildQuery(page = 1, archived = false) {
   const params = new URLSearchParams();

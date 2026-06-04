@@ -1049,6 +1049,20 @@ app.get('/api/dashboard/overview', requireAdmin, (req, res) => {
       (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL) AND (t.project_archived=0 OR t.project_archived IS NULL))
      +(SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL))
     )>0`).get().c,
+    // Total outstanding records across ALL active projects (for nav badge)
+    outstanding_records: (
+      db.prepare(`SELECT COUNT(*) c FROM daily_tickets t
+        JOIN projects p ON p.id=t.project_id
+        WHERE p.status='active'
+        AND (t.ticket_status='Pending' OR t.ticket_status IS NULL OR t.ticket_status='Reviewed')
+        AND (t.project_archived=0 OR t.project_archived IS NULL)`).get().c
+      +
+      db.prepare(`SELECT COUNT(*) c FROM purchase_orders o
+        JOIN projects p ON p.id=o.project_id
+        WHERE p.status='active'
+        AND o.status='Open'
+        AND (o.project_archived=0 OR o.project_archived IS NULL)`).get().c
+    ),
     done:    db.prepare("SELECT COUNT(*) c FROM projects WHERE status IN ('complete','archived')").get().c,
   };
   const o = {
