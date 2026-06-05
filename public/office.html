@@ -500,6 +500,8 @@
         <button class="btn btn-secondary btn-sm" id="ts-prev">← Prev</button>
         <span id="ts-offset-label" style="font-size:12px;color:var(--gray-500);min-width:60px;text-align:center;"></span>
         <button class="btn btn-secondary btn-sm" id="ts-next">Next →</button>
+        <button class="btn btn-sm" id="ts-print-all" style="background:#1c1c1e;color:white;">🖨 Print All Timesheets</button>
+        <button class="btn btn-sm" id="ts-print-selected" style="background:#1c1c1e;color:white;display:none;">🖨 Print Selected</button>
         <button class="btn btn-sm" id="ts-export-all" style="background:#1a6e35;color:white;">Export All Staff</button>
         <button class="btn btn-secondary btn-sm" id="ts-show-archive">Archive</button>
         <button class="btn btn-secondary btn-sm" id="btn-close-timesheets">← Back</button>
@@ -512,7 +514,10 @@
         <div class="card-header"><h2 style="font-size:15px;font-weight:700;">All Employees — Current Period</h2></div>
         <div style="overflow-x:auto;">
           <table class="po-table">
-            <thead><tr><th>Employee</th><th style="text-align:center;">Regular Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th style="font-size:11px;color:var(--gray-400);">Pending</th><th></th></tr></thead>
+            <thead><tr>
+              <th class="cb-col"><input type="checkbox" class="po-cb" id="ts-staff-select-all" title="Select all employees"/></th>
+              <th>Employee</th><th style="text-align:center;">Regular Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th style="font-size:11px;color:var(--gray-400);">Pending</th><th></th>
+            </tr></thead>
             <tbody id="ts-staff-tbody"></tbody>
           </table>
         </div>
@@ -2453,6 +2458,8 @@ let tsOffset = null;
 let tsCurrentOffset = null;
 let tsCurrentUserId = null;
 let lastTSDetailData = null; // stored for print
+let tsCurrentPeriod = null;  // current period for bulk print
+let tsAllStaffIds = [];      // all employee IDs for "print all"
 let tsHasEditAccess = false;
 
 function showTimesheetsView() {
@@ -2472,24 +2479,29 @@ async function loadTSList(offset) {
   if (!res.ok) return;
   const d = await res.json();
   tsOffset = d.offset;
-  tsCurrentOffset = d.offset; // will be refined by current period check
+  tsCurrentOffset = d.offset;
+  tsCurrentPeriod = d.period; // store for bulk print
+  tsAllStaffIds = d.summaries.map(u => u.id); // store all IDs for "print all"
   $('ts-period-label').textContent = `Pay Period: ${fmtDate(d.period.start)} — ${fmtDate(d.period.end)} · Payday: ${fmtDate(d.period.payday)}`;
   $('ts-offset-label').textContent = `Period ${d.offset >= 0 ? '+'+d.offset : d.offset}`;
   $('ts-next').disabled = false;
+  $('ts-staff-select-all').checked = false;
+  $('ts-print-selected').style.display = 'none';
   $('ts-staff-tbody').innerHTML = d.summaries.map(u => {
     const pendTotal = (u.pending_regular||0)+(u.pending_ot||0)+(u.pending_travel||0);
     const hasPending = pendTotal > 0;
     const anyHours = (u.regular_hours||0)+(u.overtime_hours||0)+(u.travel_hours||0) > 0 || hasPending;
     const color = anyHours ? 'color:var(--green);font-weight:700;' : 'color:var(--gray-400);';
-    return `<tr style="cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})">
-      <td><strong>${esc(u.name)}</strong></td>
-      <td style="text-align:center;${color}">${(u.regular_hours||0).toFixed(1)}</td>
-      <td style="text-align:center;${color}">${(u.overtime_hours||0).toFixed(1)}</td>
-      <td style="text-align:center;${color}">${(u.travel_hours||0).toFixed(1)}</td>
+    return `<tr>
+      <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb ts-emp-cb" data-uid="${u.id}" style="width:14px;height:14px;accent-color:var(--orange);" onchange="updateTSBulkBar()"/></td>
+      <td style="cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})"><strong>${esc(u.name)}</strong></td>
+      <td style="text-align:center;${color};cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})">${(u.regular_hours||0).toFixed(1)}</td>
+      <td style="text-align:center;${color};cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})">${(u.overtime_hours||0).toFixed(1)}</td>
+      <td style="text-align:center;${color};cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})">${(u.travel_hours||0).toFixed(1)}</td>
       <td style="text-align:center;">${hasPending?`<span style="font-size:11px;font-weight:700;color:#d9342b;background:#fde8e8;padding:2px 7px;border-radius:10px;">⚠ ${pendTotal.toFixed(1)} pending</span>`:''}</td>
-      <td><button class="btn btn-ghost btn-sm">View →</button></td>
+      <td style="cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})"><button class="btn btn-ghost btn-sm">View →</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--gray-500);">No employees found.</td></tr>';
+  }).join('') || `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--gray-500);">No employees found.</td></tr>`;
 }
 
 async function loadTSDetail(userId, offset) {
@@ -2666,6 +2678,143 @@ $('ts-print-btn').addEventListener('click', () => {
   const w = window.open('', '_blank', 'width=800,height=700');
   w.document.write(buildTimesheetPrintHTML(lastTSDetailData, currentUser?.name || null));
   w.document.close();
+});
+
+// ── Bulk print helpers ──
+function updateTSBulkBar() {
+  const checked = document.querySelectorAll('.ts-emp-cb:checked');
+  const all = document.querySelectorAll('.ts-emp-cb');
+  $('ts-staff-select-all').checked = all.length > 0 && checked.length === all.length;
+  $('ts-print-selected').style.display = checked.length > 0 ? '' : 'none';
+  $('ts-print-selected').textContent = `🖨 Print Selected (${checked.length})`;
+}
+
+$('ts-staff-select-all').addEventListener('change', e => {
+  document.querySelectorAll('.ts-emp-cb').forEach(cb => { cb.checked = e.target.checked; });
+  updateTSBulkBar();
+});
+
+async function printTimesheetsForIds(userIds) {
+  if (!userIds.length || !tsCurrentPeriod) return;
+  const offset = tsOffset ?? 0;
+  const btn = userIds === tsAllStaffIds ? $('ts-print-all') : $('ts-print-selected');
+  const origText = btn.textContent;
+  btn.textContent = 'Loading…'; btn.disabled = true;
+
+  // Fetch each employee's timesheet for the current period
+  const results = await Promise.all(
+    userIds.map(uid => fetch(`/api/timesheets/${uid}?offset=${offset}`).then(r => r.ok ? r.json() : null))
+  );
+  const valid = results.filter(Boolean);
+  btn.textContent = origText; btn.disabled = false;
+  if (!valid.length) { showToast('No timesheet data to print', 'error'); return; }
+
+  const adminName = currentUser?.name || null;
+  const w = window.open('', '_blank', 'width=900,height=800');
+  const pages = valid.map(d => buildTimesheetPrintHTML(d, adminName, true)).join('');
+  w.document.write(`<!DOCTYPE html><html><head><title>Timesheets — ${fmtDate(tsCurrentPeriod.start)} to ${fmtDate(tsCurrentPeriod.end)}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,Helvetica,sans-serif;}
+      .ts-page{padding:32px;page-break-after:always;}
+      .ts-page:last-child{page-break-after:auto;}
+      .co{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#888;}
+      .emp{font-size:20px;font-weight:900;margin:6px 0 2px;}
+      .meta{font-size:12px;color:#555;margin-bottom:20px;}
+      table{width:100%;border-collapse:collapse;margin-top:4px;}
+      th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;background:#f5f5f5;padding:6px 8px;border:1px solid #ddd;text-align:left;color:#555;}
+      td{padding:6px 8px;border:1px solid #e5e5e5;vertical-align:middle;}
+      tr.total-row td{font-weight:700;background:#f0f0f0;border-top:2px solid #ccc;}
+      .footer{margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}
+      @media print{.ts-page{padding:16px;}@page{margin:1cm;}}
+    </style></head><body>${pages}<script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+
+// buildTimesheetPrintHTML updated to support inline (no own HTML wrapper) mode for bulk print
+// Original single-page function handles its own wrapper. For bulk we extract just the page content.
+// We'll pass a "pageOnly" flag — when true returns just the <div class="ts-page"> block.
+const _origBuildTimesheetPrintHTML = buildTimesheetPrintHTML;
+// Redefine to support pageOnly parameter
+function buildTimesheetPrintHTML(data, printedByName, pageOnly) {
+  const p = data.period;
+  const user = data.user;
+  const days = data.days;
+  const totals = data.totals;
+  const now = new Date().toLocaleString('en-CA',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  function ep(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function fd(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});}
+
+  const rows = days.map(day => {
+    const isPending = day.approval_status === 'pending';
+    const hasHrs = (day.total_hours||0) > 0;
+    const rowStyle = isPending ? 'color:#bbb;background:#fafafa;' : '';
+    const statusCell = isPending
+      ? '<span style="background:#fde8e8;color:#d9342b;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Pending</span>'
+      : (hasHrs ? '<span style="background:#d4edda;color:#155724;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Approved</span>' : '—');
+    return `<tr style="${rowStyle}">
+      <td>${ep(day.date)}</td><td>${ep(day.dow)}</td>
+      <td style="text-align:center;">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
+      <td style="text-align:center;">${hasHrs?day.overtime_hours.toFixed(1):'—'}</td>
+      <td style="text-align:center;">${(day.travel_hours||0)>0?day.travel_hours.toFixed(1):'—'}</td>
+      <td>${ep(day.job_number||'')}</td>
+      <td style="font-size:11px;">${ep(day.project_name||'')}</td>
+      <td>${statusCell}</td>
+    </tr>`;
+  }).join('');
+
+  const footerExtra = printedByName ? `<br/>Printed by <strong>${ep(printedByName)}</strong> on ${now}` : '';
+  const content = `
+    <div class="co">J&amp;D Western Electric Ltd</div>
+    <div class="emp">${ep(user.name)}</div>
+    <div class="meta">Pay Period: <strong>${fd(p.start)} — ${fd(p.end)}</strong>&nbsp;&nbsp;·&nbsp;&nbsp;Payday: <strong>${fd(p.payday)}</strong></div>
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Day</th>
+        <th style="text-align:center;">Regular Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th>
+        <th>Job #</th><th>Project</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${rows}
+        <tr class="total-row">
+          <td colspan="2">TOTALS (Approved only)</td>
+          <td style="text-align:center;">${(totals.regular||0).toFixed(1)}</td>
+          <td style="text-align:center;">${(totals.ot||0).toFixed(1)}</td>
+          <td style="text-align:center;">${(totals.travel||0).toFixed(1)}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="footer">J&amp;D Western Electric Ltd — Generated on ${now}${footerExtra}</div>`;
+
+  if (pageOnly) return `<div class="ts-page">${content}</div>`;
+
+  return `<!DOCTYPE html><html><head><title>Timesheet — ${ep(user.name)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Arial,Helvetica,sans-serif;padding:32px;color:#111;font-size:13px;}
+    .co{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#888;}
+    .emp{font-size:20px;font-weight:900;margin:6px 0 2px;}
+    .meta{font-size:12px;color:#555;margin-bottom:20px;}
+    table{width:100%;border-collapse:collapse;margin-top:4px;}
+    th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;background:#f5f5f5;padding:6px 8px;border:1px solid #ddd;text-align:left;color:#555;}
+    td{padding:6px 8px;border:1px solid #e5e5e5;vertical-align:middle;}
+    tr.total-row td{font-weight:700;background:#f0f0f0;border-top:2px solid #ccc;}
+    .footer{margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}
+    @media print{body{padding:16px;}@page{margin:1cm;}}
+  </style></head><body>
+  <div>${content}</div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+}
+
+$('ts-print-all').addEventListener('click', () => {
+  printTimesheetsForIds([...tsAllStaffIds]);
+});
+
+$('ts-print-selected').addEventListener('click', () => {
+  const ids = Array.from(document.querySelectorAll('.ts-emp-cb:checked')).map(cb => parseInt(cb.dataset.uid));
+  printTimesheetsForIds(ids);
 });
 $('btn-close-timesheets').addEventListener('click', hideTimesheetsView);
 $('nav-timesheets').addEventListener('click', e => { e.preventDefault(); showTimesheetsView(); });
