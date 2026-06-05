@@ -143,7 +143,32 @@ async function initSchema() {
       updated_at   TEXT,
       completed_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS payroll_config (
+      id                INTEGER PRIMARY KEY DEFAULT 1,
+      cycle_start_date  TEXT NOT NULL DEFAULT '2026-05-25',
+      period_days       INTEGER NOT NULL DEFAULT 14
+    );
+
+    CREATE TABLE IF NOT EXISTS timesheet_overrides (
+      id                 SERIAL PRIMARY KEY,
+      employee_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date               TEXT NOT NULL,
+      regular_hours      REAL DEFAULT 0,
+      overtime_hours     REAL DEFAULT 0,
+      original_regular   REAL DEFAULT 0,
+      original_ot        REAL DEFAULT 0,
+      edited_by_id       INTEGER,
+      edited_by_name     TEXT,
+      edit_reason        TEXT,
+      created_at         TEXT NOT NULL,
+      UNIQUE(employee_user_id, date)
+    );
   `);
+  // Seed default payroll config if not present
+  await pool.query(`INSERT INTO payroll_config (id, cycle_start_date, period_days) VALUES (1, '2026-05-25', 14) ON CONFLICT DO NOTHING`);
+  // Add user_id column to ticket_employees if missing
+  await pool.query(`ALTER TABLE ticket_employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
   console.log('  ✓ Database schema ready');
 }
 

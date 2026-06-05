@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My Timesheet — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { visibility:hidden; background:var(--gray-100); }
+    .page-container { max-width:700px; margin:0 auto; padding:20px 16px 48px; }
+    .period-header { background:var(--black); color:#fff; border-radius:var(--radius) var(--radius) 0 0; padding:18px 22px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+    .period-header h2 { font-size:16px; font-weight:800; }
+    .period-meta { font-size:12px; color:rgba(255,255,255,.6); }
+    .period-nav { display:flex; gap:8px; align-items:center; }
+    .period-nav button { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); color:#fff; border-radius:6px; padding:5px 12px; cursor:pointer; font-size:13px; }
+    .period-nav button:hover { background:rgba(255,255,255,.2); }
+    .period-nav button:disabled { opacity:.4; cursor:default; }
+    .totals-bar { display:flex; gap:16px; padding:14px 22px; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-wrap:wrap; }
+    .totals-bar .tot { text-align:center; }
+    .totals-bar .tot-val { font-size:22px; font-weight:900; color:var(--orange); line-height:1; }
+    .totals-bar .tot-lbl { font-size:11px; color:rgba(255,255,255,.45); text-transform:uppercase; letter-spacing:.07em; }
+    .dates-bar { display:flex; gap:16px; padding:10px 22px; background:#111; border-radius:0 0 var(--radius) var(--radius); margin-bottom:16px; flex-wrap:wrap; }
+    .dates-bar .date-item { font-size:12px; color:rgba(255,255,255,.5); }
+    .dates-bar .date-item strong { color:var(--orange); }
+    .day-grid { background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+    .day-row { display:grid; grid-template-columns:90px 44px 80px 60px 60px 90px 1fr; align-items:center; padding:10px 16px; border-bottom:1px solid var(--gray-100); font-size:13px; gap:8px; }
+    .day-row:last-child { border-bottom:none; }
+    .day-row.header { background:var(--gray-50); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-500); padding:8px 16px; }
+    .day-row.weekend { background:#fafafa; }
+    .day-row.entered { border-left:3px solid #28a745; background:rgba(40,167,69,0.05); }
+    .day-row.pending { border-left:3px solid #bbb; background:rgba(200,200,200,0.08); }
+    .day-row.no-hours { color:var(--gray-400); }
+    .day-name { font-weight:600; color:var(--dark); }
+    .day-name.weekend { color:var(--gray-400); }
+    .hrs-cell { text-align:center; font-weight:700; }
+    .ticket-ref { font-size:11px; color:var(--gray-400); }
+    .source-badge { font-size:10px; padding:1px 6px; border-radius:8px; background:var(--gray-100); color:var(--gray-500); }
+    .source-badge.manual { background:#fef9c3; color:#92400e; }
+
+    .past-section { margin-top:24px; }
+    .past-section h3 { font-size:14px; font-weight:800; margin-bottom:10px; color:var(--gray-700); }
+    .past-card { background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; transition:box-shadow .15s; }
+    .past-card:hover { box-shadow:var(--shadow-lg); }
+    .past-card .period-range { font-size:13px; font-weight:700; }
+    .past-card .period-hrs { font-size:12px; color:var(--gray-500); }
+    @media(max-width:500px){ .day-row { grid-template-columns:70px 40px 70px 55px 55px 1fr; font-size:12px; } }
+  </style>
+</head>
+<body>
+<header class="app-header">
+  <div class="header-brand">
+    <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
+    <div class="header-title">
+      <span class="company">J&D Western Electric</span>
+      <span class="module">My Timesheet</span>
+    </div>
+  </div>
+  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+    <span id="header-user" style="font-size:12px;color:rgba(255,255,255,.45);padding:0 8px;"></span>
+    <a href="index.html">Home</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page-container">
+  <div id="ts-card">
+    <div class="period-header">
+      <div>
+        <div class="period-meta">Current Pay Period</div>
+        <h2 id="period-label">Loading…</h2>
+      </div>
+      <div class="period-nav">
+        <button id="btn-prev-period">← Prev</button>
+        <span id="period-index-label" style="font-size:12px;color:rgba(255,255,255,.5);"></span>
+        <button id="btn-next-period">Next →</button>
+      </div>
+    </div>
+
+    <div class="totals-bar">
+      <div class="tot"><div class="tot-val" id="tot-reg">—</div><div class="tot-lbl">Regular Hrs</div></div>
+      <div class="tot"><div class="tot-val" id="tot-ot">—</div><div class="tot-lbl">OT Hrs</div></div>
+      <div class="tot"><div class="tot-val" id="tot-total">—</div><div class="tot-lbl">Total Hrs</div></div>
+    </div>
+
+    <div class="dates-bar">
+      <div class="date-item">Cutoff: <strong id="cutoff-date">—</strong></div>
+      <div class="date-item">Payday: <strong id="payday-date">—</strong></div>
+    </div>
+
+    <div class="day-grid">
+      <div class="day-row header">
+        <span>Date</span><span>Day</span><span>Regular</span><span>OT</span><span>Total</span><span>Job #</span><span>Status</span>
+      </div>
+      <div id="day-rows"></div>
+    </div>
+  </div>
+
+  <div class="past-section" id="past-section" style="display:none;">
+    <h3>Past Pay Periods</h3>
+    <div id="past-list"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let currentOffset = 0;
+let currentOffset0 = 0; // the "now" offset
+
+function showToast(msg,type=''){const t=$('toast');t.textContent=msg;t.className=`show ${type}`;setTimeout(()=>t.className='',3200);}
+
+// ── Auth ──
+(async()=>{
+  const r=await fetch('/api/auth/me');
+  if(!r.ok){location.href='/login.html';return;}
+  const u=await r.json();
+  document.body.style.visibility='visible';
+  $('header-user').textContent=u.name;
+  loadTimesheet(null);
+})();
+
+$('logout-btn').addEventListener('click',async e=>{e.preventDefault();await fetch('/api/auth/logout',{method:'POST'});location.href='/login.html';});
+
+async function loadTimesheet(offset){
+  const url=offset!=null?`/api/my-timesheet?offset=${offset}`:'/api/my-timesheet';
+  const r=await fetch(url);
+  if(!r.ok){showToast('Failed to load timesheet','error');return;}
+  const d=await r.json();
+  currentOffset=d.offset;
+  currentOffset0=d.current_offset;
+
+  $('period-label').textContent=`${fmtDate(d.period.start)} — ${fmtDate(d.period.end)}`;
+  $('period-index-label').textContent=offset===d.current_offset||offset==null?'Current':offset>d.current_offset?`+${offset-d.current_offset}`:`${offset-d.current_offset}`;
+  $('cutoff-date').textContent=fmtDate(d.period.cutoff);
+  $('payday-date').textContent=fmtDate(d.period.payday);
+  // Only show approved (Entered) hours in totals
+  $('tot-reg').textContent=d.totals.regular.toFixed(1);
+  $('tot-ot').textContent=d.totals.ot.toFixed(1);
+  $('tot-total').textContent=d.totals.total.toFixed(1);
+  $('btn-prev-period').disabled=false;
+  $('btn-next-period').disabled=d.offset>=d.current_offset;
+
+  $('day-rows').innerHTML=d.days.map(day=>{
+    const weekend=day.dow==='Sat'||day.dow==='Sun';
+    const hasHrs=day.total_hours>0;
+    const isPending=day.approval_status==='pending';
+    const isEntered=day.approval_status==='entered'||day.approval_status==='partial';
+    const statusLabel=isPending
+      ?'<span class="source-badge" style="background:#e0e0e0;color:#666;">Pending</span>'
+      :isEntered
+        ?'<span class="source-badge" style="background:#d4edda;color:#155724;">Approved</span>'
+        :day.source==='manual'
+          ?'<span class="source-badge manual">Edited</span>'
+          :'';
+    const rowClass=`day-row${weekend?' weekend':''}${isPending?' pending':isEntered?' entered':hasHrs?'':' no-hours'}`;
+    const hrsStyle=isPending?'color:#bbb;':isEntered?'color:#155724;font-weight:700;':'color:var(--gray-400);';
+    return `<div class="${rowClass}">
+      <span class="day-name${weekend?' weekend':''}">${day.date}</span>
+      <span>${day.dow}</span>
+      <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.regular_hours.toFixed(1):'—'}</span>
+      <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</span>
+      <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.total_hours.toFixed(1):'—'}</span>
+      <span style="font-size:11px;color:var(--gray-500);">${day.job_number||''}</span>
+      <span>${statusLabel}</span>
+    </div>`;
+  }).join('');
+
+  // Past periods
+  if(d.past_periods&&d.past_periods.length>0){
+    $('past-section').style.display='block';
+    $('past-list').innerHTML=d.past_periods.map(p=>`
+      <div class="past-card" onclick="loadTimesheet(${d.current_offset-(d.past_periods.indexOf(p)+1)})">
+        <div class="period-range">${fmtDate(p.start)} — ${fmtDate(p.end)}</div>
+        <div class="period-hrs">Payday: ${fmtDate(p.payday)} →</div>
+      </div>`).join('');
+  }
+}
+
+$('btn-prev-period').addEventListener('click',()=>loadTimesheet(currentOffset-1));
+$('btn-next-period').addEventListener('click',()=>loadTimesheet(currentOffset+1));
+
+function fmtDate(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});}
+</script>
+</body>
+</html>

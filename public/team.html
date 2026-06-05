@@ -149,6 +149,37 @@
   </div>
 </div>
 
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="edit-user-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>Edit User</h3>
+      <button class="modal-close" id="edit-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-user-id"/>
+      <div class="warning-msg" id="edit-warning"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="form-group" style="margin:0;"><label class="form-label">Name</label><input type="text" id="edit-name" class="form-control"/></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Email</label><input type="email" id="edit-email" class="form-control"/></div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Role</label>
+        <select id="edit-role" class="form-control">
+          <option value="field">Field User</option>
+          <option value="admin">Office Admin</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Module Permissions</label>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;" id="edit-perms-wrap"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" id="edit-save-btn">Save Changes</button>
+      <button class="btn btn-secondary btn-sm" id="edit-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Reset Password Modal -->
 <div class="modal-overlay" id="reset-modal">
   <div class="modal">
@@ -183,8 +214,8 @@
 const $ = id => document.getElementById(id);
 let currentUser;
 let resetTargetId = null;
-const ALL_MODULES = ['time_ticket','get_po','office_dashboard'];
-const MODULE_LABELS = { time_ticket: 'Time Ticket', get_po: 'Get PO', office_dashboard: 'Office Dashboard' };
+const ALL_MODULES = ['time_ticket','get_po','office_dashboard','timesheet_edit'];
+const MODULE_LABELS = { time_ticket: 'Time Ticket', get_po: 'Get PO', office_dashboard: 'Office Dashboard', timesheet_edit: 'Timesheet Edit' };
 
 function showToast(msg, type='') {
   const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
@@ -257,6 +288,7 @@ async function loadUsers() {
       <td style="font-size:12px;color:var(--gray-500);">${lastLogin}</td>
       <td>
         ${!isMe ? `<div class="actions-cell">
+          <button class="btn btn-sm btn-secondary" onclick="openEditModal(${u.id})">Edit</button>
           <button class="btn btn-sm btn-ghost" onclick="openResetModal(${u.id},'${esc(u.name)}')">Reset PW</button>
           <button class="btn btn-sm btn-secondary" onclick="sendResetLink(${u.id},'${esc(u.name)}')">Send Link</button>
           ${u.status==='active'
@@ -374,6 +406,54 @@ $('modal-close-btn').addEventListener('click',closeResetModal);
 $('modal-cancel-btn').addEventListener('click',closeResetModal);
 $('reset-modal').addEventListener('click',e=>{ if(e.target===$('reset-modal')) closeResetModal(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeResetModal(); });
+
+// ── Edit user modal ──
+let editUserData = null;
+
+async function openEditModal(id) {
+  const res = await fetch('/api/users');
+  const users = await res.json();
+  const u = users.find(x=>x.id===id);
+  if(!u) return;
+  editUserData = u;
+  $('edit-user-id').value = u.id;
+  $('edit-name').value  = u.name;
+  $('edit-email').value = u.email;
+  $('edit-role').value  = u.role;
+  $('edit-warning').style.display='none';
+  // Build permission checkboxes
+  const perms = (u.permissions||'').split(',').filter(Boolean);
+  $('edit-perms-wrap').innerHTML = ALL_MODULES.map(mod=>`
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+      <input type="checkbox" class="edit-perm-cb" data-perm="${mod}" ${perms.includes(mod)||u.role==='admin'?'checked':''} style="width:14px;height:14px;accent-color:var(--orange);"/>
+      ${MODULE_LABELS[mod]}
+    </label>`).join('');
+  $('edit-user-modal').classList.add('open');
+}
+function closeEditModal(){ $('edit-user-modal').classList.remove('open'); editUserData=null; }
+$('edit-modal-close').addEventListener('click',closeEditModal);
+$('edit-cancel-btn').addEventListener('click',closeEditModal);
+$('edit-user-modal').addEventListener('click',e=>{ if(e.target===$('edit-user-modal')) closeEditModal(); });
+
+$('edit-save-btn').addEventListener('click', async()=>{
+  const id    = parseInt($('edit-user-id').value);
+  const name  = $('edit-name').value.trim();
+  const email = $('edit-email').value.trim();
+  const role  = $('edit-role').value;
+  const perms = Array.from($('edit-perms-wrap').querySelectorAll('.edit-perm-cb:checked')).map(c=>c.dataset.perm);
+  if(!name||!email){ showToast('Name and email required','error'); return; }
+  $('edit-save-btn').disabled=true; $('edit-save-btn').textContent='Saving…';
+  // Update name/role
+  const r1 = await fetch(`/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,role})});
+  const d1 = await r1.json();
+  if(!r1.ok){ $('edit-warning').textContent=d1.error; $('edit-warning').style.display='block'; $('edit-save-btn').disabled=false; $('edit-save-btn').textContent='Save Changes'; return; }
+  // Update permissions
+  await fetch(`/api/users/${id}/permissions`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({permissions:perms})});
+  $('edit-save-btn').disabled=false; $('edit-save-btn').textContent='Save Changes';
+  showToast('User updated successfully','success');
+  closeEditModal();
+  loadUsers();
+});
 
 $('modal-save-btn').addEventListener('click',async()=>{
   const pw=$('new-pw').value, cf=$('confirm-pw').value;

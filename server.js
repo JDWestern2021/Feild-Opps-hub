@@ -428,8 +428,8 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
     const tid = rows[0].id;
     for (const e of employees) {
       if (e.name?.trim()) await client.query(
-        'INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level) VALUES ($1,$2,$3,$4,$5)',
-        [tid, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman']
+        'INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level,user_id) VALUES ($1,$2,$3,$4,$5,$6)',
+        [tid, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman', e.user_id||null]
       );
     }
     await client.query('COMMIT');
@@ -516,8 +516,8 @@ app.put('/api/tickets/:id', requireAdmin, async (req, res) => {
       [date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,new Date().toISOString(),resolvedPid,resolvedStatus,req.params.id]);
     await client.query('DELETE FROM ticket_employees WHERE ticket_id=$1',[req.params.id]);
     for (const e of employees) {
-      if (e.name?.trim()) await client.query('INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level) VALUES ($1,$2,$3,$4,$5)',
-        [req.params.id,e.name.trim(),parseFloat(e.regular_hours)||0,parseFloat(e.overtime_hours)||0,e.level||'Journeyman']);
+      if (e.name?.trim()) await client.query('INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level,user_id) VALUES ($1,$2,$3,$4,$5,$6)',
+        [req.params.id,e.name.trim(),parseFloat(e.regular_hours)||0,parseFloat(e.overtime_hours)||0,e.level||'Journeyman',e.user_id||null]);
     }
     await client.query('COMMIT');
     logAction(req,'ticket_updated',t.id,t.ticket_number,`Edited by ${req.user?.name}`);
@@ -942,6 +942,331 @@ app.get('/api/projects', requireAuth, async (req, res) => {
     GROUP BY t.job_name, t.job_number ORDER BY MAX(t.date) DESC`);
   res.json(rows);
 });
+
+// ─────────────────────────────────────────────
+// PAYROLL & TIMESHEETS
+// ─────────────────────────────────────────────
+
+// ── Payroll helpers ──
+async function getPayrollBase() {
+  const { rows } = await pool.query('SELECT cycle_start_date, period_days FROM payroll_config WHERE id=1');
+  return { base: rows[0]?.cycle_start_date || '2026-05-25', days: parseInt(rows[0]?.period_days || 14) };
+}
+
+function calcPayPeriod(base, periodDays, offset = 0) {
+  const b = new Date(base + 'T00:00:00Z');
+  const start = new Date(b); start.setUTCDate(start.getUTCDate() + offset * periodDays);
+  const end   = new Date(start); end.setUTCDate(end.getUTCDate() + periodDays - 1);
+  const payday = new Date(end); payday.setUTCDate(payday.getUTCDate() + 5);
+  return {
+    index: offset,
+    start:  start.toISOString().slice(0,10),
+    end:    end.toISOString().slice(0,10),
+    cutoff: end.toISOString().slice(0,10),
+    payday: payday.toISOString().slice(0,10),
+  };
+}
+
+function getCurrentPeriodOffset(base, periodDays) {
+  const b = new Date(base + 'T00:00:00Z');
+  const now = new Date(); now.setUTCHours(0,0,0,0);
+  return Math.floor((now - b) / (periodDays * 24*60*60*1000));
+}
+
+// ── Get payroll config + current period ──
+app.get('/api/payroll/config', requireAuth, async (req, res) => {
+  const { base, days } = await getPayrollBase();
+  const offset = getCurrentPeriodOffset(base, days);
+  const current = calcPayPeriod(base, days, offset);
+  const prev    = calcPayPeriod(base, days, offset - 1);
+  const next    = calcPayPeriod(base, days, offset + 1);
+  res.json({ base, period_days: days, current, prev, next, current_offset: offset });
+});
+
+app.patch('/api/payroll/config', requireAdmin, async (req, res) => {
+  const { cycle_start_date, period_days } = req.body;
+  await pool.query('UPDATE payroll_config SET cycle_start_date=COALESCE($1,cycle_start_date), period_days=COALESCE($2,period_days) WHERE id=1',
+    [cycle_start_date||null, period_days||null]);
+  logAction(req, 'payroll_config_updated', null, null, `Payroll config updated by ${req.user.name}`);
+  res.json({ ok: true });
+});
+
+// ── Active users list for employee dropdown ──
+app.get('/api/users/employees', requireAuth, async (req, res) => {
+  const { rows } = await pool.query("SELECT id, name FROM users WHERE status='active' ORDER BY name");
+  res.json(rows);
+});
+
+// ── Build timesheet for one employee + period ──
+async function buildTimesheet(userId, periodStart, periodEnd) {
+  const { rows: userRows } = await pool.query('SELECT id, name FROM users WHERE id=$1', [userId]);
+  if (!userRows[0]) return null;
+
+  // ── Ticket source of truth — one query, all the data ──
+  // No aggregation: keep individual ticket entries so we preserve status, job, project per entry
+  const { rows: ticketEntries } = await pool.query(`
+    SELECT
+      t.date,
+      t.id              AS ticket_id,
+      t.ticket_number,
+      COALESCE(t.ticket_status, 'Pending') AS ticket_status,
+      t.job_number,
+      t.job_name,
+      COALESCE(p.name, '') AS project_name,
+      te.regular_hours,
+      te.overtime_hours,
+      COALESCE(te.level, 'Journeyman') AS level,
+      t.supervisor,
+      t.updated_at
+    FROM ticket_employees te
+    JOIN daily_tickets t ON t.id = te.ticket_id
+    LEFT JOIN projects p ON p.id = t.project_id
+    WHERE te.user_id = $1 AND t.date >= $2 AND t.date <= $3
+    ORDER BY t.date, t.submitted_at`, [userId, periodStart, periodEnd]);
+
+  // Manual overrides (applied on top of ticket data when present)
+  const { rows: overrides } = await pool.query(
+    'SELECT * FROM timesheet_overrides WHERE employee_user_id=$1 AND date>=$2 AND date<=$3 ORDER BY date',
+    [userId, periodStart, periodEnd]);
+  const overrideMap = {};
+  overrides.forEach(o => { overrideMap[o.date] = o; });
+
+  // Group ticket entries by date
+  const entriesByDate = {};
+  ticketEntries.forEach(e => {
+    if (!entriesByDate[e.date]) entriesByDate[e.date] = [];
+    entriesByDate[e.date].push(e);
+  });
+
+  // Build per-day rows
+  const days = [];
+  let enteredReg = 0, enteredOT = 0;  // payroll totals — only Entered
+  let pendingReg = 0, pendingOT  = 0; // pending display totals
+
+  const start = new Date(periodStart + 'T00:00:00Z');
+  const end   = new Date(periodEnd   + 'T00:00:00Z');
+
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const dateStr = d.toISOString().slice(0, 10);
+    const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()];
+    const entries = entriesByDate[dateStr] || [];
+    const override = overrideMap[dateStr];
+
+    if (override) {
+      // Manual override overrides all ticket hours for this day; treat as Entered
+      const reg = parseFloat(override.regular_hours) || 0;
+      const ot  = parseFloat(override.overtime_hours) || 0;
+      enteredReg += reg; enteredOT += ot;
+      const first = entries[0] || {};
+      days.push({ date: dateStr, dow,
+        regular_hours: reg, overtime_hours: ot, total_hours: reg + ot,
+        approval_status: 'entered', source: 'manual',
+        job_number: first.job_number || '', job_name: first.job_name || '',
+        project_name: first.project_name || '', level: first.level || '',
+        ticket_numbers: entries.map(e => e.ticket_number).join(', '),
+        edited_by_name: override.edited_by_name, edited_at: override.created_at,
+        entries });
+    } else if (entries.length > 0) {
+      // Sum hours from tickets; approval_status is Entered only if ALL tickets are Entered
+      let dayReg = 0, dayOT = 0;
+      const allEntered = entries.every(e => e.ticket_status === 'Entered');
+      const anyEntered = entries.some(e => e.ticket_status === 'Entered');
+      entries.forEach(e => { dayReg += parseFloat(e.regular_hours)||0; dayOT += parseFloat(e.overtime_hours)||0; });
+      const approvalStatus = allEntered ? 'entered' : (anyEntered ? 'partial' : 'pending');
+      if (allEntered) { enteredReg += dayReg; enteredOT += dayOT; }
+      else { pendingReg += dayReg; pendingOT += dayOT; }
+      const first = entries[0];
+      days.push({ date: dateStr, dow,
+        regular_hours: dayReg, overtime_hours: dayOT, total_hours: dayReg + dayOT,
+        approval_status: approvalStatus, source: 'ticket',
+        job_number: entries.map(e => e.job_number||'').filter(Boolean).join(', '),
+        job_name: entries.map(e => e.job_name||'').filter(Boolean).join(', '),
+        project_name: [...new Set(entries.map(e=>e.project_name||'').filter(Boolean))].join(', '),
+        level: first.level,
+        ticket_numbers: entries.map(e => e.ticket_number).join(', '),
+        supervisor: first.supervisor,
+        updated_at: first.updated_at,
+        entries });
+    } else {
+      days.push({ date: dateStr, dow, regular_hours: 0, overtime_hours: 0, total_hours: 0, approval_status: 'none', source: 'none', entries: [] });
+    }
+  }
+
+  return {
+    user: userRows[0], days,
+    totals:         { regular: enteredReg, ot: enteredOT, total: enteredReg + enteredOT },
+    pending_totals: { regular: pendingReg, ot: pendingOT, total: pendingReg + pendingOT },
+  };
+}
+
+// ── Admin: list all employees with current period summary ──
+app.get('/api/timesheets', requireAdmin, async (req, res) => {
+  const { base, days } = await getPayrollBase();
+  const offset  = parseInt(req.query.offset ?? getCurrentPeriodOffset(base, days));
+  const period  = calcPayPeriod(base, days, offset);
+  const { rows: users } = await pool.query("SELECT id, name FROM users WHERE status='active' ORDER BY name");
+
+  const summaries = await Promise.all(users.map(async u => {
+    // Only count Entered tickets in payroll totals
+    const { rows: hrs } = await pool.query(`
+      SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot
+      FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
+      WHERE te.user_id=$1 AND t.date>=$2 AND t.date<=$3 AND t.archived=0 AND t.ticket_status='Entered'`,
+      [u.id, period.start, period.end]);
+    const { rows: pendHrs } = await pool.query(`
+      SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot
+      FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
+      WHERE te.user_id=$1 AND t.date>=$2 AND t.date<=$3 AND t.archived=0 AND COALESCE(t.ticket_status,'Pending')='Pending'`,
+      [u.id, period.start, period.end]);
+    const reg = parseFloat(hrs[0].reg)||0, ot = parseFloat(hrs[0].ot)||0;
+    const pendReg = parseFloat(pendHrs[0].reg)||0, pendOt = parseFloat(pendHrs[0].ot)||0;
+    return { ...u, regular_hours: reg, overtime_hours: ot, total_hours: reg+ot, pending_regular: pendReg, pending_ot: pendOt };
+  }));
+
+  res.json({ period, summaries, offset });
+});
+
+// ── Archive: list past periods grouped by month ── (MUST be before /:userId)
+app.get('/api/timesheets/archive-periods', requireAdmin, async (req, res) => {
+  const { base, days: pd } = await getPayrollBase();
+  const curOffset = getCurrentPeriodOffset(base, pd);
+  const periods = [];
+  for (let i = 0; i < curOffset; i++) periods.push({ ...calcPayPeriod(base, pd, i), offset: i });
+  const byMonth = {};
+  periods.forEach(p => {
+    const month = p.start.slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = { month, periods: [] };
+    byMonth[month].periods.unshift(p);
+  });
+  res.json(Object.values(byMonth).sort((a, b) => b.month.localeCompare(a.month)));
+});
+
+app.delete('/api/timesheets/archive', requireAdmin, async (req, res) => {
+  const { offsets, user_ids } = req.body;
+  if (!offsets?.length) return res.status(400).json({ error: 'offsets required' });
+  const { base, days: pd } = await getPayrollBase();
+  let deleted = 0;
+  for (const offset of offsets) {
+    const period = calcPayPeriod(base, pd, parseInt(offset));
+    let q = 'DELETE FROM timesheet_overrides WHERE date>=$1 AND date<=$2';
+    const params = [period.start, period.end];
+    if (user_ids?.length) { q += ` AND employee_user_id = ANY($3)`; params.push(user_ids); }
+    const { rowCount } = await pool.query(q, params);
+    deleted += rowCount;
+  }
+  logAction(req, 'timesheet_archive_deleted', null, null,
+    `Deleted ${deleted} timesheet overrides for ${offsets.length} period(s) by ${req.user.name}`);
+  res.json({ ok: true, deleted });
+});
+
+app.get('/api/timesheets/export/all', requireAdmin, async (req, res) => {
+  const { base, days: pd } = await getPayrollBase();
+  const offset = parseInt(req.query.offset ?? getCurrentPeriodOffset(base, pd));
+  const period = calcPayPeriod(base, pd, offset);
+  const { rows: users } = await pool.query("SELECT id FROM users WHERE status='active' ORDER BY name");
+  const wb = XLSX.utils.book_new();
+  for (const u of users) {
+    const ts = await buildTimesheet(u.id, period.start, period.end);
+    if (!ts) continue;
+    const rows = [['J&D Western Electric Ltd — Employee Timesheet'],[`Employee: ${ts.user.name}`],[`Pay Period: ${period.start} to ${period.end}`,`Payday: ${period.payday}`],[],
+      ['Date','Day','Regular Hours','OT Hours','Total Hours','Source','Job #','Project'],
+      ...ts.days.map(d=>[d.date,d.dow,d.regular_hours,d.overtime_hours,d.total_hours,d.source==='manual'?'Manually Edited':d.source==='ticket'?'Auto from Time Ticket':'No Entry',d.job_number||'',d.project_name||'']),
+      [],['TOTALS','',ts.totals.regular,ts.totals.ot,ts.totals.total]];
+    const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:12},{wch:6},{wch:14},{wch:10},{wch:12},{wch:22},{wch:12},{wch:24}];
+    XLSX.utils.book_append_sheet(wb,ws,ts.user.name.slice(0,31));
+  }
+  const buf=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+  const fn=`JD-Timesheets-${period.start}-to-${period.end}.xlsx`;
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition',`attachment; filename="${fn}"`);
+  res.send(buf);
+});
+
+// ── Admin: get one employee's full timesheet ──
+app.get('/api/timesheets/:userId', requireAdmin, async (req, res) => {
+  const { base, days } = await getPayrollBase();
+  const offset = parseInt(req.query.offset ?? getCurrentPeriodOffset(base, days));
+  const period = calcPayPeriod(base, days, offset);
+  const ts = await buildTimesheet(parseInt(req.params.userId), period.start, period.end);
+  if (!ts) return res.status(404).json({ error: 'User not found' });
+  res.json({ ...ts, period, offset });
+});
+
+// ── Field user: own timesheet ──
+app.get('/api/my-timesheet', requireAuth, async (req, res) => {
+  const { base, days } = await getPayrollBase();
+  const offset = parseInt(req.query.offset ?? getCurrentPeriodOffset(base, days));
+  const period = calcPayPeriod(base, days, offset);
+  const ts = await buildTimesheet(req.user.id, period.start, period.end);
+  if (!ts) return res.status(404).json({ error: 'Not found' });
+  // Past periods list (last 10)
+  const periods = [];
+  const curOffset = getCurrentPeriodOffset(base, days);
+  for (let i = curOffset - 1; i >= Math.max(0, curOffset - 10); i--) {
+    periods.push(calcPayPeriod(base, days, i));
+  }
+  res.json({ ...ts, period, offset, past_periods: periods, current_offset: curOffset });
+});
+
+// ── Manual timesheet edit (requires timesheet_edit permission) ──
+app.patch('/api/timesheets/:userId/:date', requireAdmin, async (req, res) => {
+  const perms = (req.user.permissions || '').split(',');
+  if (!perms.includes('timesheet_edit')) return res.status(403).json({ error: 'Timesheet Edit Access required' });
+  const { regular_hours, overtime_hours, reason } = req.body;
+  const userId = parseInt(req.params.userId);
+  const date   = req.params.date;
+  const { rows: userRows } = await pool.query('SELECT name FROM users WHERE id=$1', [userId]);
+  if (!userRows[0]) return res.status(404).json({ error: 'User not found' });
+
+  // Get current hours for audit
+  const { rows: current } = await pool.query(`
+    SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot
+    FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
+    WHERE te.user_id=$1 AND t.date=$2 AND t.archived=0`, [userId, date]);
+  const origReg = parseFloat(regular_hours)||0, origOT = parseFloat(overtime_hours)||0;
+  const oldReg = parseFloat(current[0].reg)||0, oldOT = parseFloat(current[0].ot)||0;
+
+  await pool.query(`INSERT INTO timesheet_overrides (employee_user_id,date,regular_hours,overtime_hours,original_regular,original_ot,edited_by_id,edited_by_name,edit_reason,created_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    ON CONFLICT (employee_user_id,date) DO UPDATE SET regular_hours=$3,overtime_hours=$4,edited_by_id=$7,edited_by_name=$8,edit_reason=$9,created_at=$10`,
+    [userId,date,origReg,origOT,oldReg,oldOT,req.user.id,req.user.name,reason||null,new Date().toISOString()]);
+
+  logAction(req,'timesheet_edited',null,null,
+    `Timesheet manually edited by ${req.user.name} — changed ${userRows[0].name} ${date} from ${oldReg}reg/${oldOT}OT to ${origReg}reg/${origOT}OT`);
+  res.json({ ok: true });
+});
+
+// (archive-periods and archive delete moved above /:userId route)
+
+// ── Export single employee timesheet ──
+app.get('/api/timesheets/:userId/export', requireAdmin, async (req, res) => {
+  const { base, days: pd } = await getPayrollBase();
+  const offset = parseInt(req.query.offset ?? getCurrentPeriodOffset(base, pd));
+  const period = calcPayPeriod(base, pd, offset);
+  const ts = await buildTimesheet(parseInt(req.params.userId), period.start, period.end);
+  if (!ts) return res.status(404).json({ error: 'User not found' });
+
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['J&D Western Electric Ltd — Employee Timesheet'],
+    [`Employee: ${ts.user.name}`],
+    [`Pay Period: ${period.start} to ${period.end}`, `Payday: ${period.payday}`],
+    [],
+    ['Date','Day','Regular Hours','OT Hours','Total Hours','Source','Job #','Project','Status'],
+    ...ts.days.map(d => [d.date, d.dow, d.regular_hours, d.overtime_hours, d.total_hours, d.source==='manual'?'Manually Edited':d.source==='ticket'?'Auto from Time Ticket':'No Entry', d.job_number||'', d.project_name||'', d.approval_status||'']),
+    [],
+    ['TOTALS','', ts.totals.regular, ts.totals.ot, ts.totals.total],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:6},{wch:14},{wch:10},{wch:12},{wch:22}];
+  XLSX.utils.book_append_sheet(wb, ws, ts.user.name.slice(0,31));
+  const buf = XLSX.write(wb, {type:'buffer',bookType:'xlsx'});
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition',`attachment; filename="${ts.user.name.replace(/[^a-z0-9]/gi,'_')}-timesheet-${period.start}.xlsx"`);
+  res.send(buf);
+});
+
+// (export/all moved above /:userId route)
 
 // ─────────────────────────────────────────────
 // START

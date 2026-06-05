@@ -356,6 +356,7 @@
     <a href="#" id="nav-tickets" style="position:relative;">Time Tickets<span class="nav-badge" id="badge-tickets" style="display:none;"></span></a>
     <a href="#" id="nav-projects" style="position:relative;">Projects<span class="nav-badge" id="badge-projects" style="display:none;"></span></a>
     <a href="#" id="nav-pos" style="position:relative;">Purchase Orders<span class="nav-badge" id="badge-pos" style="display:none;"></span></a>
+    <a href="#" id="nav-timesheets">Timesheets</a>
     <a href="field.html" style="font-size:12px;opacity:.7;">+ New Ticket</a>
     <a href="team.html">Team</a>
     <a href="settings-admin.html">Settings</a>
@@ -487,6 +488,70 @@
 
   <div class="pagination" id="pagination"></div>
   </div><!-- end #tt-dashboard -->
+
+  <!-- TIMESHEETS VIEW -->
+  <div id="timesheets-view" style="display:none;">
+    <div class="flex-between" style="margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="font-size:18px;font-weight:800;">Timesheets</h2>
+        <div id="ts-period-label" style="font-size:13px;color:var(--gray-500);margin-top:2px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" id="ts-prev">← Prev</button>
+        <span id="ts-offset-label" style="font-size:12px;color:var(--gray-500);min-width:60px;text-align:center;"></span>
+        <button class="btn btn-secondary btn-sm" id="ts-next">Next →</button>
+        <button class="btn btn-sm" id="ts-export-all" style="background:#1a6e35;color:white;">Export All Staff</button>
+        <button class="btn btn-secondary btn-sm" id="ts-show-archive">Archive</button>
+        <button class="btn btn-secondary btn-sm" id="btn-close-timesheets">← Back</button>
+      </div>
+    </div>
+
+    <!-- Employee list -->
+    <div id="ts-employee-list">
+      <div class="card">
+        <div class="card-header"><h2 style="font-size:15px;font-weight:700;">All Employees — Current Period</h2></div>
+        <div style="overflow-x:auto;">
+          <table class="po-table">
+            <thead><tr><th>Employee</th><th style="text-align:center;">Regular Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Total Hrs</th><th></th></tr></thead>
+            <tbody id="ts-staff-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Archive section -->
+    <div id="ts-archive" style="display:none;margin-bottom:24px;">
+      <div class="flex-between" style="margin-bottom:12px;">
+        <h3 style="font-size:15px;font-weight:800;">Past Pay Periods Archive</h3>
+        <button class="btn btn-secondary btn-sm" id="ts-close-archive">← Back to Current</button>
+      </div>
+      <div id="ts-archive-content"></div>
+    </div>
+
+    <!-- Single employee timesheet -->
+    <div id="ts-detail" style="display:none;">
+      <div class="card">
+        <div class="card-header" style="align-items:flex-start;">
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);">Employee Timesheet</div>
+            <h2 id="ts-detail-name" style="font-size:18px;"></h2>
+            <div id="ts-detail-totals" style="margin-top:4px;font-size:13px;color:var(--gray-500);"></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" id="ts-edit-btn" style="background:#2563eb;color:white;">Edit Timesheet</button>
+            <button class="btn btn-sm" id="ts-export-one" style="background:#1a6e35;color:white;">Export to Excel</button>
+            <button class="btn btn-secondary btn-sm" id="ts-back-list">All Staff</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;padding:16px;">
+          <table class="po-table" id="ts-day-table">
+            <thead><tr><th>Date</th><th>Day</th><th>Job #</th><th>Project</th><th>Level</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Total</th><th>Status</th></tr></thead>
+            <tbody id="ts-day-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- PURCHASE ORDERS VIEW -->
   <div id="pos-view" style="display:none;">
@@ -2198,7 +2263,7 @@ $('hm-link-proj').addEventListener('click', e => { e.preventDefault(); showProje
 $('hm-link-po').addEventListener('click',   e => { e.preventDefault(); showPOsView(); });
 
 function hideAllSpecialViews() {
-  ['home-view','tt-dashboard','pos-view','projects-view','archive-section'].forEach(id => {
+  ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view'].forEach(id => {
     const el = $(id); if (el) el.style.display = 'none';
   });
 }
@@ -2255,6 +2320,228 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 $('nav-home').addEventListener('click', e => { e.preventDefault(); showHomeView(); });
+
+// ─────────────────────────────────────────────
+// TIMESHEETS
+// ─────────────────────────────────────────────
+
+let tsOffset = null;
+let tsCurrentOffset = null;
+let tsCurrentUserId = null;
+let tsHasEditAccess = false;
+
+function showTimesheetsView() {
+  hideAllSpecialViews();
+  $('timesheets-view').style.display = 'block';
+  setNavActive('nav-timesheets');
+  tsHasEditAccess = (currentUser?.permissions||'').split(',').includes('timesheet_edit');
+  loadTSList(null);
+}
+function hideTimesheetsView() { showTTDashboard(); }
+
+async function loadTSList(offset) {
+  $('ts-employee-list').style.display = 'block';
+  $('ts-detail').style.display = 'none';
+  const url = offset != null ? `/api/timesheets?offset=${offset}` : '/api/timesheets';
+  const res = await fetch(url);
+  if (!res.ok) return;
+  const d = await res.json();
+  tsOffset = d.offset;
+  tsCurrentOffset = d.offset; // will be refined by current period check
+  $('ts-period-label').textContent = `Pay Period: ${fmtDate(d.period.start)} — ${fmtDate(d.period.end)} · Payday: ${fmtDate(d.period.payday)}`;
+  $('ts-offset-label').textContent = `Period ${d.offset >= 0 ? '+'+d.offset : d.offset}`;
+  $('ts-next').disabled = false;
+  $('ts-staff-tbody').innerHTML = d.summaries.map(u => {
+    const hasPending = (u.pending_regular||0)+(u.pending_ot||0) > 0;
+    return `<tr style="cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})">
+      <td><strong>${esc(u.name)}</strong></td>
+      <td style="text-align:center;color:var(--green);font-weight:700;">${(u.regular_hours||0).toFixed(1)}</td>
+      <td style="text-align:center;color:var(--green);font-weight:700;">${(u.overtime_hours||0).toFixed(1)}</td>
+      <td style="text-align:center;font-weight:800;">${(u.total_hours||0).toFixed(1)}</td>
+      <td>${hasPending?`<span class="spill spill-pending" style="font-size:10px;">${((u.pending_regular||0)+(u.pending_ot||0)).toFixed(1)} pending</span>`:''}</td>
+      <td><button class="btn btn-ghost btn-sm">View →</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--gray-500);">No employees found.</td></tr>';
+}
+
+async function loadTSDetail(userId, offset) {
+  tsCurrentUserId = userId;
+  $('ts-employee-list').style.display = 'none';
+  $('ts-detail').style.display = 'block';
+  const res = await fetch(`/api/timesheets/${userId}?offset=${offset ?? tsOffset}`);
+  if (!res.ok) return;
+  const d = await res.json();
+  tsOffset = d.offset;
+  $('ts-period-label').textContent = `Pay Period: ${fmtDate(d.period.start)} — ${fmtDate(d.period.end)} · Payday: ${fmtDate(d.period.payday)}`;
+  $('ts-detail-name').textContent = d.user.name;
+  const pendText = d.pending_totals?.total > 0 ? ` · <span style="color:#aaa;">${d.pending_totals.total.toFixed(1)} hrs pending (not counted)</span>` : '';
+  $('ts-detail-totals').innerHTML = `<span style="color:var(--green);font-weight:700;">Approved — Reg: ${d.totals.regular.toFixed(1)} · OT: ${d.totals.ot.toFixed(1)} · Total: ${d.totals.total.toFixed(1)} hrs</span>${pendText}`;
+  $('ts-edit-btn').style.display = tsHasEditAccess ? '' : 'none';
+
+  const editing = $('ts-day-tbody').dataset.editing === '1';
+  $('ts-day-tbody').innerHTML = d.days.map(day => {
+    const hasHrs = day.total_hours > 0;
+    const isPending = day.approval_status === 'pending';
+    const isEntered = day.approval_status === 'entered' || day.approval_status === 'partial';
+    const rowBg    = isPending ? 'background:rgba(200,200,200,0.12);' : isEntered ? 'background:rgba(40,167,69,0.07);border-left:3px solid #28a745;' : '';
+    const hrsColor = isPending ? 'color:#bbb;' : isEntered ? 'color:#155724;font-weight:700;' : 'color:var(--gray-400);';
+    const statusBadge = isPending
+      ? `<span class="spill" style="background:#e0e0e0;color:#555;font-size:10px;">Pending</span>`
+      : isEntered
+        ? `<span class="spill" style="background:#d4edda;color:#155724;font-size:10px;">Entered</span>`
+        : day.source === 'manual'
+          ? `<span class="spill spill-reviewed" style="font-size:10px;">Edited</span>`
+          : '';
+    const editedStamp = day.edited_by_name ? `<div style="font-size:10px;color:#888;margin-top:2px;">Edited by ${esc(day.edited_by_name)}</div>` : day.updated_at && isEntered ? `<div style="font-size:10px;color:#888;margin-top:2px;">Updated ${fmtDateTime(day.updated_at)}</div>` : '';
+
+    if (editing && tsHasEditAccess) {
+      return `<tr data-date="${day.date}" style="${rowBg}">
+        <td>${day.date}</td><td>${day.dow}</td>
+        <td>${esc(day.job_number||'')}</td><td style="font-size:12px;">${esc(day.project_name||'')}</td><td style="font-size:12px;">${esc(day.level||'')}</td>
+        <td><input type="number" class="form-control ts-edit-reg" value="${day.regular_hours}" min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:70px;"/></td>
+        <td><input type="number" class="form-control ts-edit-ot"  value="${day.overtime_hours}" min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:70px;"/></td>
+        <td>${(day.regular_hours+day.overtime_hours).toFixed(1)}</td>
+        <td>${statusBadge}</td>
+      </tr>`;
+    }
+    return `<tr style="${rowBg}">
+      <td>${day.date}</td><td>${day.dow}</td>
+      <td style="font-size:12px;">${esc(day.job_number||'')}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${esc(day.project_name||'')}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${esc(day.level||'')}</td>
+      <td style="text-align:center;${hrsColor}">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
+      <td style="text-align:center;${hrsColor}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</td>
+      <td style="text-align:center;${hrsColor}">${hasHrs?day.total_hours.toFixed(1):'—'}</td>
+      <td>${statusBadge}${editedStamp}</td>
+    </tr>`;
+  }).join('');
+}
+
+$('ts-edit-btn').addEventListener('click', async () => {
+  const tbody = $('ts-day-tbody');
+  if (tbody.dataset.editing === '1') {
+    // Save all changes
+    const rows = tbody.querySelectorAll('tr[data-date]');
+    let saved = 0;
+    for (const row of rows) {
+      const date = row.dataset.date;
+      const reg  = parseFloat(row.querySelector('.ts-edit-reg')?.value)||0;
+      const ot   = parseFloat(row.querySelector('.ts-edit-ot')?.value)||0;
+      await fetch(`/api/timesheets/${tsCurrentUserId}/${date}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ regular_hours: reg, overtime_hours: ot })
+      });
+      saved++;
+    }
+    tbody.dataset.editing = '0';
+    $('ts-edit-btn').textContent = 'Edit Timesheet';
+    showToast(`${saved} days saved`, 'success');
+    loadTSDetail(tsCurrentUserId, tsOffset);
+  } else {
+    tbody.dataset.editing = '1';
+    $('ts-edit-btn').textContent = 'Save Changes';
+    loadTSDetail(tsCurrentUserId, tsOffset);
+  }
+});
+
+$('ts-back-list').addEventListener('click', () => loadTSList(tsOffset));
+$('ts-prev').addEventListener('click', () => {
+  const newOff = (tsOffset ?? 0) - 1;
+  tsCurrentUserId ? loadTSDetail(tsCurrentUserId, newOff) : loadTSList(newOff);
+});
+$('ts-next').addEventListener('click', () => {
+  const newOff = (tsOffset ?? 0) + 1;
+  tsCurrentUserId ? loadTSDetail(tsCurrentUserId, newOff) : loadTSList(newOff);
+});
+$('ts-export-all').addEventListener('click', () => { window.location = `/api/timesheets/export/all?offset=${tsOffset??0}`; });
+$('ts-export-one').addEventListener('click', () => { if(tsCurrentUserId) window.location = `/api/timesheets/${tsCurrentUserId}/export?offset=${tsOffset??0}`; });
+$('btn-close-timesheets').addEventListener('click', hideTimesheetsView);
+$('nav-timesheets').addEventListener('click', e => { e.preventDefault(); showTimesheetsView(); });
+
+// ── Timesheet Archive ──
+$('ts-show-archive').addEventListener('click', loadTSArchive);
+$('ts-close-archive').addEventListener('click', () => {
+  $('ts-archive').style.display = 'none';
+  $('ts-employee-list').style.display = 'block';
+});
+
+async function loadTSArchive() {
+  $('ts-employee-list').style.display = 'none';
+  $('ts-detail').style.display = 'none';
+  $('ts-archive').style.display = 'block';
+  $('ts-archive-content').innerHTML = '<div style="color:var(--gray-500);padding:16px;">Loading…</div>';
+  const res = await fetch('/api/timesheets/archive-periods');
+  if (!res.ok) { $('ts-archive-content').innerHTML = 'Error loading archive'; return; }
+  const months = await res.json();
+  if (!months.length) {
+    $('ts-archive-content').innerHTML = '<div style="color:var(--gray-500);padding:16px;">No archived pay periods yet.</div>';
+    return;
+  }
+  let html = '';
+  months.forEach(m => {
+    const monthLabel = new Date(m.month + '-15').toLocaleDateString('en-CA', {month:'long',year:'numeric'});
+    html += `<div class="card" style="margin-bottom:14px;overflow:hidden;">
+      <div class="card-header" style="cursor:pointer;user-select:none;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <span style="font-weight:800;">${monthLabel}</span>
+        <span style="font-size:12px;color:var(--gray-500);">${m.periods.length} pay period${m.periods.length!==1?'s':''}</span>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;margin-left:auto;cursor:pointer;" onclick="event.stopPropagation()">
+          <input type="checkbox" class="archive-month-cb" data-month="${m.month}" style="width:14px;height:14px;"/> Select all in month
+        </label>
+      </div>
+      <div style="display:none;">
+        <table class="po-table"><thead><tr>
+          <th style="width:30px;"><input type="checkbox" class="archive-month-all-cb" data-month="${m.month}" style="width:13px;height:13px;" title="Select all"/></th>
+          <th>Pay Period</th><th>Payday</th><th></th>
+        </tr></thead><tbody>
+        ${m.periods.map(p=>`<tr>
+          <td><input type="checkbox" class="archive-period-cb" data-offset="${p.offset}" style="width:13px;height:13px;"/></td>
+          <td>${fmtDate(p.start)} — ${fmtDate(p.end)}</td>
+          <td>${fmtDate(p.payday)}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="loadTSList(${p.offset})">View</button></td>
+        </tr>`).join('')}
+        </tbody></table>
+      </div>
+    </div>`;
+  });
+  html += `<div style="margin-top:14px;">
+    <button class="btn btn-danger btn-sm" id="ts-archive-delete">Delete Selected</button>
+    <span style="font-size:12px;color:var(--gray-500);margin-left:10px;" id="ts-archive-sel-count">0 periods selected</span>
+  </div>`;
+  $('ts-archive-content').innerHTML = html;
+
+  // Wire select-all per month
+  $('ts-archive-content').querySelectorAll('.archive-month-all-cb').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const month = cb.dataset.month;
+      $('ts-archive-content').querySelectorAll(`.archive-period-cb`).forEach(pcb => {
+        const row = pcb.closest('tr');
+        if (row) pcb.checked = cb.checked;
+      });
+      updateArchiveSelCount();
+    });
+  });
+  $('ts-archive-content').querySelectorAll('.archive-period-cb').forEach(cb => {
+    cb.addEventListener('change', updateArchiveSelCount);
+  });
+
+  $('ts-archive-delete').addEventListener('click', async () => {
+    const offsets = Array.from($('ts-archive-content').querySelectorAll('.archive-period-cb:checked')).map(cb=>parseInt(cb.dataset.offset));
+    if (!offsets.length) { showToast('Select at least one pay period first', 'error'); return; }
+    const periods = months.flatMap(m=>m.periods).filter(p=>offsets.includes(p.offset));
+    const labels = periods.map(p=>`${fmtDate(p.start)} — ${fmtDate(p.end)}`).join(', ');
+    if (!confirm(`⚠ Delete manual edits for ${offsets.length} pay period${offsets.length!==1?'s':''}?\n\n${labels}\n\nThis removes any manual timesheet corrections for these periods. Ticket data is NOT deleted. This cannot be undone.`)) return;
+    const res = await fetch('/api/timesheets/archive', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({offsets}) });
+    const d = await res.json();
+    showToast(`Deleted ${d.deleted} manual override${d.deleted!==1?'s':''}`, 'success');
+    loadTSArchive();
+  });
+}
+
+function updateArchiveSelCount() {
+  const n = $('ts-archive-content').querySelectorAll('.archive-period-cb:checked').length;
+  const el = $('ts-archive-sel-count');
+  if (el) el.textContent = `${n} period${n!==1?'s':''} selected`;
+}
 
 $('nav-projects').addEventListener('click', e => {
   e.preventDefault();

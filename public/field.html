@@ -390,9 +390,25 @@
   // Field users cannot create projects — they see the dropdown only.
 
   // ── Employee rows ──
+  let activeEmployees = [];
+  // Load employees FIRST, then add default rows — this is the root cause fix.
+  // Previously employees loaded async but rows were added before fetch completed.
+  (async () => {
+    try { const r = await fetch('/api/users/employees'); if (r.ok) activeEmployees = await r.json(); } catch {}
+    // Default rows added HERE so dropdown is populated from the start
+    addEmployeeRow();
+    addEmployeeRow();
+  })();
+
   const LEVELS = ['Journeyman','4th Year Apprentice','3rd Year Apprentice','2nd Year Apprentice','1st Year Apprentice'];
 
-  function addEmployeeRow(name = '', reg = '', ot = '', level = 'Journeyman') {
+  function buildEmpOptions(selectedName='') {
+    const base = `<option value="">— Select employee —</option>`;
+    const opts = activeEmployees.map(u => `<option value="${u.name}" data-uid="${u.id}"${u.name===selectedName?' selected':''}>${u.name}</option>`).join('');
+    return base + opts;
+  }
+
+  function addEmployeeRow(name = '', reg = '', ot = '', level = 'Journeyman', userId = '') {
     empCount++;
     const id = empCount;
     const tbody = $('employee-rows');
@@ -401,7 +417,8 @@
     tr.dataset.id = id;
     tr.innerHTML = `
       <td>
-        <input type="text" class="form-control emp-name" placeholder="Employee name" value="${name}" autocomplete="off"/>
+        <select class="form-control emp-name" style="font-size:14px;">${buildEmpOptions(name)}</select>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Employee not listed? Contact the office to add them to the system</div>
       </td>
       <td>
         <select class="form-control emp-level" style="padding:9px 6px;font-size:13px;">
@@ -448,12 +465,10 @@
 
   $('add-employee-btn').addEventListener('click', () => {
     const row = addEmployeeRow();
-    row.querySelector('.emp-name').focus();
+    row.querySelector('.emp-name')?.focus();
   });
 
-  // Start with 2 rows
-  addEmployeeRow();
-  addEmployeeRow();
+  // Default rows are now added inside the async employee loader above
 
   // ── Validation ──
   function validateField(inputId, errId, condition) {
@@ -483,9 +498,13 @@
     const empRows = document.querySelectorAll('.employee-row');
     const employees = [];
     empRows.forEach(r => {
-      const name = r.querySelector('.emp-name').value.trim();
+      const sel = r.querySelector('.emp-name');
+      const name = sel.value.trim();
+      const selOpt = sel.options[sel.selectedIndex];
+      const uid = selOpt?.dataset?.uid || null;
       if (name) employees.push({
         name,
+        user_id: uid ? parseInt(uid) : null,
         level: r.querySelector('.emp-level').value,
         regular_hours: parseFloat(r.querySelector('.emp-reg').value) || 0,
         overtime_hours: parseFloat(r.querySelector('.emp-ot').value) || 0
@@ -553,6 +572,7 @@
     hideCreateProject();
     document.getElementById('employee-rows').innerHTML = '';
     empCount = 0;
+    // activeEmployees already loaded — these rows will have the dropdown populated
     addEmployeeRow();
     addEmployeeRow();
     $('form-card').style.display = 'block';
