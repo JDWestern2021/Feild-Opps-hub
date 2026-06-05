@@ -503,7 +503,7 @@ app.get('/api/tickets/export/xlsx', requireAuth, async (req, res) => {
 app.get('/api/tickets/:id', requireAuth, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Ticket not found' });
-  const { rows: emps } = await pool.query(`SELECT employee_name,regular_hours,overtime_hours,COALESCE(level,'Journeyman') AS level FROM ticket_employees WHERE ticket_id=$1`, [req.params.id]);
+  const { rows: emps } = await pool.query(`SELECT employee_name,regular_hours,overtime_hours,COALESCE(level,'Journeyman') AS level,COALESCE(travel_hours,0) AS travel_hours FROM ticket_employees WHERE ticket_id=$1`, [req.params.id]);
   logAction(req,'ticket_viewed',rows[0].id,rows[0].ticket_number);
   res.json({ ...rows[0], employees: emps });
 });
@@ -599,7 +599,7 @@ app.delete('/api/tickets/:id', requireAdmin, async (req, res) => {
 app.get('/api/tickets/:id/export/xlsx', requireAuth, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1',[req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  const { rows: emps } = await pool.query(`SELECT employee_name,regular_hours,overtime_hours,COALESCE(level,'Journeyman') AS level FROM ticket_employees WHERE ticket_id=$1`,[req.params.id]);
+  const { rows: emps } = await pool.query(`SELECT employee_name,regular_hours,overtime_hours,COALESCE(level,'Journeyman') AS level,COALESCE(travel_hours,0) AS travel_hours FROM ticket_employees WHERE ticket_id=$1`,[req.params.id]);
   const t = rows[0];
   const totalReg=emps.reduce((s,e)=>s+e.regular_hours,0), totalOT=emps.reduce((s,e)=>s+e.overtime_hours,0);
   const xlsxRows=[['J&D Western Electric Ltd — Daily Time Ticket'],[],['Ticket #',t.ticket_number],['Date',t.date],['Job Name',t.job_name],['Job #',t.job_number||''],['Supervisor',t.supervisor],['Submitted',t.submitted_at],[],

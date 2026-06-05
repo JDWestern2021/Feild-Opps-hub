@@ -1435,38 +1435,87 @@ $('confirm-yes').addEventListener('click', async () => {
 // ── Edit Ticket (full inline edit) ──
 $('modal-edit-btn').addEventListener('click', () => openTicketEdit(activeTicketId));
 
+// ── Fix: restore original modal footer without replacing HTML (preserves event listeners) ──
+function showModalEditMode(saveHandler, cancelHandler) {
+  // Hide all original footer buttons
+  Array.from($('modal-footer').children).forEach(el => el.style.display = 'none');
+  // Add edit-mode buttons if not already present
+  if (!$('modal-save-edit')) {
+    const wrap = document.createElement('span');
+    wrap.id = 'modal-edit-btns';
+    wrap.innerHTML = `<button class="btn btn-primary btn-sm" id="modal-save-edit" style="margin-right:6px;">Save Changes</button>
+                      <button class="btn btn-secondary btn-sm" id="modal-cancel-edit">Cancel</button>`;
+    $('modal-footer').appendChild(wrap);
+  }
+  $('modal-save-edit').onclick = saveHandler;
+  $('modal-cancel-edit').onclick = cancelHandler;
+}
+
+function hideModalEditMode() {
+  $('modal-edit-btns')?.remove();
+  Array.from($('modal-footer').children).forEach(el => el.style.display = '');
+}
+
 async function openTicketEdit(id) {
-  const res = await fetch('/api/tickets/' + id);
-  const t = await res.json();
-  // Load active projects for dropdown
-  const projRes = await fetch('/api/project-folders');
+  const [ticketRes, projRes, empRes] = await Promise.all([
+    fetch('/api/tickets/' + id),
+    fetch('/api/project-folders'),
+    fetch('/api/users/employees'),
+  ]);
+  const t = await ticketRes.json();
   const projects = await projRes.json();
+  const activeEmps = empRes.ok ? await empRes.json() : [];
+
   const projOpts = `<option value="">— No Project —</option>` +
     projects.map(p => `<option value="${p.id}" ${t.project_id==p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+
   const levOpts = ['Journeyman','4th Year Apprentice','3rd Year Apprentice','2nd Year Apprentice','1st Year Apprentice'];
-  const empRows = (t.employees||[]).map((e,i) => `
-    <tr class="edit-emp-row">
-      <td><input type="text" class="form-control edit-emp-name" style="padding:6px;font-size:13px;" value="${esc(e.employee_name||e.name||'')}"/></td>
+
+  function empNameOpts(currentName) {
+    const base = `<option value="">— Select employee —</option>`;
+    const opts = activeEmps.map(u => `<option value="${esc(u.name)}" data-uid="${u.id}" ${u.name===currentName?'selected':''}>${esc(u.name)}</option>`).join('');
+    // If current name isn't in dropdown, add it
+    const nameInList = activeEmps.some(u => u.name === currentName);
+    const extra = (currentName && !nameInList) ? `<option value="${esc(currentName)}" selected>${esc(currentName)}</option>` : '';
+    return base + opts + extra;
+  }
+
+  function buildEmpRow(e) {
+    const name = e.employee_name || e.name || '';
+    return `<tr class="edit-emp-row">
+      <td style="min-width:140px;"><select class="form-control edit-emp-name" style="padding:6px;font-size:13px;">${empNameOpts(name)}</select></td>
       <td><select class="form-control edit-emp-level" style="padding:6px;font-size:12px;">${levOpts.map(l=>`<option ${l===(e.level||'Journeyman')?'selected':''}>${l}</option>`).join('')}</select></td>
-      <td><input type="number" class="form-control edit-emp-reg" style="padding:6px;font-size:13px;text-align:center;" value="${e.regular_hours||0}" min="0" max="24" step="0.5"/></td>
-      <td><input type="number" class="form-control edit-emp-ot" style="padding:6px;font-size:13px;text-align:center;" value="${e.overtime_hours||0}" min="0" max="24" step="0.5"/></td>
+      <td><input type="number" class="form-control edit-emp-reg"    style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.regular_hours||0}"   min="0" max="24" step="0.5" title="Regular Hours"/></td>
+      <td><input type="number" class="form-control edit-emp-ot"     style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.overtime_hours||0}"  min="0" max="24" step="0.5" title="OT Hours"/></td>
+      <td><input type="number" class="form-control edit-emp-travel" style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.travel_hours||0}"    min="0" max="24" step="0.5" title="Travel Hours" placeholder="0"/></td>
       <td><button type="button" style="background:none;border:none;color:#c0392b;font-size:18px;cursor:pointer;" onclick="this.closest('tr').remove()">×</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }
+
+  const empRows = (t.employees||[]).map(e => buildEmpRow(e)).join('');
+
+  // Escaped level options for inline add button
+  const levOptsEsc = levOpts.map(l=>`<option>${l}</option>`).join('');
 
   $('modal-body').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-      <div class="form-group"><label class="form-label">Date</label><input type="date" id="edit-date" class="form-control" value="${t.date||''}"/></div>
+      <div class="form-group"><label class="form-label">Date <span class="required">*</span></label><input type="date" id="edit-date" class="form-control" value="${t.date||''}"/></div>
       <div class="form-group"><label class="form-label">Job Number</label><input type="text" id="edit-job-num" class="form-control" value="${esc(t.job_number||'')}"/></div>
     </div>
-    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Job Name / Site</label><input type="text" id="edit-job-name" class="form-control" value="${esc(t.job_name||'')}"/></div>
-    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Supervisor</label><input type="text" id="edit-supervisor" class="form-control" value="${esc(t.supervisor||'')}"/></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Job Name / Site <span class="required">*</span></label><input type="text" id="edit-job-name" class="form-control" value="${esc(t.job_name||'')}"/></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Supervisor <span class="required">*</span></label><input type="text" id="edit-supervisor" class="form-control" value="${esc(t.supervisor||'')}"/></div>
     <div style="margin-bottom:10px;">
       <label class="form-label">Crew &amp; Hours</label>
-      <table class="po-table" style="font-size:13px;"><thead><tr><th>Name</th><th>Level</th><th>Reg Hrs</th><th>OT Hrs</th><th></th></tr></thead>
-      <tbody id="edit-emp-tbody">${empRows}</tbody></table>
-      <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="document.getElementById('edit-emp-tbody').insertAdjacentHTML('beforeend','<tr class=\\'edit-emp-row\\'><td><input type=\\'text\\' class=\\'form-control edit-emp-name\\' style=\\'padding:6px;font-size:13px;\\' placeholder=\\'Name\\'/></td><td><select class=\\'form-control edit-emp-level\\' style=\\'padding:6px;font-size:12px;\\'>${levOpts.map(l=>`<option>${l}</option>`).join('')}</select></td><td><input type=\\'number\\' class=\\'form-control edit-emp-reg\\' style=\\'padding:6px;font-size:13px;text-align:center;\\' value=\\'0\\' min=\\'0\\' max=\\'24\\' step=\\'0.5\\'/></td><td><input type=\\'number\\' class=\\'form-control edit-emp-ot\\' style=\\'padding:6px;font-size:13px;text-align:center;\\' value=\\'0\\' min=\\'0\\' max=\\'24\\' step=\\'0.5\\'/></td><td><button type=\\'button\\' style=\\'background:none;border:none;color:#c0392b;font-size:18px;cursor:pointer;\\' onclick=\\'this.closest(\\'tr\\').remove()\\'>×</button></td></tr>')">+ Add Employee</button>
+      <div style="overflow-x:auto;">
+      <table class="po-table" style="font-size:13px;min-width:500px;">
+        <thead><tr><th>Employee</th><th>Level</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th></th></tr></thead>
+        <tbody id="edit-emp-tbody">${empRows}</tbody>
+      </table>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="edit-add-emp-btn" style="margin-top:6px;">+ Add Employee</button>
+      <p style="font-size:11px;color:var(--gray-400);margin-top:4px;">Employee not listed? Go to Manage Team to add them to the system first.</p>
     </div>
-    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Work Description</label><textarea id="edit-work-desc" class="form-control" rows="3">${esc(t.work_description||'')}</textarea></div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Work Description <span class="required">*</span></label><textarea id="edit-work-desc" class="form-control" rows="3">${esc(t.work_description||'')}</textarea></div>
     <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Equipment Used</label><input type="text" id="edit-equipment" class="form-control" value="${esc(t.equipment_used||'')}"/></div>
     <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Notes</label><textarea id="edit-notes" class="form-control" rows="2">${esc(t.notes||'')}</textarea></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -1480,40 +1529,56 @@ async function openTicketEdit(id) {
       <div class="form-group"><label class="form-label">Project</label><select id="edit-project" class="form-control">${projOpts}</select></div>
     </div>`;
 
-  // Swap footer buttons
-  $('modal-footer').innerHTML = `
-    <button class="btn btn-primary btn-sm" id="modal-save-edit">Save Changes</button>
-    <button class="btn btn-secondary btn-sm" id="modal-cancel-edit">Cancel</button>`;
-  $('modal-save-edit').addEventListener('click', () => saveTicketEdit(id, t.ticket_number));
-  $('modal-cancel-edit').addEventListener('click', () => openDetail(id, activeTicketArchived));
+  // Wire the add-employee button using stored employee list
+  $('modal-body').querySelector('#edit-add-emp-btn').addEventListener('click', () => {
+    $('edit-emp-tbody').insertAdjacentHTML('beforeend', buildEmpRow({}));
+  });
+
+  // ── Fix: don't replace footer HTML — just overlay edit buttons ──
+  showModalEditMode(
+    () => saveTicketEdit(id, t.ticket_number),
+    () => { hideModalEditMode(); openDetail(id, activeTicketArchived); }
+  );
 }
 
 async function saveTicketEdit(id, ticketNumber) {
-  const employees = Array.from(document.querySelectorAll('#edit-emp-tbody .edit-emp-row')).map(row => ({
-    name: row.querySelector('.edit-emp-name').value.trim(),
-    level: row.querySelector('.edit-emp-level').value,
-    regular_hours: parseFloat(row.querySelector('.edit-emp-reg').value)||0,
-    overtime_hours: parseFloat(row.querySelector('.edit-emp-ot').value)||0,
-  })).filter(e => e.name);
+  const employees = Array.from(document.querySelectorAll('#edit-emp-tbody .edit-emp-row')).map(row => {
+    const sel = row.querySelector('.edit-emp-name');
+    const name = sel?.value?.trim() || '';
+    const selOpt = sel?.options?.[sel.selectedIndex];
+    const uid = selOpt?.dataset?.uid ? parseInt(selOpt.dataset.uid) : null;
+    return {
+      name,
+      user_id: uid,
+      level:          row.querySelector('.edit-emp-level')?.value || 'Journeyman',
+      regular_hours:  parseFloat(row.querySelector('.edit-emp-reg')?.value)    || 0,
+      overtime_hours: parseFloat(row.querySelector('.edit-emp-ot')?.value)     || 0,
+      travel_hours:   parseFloat(row.querySelector('.edit-emp-travel')?.value) || 0,
+    };
+  }).filter(e => e.name);
+
   const payload = {
-    date: document.getElementById('edit-date').value,
-    job_name: document.getElementById('edit-job-name').value.trim(),
-    job_number: document.getElementById('edit-job-num').value.trim(),
-    supervisor: document.getElementById('edit-supervisor').value.trim(),
+    date:             document.getElementById('edit-date').value,
+    job_name:         document.getElementById('edit-job-name').value.trim(),
+    job_number:       document.getElementById('edit-job-num').value.trim(),
+    supervisor:       document.getElementById('edit-supervisor').value.trim(),
     work_description: document.getElementById('edit-work-desc').value.trim(),
-    equipment_used: document.getElementById('edit-equipment').value.trim(),
-    notes: document.getElementById('edit-notes').value.trim(),
-    ticket_status: document.getElementById('edit-ticket-status').value,
-    project_id: document.getElementById('edit-project').value || null,
-    employees
+    equipment_used:   document.getElementById('edit-equipment').value.trim(),
+    notes:            document.getElementById('edit-notes').value.trim(),
+    ticket_status:    document.getElementById('edit-ticket-status').value,
+    project_id:       document.getElementById('edit-project').value || null,
+    employees,
   };
+
   try {
-    const res = await fetch('/api/tickets/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if (!res.ok) throw new Error((await res.json()).error);
+    const res = await fetch('/api/tickets/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Server error'); }
     showToast('Ticket updated', 'success');
+    // ── Fix: restore footer BEFORE calling openDetail so its elements exist again ──
+    hideModalEditMode();
     openDetail(id, activeTicketArchived);
     refreshProjectIfOpen();
-  } catch(err) { showToast('Save failed: '+err.message, 'error'); }
+  } catch(err) { showToast('Save failed: ' + err.message, 'error'); }
 }
 
 // ── Edit PO (full inline edit) ──
