@@ -75,6 +75,7 @@
         <button id="btn-prev-period">← Prev</button>
         <span id="period-index-label" style="font-size:12px;color:rgba(255,255,255,.5);"></span>
         <button id="btn-next-period">Next →</button>
+        <button id="btn-print-ts" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:13px;">🖨 Print</button>
       </div>
     </div>
 
@@ -108,7 +109,8 @@
 <script>
 const $ = id => document.getElementById(id);
 let currentOffset = 0;
-let currentOffset0 = 0; // the "now" offset
+let currentOffset0 = 0;
+let lastTSData = null; // stored for print // the "now" offset
 
 function showToast(msg,type=''){const t=$('toast');t.textContent=msg;t.className=`show ${type}`;setTimeout(()=>t.className='',3200);}
 
@@ -130,6 +132,7 @@ async function loadTimesheet(offset){
   const r=await fetch(url);
   if(!r.ok){showToast('Failed to load timesheet','error');return;}
   const d=await r.json();
+  lastTSData = d;  // store for print
   currentOffset=d.offset;
   currentOffset0=d.current_offset;
 
@@ -185,6 +188,90 @@ $('btn-prev-period').addEventListener('click',()=>loadTimesheet(currentOffset-1)
 $('btn-next-period').addEventListener('click',()=>loadTimesheet(currentOffset+1));
 
 function fmtDate(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});}
+
+function escP(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function buildTimesheetPrintHTML(data, printedByName) {
+  const p = data.period;
+  const user = data.user;
+  const days = data.days;
+  const totals = data.totals;
+  const now = new Date().toLocaleString('en-CA',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  const rows = days.map(day => {
+    const isPending = day.approval_status === 'pending';
+    const hasHrs = (day.total_hours || 0) > 0;
+    const rowStyle = isPending ? 'color:#bbb;background:#fafafa;' : '';
+    const statusCell = isPending
+      ? '<span style="background:#fde8e8;color:#d9342b;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Pending</span>'
+      : (hasHrs ? '<span style="background:#d4edda;color:#155724;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Approved</span>' : '—');
+    return `<tr style="${rowStyle}">
+      <td>${escP(day.date)}</td>
+      <td>${escP(day.dow)}</td>
+      <td style="text-align:center;">${hasHrs ? day.regular_hours.toFixed(1) : '—'}</td>
+      <td style="text-align:center;">${hasHrs ? day.overtime_hours.toFixed(1) : '—'}</td>
+      <td style="text-align:center;">${(day.travel_hours||0) > 0 ? day.travel_hours.toFixed(1) : '—'}</td>
+      <td>${escP(day.job_number||'')}</td>
+      <td style="font-size:11px;">${escP(day.project_name||'')}</td>
+      <td>${statusCell}</td>
+    </tr>`;
+  }).join('');
+
+  const printedByRow = printedByName
+    ? `<p style="margin-top:12px;font-size:10px;color:#888;">Printed by <strong>${escP(printedByName)}</strong> on ${now}</p>`
+    : '';
+
+  return `<!DOCTYPE html><html><head><title>Timesheet — ${escP(user.name)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Arial,Helvetica,sans-serif;padding:32px;color:#111;font-size:13px;}
+    .co{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#888;}
+    .emp{font-size:20px;font-weight:900;margin:6px 0 2px;}
+    .meta{font-size:12px;color:#555;margin-bottom:20px;}
+    table{width:100%;border-collapse:collapse;margin-top:4px;}
+    th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;background:#f5f5f5;padding:6px 8px;border:1px solid #ddd;text-align:left;color:#555;}
+    td{padding:6px 8px;border:1px solid #e5e5e5;vertical-align:middle;}
+    tr.total-row td{font-weight:700;background:#f9f9f9;border-top:2px solid #ccc;}
+    .footer{margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}
+    @media print{body{padding:16px;}@page{margin:1cm;}}
+  </style></head><body>
+  <div class="co">J&amp;D Western Electric Ltd</div>
+  <div class="emp">${escP(user.name)}</div>
+  <div class="meta">
+    Pay Period: <strong>${fmtDate(p.start)} — ${fmtDate(p.end)}</strong>&nbsp;&nbsp;·&nbsp;&nbsp;
+    Payday: <strong>${fmtDate(p.payday)}</strong>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Date</th><th>Day</th><th style="text-align:center;">Regular Hrs</th>
+      <th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th>
+      <th>Job #</th><th>Project</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+      ${rows}
+      <tr class="total-row">
+        <td colspan="2">TOTALS (Approved only)</td>
+        <td style="text-align:center;">${(totals.regular||0).toFixed(1)}</td>
+        <td style="text-align:center;">${(totals.ot||0).toFixed(1)}</td>
+        <td style="text-align:center;">${(totals.travel||0).toFixed(1)}</td>
+        <td colspan="3"></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="footer">
+    J&amp;D Western Electric Ltd — Generated on ${now}
+    ${printedByRow}
+  </div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+}
+
+$('btn-print-ts').addEventListener('click', () => {
+  if (!lastTSData) return;
+  const w = window.open('', '_blank', 'width=800,height=700');
+  w.document.write(buildTimesheetPrintHTML(lastTSData, null));
+  w.document.close();
+});
 </script>
 </body>
 </html>

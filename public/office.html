@@ -539,6 +539,7 @@
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="ts-edit-btn" style="background:#2563eb;color:white;">Edit Timesheet</button>
+            <button class="btn btn-sm" id="ts-print-btn" style="background:#1c1c1e;color:white;">🖨 Print</button>
             <button class="btn btn-sm" id="ts-export-one" style="background:#1a6e35;color:white;">Export to Excel</button>
             <button class="btn btn-secondary btn-sm" id="ts-back-list">All Staff</button>
           </div>
@@ -2451,6 +2452,7 @@ $('nav-home').addEventListener('click', e => { e.preventDefault(); showHomeView(
 let tsOffset = null;
 let tsCurrentOffset = null;
 let tsCurrentUserId = null;
+let lastTSDetailData = null; // stored for print
 let tsHasEditAccess = false;
 
 function showTimesheetsView() {
@@ -2497,6 +2499,7 @@ async function loadTSDetail(userId, offset) {
   const res = await fetch(`/api/timesheets/${userId}?offset=${offset ?? tsOffset}`);
   if (!res.ok) return;
   const d = await res.json();
+  lastTSDetailData = d;  // store for print
   tsOffset = d.offset;
   $('ts-period-label').textContent = `Pay Period: ${fmtDate(d.period.start)} — ${fmtDate(d.period.end)} · Payday: ${fmtDate(d.period.payday)}`;
   $('ts-detail-name').textContent = d.user.name;
@@ -2583,6 +2586,87 @@ $('ts-next').addEventListener('click', () => {
 });
 $('ts-export-all').addEventListener('click', () => { window.location = `/api/timesheets/export/all?offset=${tsOffset??0}`; });
 $('ts-export-one').addEventListener('click', () => { if(tsCurrentUserId) window.location = `/api/timesheets/${tsCurrentUserId}/export?offset=${tsOffset??0}`; });
+
+// ── Timesheet print (shared format for admin and field user) ──
+function buildTimesheetPrintHTML(data, printedByName) {
+  const p = data.period;
+  const user = data.user;
+  const days = data.days;
+  const totals = data.totals;
+  const now = new Date().toLocaleString('en-CA',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  function ep(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function fd(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});}
+
+  const rows = days.map(day => {
+    const isPending = day.approval_status === 'pending';
+    const hasHrs = (day.total_hours||0) > 0;
+    const rowStyle = isPending ? 'color:#bbb;background:#fafafa;' : '';
+    const statusCell = isPending
+      ? '<span style="background:#fde8e8;color:#d9342b;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Pending</span>'
+      : (hasHrs ? '<span style="background:#d4edda;color:#155724;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Approved</span>' : '—');
+    return `<tr style="${rowStyle}">
+      <td>${ep(day.date)}</td>
+      <td>${ep(day.dow)}</td>
+      <td style="text-align:center;">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
+      <td style="text-align:center;">${hasHrs?day.overtime_hours.toFixed(1):'—'}</td>
+      <td style="text-align:center;">${(day.travel_hours||0)>0?day.travel_hours.toFixed(1):'—'}</td>
+      <td>${ep(day.job_number||'')}</td>
+      <td style="font-size:11px;">${ep(day.project_name||'')}</td>
+      <td>${statusCell}</td>
+    </tr>`;
+  }).join('');
+
+  const printedByRow = printedByName
+    ? `<p style="margin-top:8px;font-size:10px;color:#888;">Printed by <strong>${ep(printedByName)}</strong> on ${now}</p>`
+    : '';
+
+  return `<!DOCTYPE html><html><head><title>Timesheet — ${ep(user.name)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Arial,Helvetica,sans-serif;padding:32px;color:#111;font-size:13px;}
+    .co{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#888;}
+    .emp{font-size:20px;font-weight:900;margin:6px 0 2px;}
+    .meta{font-size:12px;color:#555;margin-bottom:20px;}
+    table{width:100%;border-collapse:collapse;margin-top:4px;}
+    th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;background:#f5f5f5;padding:6px 8px;border:1px solid #ddd;text-align:left;color:#555;}
+    td{padding:6px 8px;border:1px solid #e5e5e5;vertical-align:middle;}
+    tr.total-row td{font-weight:700;background:#f0f0f0;border-top:2px solid #ccc;}
+    .footer{margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}
+    @media print{body{padding:16px;}@page{margin:1cm;}}
+  </style></head><body>
+  <div class="co">J&amp;D Western Electric Ltd</div>
+  <div class="emp">${ep(user.name)}</div>
+  <div class="meta">
+    Pay Period: <strong>${fd(p.start)} — ${fd(p.end)}</strong>&nbsp;&nbsp;·&nbsp;&nbsp;Payday: <strong>${fd(p.payday)}</strong>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Date</th><th>Day</th>
+      <th style="text-align:center;">Regular Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th>
+      <th>Job #</th><th>Project</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+      ${rows}
+      <tr class="total-row">
+        <td colspan="2">TOTALS (Approved only)</td>
+        <td style="text-align:center;">${(totals.regular||0).toFixed(1)}</td>
+        <td style="text-align:center;">${(totals.ot||0).toFixed(1)}</td>
+        <td style="text-align:center;">${(totals.travel||0).toFixed(1)}</td>
+        <td colspan="3"></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="footer">J&amp;D Western Electric Ltd — Generated on ${now}${printedByRow}</div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+}
+
+$('ts-print-btn').addEventListener('click', () => {
+  if (!lastTSDetailData) return;
+  const w = window.open('', '_blank', 'width=800,height=700');
+  w.document.write(buildTimesheetPrintHTML(lastTSDetailData, currentUser?.name || null));
+  w.document.close();
+});
 $('btn-close-timesheets').addEventListener('click', hideTimesheetsView);
 $('nav-timesheets').addEventListener('click', e => { e.preventDefault(); showTimesheetsView(); });
 
