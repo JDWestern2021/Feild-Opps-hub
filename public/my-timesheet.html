@@ -90,7 +90,7 @@
 
     <div class="day-grid">
       <div class="day-row header">
-        <span>Date</span><span>Day</span><span>Regular</span><span>OT</span><span>Travel</span><span>Job #</span><span>Status</span>
+        <span>Date</span><span>Day</span><span>Regular</span><span>OT</span><span>Travel</span><span>Job / Project</span><span>Status</span>
       </div>
       <div id="day-rows"></div>
     </div>
@@ -163,7 +163,7 @@ async function loadTimesheet(offset){
       <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.regular_hours.toFixed(1):'—'}</span>
       <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</span>
       <span class="hrs-cell" style="${hrsStyle}">${travelHrs>0?travelHrs.toFixed(1):'—'}</span>
-      <span style="font-size:11px;color:var(--gray-500);">${day.job_number||''}</span>
+      <span style="font-size:11px;color:var(--gray-500);">${day.job_number?`Job: ${day.job_number}`:''}${day.project_name?` | Project: ${day.project_name}`:''}</span>
       <span>${statusLabel}</span>
     </div>`;
   }).join('');

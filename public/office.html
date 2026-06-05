@@ -545,7 +545,7 @@
         </div>
         <div style="overflow-x:auto;padding:16px;">
           <table class="po-table" id="ts-day-table">
-            <thead><tr><th>Date</th><th>Day</th><th>Job #</th><th>Project</th><th>Level</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th>Status</th></tr></thead>
+            <thead><tr><th>Date</th><th>Day</th><th colspan="2">Job / Project</th><th>Level</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th>Status</th></tr></thead>
             <tbody id="ts-day-tbody"></tbody>
           </table>
         </div>
@@ -677,6 +677,11 @@
         <button class="proj-tab" id="ptab-complete" data-status="complete">Completed Projects</button>
         <button class="proj-tab" id="ptab-archived-proj" data-status="archived">Archived Projects</button>
       </div>
+      <!-- Bulk actions bar for archived projects (visible only when archived tab active + items checked) -->
+      <div class="po-bulk-bar" id="proj-bulk-bar" style="margin-bottom:10px;">
+        <span class="sel-count" id="proj-bulk-count">0 selected</span>
+        <button class="btn btn-danger btn-sm" id="btn-delete-selected-projects">🗑 Delete Selected</button>
+      </div>
       <div id="project-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
     </div>
 
@@ -723,6 +728,11 @@
         <span class="badge badge-gray" id="archived-count-badge">0</span>
       </div>
       <button class="btn btn-secondary btn-sm" id="btn-hide-archive">Hide Archived</button>
+    </div>
+    <!-- Bulk actions for archived tickets -->
+    <div class="po-bulk-bar" id="arch-ticket-bulk-bar" style="margin-bottom:10px;">
+      <span class="sel-count" id="arch-ticket-bulk-count">0 selected</span>
+      <button class="btn btn-danger btn-sm" id="btn-delete-selected-tickets">🗑 Delete Selected</button>
     </div>
     <div id="archive-list" class="ticket-list"></div>
     <div class="pagination" id="archive-pagination"></div>
@@ -1008,6 +1018,7 @@ function renderTickets(tickets, isArchived = false, listId = 'ticket-list') {
         <div class="hrs-sub">hrs${totalOT > 0 ? `&nbsp;<span class="ot-badge">+${totalOT.toFixed(1)}OT</span>` : ''}</div>
       </div>
       <div class="ticket-actions">
+        ${isArchived ? `<input type="checkbox" class="po-cb arch-ticket-cb" data-id="${t.id}" style="width:14px;height:14px;accent-color:var(--orange);margin-right:4px;" onchange="updateArchTicketBulkBar()"/>` : ''}
         <button class="btn btn-ghost btn-sm" data-id="${t.id}" data-archived="${isArchived ? 1 : 0}" data-action="view">View</button>
         ${isArchived ? `
           <button class="btn btn-sm" data-id="${t.id}" data-action="restore" style="background:#2563eb;color:white;font-size:12px;">Restore</button>
@@ -1085,6 +1096,33 @@ document.addEventListener('click', e => {
   sel.addEventListener('blur', () => { setTimeout(() => { if(document.contains(sel)) sel.replaceWith(btn); }, 200); });
   btn.replaceWith(sel);
   sel.focus();
+});
+
+// ── Bulk delete archived tickets ──
+function updateArchTicketBulkBar() {
+  const checked = document.querySelectorAll('.arch-ticket-cb:checked');
+  const bar = $('arch-ticket-bulk-bar');
+  if (checked.length > 0) {
+    bar.classList.add('visible');
+    $('arch-ticket-bulk-count').textContent = `${checked.length} selected`;
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+
+$('btn-delete-selected-tickets').addEventListener('click', async () => {
+  const checked = Array.from(document.querySelectorAll('.arch-ticket-cb:checked'));
+  if (!checked.length) return;
+  if (!confirm(`⚠ Permanently delete ${checked.length} archived ticket${checked.length!==1?'s':''}?\n\nThis cannot be undone. All ticket data will be gone forever.`)) return;
+  let deleted = 0;
+  for (const cb of checked) {
+    const res = await fetch(`/api/tickets/${cb.dataset.id}`, { method: 'DELETE' });
+    if (res.ok) deleted++;
+  }
+  showToast(`${deleted} ticket${deleted!==1?'s':''} permanently deleted`, 'success');
+  $('arch-ticket-bulk-bar').classList.remove('visible');
+  loadArchived(currentPage);
+  loadStats();
 });
 
 async function restoreTicket(id) {
@@ -1583,11 +1621,38 @@ let editingProjectId = null;
 $('ptab-active').addEventListener('click', () => switchProjectListTab('active'));
 $('ptab-complete').addEventListener('click', () => switchProjectListTab('complete'));
 $('ptab-archived-proj').addEventListener('click', () => switchProjectListTab('archived'));
+
+function updateProjBulkBar() {
+  const checked = document.querySelectorAll('.proj-archive-cb:checked');
+  const bar = $('proj-bulk-bar');
+  if (projectListStatus === 'archived' && checked.length > 0) {
+    bar.classList.add('visible');
+    $('proj-bulk-count').textContent = `${checked.length} selected`;
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+
+$('btn-delete-selected-projects').addEventListener('click', async () => {
+  const checked = Array.from(document.querySelectorAll('.proj-archive-cb:checked'));
+  if (!checked.length) return;
+  const names = checked.map(cb => cb.dataset.projName).join('\n  • ');
+  if (!confirm(`⚠ Permanently delete ${checked.length} archived project${checked.length!==1?'s':''}?\n\n  • ${names}\n\nThis cannot be undone. All project records will be removed. Linked time tickets and POs will lose their project association but will NOT be deleted.`)) return;
+  let deleted = 0;
+  for (const cb of checked) {
+    const res = await fetch(`/api/project-folders/${cb.dataset.projId}`, { method: 'DELETE' });
+    if (res.ok) deleted++;
+  }
+  showToast(`${deleted} project${deleted!==1?'s':''} permanently deleted`, 'success');
+  updateProjBulkBar();
+  loadProjects();
+});
 function switchProjectListTab(status) {
   projectListStatus = status;
   $('ptab-active').classList.toggle('active', status === 'active');
   $('ptab-complete').classList.toggle('active', status === 'complete');
   $('ptab-archived-proj').classList.toggle('active', status === 'archived');
+  if (status !== 'archived') $('proj-bulk-bar').classList.remove('visible');
   loadProjects();
 }
 
@@ -1626,9 +1691,13 @@ async function loadProjects() {
           ${p.status === 'archived' ? `<span style="color:#888;">Archived</span>` : ''}
         </div>
         ${projectListStatus === 'archived' ? `
-          <div style="margin-top:10px;display:flex;gap:8px;" onclick="event.stopPropagation()">
-            <button class="btn btn-sm" data-proj-id="${p.id}" data-action="proj-restore" style="background:#2563eb;color:white;font-size:12px;">Restore</button>
-            <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-open" style="font-size:12px;">View</button>
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px;" onclick="event.stopPropagation()">
+            <input type="checkbox" class="po-cb proj-archive-cb" data-proj-id="${p.id}" data-proj-name="${esc(p.name)}" style="width:15px;height:15px;accent-color:var(--orange);margin-top:2px;flex-shrink:0;" onchange="updateProjBulkBar()"/>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-sm" data-proj-id="${p.id}" data-action="proj-restore" style="background:#2563eb;color:white;font-size:12px;">Restore</button>
+              <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-edit-arch" style="font-size:12px;">Edit</button>
+              <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-open" style="font-size:12px;">View</button>
+            </div>
           </div>` : ''}
       </div>`;
     }).join('');
@@ -1644,6 +1713,16 @@ async function loadProjects() {
     $('project-cards').querySelectorAll('[data-action="proj-open"]').forEach(btn => {
       btn.addEventListener('click', e => { e.stopPropagation(); openProject(parseInt(btn.dataset.projId)); });
     });
+    $('project-cards').querySelectorAll('[data-action="proj-edit-arch"]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const res = await fetch(`/api/project-folders/${btn.dataset.projId}`);
+        const d = await res.json();
+        openProjectModal(d.project);
+      });
+    });
+    // Reset bulk bar when switching tabs
+    updateProjBulkBar();
   } catch {
     $('project-cards').innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>Error loading projects</h3></div>`;
   }
@@ -2402,7 +2481,7 @@ async function loadTSDetail(userId, offset) {
     if (editing && tsHasEditAccess) {
       return `<tr data-date="${day.date}" style="${rowBg}">
         <td>${day.date}</td><td>${day.dow}</td>
-        <td>${esc(day.job_number||'')}</td><td style="font-size:12px;">${esc(day.project_name||'')}</td><td style="font-size:12px;">${esc(day.level||'')}</td>
+        <td colspan="2">${day.job_number?`Job: ${esc(day.job_number)}`:''}${day.project_name?` | Project: ${esc(day.project_name)}`:''}</td><td style="font-size:12px;">${esc(day.level||'')}</td>
         <td><input type="number" class="form-control ts-edit-reg"    value="${day.regular_hours}"  min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:65px;"/></td>
         <td><input type="number" class="form-control ts-edit-ot"     value="${day.overtime_hours}" min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:65px;"/></td>
         <td><input type="number" class="form-control ts-edit-travel" value="${travelHrs}"          min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:65px;" placeholder="0"/></td>
@@ -2411,8 +2490,7 @@ async function loadTSDetail(userId, offset) {
     }
     return `<tr style="${rowBg}">
       <td>${day.date}</td><td>${day.dow}</td>
-      <td style="font-size:12px;">${esc(day.job_number||'')}</td>
-      <td style="font-size:12px;color:var(--gray-500);">${esc(day.project_name||'')}</td>
+      <td style="font-size:12px;" colspan="2">${day.job_number?`<span>Job: ${esc(day.job_number)}</span>`:''}${day.project_name?`<span style="color:var(--gray-500);"> | Project: ${esc(day.project_name)}</span>`:''}</td>
       <td style="font-size:12px;color:var(--gray-500);">${esc(day.level||'')}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</td>
@@ -2574,6 +2652,7 @@ $('stat-archive-card').addEventListener('click', () => {
 $('btn-hide-archive').addEventListener('click', () => {
   archiveVisible = false;
   $('archive-section').style.display = 'none';
+  $('arch-ticket-bulk-bar').classList.remove('visible');
   if ($('btn-show-ticket-archive')) $('btn-show-ticket-archive').textContent = 'Archived Tickets';
 });
 

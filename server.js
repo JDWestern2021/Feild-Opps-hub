@@ -1068,6 +1068,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
       const travelFromTickets = entries.reduce((s,e)=>s+(parseFloat(e.travel_hours)||0),0);
       days.push({ date: dateStr, dow,
         regular_hours: reg, overtime_hours: ot, travel_hours: travelFromTickets,
+        total_hours: reg + ot + travelFromTickets,
         approval_status: 'entered', source: 'manual',
         job_number: first.job_number||'', job_name: first.job_name||'',
         project_name: first.project_name||'', level: first.level||'',
@@ -1088,6 +1089,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
       const first = entries[0];
       days.push({ date: dateStr, dow,
         regular_hours: dayReg, overtime_hours: dayOT, travel_hours: dayTravel,
+        total_hours: dayReg + dayOT + dayTravel,
         approval_status: approvalStatus, source: 'ticket',
         job_number: entries.map(e=>e.job_number||'').filter(Boolean).join(', '),
         job_name:   entries.map(e=>e.job_name||'').filter(Boolean).join(', '),
@@ -1097,7 +1099,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
         supervisor: first.supervisor, updated_at: first.updated_at, entries });
     } else {
       days.push({ date: dateStr, dow,
-        regular_hours: 0, overtime_hours: 0, travel_hours: 0,
+        regular_hours: 0, overtime_hours: 0, travel_hours: 0, total_hours: 0,
         approval_status: 'none', source: 'none', entries: [] });
     }
   }
@@ -1184,7 +1186,7 @@ app.get('/api/timesheets/export/all', requireAdmin, async (req, res) => {
     const rows = [['J&D Western Electric Ltd — Employee Timesheet'],[`Employee: ${ts.user.name}`],[`Pay Period: ${period.start} to ${period.end}`,`Payday: ${period.payday}`],[],
       ['Date','Day','Regular Hours','OT Hours','Travel Hours','Source','Job #','Project'],
       ...ts.days.map(d=>[d.date,d.dow,d.regular_hours,d.overtime_hours,d.travel_hours||0,d.source==='manual'?'Manually Edited':d.source==='ticket'?'Auto from Time Ticket':'No Entry',d.job_number||'',d.project_name||'']),
-      [],['TOTALS','',ts.totals.regular,ts.totals.ot,ts.totals.total]];
+      [['TOTALS','',ts.totals.regular,ts.totals.ot,ts.totals.travel||0]]];
     const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:12},{wch:6},{wch:14},{wch:10},{wch:12},{wch:22},{wch:12},{wch:24}];
     XLSX.utils.book_append_sheet(wb,ws,ts.user.name.slice(0,31));
   }
