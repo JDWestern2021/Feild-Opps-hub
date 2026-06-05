@@ -1285,8 +1285,9 @@ async function openDetail(id, isArchived = false) {
       };
     }
 
-    const totalReg = t.employees.reduce((s, e) => s + e.regular_hours, 0);
-    const totalOT  = t.employees.reduce((s, e) => s + e.overtime_hours, 0);
+    const totalReg    = t.employees.reduce((s, e) => s + (e.regular_hours||0), 0);
+    const totalOT     = t.employees.reduce((s, e) => s + (e.overtime_hours||0), 0);
+    const totalTravel = t.employees.reduce((s, e) => s + (e.travel_hours||0), 0);
 
     $('modal-body').innerHTML = `
       <div class="ticket-detail-subhead">Project: ${t.project_name ? esc(t.project_name) : 'No Project Assigned'}<span class="sep">·</span>Job Number: ${t.job_number ? esc(t.job_number) : '—'}</div>
@@ -1321,22 +1322,24 @@ async function openDetail(id, isArchived = false) {
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--orange);margin-bottom:10px;">Crew & Hours</div>
       <table class="crew-table">
         <thead>
-          <tr><th>Employee</th><th>Level</th><th>Regular Hrs</th><th>OT Hrs</th><th>Total</th></tr>
+          <tr><th>Employee</th><th>Level</th><th>Regular Hrs</th><th>OT Hrs</th><th>Travel Hrs</th><th>Total</th></tr>
         </thead>
         <tbody>
           ${t.employees.map(e => `
             <tr>
               <td>${esc(e.employee_name)}</td>
               <td style="font-size:12px;color:var(--gray-500);">${esc(e.level || 'Journeyman')}</td>
-              <td>${e.regular_hours.toFixed(1)}</td>
-              <td>${e.overtime_hours > 0 ? `<span style="color:var(--orange);font-weight:600;">${e.overtime_hours.toFixed(1)}</span>` : '0.0'}</td>
-              <td><strong>${(e.regular_hours + e.overtime_hours).toFixed(1)}</strong></td>
+              <td>${(e.regular_hours||0).toFixed(1)}</td>
+              <td>${(e.overtime_hours||0) > 0 ? `<span style="color:var(--orange);font-weight:600;">${(e.overtime_hours).toFixed(1)}</span>` : '0.0'}</td>
+              <td style="color:var(--gray-500);">${(e.travel_hours||0) > 0 ? (e.travel_hours).toFixed(1) : '—'}</td>
+              <td><strong>${((e.regular_hours||0) + (e.overtime_hours||0) + (e.travel_hours||0)).toFixed(1)}</strong></td>
             </tr>`).join('')}
           <tr class="total-row">
             <td>TOTAL</td><td></td>
             <td>${totalReg.toFixed(1)}</td>
             <td>${totalOT.toFixed(1)}</td>
-            <td>${(totalReg + totalOT).toFixed(1)}</td>
+            <td>${totalTravel > 0 ? totalTravel.toFixed(1) : '—'}</td>
+            <td>${(totalReg + totalOT + totalTravel).toFixed(1)}</td>
           </tr>
         </tbody>
       </table>
@@ -1660,8 +1663,9 @@ let currentTicketData = null;
 $('modal-print').addEventListener('click', () => {
   if (!currentTicketData) return;
   const t = currentTicketData;
-  const totalReg = t.employees.reduce((s,e) => s + e.regular_hours, 0);
-  const totalOT  = t.employees.reduce((s,e) => s + e.overtime_hours, 0);
+  const totalReg    = t.employees.reduce((s,e) => s + (e.regular_hours||0), 0);
+  const totalOT     = t.employees.reduce((s,e) => s + (e.overtime_hours||0), 0);
+  const totalTravel = t.employees.reduce((s,e) => s + (e.travel_hours||0), 0);
   const w = window.open('', '_blank', 'width=800,height=600');
   w.document.write(`<!DOCTYPE html><html><head><title>${t.ticket_number}</title>
   <style>
@@ -1690,10 +1694,10 @@ $('modal-print').addEventListener('click', () => {
   </div>
   <div class="section-title">Crew & Hours</div>
   <table>
-    <thead><tr><th>Employee</th><th>Level</th><th>Regular Hrs</th><th>OT Hrs</th><th>Total</th></tr></thead>
+    <thead><tr><th>Employee</th><th>Level</th><th>Regular Hrs</th><th>OT Hrs</th><th>Travel Hrs</th><th>Total</th></tr></thead>
     <tbody>
-      ${t.employees.map(e => `<tr><td>${esc(e.employee_name)}</td><td>${esc(e.level||'Journeyman')}</td><td>${e.regular_hours.toFixed(1)}</td><td>${e.overtime_hours.toFixed(1)}</td><td>${(e.regular_hours+e.overtime_hours).toFixed(1)}</td></tr>`).join('')}
-      <tr class="total-row"><td>TOTAL</td><td></td><td>${totalReg.toFixed(1)}</td><td>${totalOT.toFixed(1)}</td><td>${(totalReg+totalOT).toFixed(1)}</td></tr>
+      ${t.employees.map(e => `<tr><td>${esc(e.employee_name)}</td><td>${esc(e.level||'Journeyman')}</td><td>${(e.regular_hours||0).toFixed(1)}</td><td>${(e.overtime_hours||0).toFixed(1)}</td><td>${(e.travel_hours||0)>0?(e.travel_hours).toFixed(1):'—'}</td><td>${((e.regular_hours||0)+(e.overtime_hours||0)+(e.travel_hours||0)).toFixed(1)}</td></tr>`).join('')}
+      <tr class="total-row"><td>TOTAL</td><td></td><td>${totalReg.toFixed(1)}</td><td>${totalOT.toFixed(1)}</td><td>${totalTravel>0?totalTravel.toFixed(1):'—'}</td><td>${(totalReg+totalOT+totalTravel).toFixed(1)}</td></tr>
     </tbody>
   </table>
   <div class="section-title">Work Description</div>
@@ -2215,9 +2219,9 @@ function printMultipleTickets(tickets, projName) {
       <div class="lbl">Date</div><div class="val">${fmtDate(t.date)}</div>
       <div class="lbl">Job</div><div class="val">${esc(t.job_name)}${t.job_number?' (#'+esc(t.job_number)+')':''}</div>
       <div class="lbl">Supervisor</div><div class="val">${esc(t.supervisor)}</div>
-      <table><thead><tr><th>Employee</th><th>Level</th><th>Reg Hrs</th><th>OT Hrs</th></tr></thead>
-      <tbody>${(t.employees||[]).map(e=>`<tr><td>${esc(e.name||e.employee_name)}</td><td>${esc(e.level||'')}</td><td>${e.regular_hours}</td><td>${e.overtime_hours}</td></tr>`).join('')}
-      <tr><td><strong>TOTAL</strong></td><td></td><td>${reg.toFixed(1)}</td><td>${ot.toFixed(1)}</td></tr></tbody></table>
+      <table><thead><tr><th>Employee</th><th>Level</th><th>Reg Hrs</th><th>OT Hrs</th><th>Travel Hrs</th></tr></thead>
+      <tbody>${(t.employees||[]).map(e=>`<tr><td>${esc(e.name||e.employee_name)}</td><td>${esc(e.level||'')}</td><td>${(e.regular_hours||0).toFixed(1)}</td><td>${(e.overtime_hours||0).toFixed(1)}</td><td>${(e.travel_hours||0)>0?(e.travel_hours).toFixed(1):'—'}</td></tr>`).join('')}
+      <tr><td><strong>TOTAL</strong></td><td></td><td>${reg.toFixed(1)}</td><td>${ot.toFixed(1)}</td><td>${(t.employees||[]).reduce((s,e)=>s+(e.travel_hours||0),0)>0?(t.employees||[]).reduce((s,e)=>s+(e.travel_hours||0),0).toFixed(1):'—'}</td></tr></tbody></table>
       <div class="lbl">Work Description</div><div class="val" style="white-space:pre-wrap;">${esc(t.work_description)}</div>
       ${t.equipment_used?`<div class="lbl">Equipment</div><div class="val">${esc(t.equipment_used)}</div>`:''}
       ${t.notes?`<div class="lbl">Notes</div><div class="val">${esc(t.notes)}</div>`:''}
