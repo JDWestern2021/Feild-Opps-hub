@@ -512,7 +512,7 @@
         <div class="card-header"><h2 style="font-size:15px;font-weight:700;">All Employees — Current Period</h2></div>
         <div style="overflow-x:auto;">
           <table class="po-table">
-            <thead><tr><th>Employee</th><th style="text-align:center;">Regular Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Total Hrs</th><th></th></tr></thead>
+            <thead><tr><th>Employee</th><th style="text-align:center;">Regular Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th style="font-size:11px;color:var(--gray-400);">Pending</th><th></th></tr></thead>
             <tbody id="ts-staff-tbody"></tbody>
           </table>
         </div>
@@ -545,7 +545,7 @@
         </div>
         <div style="overflow-x:auto;padding:16px;">
           <table class="po-table" id="ts-day-table">
-            <thead><tr><th>Date</th><th>Day</th><th>Job #</th><th>Project</th><th>Level</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Total</th><th>Status</th></tr></thead>
+            <thead><tr><th>Date</th><th>Day</th><th>Job #</th><th>Project</th><th>Level</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th>Status</th></tr></thead>
             <tbody id="ts-day-tbody"></tbody>
           </table>
         </div>
@@ -2352,13 +2352,16 @@ async function loadTSList(offset) {
   $('ts-offset-label').textContent = `Period ${d.offset >= 0 ? '+'+d.offset : d.offset}`;
   $('ts-next').disabled = false;
   $('ts-staff-tbody').innerHTML = d.summaries.map(u => {
-    const hasPending = (u.pending_regular||0)+(u.pending_ot||0) > 0;
+    const pendTotal = (u.pending_regular||0)+(u.pending_ot||0)+(u.pending_travel||0);
+    const hasPending = pendTotal > 0;
+    const anyHours = (u.regular_hours||0)+(u.overtime_hours||0)+(u.travel_hours||0) > 0 || hasPending;
+    const color = anyHours ? 'color:var(--green);font-weight:700;' : 'color:var(--gray-400);';
     return `<tr style="cursor:pointer;" onclick="loadTSDetail(${u.id},${d.offset})">
       <td><strong>${esc(u.name)}</strong></td>
-      <td style="text-align:center;color:var(--green);font-weight:700;">${(u.regular_hours||0).toFixed(1)}</td>
-      <td style="text-align:center;color:var(--green);font-weight:700;">${(u.overtime_hours||0).toFixed(1)}</td>
-      <td style="text-align:center;font-weight:800;">${(u.total_hours||0).toFixed(1)}</td>
-      <td>${hasPending?`<span class="spill spill-pending" style="font-size:10px;">${((u.pending_regular||0)+(u.pending_ot||0)).toFixed(1)} pending</span>`:''}</td>
+      <td style="text-align:center;${color}">${(u.regular_hours||0).toFixed(1)}</td>
+      <td style="text-align:center;${color}">${(u.overtime_hours||0).toFixed(1)}</td>
+      <td style="text-align:center;${color}">${(u.travel_hours||0).toFixed(1)}</td>
+      <td style="text-align:center;">${hasPending?`<span style="font-size:11px;color:#bbb;">${pendTotal.toFixed(1)}</span>`:''}</td>
       <td><button class="btn btn-ghost btn-sm">View →</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--gray-500);">No employees found.</td></tr>';
@@ -2374,8 +2377,9 @@ async function loadTSDetail(userId, offset) {
   tsOffset = d.offset;
   $('ts-period-label').textContent = `Pay Period: ${fmtDate(d.period.start)} — ${fmtDate(d.period.end)} · Payday: ${fmtDate(d.period.payday)}`;
   $('ts-detail-name').textContent = d.user.name;
-  const pendText = d.pending_totals?.total > 0 ? ` · <span style="color:#aaa;">${d.pending_totals.total.toFixed(1)} hrs pending (not counted)</span>` : '';
-  $('ts-detail-totals').innerHTML = `<span style="color:var(--green);font-weight:700;">Approved — Reg: ${d.totals.regular.toFixed(1)} · OT: ${d.totals.ot.toFixed(1)} · Total: ${d.totals.total.toFixed(1)} hrs</span>${pendText}`;
+  const pt = d.pending_totals||{};
+  const pendText = (pt.total||0) > 0 ? ` · <span style="color:#bbb;font-size:12px;">${(pt.regular||0).toFixed(1)} reg / ${(pt.ot||0).toFixed(1)} OT / ${(pt.travel||0).toFixed(1)} travel pending (not counted)</span>` : '';
+  $('ts-detail-totals').innerHTML = `<span style="color:var(--green);font-weight:700;">Approved — Reg: ${d.totals.regular.toFixed(1)} · OT: ${d.totals.ot.toFixed(1)} · Travel: ${(d.totals.travel||0).toFixed(1)} hrs</span>${pendText}`;
   $('ts-edit-btn').style.display = tsHasEditAccess ? '' : 'none';
 
   const editing = $('ts-day-tbody').dataset.editing === '1';
@@ -2394,13 +2398,14 @@ async function loadTSDetail(userId, offset) {
           : '';
     const editedStamp = day.edited_by_name ? `<div style="font-size:10px;color:#888;margin-top:2px;">Edited by ${esc(day.edited_by_name)}</div>` : day.updated_at && isEntered ? `<div style="font-size:10px;color:#888;margin-top:2px;">Updated ${fmtDateTime(day.updated_at)}</div>` : '';
 
+    const travelHrs = day.travel_hours || 0;
     if (editing && tsHasEditAccess) {
       return `<tr data-date="${day.date}" style="${rowBg}">
         <td>${day.date}</td><td>${day.dow}</td>
         <td>${esc(day.job_number||'')}</td><td style="font-size:12px;">${esc(day.project_name||'')}</td><td style="font-size:12px;">${esc(day.level||'')}</td>
-        <td><input type="number" class="form-control ts-edit-reg" value="${day.regular_hours}" min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:70px;"/></td>
-        <td><input type="number" class="form-control ts-edit-ot"  value="${day.overtime_hours}" min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:70px;"/></td>
-        <td>${(day.regular_hours+day.overtime_hours).toFixed(1)}</td>
+        <td><input type="number" class="form-control ts-edit-reg"    value="${day.regular_hours}"  min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:65px;"/></td>
+        <td><input type="number" class="form-control ts-edit-ot"     value="${day.overtime_hours}" min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:65px;"/></td>
+        <td><input type="number" class="form-control ts-edit-travel" value="${travelHrs}"          min="0" max="24" step="0.5" style="padding:4px 8px;font-size:13px;width:65px;" placeholder="0"/></td>
         <td>${statusBadge}</td>
       </tr>`;
     }
@@ -2411,7 +2416,7 @@ async function loadTSDetail(userId, offset) {
       <td style="font-size:12px;color:var(--gray-500);">${esc(day.level||'')}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</td>
-      <td style="text-align:center;${hrsColor}">${hasHrs?day.total_hours.toFixed(1):'—'}</td>
+      <td style="text-align:center;${hrsColor}">${travelHrs>0?travelHrs.toFixed(1):'—'}</td>
       <td>${statusBadge}${editedStamp}</td>
     </tr>`;
   }).join('');
@@ -2425,11 +2430,12 @@ $('ts-edit-btn').addEventListener('click', async () => {
     let saved = 0;
     for (const row of rows) {
       const date = row.dataset.date;
-      const reg  = parseFloat(row.querySelector('.ts-edit-reg')?.value)||0;
-      const ot   = parseFloat(row.querySelector('.ts-edit-ot')?.value)||0;
+      const reg    = parseFloat(row.querySelector('.ts-edit-reg')?.value)||0;
+      const ot     = parseFloat(row.querySelector('.ts-edit-ot')?.value)||0;
+      const travel = parseFloat(row.querySelector('.ts-edit-travel')?.value)||0;
       await fetch(`/api/timesheets/${tsCurrentUserId}/${date}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ regular_hours: reg, overtime_hours: ot })
+        body: JSON.stringify({ regular_hours: reg, overtime_hours: ot, travel_hours: travel })
       });
       saved++;
     }

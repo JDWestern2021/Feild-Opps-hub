@@ -232,6 +232,7 @@
                 <th class="hrs-col" style="text-align:center;">Level</th>
                 <th class="hrs-col" style="text-align:center;">Reg Hrs</th>
                 <th class="hrs-col" style="text-align:center;">OT Hrs</th>
+                <th class="hrs-col" style="text-align:center;">Travel Hrs</th>
                 <th></th>
               </tr>
             </thead>
@@ -408,7 +409,7 @@
     return base + opts;
   }
 
-  function addEmployeeRow(name = '', reg = '', ot = '', level = 'Journeyman', userId = '') {
+  function addEmployeeRow(name = '', reg = '', ot = '', level = 'Journeyman', userId = '', travel = '') {
     empCount++;
     const id = empCount;
     const tbody = $('employee-rows');
@@ -432,6 +433,9 @@
         <input type="number" class="form-control hrs-input emp-ot" placeholder="0" min="0" max="24" step="0.5" value="${ot}"/>
       </td>
       <td>
+        <input type="number" class="form-control hrs-input emp-travel" placeholder="0" min="0" max="24" step="0.5" value="${travel}" title="Travel Time Hours (optional)"/>
+      </td>
+      <td>
         <button type="button" class="btn-remove-emp" title="Remove row">×</button>
       </td>
     `;
@@ -439,7 +443,7 @@
       tr.remove();
       updateHoursSummary();
     });
-    tr.querySelectorAll('.emp-reg, .emp-ot').forEach(i => i.addEventListener('input', updateHoursSummary));
+    tr.querySelectorAll('.emp-reg, .emp-ot, .emp-travel').forEach(i => i.addEventListener('input', updateHoursSummary));
     tbody.appendChild(tr);
     updateHoursSummary();
     return tr;
@@ -448,9 +452,11 @@
   function updateHoursSummary() {
     const rows = document.querySelectorAll('.employee-row');
     let reg = 0, ot = 0;
+    let travel = 0;
     rows.forEach(r => {
-      reg += parseFloat(r.querySelector('.emp-reg').value) || 0;
-      ot  += parseFloat(r.querySelector('.emp-ot').value)  || 0;
+      reg    += parseFloat(r.querySelector('.emp-reg').value)    || 0;
+      ot     += parseFloat(r.querySelector('.emp-ot').value)     || 0;
+      travel += parseFloat(r.querySelector('.emp-travel')?.value) || 0;
     });
     const summary = $('hours-summary');
     if (rows.length > 0) {
@@ -506,8 +512,9 @@
         name,
         user_id: uid ? parseInt(uid) : null,
         level: r.querySelector('.emp-level').value,
-        regular_hours: parseFloat(r.querySelector('.emp-reg').value) || 0,
-        overtime_hours: parseFloat(r.querySelector('.emp-ot').value) || 0
+        regular_hours:  parseFloat(r.querySelector('.emp-reg').value)    || 0,
+        overtime_hours: parseFloat(r.querySelector('.emp-ot').value)     || 0,
+        travel_hours:   parseFloat(r.querySelector('.emp-travel')?.value) || 0
       });
     });
     const empErr = $('err-employees');

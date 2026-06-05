@@ -156,8 +156,10 @@ async function initSchema() {
       date               TEXT NOT NULL,
       regular_hours      REAL DEFAULT 0,
       overtime_hours     REAL DEFAULT 0,
+      travel_hours       REAL DEFAULT 0,
       original_regular   REAL DEFAULT 0,
       original_ot        REAL DEFAULT 0,
+      original_travel    REAL DEFAULT 0,
       edited_by_id       INTEGER,
       edited_by_name     TEXT,
       edit_reason        TEXT,
@@ -169,6 +171,8 @@ async function initSchema() {
   await pool.query(`INSERT INTO payroll_config (id, cycle_start_date, period_days) VALUES (1, '2026-05-25', 14) ON CONFLICT DO NOTHING`);
   // Add user_id column to ticket_employees if missing
   await pool.query(`ALTER TABLE ticket_employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  // Add travel_hours column to ticket_employees
+  await pool.query(`ALTER TABLE ticket_employees ADD COLUMN IF NOT EXISTS travel_hours REAL DEFAULT 0`);
   console.log('  ✓ Database schema ready');
 }
 

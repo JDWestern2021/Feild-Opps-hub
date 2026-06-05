@@ -24,7 +24,7 @@
     .dates-bar .date-item { font-size:12px; color:rgba(255,255,255,.5); }
     .dates-bar .date-item strong { color:var(--orange); }
     .day-grid { background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
-    .day-row { display:grid; grid-template-columns:90px 44px 80px 60px 60px 90px 1fr; align-items:center; padding:10px 16px; border-bottom:1px solid var(--gray-100); font-size:13px; gap:8px; }
+    .day-row { display:grid; grid-template-columns:90px 44px 80px 60px 60px 70px 90px 1fr; align-items:center; padding:10px 16px; border-bottom:1px solid var(--gray-100); font-size:13px; gap:8px; }
     .day-row:last-child { border-bottom:none; }
     .day-row.header { background:var(--gray-50); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-500); padding:8px 16px; }
     .day-row.weekend { background:#fafafa; }
@@ -80,7 +80,7 @@
     <div class="totals-bar">
       <div class="tot"><div class="tot-val" id="tot-reg">—</div><div class="tot-lbl">Regular Hrs</div></div>
       <div class="tot"><div class="tot-val" id="tot-ot">—</div><div class="tot-lbl">OT Hrs</div></div>
-      <div class="tot"><div class="tot-val" id="tot-total">—</div><div class="tot-lbl">Total Hrs</div></div>
+      <div class="tot"><div class="tot-val" id="tot-travel">—</div><div class="tot-lbl">Travel Hrs</div></div>
     </div>
 
     <div class="dates-bar">
@@ -90,7 +90,7 @@
 
     <div class="day-grid">
       <div class="day-row header">
-        <span>Date</span><span>Day</span><span>Regular</span><span>OT</span><span>Total</span><span>Job #</span><span>Status</span>
+        <span>Date</span><span>Day</span><span>Regular</span><span>OT</span><span>Travel</span><span>Job #</span><span>Status</span>
       </div>
       <div id="day-rows"></div>
     </div>
@@ -136,9 +136,9 @@ async function loadTimesheet(offset){
   $('cutoff-date').textContent=fmtDate(d.period.cutoff);
   $('payday-date').textContent=fmtDate(d.period.payday);
   // Only show approved (Entered) hours in totals
-  $('tot-reg').textContent=d.totals.regular.toFixed(1);
-  $('tot-ot').textContent=d.totals.ot.toFixed(1);
-  $('tot-total').textContent=d.totals.total.toFixed(1);
+  $('tot-reg').textContent   = d.totals.regular.toFixed(1);
+  $('tot-ot').textContent    = d.totals.ot.toFixed(1);
+  $('tot-travel').textContent= (d.totals.travel||0).toFixed(1);
   $('btn-prev-period').disabled=false;
   $('btn-next-period').disabled=d.offset>=d.current_offset;
 
@@ -156,12 +156,13 @@ async function loadTimesheet(offset){
           :'';
     const rowClass=`day-row${weekend?' weekend':''}${isPending?' pending':isEntered?' entered':hasHrs?'':' no-hours'}`;
     const hrsStyle=isPending?'color:#bbb;':isEntered?'color:#155724;font-weight:700;':'color:var(--gray-400);';
+    const travelHrs = day.travel_hours || 0;
     return `<div class="${rowClass}">
       <span class="day-name${weekend?' weekend':''}">${day.date}</span>
       <span>${day.dow}</span>
       <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.regular_hours.toFixed(1):'—'}</span>
       <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</span>
-      <span class="hrs-cell" style="${hrsStyle}">${hasHrs?day.total_hours.toFixed(1):'—'}</span>
+      <span class="hrs-cell" style="${hrsStyle}">${travelHrs>0?travelHrs.toFixed(1):'—'}</span>
       <span style="font-size:11px;color:var(--gray-500);">${day.job_number||''}</span>
       <span>${statusLabel}</span>
     </div>`;

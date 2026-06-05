@@ -62,10 +62,16 @@ function parseEmployeesRaw(raw) {
   if (!raw) return [];
   return raw.split('||').map(e => {
     const parts = e.split(':');
-    return { name: parts[0], regular_hours: parseFloat(parts[1])||0, overtime_hours: parseFloat(parts[2])||0, level: parts[3]||'Journeyman' };
+    return {
+      name: parts[0],
+      regular_hours:  parseFloat(parts[1])||0,
+      overtime_hours: parseFloat(parts[2])||0,
+      level:          parts[3]||'Journeyman',
+      travel_hours:   parseFloat(parts[4])||0,
+    };
   });
 }
-const EMP_SELECT = `e.employee_name||':'||e.regular_hours||':'||e.overtime_hours||':'||COALESCE(e.level,'Journeyman')`;
+const EMP_SELECT = `e.employee_name||':'||e.regular_hours||':'||e.overtime_hours||':'||COALESCE(e.level,'Journeyman')||':'||COALESCE(e.travel_hours,0)`;
 
 function generateTicketNumber() {
   return `JDW-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(1000+Math.random()*9000)}`;
@@ -428,8 +434,8 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
     const tid = rows[0].id;
     for (const e of employees) {
       if (e.name?.trim()) await client.query(
-        'INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level,user_id) VALUES ($1,$2,$3,$4,$5,$6)',
-        [tid, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman', e.user_id||null]
+        'INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level,user_id,travel_hours) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [tid, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman', e.user_id||null, parseFloat(e.travel_hours)||0]
       );
     }
     await client.query('COMMIT');
@@ -516,8 +522,8 @@ app.put('/api/tickets/:id', requireAdmin, async (req, res) => {
       [date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,new Date().toISOString(),resolvedPid,resolvedStatus,req.params.id]);
     await client.query('DELETE FROM ticket_employees WHERE ticket_id=$1',[req.params.id]);
     for (const e of employees) {
-      if (e.name?.trim()) await client.query('INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level,user_id) VALUES ($1,$2,$3,$4,$5,$6)',
-        [req.params.id,e.name.trim(),parseFloat(e.regular_hours)||0,parseFloat(e.overtime_hours)||0,e.level||'Journeyman',e.user_id||null]);
+      if (e.name?.trim()) await client.query('INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level,user_id,travel_hours) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [req.params.id,e.name.trim(),parseFloat(e.regular_hours)||0,parseFloat(e.overtime_hours)||0,e.level||'Journeyman',e.user_id||null,parseFloat(e.travel_hours)||0]);
     }
     await client.query('COMMIT');
     logAction(req,'ticket_updated',t.id,t.ticket_number,`Edited by ${req.user?.name}`);
@@ -1015,6 +1021,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
       COALESCE(p.name, '') AS project_name,
       te.regular_hours,
       te.overtime_hours,
+      COALESCE(te.travel_hours, 0) AS travel_hours,
       COALESCE(te.level, 'Journeyman') AS level,
       t.supervisor,
       t.updated_at
@@ -1040,8 +1047,8 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
 
   // Build per-day rows
   const days = [];
-  let enteredReg = 0, enteredOT = 0;  // payroll totals — only Entered
-  let pendingReg = 0, pendingOT  = 0; // pending display totals
+  let enteredReg = 0, enteredOT = 0, enteredTravel = 0; // payroll totals — only Entered
+  let pendingReg = 0, pendingOT  = 0, pendingTravel = 0; // pending display totals
 
   const start = new Date(periodStart + 'T00:00:00Z');
   const end   = new Date(periodEnd   + 'T00:00:00Z');
@@ -1053,49 +1060,52 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
     const override = overrideMap[dateStr];
 
     if (override) {
-      // Manual override overrides all ticket hours for this day; treat as Entered
-      const reg = parseFloat(override.regular_hours) || 0;
-      const ot  = parseFloat(override.overtime_hours) || 0;
-      enteredReg += reg; enteredOT += ot;
+      const reg    = parseFloat(override.regular_hours)  || 0;
+      const ot     = parseFloat(override.overtime_hours) || 0;
+      const travel = 0; // overrides don't store travel separately (leave at ticket value)
+      enteredReg += reg; enteredOT += ot; enteredTravel += travel;
       const first = entries[0] || {};
+      const travelFromTickets = entries.reduce((s,e)=>s+(parseFloat(e.travel_hours)||0),0);
       days.push({ date: dateStr, dow,
-        regular_hours: reg, overtime_hours: ot, total_hours: reg + ot,
+        regular_hours: reg, overtime_hours: ot, travel_hours: travelFromTickets,
         approval_status: 'entered', source: 'manual',
-        job_number: first.job_number || '', job_name: first.job_name || '',
-        project_name: first.project_name || '', level: first.level || '',
-        ticket_numbers: entries.map(e => e.ticket_number).join(', '),
-        edited_by_name: override.edited_by_name, edited_at: override.created_at,
-        entries });
+        job_number: first.job_number||'', job_name: first.job_name||'',
+        project_name: first.project_name||'', level: first.level||'',
+        ticket_numbers: entries.map(e=>e.ticket_number).join(', '),
+        edited_by_name: override.edited_by_name, edited_at: override.created_at, entries });
     } else if (entries.length > 0) {
-      // Sum hours from tickets; approval_status is Entered only if ALL tickets are Entered
-      let dayReg = 0, dayOT = 0;
+      let dayReg = 0, dayOT = 0, dayTravel = 0;
       const allEntered = entries.every(e => e.ticket_status === 'Entered');
       const anyEntered = entries.some(e => e.ticket_status === 'Entered');
-      entries.forEach(e => { dayReg += parseFloat(e.regular_hours)||0; dayOT += parseFloat(e.overtime_hours)||0; });
+      entries.forEach(e => {
+        dayReg    += parseFloat(e.regular_hours) ||0;
+        dayOT     += parseFloat(e.overtime_hours)||0;
+        dayTravel += parseFloat(e.travel_hours)  ||0;
+      });
       const approvalStatus = allEntered ? 'entered' : (anyEntered ? 'partial' : 'pending');
-      if (allEntered) { enteredReg += dayReg; enteredOT += dayOT; }
-      else { pendingReg += dayReg; pendingOT += dayOT; }
+      if (allEntered) { enteredReg += dayReg; enteredOT += dayOT; enteredTravel += dayTravel; }
+      else            { pendingReg += dayReg; pendingOT += dayOT; pendingTravel += dayTravel; }
       const first = entries[0];
       days.push({ date: dateStr, dow,
-        regular_hours: dayReg, overtime_hours: dayOT, total_hours: dayReg + dayOT,
+        regular_hours: dayReg, overtime_hours: dayOT, travel_hours: dayTravel,
         approval_status: approvalStatus, source: 'ticket',
-        job_number: entries.map(e => e.job_number||'').filter(Boolean).join(', '),
-        job_name: entries.map(e => e.job_name||'').filter(Boolean).join(', '),
+        job_number: entries.map(e=>e.job_number||'').filter(Boolean).join(', '),
+        job_name:   entries.map(e=>e.job_name||'').filter(Boolean).join(', '),
         project_name: [...new Set(entries.map(e=>e.project_name||'').filter(Boolean))].join(', '),
         level: first.level,
-        ticket_numbers: entries.map(e => e.ticket_number).join(', '),
-        supervisor: first.supervisor,
-        updated_at: first.updated_at,
-        entries });
+        ticket_numbers: entries.map(e=>e.ticket_number).join(', '),
+        supervisor: first.supervisor, updated_at: first.updated_at, entries });
     } else {
-      days.push({ date: dateStr, dow, regular_hours: 0, overtime_hours: 0, total_hours: 0, approval_status: 'none', source: 'none', entries: [] });
+      days.push({ date: dateStr, dow,
+        regular_hours: 0, overtime_hours: 0, travel_hours: 0,
+        approval_status: 'none', source: 'none', entries: [] });
     }
   }
 
   return {
     user: userRows[0], days,
-    totals:         { regular: enteredReg, ot: enteredOT, total: enteredReg + enteredOT },
-    pending_totals: { regular: pendingReg, ot: pendingOT, total: pendingReg + pendingOT },
+    totals:         { regular: enteredReg, ot: enteredOT, travel: enteredTravel, total: enteredReg + enteredOT + enteredTravel },
+    pending_totals: { regular: pendingReg, ot: pendingOT, travel: pendingTravel, total: pendingReg + pendingOT + pendingTravel },
   };
 }
 
@@ -1109,18 +1119,21 @@ app.get('/api/timesheets', requireAdmin, async (req, res) => {
   const summaries = await Promise.all(users.map(async u => {
     // Only count Entered tickets in payroll totals
     const { rows: hrs } = await pool.query(`
-      SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot
+      SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot,
+             COALESCE(SUM(te.travel_hours),0) AS travel
       FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
-      WHERE te.user_id=$1 AND t.date>=$2 AND t.date<=$3 AND t.archived=0 AND t.ticket_status='Entered'`,
+      WHERE te.user_id=$1 AND t.date>=$2 AND t.date<=$3 AND t.ticket_status='Entered'`,
       [u.id, period.start, period.end]);
     const { rows: pendHrs } = await pool.query(`
-      SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot
+      SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot,
+             COALESCE(SUM(te.travel_hours),0) AS travel
       FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
-      WHERE te.user_id=$1 AND t.date>=$2 AND t.date<=$3 AND t.archived=0 AND COALESCE(t.ticket_status,'Pending')='Pending'`,
+      WHERE te.user_id=$1 AND t.date>=$2 AND t.date<=$3 AND COALESCE(t.ticket_status,'Pending')='Pending'`,
       [u.id, period.start, period.end]);
-    const reg = parseFloat(hrs[0].reg)||0, ot = parseFloat(hrs[0].ot)||0;
-    const pendReg = parseFloat(pendHrs[0].reg)||0, pendOt = parseFloat(pendHrs[0].ot)||0;
-    return { ...u, regular_hours: reg, overtime_hours: ot, total_hours: reg+ot, pending_regular: pendReg, pending_ot: pendOt };
+    const reg=parseFloat(hrs[0].reg)||0, ot=parseFloat(hrs[0].ot)||0, travel=parseFloat(hrs[0].travel)||0;
+    const pReg=parseFloat(pendHrs[0].reg)||0, pOt=parseFloat(pendHrs[0].ot)||0, pTravel=parseFloat(pendHrs[0].travel)||0;
+    return { ...u, regular_hours: reg, overtime_hours: ot, travel_hours: travel, total_hours: reg+ot+travel,
+             pending_regular: pReg, pending_ot: pOt, pending_travel: pTravel };
   }));
 
   res.json({ period, summaries, offset });
@@ -1169,8 +1182,8 @@ app.get('/api/timesheets/export/all', requireAdmin, async (req, res) => {
     const ts = await buildTimesheet(u.id, period.start, period.end);
     if (!ts) continue;
     const rows = [['J&D Western Electric Ltd — Employee Timesheet'],[`Employee: ${ts.user.name}`],[`Pay Period: ${period.start} to ${period.end}`,`Payday: ${period.payday}`],[],
-      ['Date','Day','Regular Hours','OT Hours','Total Hours','Source','Job #','Project'],
-      ...ts.days.map(d=>[d.date,d.dow,d.regular_hours,d.overtime_hours,d.total_hours,d.source==='manual'?'Manually Edited':d.source==='ticket'?'Auto from Time Ticket':'No Entry',d.job_number||'',d.project_name||'']),
+      ['Date','Day','Regular Hours','OT Hours','Travel Hours','Source','Job #','Project'],
+      ...ts.days.map(d=>[d.date,d.dow,d.regular_hours,d.overtime_hours,d.travel_hours||0,d.source==='manual'?'Manually Edited':d.source==='ticket'?'Auto from Time Ticket':'No Entry',d.job_number||'',d.project_name||'']),
       [],['TOTALS','',ts.totals.regular,ts.totals.ot,ts.totals.total]];
     const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:12},{wch:6},{wch:14},{wch:10},{wch:12},{wch:22},{wch:12},{wch:24}];
     XLSX.utils.book_append_sheet(wb,ws,ts.user.name.slice(0,31));
@@ -1212,7 +1225,7 @@ app.get('/api/my-timesheet', requireAuth, async (req, res) => {
 app.patch('/api/timesheets/:userId/:date', requireAdmin, async (req, res) => {
   const perms = (req.user.permissions || '').split(',');
   if (!perms.includes('timesheet_edit')) return res.status(403).json({ error: 'Timesheet Edit Access required' });
-  const { regular_hours, overtime_hours, reason } = req.body;
+  const { regular_hours, overtime_hours, travel_hours, reason } = req.body;
   const userId = parseInt(req.params.userId);
   const date   = req.params.date;
   const { rows: userRows } = await pool.query('SELECT name FROM users WHERE id=$1', [userId]);
@@ -1220,19 +1233,19 @@ app.patch('/api/timesheets/:userId/:date', requireAdmin, async (req, res) => {
 
   // Get current hours for audit
   const { rows: current } = await pool.query(`
-    SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot
+    SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot, COALESCE(SUM(te.travel_hours),0) AS travel
     FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
-    WHERE te.user_id=$1 AND t.date=$2 AND t.archived=0`, [userId, date]);
-  const origReg = parseFloat(regular_hours)||0, origOT = parseFloat(overtime_hours)||0;
-  const oldReg = parseFloat(current[0].reg)||0, oldOT = parseFloat(current[0].ot)||0;
+    WHERE te.user_id=$1 AND t.date=$2`, [userId, date]);
+  const origReg=parseFloat(regular_hours)||0, origOT=parseFloat(overtime_hours)||0, origTravel=parseFloat(travel_hours)||0;
+  const oldReg=parseFloat(current[0].reg)||0, oldOT=parseFloat(current[0].ot)||0, oldTravel=parseFloat(current[0].travel)||0;
 
-  await pool.query(`INSERT INTO timesheet_overrides (employee_user_id,date,regular_hours,overtime_hours,original_regular,original_ot,edited_by_id,edited_by_name,edit_reason,created_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-    ON CONFLICT (employee_user_id,date) DO UPDATE SET regular_hours=$3,overtime_hours=$4,edited_by_id=$7,edited_by_name=$8,edit_reason=$9,created_at=$10`,
-    [userId,date,origReg,origOT,oldReg,oldOT,req.user.id,req.user.name,reason||null,new Date().toISOString()]);
+  await pool.query(`INSERT INTO timesheet_overrides (employee_user_id,date,regular_hours,overtime_hours,travel_hours,original_regular,original_ot,original_travel,edited_by_id,edited_by_name,edit_reason,created_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    ON CONFLICT (employee_user_id,date) DO UPDATE SET regular_hours=$3,overtime_hours=$4,travel_hours=$5,edited_by_id=$9,edited_by_name=$10,edit_reason=$11,created_at=$12`,
+    [userId,date,origReg,origOT,origTravel,oldReg,oldOT,oldTravel,req.user.id,req.user.name,reason||null,new Date().toISOString()]);
 
   logAction(req,'timesheet_edited',null,null,
-    `Timesheet manually edited by ${req.user.name} — changed ${userRows[0].name} ${date} from ${oldReg}reg/${oldOT}OT to ${origReg}reg/${origOT}OT`);
+    `Timesheet manually edited by ${req.user.name} — changed ${userRows[0].name} ${date} from ${oldReg}reg/${oldOT}OT/${oldTravel}travel to ${origReg}reg/${origOT}OT/${origTravel}travel`);
   res.json({ ok: true });
 });
 
@@ -1252,10 +1265,10 @@ app.get('/api/timesheets/:userId/export', requireAdmin, async (req, res) => {
     [`Employee: ${ts.user.name}`],
     [`Pay Period: ${period.start} to ${period.end}`, `Payday: ${period.payday}`],
     [],
-    ['Date','Day','Regular Hours','OT Hours','Total Hours','Source','Job #','Project','Status'],
-    ...ts.days.map(d => [d.date, d.dow, d.regular_hours, d.overtime_hours, d.total_hours, d.source==='manual'?'Manually Edited':d.source==='ticket'?'Auto from Time Ticket':'No Entry', d.job_number||'', d.project_name||'', d.approval_status||'']),
+    ['Date','Day','Regular Hours','OT Hours','Travel Hours','Source','Job #','Project','Status'],
+    ...ts.days.map(d => [d.date, d.dow, d.regular_hours, d.overtime_hours, d.travel_hours||0, d.source==='manual'?'Manually Edited':d.source==='ticket'?'Auto from Time Ticket':'No Entry', d.job_number||'', d.project_name||'', d.approval_status||'']),
     [],
-    ['TOTALS','', ts.totals.regular, ts.totals.ot, ts.totals.total],
+    ['TOTALS','', ts.totals.regular, ts.totals.ot, ts.totals.travel||0],
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{wch:12},{wch:6},{wch:14},{wch:10},{wch:12},{wch:22}];
