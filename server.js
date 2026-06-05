@@ -387,7 +387,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
     pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE ticket_status='Entered' AND archived=0"),
     pool.query("SELECT COUNT(*) c FROM projects WHERE status='active'"),
     pool.query(`SELECT COUNT(*) c FROM projects p WHERE p.status='active' AND (
-      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL) AND (t.project_archived=0 OR t.project_archived IS NULL))
+      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL OR t.ticket_status='Reviewed') AND (t.project_archived=0 OR t.project_archived IS NULL))
      +(SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL))
     )>0`),
     pool.query(`SELECT (
@@ -839,7 +839,7 @@ app.get('/api/project-folders/all', requireAdmin, async (req, res) => {
     SELECT p.*,
       (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id) AS ticket_count,
       (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id) AS po_count,
-      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL) AND (t.project_archived=0 OR t.project_archived IS NULL)) AS pending_tickets,
+      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL OR t.ticket_status='Reviewed') AND (t.project_archived=0 OR t.project_archived IS NULL)) AS pending_tickets,
       (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL)) AS open_pos
     FROM projects p WHERE p.status=$1 ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC`, [status]);
   res.json(rows);

@@ -1893,7 +1893,7 @@ function projTicketRow(t, showArchiveBtn = true) {
   const reg = t.employees ? t.employees.reduce((s,e)=>s+e.regular_hours,0) : 0;
   const ot  = t.employees ? t.employees.reduce((s,e)=>s+e.overtime_hours,0) : 0;
   const ts  = t.ticket_status || 'Pending';
-  const isOutstanding = ts === 'Pending';
+  const isOutstanding = ts === 'Pending' || ts === 'Reviewed';
   return `<tr data-id="${t.id}" data-archived="${t.archived ? 1 : 0}" class="${isOutstanding&&showArchiveBtn ? 'row-outstanding' : 'row-ok'}">
     <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb proj-tt-cb" data-id="${t.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
     <td>${fmtDate(t.date)}</td>
@@ -2138,7 +2138,9 @@ async function projUnarchivePO(id) {
 function updateProjectOutstandingSummary() {
   const div = $('project-outstanding-summary');
   if (!div) return;
-  const pending = currentProjectData.tickets.filter(t => !t.ticket_status || t.ticket_status==='Pending').length;
+  // Count one per ticket that is Pending or Reviewed (not Entered)
+  const pending = currentProjectData.tickets.filter(t => !t.ticket_status || t.ticket_status==='Pending' || t.ticket_status==='Reviewed').length;
+  // Count one per PO that is Open
   const openPos = currentProjectData.purchase_orders.filter(p => p.status==='Open').length;
   const total   = currentProjectData.tickets.length + currentProjectData.purchase_orders.length;
   if (total === 0) { div.innerHTML=''; return; }
@@ -2166,7 +2168,7 @@ async function saveTicketStatus(id, newStatus, row) {
     } else {
       const t = currentProjectData.tickets.find(x=>x.id==id);
       if(t) t.ticket_status=newStatus;
-      if(row) row.className = newStatus==='Pending'?'row-outstanding':'row-ok';
+      if(row) row.className = (newStatus==='Pending'||newStatus==='Reviewed')?'row-outstanding':'row-ok';
       updateProjectOutstandingSummary();
       showToast(data.auto_archived ? 'Ticket marked Entered and moved to Archived Tickets' : 'Ticket status updated','success');
     }
