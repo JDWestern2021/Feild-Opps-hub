@@ -29,7 +29,7 @@
     .day-row.header { background:var(--gray-50); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-500); padding:8px 16px; }
     .day-row.weekend { background:#fafafa; }
     .day-row.entered { border-left:3px solid #28a745; background:rgba(40,167,69,0.05); }
-    .day-row.pending { border-left:3px solid #bbb; background:rgba(200,200,200,0.08); }
+    .day-row.pending { border-left:3px solid #d9342b; background:rgba(217,52,43,0.05); }
     .day-row.no-hours { color:var(--gray-400); }
     .day-name { font-weight:600; color:var(--dark); }
     .day-name.weekend { color:var(--gray-400); }
@@ -67,7 +67,8 @@
   <div id="ts-card">
     <div class="period-header">
       <div>
-        <div class="period-meta">Current Pay Period</div>
+        <div class="period-meta" id="employee-name-label" style="font-size:15px;font-weight:800;color:#fff;margin-bottom:2px;"></div>
+        <div class="period-meta">Pay Period</div>
         <h2 id="period-label">Loading…</h2>
       </div>
       <div class="period-nav">
@@ -118,6 +119,7 @@ function showToast(msg,type=''){const t=$('toast');t.textContent=msg;t.className
   const u=await r.json();
   document.body.style.visibility='visible';
   $('header-user').textContent=u.name;
+  if ($('employee-name-label')) $('employee-name-label').textContent = u.name + "'s Timesheet";
   loadTimesheet(null);
 })();
 
@@ -148,14 +150,14 @@ async function loadTimesheet(offset){
     const isPending=day.approval_status==='pending';
     const isEntered=day.approval_status==='entered'||day.approval_status==='partial';
     const statusLabel=isPending
-      ?'<span class="source-badge" style="background:#e0e0e0;color:#666;">Pending</span>'
+      ?'<span class="source-badge" style="background:#fde8e8;color:#d9342b;font-weight:700;">⚠ Pending</span>'
       :isEntered
         ?'<span class="source-badge" style="background:#d4edda;color:#155724;">Approved</span>'
         :day.source==='manual'
           ?'<span class="source-badge manual">Edited</span>'
           :'';
     const rowClass=`day-row${weekend?' weekend':''}${isPending?' pending':isEntered?' entered':hasHrs?'':' no-hours'}`;
-    const hrsStyle=isPending?'color:#bbb;':isEntered?'color:#155724;font-weight:700;':'color:var(--gray-400);';
+    const hrsStyle=isPending?'color:#d9342b;font-weight:600;':isEntered?'color:#155724;font-weight:700;':'color:var(--gray-400);';
     const travelHrs = day.travel_hours || 0;
     return `<div class="${rowClass}">
       <span class="day-name${weekend?' weekend':''}">${day.date}</span>

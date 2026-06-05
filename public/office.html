@@ -640,7 +640,16 @@
     <!-- Archived POs section (Entered + Archived status) -->
     <div style="margin-top:24px;" id="po-archived-section">
       <div class="flex-between" style="margin-bottom:10px;">
-        <h3 style="font-size:15px;font-weight:700;">Archived POs <span style="font-size:12px;color:var(--gray-500);font-weight:400;">(Entered &amp; Archived)</span></h3>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <h3 style="font-size:15px;font-weight:700;">Archived POs <span style="font-size:12px;color:var(--gray-500);font-weight:400;">(Entered &amp; Archived)</span></h3>
+          <div id="po-arch-bulk-bar" style="display:none;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;cursor:pointer;">
+              <input type="checkbox" id="po-arch-select-all-top" style="width:13px;height:13px;accent-color:var(--orange);"/> Select All
+            </label>
+            <span id="po-arch-bulk-count" style="font-size:12px;color:var(--gray-500);"></span>
+            <button class="btn btn-danger btn-sm" id="btn-delete-selected-pos">🗑 Delete Selected</button>
+          </div>
+        </div>
         <button class="archived-toggle" id="btn-toggle-archived-pos">Show ▼</button>
       </div>
       <div id="po-archived-wrap" style="display:none;">
@@ -679,6 +688,9 @@
       </div>
       <!-- Bulk actions bar for archived projects (visible only when archived tab active + items checked) -->
       <div class="po-bulk-bar" id="proj-bulk-bar" style="margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;margin-right:8px;">
+          <input type="checkbox" id="proj-select-all-cb" style="width:14px;height:14px;accent-color:var(--orange);"/> Select All
+        </label>
         <span class="sel-count" id="proj-bulk-count">0 selected</span>
         <button class="btn btn-danger btn-sm" id="btn-delete-selected-projects">🗑 Delete Selected</button>
       </div>
@@ -731,6 +743,9 @@
     </div>
     <!-- Bulk actions for archived tickets -->
     <div class="po-bulk-bar" id="arch-ticket-bulk-bar" style="margin-bottom:10px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;margin-right:8px;" id="arch-ticket-select-all-wrap">
+        <input type="checkbox" id="arch-ticket-select-all" style="width:14px;height:14px;accent-color:var(--orange);"/> Select All
+      </label>
       <span class="sel-count" id="arch-ticket-bulk-count">0 selected</span>
       <button class="btn btn-danger btn-sm" id="btn-delete-selected-tickets">🗑 Delete Selected</button>
     </div>
@@ -1007,7 +1022,7 @@ function renderTickets(tickets, isArchived = false, listId = 'ticket-list') {
       <div class="ticket-job">
         <div class="job-name">${esc(t.job_name)}${isArchived ? ' <span style="font-size:10px;background:#e0e0e0;color:#666;padding:1px 6px;border-radius:8px;font-weight:600;vertical-align:middle;">ARCHIVED</span>' : ''}</div>
         <div class="job-num">${t.job_number ? '#' + esc(t.job_number) : ''}&nbsp;<span style="color:var(--gray-300);">·</span>&nbsp;${t.employees.length} worker${t.employees.length !== 1 ? 's' : ''}</div>
-        <div class="ticket-subhead">Project: ${t.project_name ? esc(t.project_name) : 'No Project Assigned'}<span class="sep">·</span>Job #: ${t.job_number ? esc(t.job_number) : '—'}</div>
+        <div class="ticket-subhead">Project: ${t.project_name ? esc(t.project_name) : 'No Project Assigned'}<span class="sep">·</span>Job #: ${t.job_number ? esc(t.job_number) : '—'}${t.submitted_by_name ? `<span class="sep">·</span>By: ${esc(t.submitted_by_name)}` : ''}</div>
       </div>
       <div class="ticket-status-col" onclick="event.stopPropagation()">
         <button class="status-quick-btn" data-id="${t.id}" data-status="${t.ticket_status||'Pending'}" title="Click to change status">${ticketStatusBadge(t.ticket_status)}</button>
@@ -1099,16 +1114,26 @@ document.addEventListener('click', e => {
 });
 
 // ── Bulk delete archived tickets ──
-function updateArchTicketBulkBar() {
+function updateArchTicketBulkBar(forceShow = false) {
+  const all = document.querySelectorAll('.arch-ticket-cb');
   const checked = document.querySelectorAll('.arch-ticket-cb:checked');
   const bar = $('arch-ticket-bulk-bar');
-  if (checked.length > 0) {
+  if (forceShow || all.length > 0) {
     bar.classList.add('visible');
-    $('arch-ticket-bulk-count').textContent = `${checked.length} selected`;
+    $('arch-ticket-bulk-count').textContent = checked.length > 0 ? `${checked.length} of ${all.length} selected` : `${all.length} in archive`;
+    const selAll = $('arch-ticket-select-all');
+    if (selAll) selAll.checked = all.length > 0 && checked.length === all.length;
   } else {
     bar.classList.remove('visible');
   }
 }
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'arch-ticket-select-all') {
+    document.querySelectorAll('.arch-ticket-cb').forEach(cb => { cb.checked = e.target.checked; });
+    updateArchTicketBulkBar();
+  }
+});
 
 $('btn-delete-selected-tickets').addEventListener('click', async () => {
   const checked = Array.from(document.querySelectorAll('.arch-ticket-cb:checked'));
@@ -1208,6 +1233,7 @@ async function loadArchived(page = 1) {
     $('archived-count-badge').textContent = data.total;
     renderTickets(data.tickets, true, 'archive-list');
     renderPagination(data.total, page, 'archive-pagination', loadArchived);
+    setTimeout(() => updateArchTicketBulkBar(true), 50);
   } catch {
     $('archive-list').innerHTML = `<div class="empty-state"><h3>Error loading archived tickets</h3></div>`;
   }
@@ -1274,6 +1300,10 @@ async function openDetail(id, isArchived = false) {
         <div class="detail-field">
           <label>Supervisor</label>
           <div class="val">${esc(t.supervisor)}</div>
+        </div>
+        <div class="detail-field">
+          <label>Submitted By</label>
+          <div class="val" style="font-weight:700;">${esc(t.submitted_by_name || t.supervisor)}</div>
         </div>
         <div class="detail-field">
           <label>Submitted</label>
@@ -1624,14 +1654,24 @@ $('ptab-archived-proj').addEventListener('click', () => switchProjectListTab('ar
 
 function updateProjBulkBar() {
   const checked = document.querySelectorAll('.proj-archive-cb:checked');
+  const all = document.querySelectorAll('.proj-archive-cb');
   const bar = $('proj-bulk-bar');
-  if (projectListStatus === 'archived' && checked.length > 0) {
+  if (projectListStatus === 'archived') {
     bar.classList.add('visible');
-    $('proj-bulk-count').textContent = `${checked.length} selected`;
+    $('proj-bulk-count').textContent = checked.length > 0 ? `${checked.length} of ${all.length} selected` : `${all.length} project${all.length!==1?'s':''} in archive`;
+    const selAll = $('proj-select-all-cb');
+    if (selAll) selAll.checked = all.length > 0 && checked.length === all.length;
   } else {
     bar.classList.remove('visible');
   }
 }
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'proj-select-all-cb') {
+    document.querySelectorAll('.proj-archive-cb').forEach(cb => { cb.checked = e.target.checked; });
+    updateProjBulkBar();
+  }
+});
 
 $('btn-delete-selected-projects').addEventListener('click', async () => {
   const checked = Array.from(document.querySelectorAll('.proj-archive-cb:checked'));
@@ -1652,7 +1692,11 @@ function switchProjectListTab(status) {
   $('ptab-active').classList.toggle('active', status === 'active');
   $('ptab-complete').classList.toggle('active', status === 'complete');
   $('ptab-archived-proj').classList.toggle('active', status === 'archived');
-  if (status !== 'archived') $('proj-bulk-bar').classList.remove('visible');
+  if (status !== 'archived') {
+    $('proj-bulk-bar').classList.remove('visible');
+    const selAll = $('proj-select-all-cb');
+    if (selAll) selAll.checked = false;
+  }
   loadProjects();
 }
 
@@ -2440,7 +2484,7 @@ async function loadTSList(offset) {
       <td style="text-align:center;${color}">${(u.regular_hours||0).toFixed(1)}</td>
       <td style="text-align:center;${color}">${(u.overtime_hours||0).toFixed(1)}</td>
       <td style="text-align:center;${color}">${(u.travel_hours||0).toFixed(1)}</td>
-      <td style="text-align:center;">${hasPending?`<span style="font-size:11px;color:#bbb;">${pendTotal.toFixed(1)}</span>`:''}</td>
+      <td style="text-align:center;">${hasPending?`<span style="font-size:11px;font-weight:700;color:#d9342b;background:#fde8e8;padding:2px 7px;border-radius:10px;">⚠ ${pendTotal.toFixed(1)} pending</span>`:''}</td>
       <td><button class="btn btn-ghost btn-sm">View →</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--gray-500);">No employees found.</td></tr>';
@@ -2457,7 +2501,7 @@ async function loadTSDetail(userId, offset) {
   $('ts-period-label').textContent = `Pay Period: ${fmtDate(d.period.start)} — ${fmtDate(d.period.end)} · Payday: ${fmtDate(d.period.payday)}`;
   $('ts-detail-name').textContent = d.user.name;
   const pt = d.pending_totals||{};
-  const pendText = (pt.total||0) > 0 ? ` · <span style="color:#bbb;font-size:12px;">${(pt.regular||0).toFixed(1)} reg / ${(pt.ot||0).toFixed(1)} OT / ${(pt.travel||0).toFixed(1)} travel pending (not counted)</span>` : '';
+  const pendText = (pt.total||0) > 0 ? ` · <span style="color:#d9342b;font-size:12px;font-weight:700;">⚠ ${(pt.regular||0).toFixed(1)} reg / ${(pt.ot||0).toFixed(1)} OT / ${(pt.travel||0).toFixed(1)} travel PENDING — needs approval</span>` : '';
   $('ts-detail-totals').innerHTML = `<span style="color:var(--green);font-weight:700;">Approved — Reg: ${d.totals.regular.toFixed(1)} · OT: ${d.totals.ot.toFixed(1)} · Travel: ${(d.totals.travel||0).toFixed(1)} hrs</span>${pendText}`;
   $('ts-edit-btn').style.display = tsHasEditAccess ? '' : 'none';
 
@@ -2466,8 +2510,8 @@ async function loadTSDetail(userId, offset) {
     const hasHrs = day.total_hours > 0;
     const isPending = day.approval_status === 'pending';
     const isEntered = day.approval_status === 'entered' || day.approval_status === 'partial';
-    const rowBg    = isPending ? 'background:rgba(200,200,200,0.12);' : isEntered ? 'background:rgba(40,167,69,0.07);border-left:3px solid #28a745;' : '';
-    const hrsColor = isPending ? 'color:#bbb;' : isEntered ? 'color:#155724;font-weight:700;' : 'color:var(--gray-400);';
+    const rowBg    = isPending ? 'background:rgba(217,52,43,0.05);border-left:3px solid #d9342b;' : isEntered ? 'background:rgba(40,167,69,0.07);border-left:3px solid #28a745;' : '';
+    const hrsColor = isPending ? 'color:#d9342b;' : isEntered ? 'color:#155724;font-weight:700;' : 'color:var(--gray-400);';
     const statusBadge = isPending
       ? `<span class="spill" style="background:#e0e0e0;color:#555;font-size:10px;">Pending</span>`
       : isEntered
@@ -2828,6 +2872,7 @@ async function loadArchivedPOs() {
   const combined = [...(r1.purchase_orders||[]), ...(r2.purchase_orders||[])].sort((a,b)=>b.created_at.localeCompare(a.created_at));
   allArchivedPOs = combined;
   renderPORows(combined, 'po-archived-tbody', true);
+  setTimeout(updatePoArchBulkBar, 50);
 }
 
 async function openPODetail(id) {
@@ -2986,7 +3031,42 @@ $('po-select-all').addEventListener('change', e => {
 
 $('po-arch-select-all').addEventListener('change', e => {
   document.querySelectorAll('#po-archived-tbody .po-row-cb').forEach(cb => cb.checked = e.target.checked);
-  updateBulkBar();
+  updateBulkBar(); updatePoArchBulkBar();
+});
+
+function updatePoArchBulkBar() {
+  const all = document.querySelectorAll('#po-archived-tbody .po-row-cb');
+  const checked = document.querySelectorAll('#po-archived-tbody .po-row-cb:checked');
+  const bar = $('po-arch-bulk-bar');
+  if (all.length > 0) {
+    bar.style.display = 'flex';
+    $('po-arch-bulk-count').textContent = checked.length > 0 ? `${checked.length} of ${all.length} selected` : `${all.length} in archive`;
+    const selAllTop = $('po-arch-select-all-top');
+    if (selAllTop) selAllTop.checked = checked.length === all.length && all.length > 0;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'po-arch-select-all-top') {
+    document.querySelectorAll('#po-archived-tbody .po-row-cb').forEach(cb => { cb.checked = e.target.checked; });
+    $('po-arch-select-all').checked = e.target.checked;
+    updateBulkBar(); updatePoArchBulkBar();
+  }
+});
+
+$('btn-delete-selected-pos').addEventListener('click', async () => {
+  const ids = Array.from(document.querySelectorAll('#po-archived-tbody .po-row-cb:checked')).map(cb => cb.dataset.id);
+  if (!ids.length) return;
+  if (!confirm(`⚠ Permanently delete ${ids.length} archived PO${ids.length!==1?'s':''}?\n\nThis cannot be undone.`)) return;
+  let deleted = 0;
+  for (const id of ids) {
+    const res = await fetch(`/api/po/${id}`, { method: 'DELETE' });
+    if (res.ok) deleted++;
+  }
+  showToast(`${deleted} PO${deleted!==1?'s':''} permanently deleted`, 'success');
+  loadArchivedPOs(); loadStats();
 });
 
 // ── Print Selected ──

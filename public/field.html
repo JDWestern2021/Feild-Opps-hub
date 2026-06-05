@@ -218,6 +218,11 @@
           <input type="text" id="supervisor" name="supervisor" class="form-control" placeholder="Your name" required/>
           <span class="form-error" id="err-supervisor">Required</span>
         </div>
+        <div class="form-group mt-12">
+          <label class="form-label">Submitted By</label>
+          <input type="text" id="submitted-by-display" class="form-control readonly-field" readonly style="background:var(--gray-50);color:var(--gray-700);font-weight:600;"/>
+          <span class="form-hint">Locked to your account — cannot be changed</span>
+        </div>
       </div>
 
       <!-- SECTION: Crew & Hours -->
@@ -339,6 +344,7 @@
     const u = await r.json();
     document.body.style.visibility = 'visible';
     $('header-user').textContent = u.name;
+    if ($('submitted-by-display')) $('submitted-by-display').value = u.name + ' (' + u.email + ')';
     // Pre-fill supervisor with logged-in user's name if empty
     if (!$('supervisor').value) $('supervisor').value = u.name;
   })();
