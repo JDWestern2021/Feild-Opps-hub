@@ -77,6 +77,31 @@
     .req-status.cancelled{ background: var(--gray-100); color: var(--gray-500); }
     .cancel-btn { background: none; border: 1px solid var(--gray-300); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--gray-500); margin-top: 6px; }
     .cancel-btn:hover { border-color: var(--red); color: var(--red); }
+    .edit-btn { background: none; border: 1px solid var(--orange); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--orange); margin-top: 6px; }
+    .edit-btn:hover { background: var(--orange); color: white; }
+    .delete-btn { background: none; border: 1px solid #dc3545; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; color: #dc3545; margin-top: 6px; }
+    .delete-btn:hover { background: #dc3545; color: white; }
+
+    /* Swipe-to-delete for cancelled/denied */
+    .req-item { position: relative; overflow: hidden; touch-action: pan-y; }
+    .req-item .swipe-delete-bg {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 80px;
+      background: #dc3545; display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 12px; font-weight: 700; transform: translateX(100%);
+      transition: transform .2s; border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    .req-item.swipe-reveal .swipe-delete-bg { transform: translateX(0); }
+    .req-item.deleting { animation: slideOut .3s ease forwards; }
+    @keyframes slideOut { to { transform: translateX(-100%); opacity: 0; max-height: 0; margin: 0; padding: 0; } }
+
+    /* Edit modal */
+    .edit-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; display: flex; align-items: flex-end; justify-content: center; }
+    .edit-modal { background: white; border-radius: 16px 16px 0 0; padding: 20px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+    .edit-modal h3 { font-size: 16px; font-weight: 800; margin-bottom: 16px; }
+    @media (min-width: 600px) {
+      .edit-modal-overlay { align-items: center; }
+      .edit-modal { border-radius: 16px; max-height: 80vh; }
+    }
 
     /* Notification banner */
     .notif-banner { background: #d4edda; border: 1px solid #b8ddc8; border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: #155724; cursor: pointer; }
@@ -211,6 +236,57 @@
     <div id="my-req-list"><div class="empty-notice">Loading…</div></div>
   </div>
 
+</div>
+
+<!-- Edit Request Modal -->
+<div id="edit-modal-overlay" class="edit-modal-overlay" style="display:none;" onclick="if(event.target===this)closeEditModal()">
+  <div class="edit-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3>Edit Request</h3>
+      <button onclick="closeEditModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400);">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <select id="edit-type" class="form-control">
+        <option value="Vacation">Vacation</option>
+        <option value="Sick">Sick</option>
+        <option value="Unpaid">Unpaid</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="date-grid mt-12">
+      <div class="form-group">
+        <label class="form-label">First Day Off</label>
+        <input type="date" id="edit-start" class="form-control"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Last Day Off</label>
+        <input type="date" id="edit-end" class="form-control"/>
+      </div>
+    </div>
+    <div class="form-group mt-12">
+      <label class="form-label">Return to Work Date</label>
+      <input type="date" id="edit-rtw" class="form-control"/>
+    </div>
+    <div class="form-group mt-12">
+      <label class="form-label">Half Day</label>
+      <select id="edit-halfday" class="form-control">
+        <option value="">Full Day(s)</option>
+        <option value="morning">Morning (AM) only</option>
+        <option value="afternoon">Afternoon (PM) only</option>
+      </select>
+    </div>
+    <div class="form-group mt-12">
+      <label class="form-label">Note <span style="font-weight:400;color:var(--gray-500);">(optional)</span></label>
+      <textarea id="edit-note" class="form-control" rows="2" placeholder="Reason or details…"></textarea>
+    </div>
+    <div id="edit-error" style="display:none;background:#f8d7da;border-radius:8px;padding:10px 14px;margin-top:12px;font-size:13px;color:#721c24;"></div>
+    <div style="font-size:12px;color:var(--gray-500);margin-top:10px;" id="edit-resubmit-note"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-primary" id="btn-save-edit" style="flex:1;">Save &amp; Re-submit</button>
+      <button class="btn btn-secondary" onclick="closeEditModal()" style="flex:1;">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <!-- Event detail popup -->
@@ -545,18 +621,54 @@ async function loadMyRequests() {
     const halfLabel = req.half_day ? ` — ${req.half_day}` : '';
     const rtwLine = req.return_to_work_date ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px;">🏁 Return to work: <strong>${fmtDate(req.return_to_work_date)}</strong></div>` : '';
     const reviewNote = req.review_note ? `<div style="font-size:12px;color:var(--gray-500);margin-top:4px;">Office note: "${req.review_note}"</div>` : '';
-    const cancelBtn = ['pending','approved'].includes(req.status)
-      ? `<button class="cancel-btn" onclick="cancelRequest(${req.id})">Cancel Request</button>` : '';
-    return `<div class="req-item">
+
+    // Action buttons based on status
+    let actionBtns = '';
+    if (['pending','approved'].includes(req.status)) {
+      actionBtns += `<button class="cancel-btn" onclick="cancelRequest(${req.id})">Cancel</button> `;
+    }
+    if (['pending','cancelled'].includes(req.status)) {
+      actionBtns += `<button class="edit-btn" onclick="openEditRequest(${req.id})">✏ Edit${req.status === 'cancelled' ? ' & Re-submit' : ''}</button> `;
+    }
+    if (['cancelled','denied'].includes(req.status)) {
+      actionBtns += `<button class="delete-btn" onclick="deleteRequest(${req.id})">🗑 Delete</button>`;
+    }
+
+    // Swipe hint for cancelled/denied
+    const canDelete = ['cancelled','denied'].includes(req.status);
+    return `<div class="req-item" id="req-${req.id}" data-id="${req.id}" data-can-delete="${canDelete}">
+      ${canDelete ? '<div class="swipe-delete-bg" onclick="deleteRequest(' + req.id + ')">🗑 Delete</div>' : ''}
       <div class="req-type-dot" style="background:${c.bg};border:2px solid ${c.border};"></div>
       <div class="req-info">
         <div class="req-dates">${fmtDate(req.start_date)}${req.start_date !== req.end_date ? ' → ' + fmtDate(req.end_date) : ''}${halfLabel}</div>
         <div class="req-meta">${req.type} · ${days} day${days!==1?'s':''} · Submitted ${fmtDate(req.created_at?.slice(0,10))}</div>
-        ${rtwLine}${reviewNote}${cancelBtn}
+        ${rtwLine}${reviewNote}
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${actionBtns}</div>
       </div>
       <span class="req-status ${req.status}">${req.status}</span>
     </div>`;
   }).join('');
+
+  // Attach swipe-to-delete touch handlers for cancelled/denied items
+  list.querySelectorAll('.req-item[data-can-delete="true"]').forEach(attachSwipe);
+}
+
+function attachSwipe(el) {
+  let startX = 0, moved = false;
+  el.addEventListener('touchstart', e => { startX = e.touches[0].clientX; moved = false; }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - startX;
+    moved = true;
+    if (dx < -40) el.classList.add('swipe-reveal');
+    else if (dx > 10) el.classList.remove('swipe-reveal');
+  }, { passive: true });
+  el.addEventListener('touchend', () => {
+    if (!moved) el.classList.remove('swipe-reveal');
+  });
+  // Tap outside to close reveal
+  document.addEventListener('touchstart', e => {
+    if (!el.contains(e.target)) el.classList.remove('swipe-reveal');
+  }, { passive: true });
 }
 
 async function cancelRequest(id) {
@@ -565,6 +677,80 @@ async function cancelRequest(id) {
   if (r.ok) { showToast('Request cancelled.'); await loadCalendarData(); loadPersonFilter(); loadMyRequests(); }
   else { const d = await r.json(); showToast(d.error || 'Failed to cancel.', 'error'); }
 }
+
+async function deleteRequest(id) {
+  if (!confirm('Permanently delete this request? This cannot be undone.')) return;
+  const el = $(`req-${id}`);
+  if (el) el.classList.add('deleting');
+  const r = await fetch(`/api/time-off/${id}`, {method:'DELETE'});
+  if (r.ok) { showToast('Request deleted.'); setTimeout(() => loadMyRequests(), 300); }
+  else {
+    if (el) el.classList.remove('deleting');
+    const d = await r.json(); showToast(d.error || 'Failed to delete.', 'error');
+  }
+}
+
+// ── Edit request modal ──
+let editingId = null;
+function openEditRequest(id) {
+  // Grab data from the rendered list (we already fetched it)
+  fetch(`/api/time-off/${id}`).then(r => r.json()).then(req => {
+    editingId = id;
+    $('edit-type').value    = req.type || 'Vacation';
+    $('edit-start').value   = req.start_date || '';
+    $('edit-end').value     = req.end_date   || '';
+    $('edit-rtw').value     = req.return_to_work_date || '';
+    $('edit-halfday').value = req.half_day   || '';
+    $('edit-note').value    = req.note       || '';
+    $('edit-error').style.display = 'none';
+    $('edit-resubmit-note').textContent = req.status === 'cancelled'
+      ? '💡 Saving will re-submit this as a new pending request for approval.'
+      : '💡 Saving will update and keep this request as pending.';
+    $('edit-modal-overlay').style.display = 'flex';
+  });
+}
+function closeEditModal() {
+  $('edit-modal-overlay').style.display = 'none';
+  editingId = null;
+}
+
+// Auto-fill RTW in edit modal
+$('edit-end').addEventListener('change', () => {
+  const end = $('edit-end').value;
+  if (!end || $('edit-rtw').value) return; // don't override if already set
+  const d = new Date(end + 'T00:00:00'); d.setDate(d.getDate() + 1);
+  if (d.getDay() === 6) d.setDate(d.getDate() + 2);
+  if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+  $('edit-rtw').value = d.toISOString().slice(0,10);
+});
+
+$('btn-save-edit').addEventListener('click', async () => {
+  if (!editingId) return;
+  const type    = $('edit-type').value;
+  const start   = $('edit-start').value;
+  const end     = $('edit-end').value;
+  const rtw     = $('edit-rtw').value;
+  const halfDay = $('edit-halfday').value;
+  const note    = $('edit-note').value.trim();
+  const errEl   = $('edit-error');
+  errEl.style.display = 'none';
+  if (!start || !end) { errEl.textContent = 'Please select start and end dates.'; errEl.style.display='block'; return; }
+  if (start > end)    { errEl.textContent = 'Start date must be on or before end date.'; errEl.style.display='block'; return; }
+
+  $('btn-save-edit').disabled = true; $('btn-save-edit').textContent = 'Saving…';
+  try {
+    const r = await fetch(`/api/time-off/${editingId}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type, start_date: start, end_date: end, return_to_work_date: rtw||null, half_day: halfDay||null, note: note||null })
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || 'Failed to save.'; errEl.style.display='block'; return; }
+    showToast('Request updated & re-submitted ✓', 'success');
+    closeEditModal();
+    await loadCalendarData(); loadPersonFilter(); loadMyRequests();
+  } catch { errEl.textContent = 'Network error. Try again.'; errEl.style.display='block'; }
+  finally { $('btn-save-edit').disabled = false; $('btn-save-edit').textContent = 'Save & Re-submit'; }
+});
 
 function fmtDate(d) {
   if (!d) return '—';

@@ -1039,7 +1039,30 @@ let currentUser = null;
   const r = await fetch('/api/auth/me');
   if (!r.ok) { location.href = '/login.html'; return; }
   currentUser = await r.json();
-  if (currentUser.role !== 'admin') { location.href = '/field.html'; return; }
+  const isAdmin = currentUser.role === 'admin';
+  const isTimeOffApprover = isAdmin || (currentUser.permissions||'').split(',').includes('time_off_approve');
+  if (!isAdmin && !isTimeOffApprover) { location.href = '/field.html'; return; }
+
+  // If non-admin approver: show only the time off section, hide everything else
+  if (!isAdmin) {
+    // Hide nav items not relevant
+    ['nav-tt','nav-archive','nav-pos','nav-projects','nav-timesheets','nav-team','nav-settings'].forEach(id => {
+      const el = $(id); if (el) el.closest('a,li')?.style && (el.style.display = 'none'), el?.parentElement?.setAttribute && el?.closest('a')?.remove?.();
+    });
+    // Remove admin-only nav links
+    document.querySelectorAll('#office-nav a').forEach(a => {
+      const txt = a.textContent.trim();
+      if (!['Time Off','Sign Out'].includes(txt)) a.style.display = 'none';
+    });
+    document.body.style.visibility = 'visible';
+    showTimeOffView();
+    // Load pending count for nav badge
+    fetch('/api/time-off/pending-count').then(r=>r.json()).then(d=>{
+      setNavBadge('badge-timeoff', d.count || 0);
+    }).catch(()=>{});
+    return;
+  }
+
   document.body.style.visibility = 'visible';
   showHomeView();               // Home is the default landing
   loadNavBadges();              // show outstanding counts immediately

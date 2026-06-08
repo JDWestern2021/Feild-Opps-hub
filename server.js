@@ -1515,7 +1515,15 @@ async function removeTimeOffTimesheetRows(requestId) {
 }
 
 // ── Admin: approve or deny ──
-app.patch('/api/time-off/:id/review', requireAdmin, async (req, res) => {
+// ── Helper: check if user can approve time off ──
+function canApproveTimeOff(user) {
+  if (user.role === 'admin') return true;
+  const perms = (user.permissions || '').split(',').map(p => p.trim());
+  return perms.includes('time_off_approve');
+}
+
+app.patch('/api/time-off/:id/review', requireAuth, async (req, res) => {
+  if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'You do not have permission to approve time off requests' });
   const { status, review_note } = req.body;
   if (!['approved', 'denied'].includes(status)) return res.status(400).json({ error: 'status must be approved or denied' });
   const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
@@ -1550,6 +1558,41 @@ app.patch('/api/time-off/:id/cancel', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Field user: edit own pending or cancelled request ──
+app.patch('/api/time-off/:id', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Forbidden' });
+  if (!['pending','cancelled'].includes(rows[0].status))
+    return res.status(400).json({ error: 'Only pending or cancelled requests can be edited' });
+  const { type, start_date, end_date, return_to_work_date, half_day, note } = req.body;
+  if (!type || !start_date || !end_date) return res.status(400).json({ error: 'type, start_date and end_date are required' });
+  if (start_date > end_date) return res.status(400).json({ error: 'start_date must be on or before end_date' });
+  const now = new Date().toISOString();
+  // Re-open as pending when editing a cancelled request
+  const newStatus = rows[0].status === 'cancelled' ? 'pending' : 'pending';
+  await pool.query(
+    `UPDATE time_off_requests SET type=$1,start_date=$2,end_date=$3,return_to_work_date=$4,half_day=$5,note=$6,status=$7,updated_at=$8 WHERE id=$9`,
+    [type, start_date, end_date, return_to_work_date || null, half_day || null, note || null, newStatus, now, req.params.id]
+  );
+  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+    [req.params.id, req.user.name, 'edited', `Edited and re-submitted as ${newStatus}`, now]);
+  res.json({ ok: true });
+});
+
+// ── Field user: delete own cancelled request ──
+app.delete('/api/time-off/:id', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Forbidden' });
+  if (!['cancelled','denied'].includes(rows[0].status))
+    return res.status(400).json({ error: 'Only cancelled or denied requests can be deleted' });
+  await pool.query('DELETE FROM time_off_requests WHERE id=$1', [req.params.id]);
+  res.json({ ok: true });
+});
+
 // ── My notifications: approved/denied requests the user hasn't acknowledged ──
 app.get('/api/time-off/my-notifications', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
@@ -1563,7 +1606,8 @@ app.get('/api/time-off/my-notifications', requireAuth, async (req, res) => {
 
 // ── Dashboard overview includes pending time-off count ──
 // (Exposed via /api/time-off/pending-count for nav badge)
-app.get('/api/time-off/pending-count', requireAdmin, async (req, res) => {
+app.get('/api/time-off/pending-count', requireAuth, async (req, res) => {
+  if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
   const { rows } = await pool.query("SELECT COUNT(*) AS c FROM time_off_requests WHERE status='pending'");
   res.json({ count: parseInt(rows[0].c) });
 });

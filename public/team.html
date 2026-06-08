@@ -220,8 +220,8 @@
 const $ = id => document.getElementById(id);
 let currentUser;
 let resetTargetId = null;
-const ALL_MODULES = ['time_ticket','get_po','office_dashboard','timesheet_edit'];
-const MODULE_LABELS = { time_ticket: 'Time Ticket', get_po: 'Get PO', office_dashboard: 'Office Dashboard', timesheet_edit: 'Timesheet Edit' };
+const ALL_MODULES = ['time_ticket','get_po','office_dashboard','timesheet_edit','time_off_approve'];
+const MODULE_LABELS = { time_ticket: 'Time Ticket', get_po: 'Get PO', office_dashboard: 'Office Dashboard', timesheet_edit: 'Timesheet Edit', time_off_approve: 'Time Off Approval' };
 
 function showToast(msg, type='') {
   const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
