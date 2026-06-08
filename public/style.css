@@ -305,3 +305,148 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .modal { border-radius: 16px 16px 0 0; }
   .modal-overlay { align-items: flex-end; padding: 0; }
 }
+
+/* ═══════════════════════════════════════════
+   GLOBAL MOBILE OVERRIDES  ≤ 768px
+   ═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Header: hide text, keep logo + minimal nav ── */
+  .app-header { padding: 0 12px; height: 52px; }
+  .header-title .company { display: none; }
+  .header-title .module  { font-size: 13px; }
+  .header-logo { height: 34px; width: 34px; }
+
+  /* ── Nav: compress to icon-only or collapse ── */
+  .header-nav { gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .header-nav::-webkit-scrollbar { display: none; }
+  .header-nav a { font-size: 12px; padding: 5px 8px; white-space: nowrap; }
+
+  /* ── Body text sizes ── */
+  body { font-size: 14px; }
+
+  /* ── Buttons: bigger tap targets ── */
+  .btn { padding: 11px 18px; font-size: 14px; }
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+  .btn-lg { padding: 15px 20px; font-size: 15px; }
+
+  /* ── Form controls: larger for finger input ── */
+  .form-control { padding: 13px 14px; font-size: 16px; } /* 16px prevents iOS zoom */
+  select.form-control { font-size: 16px; }
+  textarea.form-control { font-size: 16px; }
+
+  /* ── Card body: less padding ── */
+  .card-body { padding: 14px 16px; }
+  .card-header { padding: 12px 16px; }
+
+  /* ── Modal: slide up from bottom ── */
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal { border-radius: 20px 20px 0 0; max-height: 92vh; max-width: 100%; }
+  .modal-header { padding: 16px 18px 12px; }
+  .modal-body   { padding: 14px 18px; }
+  .modal-footer { padding: 12px 18px; flex-wrap: wrap; }
+  .modal-footer .btn { flex: 1; justify-content: center; min-width: 80px; }
+
+  /* ── Grid utilities ── */
+  .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 12px; }
+
+  /* ── Landing cards: single column ── */
+  .landing-cards { grid-template-columns: 1fr; gap: 12px; margin-top: 28px; }
+
+  /* ── Toast: full-width ── */
+  #toast { left: 12px; right: 12px; transform: translateX(0) translateY(80px); max-width: none; }
+  #toast.show { transform: translateX(0) translateY(0); }
+}
+
+/* ═══════════════════════════════════════════
+   OFFICE DASHBOARD MOBILE  ≤ 768px
+   ═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  .page-wrap { padding: 14px 12px 48px; }
+
+  /* Stats grid: 2 cols */
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-val  { font-size: 22px; }
+  .stat-label{ font-size: 11px; }
+
+  /* Filter bar: stack vertically */
+  .filter-bar { flex-direction: column; gap: 8px; }
+  .filter-bar .form-group { min-width: 0; }
+  .filter-actions { width: 100%; justify-content: flex-start; }
+
+  /* Ticket rows: simplified 2-col layout */
+  .ticket-row {
+    grid-template-columns: 80px 1fr 60px 36px !important;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .ticket-supervisor { display: none; }
+  .ticket-job .job-num { display: none; }
+
+  /* PO table: horizontal scroll */
+  .po-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .po-filter-bar { flex-direction: column; gap: 8px; }
+  .po-filter-bar .form-group { min-width: 0; }
+
+  /* Home cards: 1 col */
+  .home-cards { grid-template-columns: 1fr; gap: 10px; }
+
+  /* Project cards: stack */
+  .project-card { padding: 14px; }
+
+  /* Timesheets: scroll */
+  #ts-employee-list { overflow-x: auto; }
+  #ts-day-table { min-width: 600px; }
+
+  /* Timeoff stats bar: 2×2 grid */
+  #to-stats-bar { grid-template-columns: repeat(2,1fr) !important; }
+}
+
+/* ═══════════════════════════════════════════
+   FIELD VIEW MOBILE  ≤ 480px
+   ═══════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .ticket-header-bar { padding: 14px 16px; }
+  .form-section      { padding: 14px 16px; }
+
+  /* Employee table: horizontal scroll on mobile */
+  .employee-table { min-width: 480px; }
+  .form-section > div[style*="overflow"] { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  .submit-section { padding: 14px 16px 24px; }
+}
+
+/* ═══════════════════════════════════════════
+   HAMBURGER NAV  ≤ 600px
+   ═══════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Show hamburger toggle button */
+  .nav-hamburger { display: flex !important; }
+
+  /* Mobile nav drawer (hidden by default, shown when .open) */
+  .header-nav {
+    position: fixed;
+    top: 52px;
+    left: 0; right: 0;
+    background: var(--black);
+    flex-direction: column;
+    padding: 8px 12px 16px;
+    gap: 2px;
+    display: none !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    z-index: 99;
+    overflow-x: unset;
+  }
+  .header-nav.nav-open { display: flex !important; }
+  .header-nav a { padding: 10px 14px; border-radius: 8px; font-size: 14px; width: 100%; }
+  .header-nav a.active { background: var(--orange); }
+
+  /* Hamburger icon */
+  .nav-hamburger {
+    background: none; border: none; cursor: pointer;
+    color: white; padding: 6px; display: none;
+    flex-direction: column; gap: 4px;
+  }
+  .nav-hamburger span { display: block; width: 20px; height: 2px; background: white; border-radius: 2px; transition: .2s; }
+}

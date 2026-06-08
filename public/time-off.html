@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Time Off — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { visibility: hidden; background: var(--gray-100); }
+
+    .page-container { max-width: 700px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    /* Tabs */
+    .view-tabs { display: flex; gap: 4px; margin-bottom: 20px; background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 6px; }
+    .view-tab { flex: 1; padding: 9px 4px; border: none; background: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--gray-500); transition: all .15s; }
+    .view-tab.active { background: var(--orange); color: white; }
+
+    /* Calendar */
+    .cal-wrap { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .cal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--dark); color: white; }
+    .cal-header h2 { font-size: 15px; font-weight: 700; }
+    .cal-nav { background: none; border: 1px solid rgba(255,255,255,.3); color: white; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .cal-nav:hover { background: rgba(255,255,255,.1); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .cal-dow { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); padding: 10px 2px 6px; }
+    .cal-cell { min-height: 64px; padding: 4px 5px; border-top: 1px solid var(--gray-100); border-right: 1px solid var(--gray-100); position: relative; cursor: default; }
+    .cal-cell:nth-child(7n) { border-right: none; }
+    .cal-cell.other-month .cal-num { color: var(--gray-300); }
+    .cal-cell.today { background: #fff8f0; }
+    .cal-cell.today .cal-num { background: var(--orange); color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+    .cal-num { font-size: 12px; font-weight: 600; color: var(--dark); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+    .cal-stat { font-size: 9px; font-weight: 800; color: #1a6e35; background: #d4edda; border-radius: 3px; padding: 1px 4px; margin-top: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cal-event { font-size: 9px; font-weight: 700; border-radius: 3px; padding: 1px 4px; margin-top: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .cal-event.approved { background: #d1e7ff; color: #084298; }
+    .cal-event.approved.vacation { background: #cce5ff; color: #004085; }
+    .cal-event.approved.sick    { background: #d4edda; color: #155724; }
+    .cal-event.approved.unpaid  { background: #e2e3e5; color: #383d41; }
+    .cal-event.approved.other   { background: #fce8b2; color: #856404; }
+    .cal-event.pending  { background: repeating-linear-gradient(45deg, #f8f9fa, #f8f9fa 2px, #dee2e6 2px, #dee2e6 4px); color: #495057; border: 1px solid #ced4da; }
+    .cal-event.mine { outline: 2px solid var(--orange); }
+
+    /* Request form */
+    .req-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .req-header { background: linear-gradient(135deg, var(--black) 60%, var(--orange) 100%); color: white; padding: 18px 20px; }
+    .req-header h1 { font-size: 17px; font-weight: 800; }
+    .req-header .sub { font-size: 12px; color: rgba(255,255,255,.65); margin-top: 2px; }
+    .req-body { padding: 20px; }
+
+    /* My requests list */
+    .req-item { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 12px; }
+    .req-type-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+    .req-type-dot.vacation { background: #2563eb; }
+    .req-type-dot.sick     { background: var(--green); }
+    .req-type-dot.unpaid   { background: var(--gray-500); }
+    .req-type-dot.other    { background: var(--orange); }
+    .req-info { flex: 1; min-width: 0; }
+    .req-dates { font-size: 14px; font-weight: 700; }
+    .req-meta  { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+    .req-status { padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
+    .req-status.pending  { background: #fff3cd; color: #856404; }
+    .req-status.approved { background: #d4edda; color: #155724; }
+    .req-status.denied   { background: #f8d7da; color: #721c24; }
+    .req-status.cancelled{ background: var(--gray-100); color: var(--gray-500); }
+    .cancel-btn { background: none; border: 1px solid var(--gray-300); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--gray-500); margin-top: 6px; }
+    .cancel-btn:hover { border-color: var(--red); color: var(--red); }
+
+    /* Event detail popup */
+    .event-popup {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--dark); color: white; border-radius: 12px;
+      padding: 14px 18px; z-index: 300; max-width: 320px; width: calc(100% - 32px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.3); font-size: 13px; display: none;
+    }
+    .event-popup.show { display: block; }
+    .event-popup .ep-close { position: absolute; top: 8px; right: 10px; background: none; border: none; color: rgba(255,255,255,.5); font-size: 18px; cursor: pointer; }
+    .event-popup strong { color: var(--orange); }
+
+    /* Filter bar for calendar */
+    .cal-filter { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 14px; margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+    .cal-filter label { font-weight: 600; color: var(--gray-700); }
+    .cal-filter select { padding: 5px 8px; border: 1.5px solid var(--gray-300); border-radius: var(--radius-sm); font-size: 13px; background: white; color: var(--dark); }
+
+    .empty-notice { text-align: center; padding: 40px 20px; color: var(--gray-500); font-size: 14px; }
+
+    @media (max-width: 480px) {
+      .cal-cell { min-height: 52px; padding: 3px 2px; }
+      .cal-event { font-size: 8px; padding: 1px 2px; }
+      .cal-stat  { font-size: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-brand">
+    <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
+    <div class="header-title">
+      <span class="company">J&D Western Electric</span>
+      <span class="module">Time Off</span>
+    </div>
+  </div>
+  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+    <a href="field.html">← Hub</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page-container">
+
+  <!-- View tabs -->
+  <div class="view-tabs">
+    <button class="view-tab active" id="tab-calendar" onclick="showTab('calendar')">📅 Calendar</button>
+    <button class="view-tab" id="tab-request"  onclick="showTab('request')">+ New Request</button>
+    <button class="view-tab" id="tab-my"       onclick="showTab('my')">My Requests</button>
+  </div>
+
+  <!-- CALENDAR VIEW -->
+  <div id="view-calendar">
+    <div class="cal-filter">
+      <label>Person:</label>
+      <select id="cf-person">
+        <option value="">Everyone</option>
+      </select>
+      <label>Type:</label>
+      <select id="cf-type">
+        <option value="">All Types</option>
+        <option value="Vacation">Vacation</option>
+        <option value="Sick">Sick</option>
+        <option value="Unpaid">Unpaid</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="cal-wrap">
+      <div class="cal-header">
+        <button class="cal-nav" id="cal-prev">‹</button>
+        <h2 id="cal-title"></h2>
+        <button class="cal-nav" id="cal-next">›</button>
+      </div>
+      <div class="cal-grid" id="cal-grid">
+        <div class="cal-dow">Sun</div><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div>
+        <div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div><div class="cal-dow">Sat</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REQUEST FORM -->
+  <div id="view-request" style="display:none;">
+    <div class="req-card">
+      <div class="req-header">
+        <h1>New Time Off Request</h1>
+        <div class="sub">Requests go to the office for approval</div>
+      </div>
+      <div class="req-body">
+        <div class="form-group">
+          <label class="form-label">Type <span class="required">*</span></label>
+          <select id="to-type" class="form-control">
+            <option value="Vacation">Vacation</option>
+            <option value="Sick">Sick</option>
+            <option value="Unpaid">Unpaid</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="grid-2 mt-12">
+          <div class="form-group">
+            <label class="form-label">Start Date <span class="required">*</span></label>
+            <input type="date" id="to-start" class="form-control"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">End Date <span class="required">*</span></label>
+            <input type="date" id="to-end" class="form-control"/>
+          </div>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label">Half Day</label>
+          <select id="to-halfday" class="form-control">
+            <option value="">Full Day(s)</option>
+            <option value="morning">Morning (AM)</option>
+            <option value="afternoon">Afternoon (PM)</option>
+          </select>
+        </div>
+        <div class="form-group mt-12">
+          <label class="form-label">Note <span style="font-weight:400;color:var(--gray-500);">(optional)</span></label>
+          <textarea id="to-note" class="form-control" rows="3" placeholder="Reason or details…"></textarea>
+        </div>
+        <div id="overlap-warning" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:10px 14px; margin-top:12px; font-size:13px; color:#856404;">
+          ⚠️ <strong>Heads up:</strong> <span id="overlap-msg"></span>
+        </div>
+        <div id="req-error" style="display:none; background:#f8d7da; border-radius:8px; padding:10px 14px; margin-top:12px; font-size:13px; color:#721c24;"></div>
+        <button class="btn btn-primary btn-lg mt-16" id="btn-submit-req">Submit Request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MY REQUESTS -->
+  <div id="view-my" style="display:none;">
+    <div id="my-req-list">
+      <div class="empty-notice">Loading…</div>
+    </div>
+  </div>
+
+</div><!-- /page-container -->
+
+<!-- Event detail popup -->
+<div class="event-popup" id="event-popup">
+  <button class="ep-close" onclick="closeEventPopup()">×</button>
+  <div id="event-popup-content"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let currentUser = null;
+let calEvents = [];
+let statHolidays = {};
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-based
+let allUsers = [];
+
+// ── Auth ──
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  currentUser = await r.json();
+  document.body.style.visibility = 'visible';
+  $('logout-btn').addEventListener('click', async e => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', {method:'POST'});
+    location.href = '/login.html';
+  });
+  // Set default start date to tomorrow
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  $('to-start').value = $('to-end').value = tomorrow.toISOString().slice(0,10);
+  await loadCalendarData();
+  renderCalendar();
+  loadPersonFilter();
+})();
+
+function showToast(msg, type='') {
+  const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
+  setTimeout(() => t.className = '', 3200);
+}
+
+function showTab(tab) {
+  ['calendar','request','my'].forEach(t => {
+    $(`view-${t}`).style.display = t === tab ? '' : 'none';
+    $(`tab-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'my') loadMyRequests();
+  if (tab === 'calendar') renderCalendar();
+}
+
+// ── Calendar data load ──
+async function loadCalendarData() {
+  const yr = calYear;
+  // Load 7 months around current (to cover adjacent months)
+  const from = new Date(yr, calMonth - 1, 1).toISOString().slice(0,10);
+  const to   = new Date(yr, calMonth + 7, 1).toISOString().slice(0,10);
+  const [evRes, holRes] = await Promise.all([
+    fetch(`/api/time-off/calendar?from_date=${from}&to_date=${to}`),
+    fetch(`/api/time-off/holidays?from_year=${yr-1}&to_year=${yr+2}`)
+  ]);
+  calEvents = evRes.ok ? await evRes.json() : [];
+  const hols = holRes.ok ? await holRes.json() : [];
+  statHolidays = {};
+  hols.forEach(h => { statHolidays[h.date] = h.name; });
+}
+
+function loadPersonFilter() {
+  // Build person list from events
+  const people = {};
+  calEvents.forEach(e => { if (e.user_id) people[e.user_id] = e.user_name; });
+  const sel = $('cf-person');
+  sel.innerHTML = '<option value="">Everyone</option>';
+  Object.entries(people).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id,name]) => {
+    sel.innerHTML += `<option value="${id}">${name}</option>`;
+  });
+}
+
+$('cal-prev').addEventListener('click', () => { calMonth--; if(calMonth<0){calMonth=11;calYear--;} loadCalendarData().then(renderCalendar); });
+$('cal-next').addEventListener('click', () => { calMonth++; if(calMonth>11){calMonth=0;calYear++;} loadCalendarData().then(renderCalendar); });
+$('cf-person').addEventListener('change', renderCalendar);
+$('cf-type').addEventListener('change', renderCalendar);
+
+function renderCalendar() {
+  const filterPerson = $('cf-person').value;
+  const filterType   = $('cf-type').value;
+  const title = new Date(calYear, calMonth, 1).toLocaleDateString('en-CA', {month:'long',year:'numeric'});
+  $('cal-title').textContent = title;
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today = new Date().toISOString().slice(0,10);
+
+  // Build cells
+  const grid = $('cal-grid');
+  // Remove old cells (keep DOW headers — first 7 children)
+  while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+
+  // Previous month padding
+  const prevMonthDays = new Date(calYear, calMonth, 0).getDate();
+  for (let i = 0; i < firstDay; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell other-month';
+    const d = prevMonthDays - firstDay + 1 + i;
+    cell.innerHTML = `<div class="cal-num">${d}</div>`;
+    grid.appendChild(cell);
+  }
+
+  // Current month
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell' + (dateStr === today ? ' today' : '');
+
+    const numEl = document.createElement('div');
+    numEl.className = 'cal-num';
+    numEl.textContent = d;
+    cell.appendChild(numEl);
+
+    // Stat holiday
+    if (statHolidays[dateStr]) {
+      const span = document.createElement('span');
+      span.className = 'cal-stat';
+      span.title = statHolidays[dateStr];
+      span.textContent = statHolidays[dateStr];
+      cell.appendChild(span);
+    }
+
+    // Time-off events covering this date
+    calEvents
+      .filter(e => {
+        if (e.start_date > dateStr || e.end_date < dateStr) return false;
+        if (filterPerson && String(e.user_id) !== filterPerson) return false;
+        if (filterType && e.type !== filterType) return false;
+        return true;
+      })
+      .forEach(e => {
+        const span = document.createElement('span');
+        const isMine = e.user_id === currentUser?.id;
+        span.className = `cal-event ${e.status} ${e.type.toLowerCase()}${isMine ? ' mine' : ''}`;
+        span.textContent = isMine && e.status === 'pending' ? `(pending) ${e.user_name}` : e.user_name;
+        span.title = `${e.user_name} — ${e.type} | ${e.start_date} to ${e.end_date}${e.half_day ? ' (' + e.half_day + ')' : ''}`;
+        span.addEventListener('click', ev => { ev.stopPropagation(); showEventDetail(e); });
+        cell.appendChild(span);
+      });
+
+    grid.appendChild(cell);
+  }
+
+  // Next month padding
+  const totalCells = firstDay + daysInMonth;
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 1; i <= remaining; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell other-month';
+    cell.innerHTML = `<div class="cal-num">${i}</div>`;
+    grid.appendChild(cell);
+  }
+}
+
+function showEventDetail(e) {
+  const popup = $('event-popup');
+  const isMine = e.user_id === currentUser?.id;
+  const days = dayCount(e.start_date, e.end_date);
+  $('event-popup-content').innerHTML = `
+    <strong>${e.user_name}</strong> — ${e.type}<br>
+    ${fmtDate(e.start_date)} ${e.start_date !== e.end_date ? '→ ' + fmtDate(e.end_date) : ''}
+    ${e.half_day ? `<br><em>${e.half_day === 'morning' ? '☀️ Morning only' : '🌇 Afternoon only'}</em>` : ''}
+    <br><span style="opacity:.7;font-size:12px;">${days} day${days!==1?'s':''} · Status: ${e.status}</span>
+    ${e.note ? `<br><span style="opacity:.7;font-size:12px;">"${e.note}"</span>` : ''}
+  `;
+  popup.classList.add('show');
+  // Auto-close after 5s
+  clearTimeout(popup._timer);
+  popup._timer = setTimeout(closeEventPopup, 5000);
+}
+function closeEventPopup() { $('event-popup').classList.remove('show'); }
+document.addEventListener('click', e => { if (!$('event-popup').contains(e.target)) closeEventPopup(); });
+
+// ── Submit request ──
+$('btn-submit-req').addEventListener('click', async () => {
+  const type     = $('to-type').value;
+  const start    = $('to-start').value;
+  const end      = $('to-end').value;
+  const halfDay  = $('to-halfday').value;
+  const note     = $('to-note').value.trim();
+  const errEl    = $('req-error');
+  errEl.style.display = 'none';
+  if (!start || !end)    { errEl.textContent = 'Please select start and end dates.'; errEl.style.display='block'; return; }
+  if (start > end)       { errEl.textContent = 'Start date must be before or equal to end date.'; errEl.style.display='block'; return; }
+
+  $('btn-submit-req').disabled = true;
+  $('btn-submit-req').textContent = 'Submitting…';
+  try {
+    const r = await fetch('/api/time-off', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type, start_date: start, end_date: end, half_day: halfDay||null, note: note||null })
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || 'Failed to submit.'; errEl.style.display='block'; return; }
+    showToast('Time off request submitted!', 'success');
+    // Reset form
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    $('to-start').value = $('to-end').value = tomorrow.toISOString().slice(0,10);
+    $('to-note').value = ''; $('to-halfday').value = '';
+    $('overlap-warning').style.display = 'none';
+    await loadCalendarData();
+    showTab('my');
+  } catch { errEl.textContent = 'Network error. Try again.'; errEl.style.display='block'; }
+  finally { $('btn-submit-req').disabled = false; $('btn-submit-req').textContent = 'Submit Request'; }
+});
+
+// ── Overlap check on date change ──
+async function checkOverlap() {
+  const start = $('to-start').value, end = $('to-end').value;
+  if (!start || !end || start > end) return;
+  const overlapping = calEvents.filter(e => e.status === 'approved' && e.start_date <= end && e.end_date >= start);
+  const warn = $('overlap-warning');
+  if (overlapping.length >= 1) {
+    const names = [...new Set(overlapping.map(e => e.user_name))];
+    $('overlap-msg').textContent = `${names.join(', ')} ${names.length===1?'is':'are'} already off during this period.`;
+    warn.style.display = 'block';
+  } else { warn.style.display = 'none'; }
+}
+$('to-start').addEventListener('change', checkOverlap);
+$('to-end').addEventListener('change', checkOverlap);
+
+// ── My requests ──
+async function loadMyRequests() {
+  const r = await fetch(`/api/time-off?user_id=${currentUser.id}`);
+  const reqs = r.ok ? await r.json() : [];
+  const myReqs = reqs.filter(req => req.user_id === currentUser.id);
+  const list = $('my-req-list');
+  if (!myReqs.length) { list.innerHTML = '<div class="empty-notice">No requests yet. Use "New Request" to submit your first one.</div>'; return; }
+  list.innerHTML = myReqs.map(req => {
+    const days = dayCount(req.start_date, req.end_date);
+    const halfLabel = req.half_day ? ` — ${req.half_day}` : '';
+    const reviewNote = req.review_note ? `<div style="font-size:12px;color:var(--gray-500);margin-top:4px;">Office note: "${req.review_note}"</div>` : '';
+    const cancelBtn = req.status === 'pending'
+      ? `<button class="cancel-btn" onclick="cancelRequest(${req.id})">Cancel Request</button>` : '';
+    return `<div class="req-item">
+      <div class="req-type-dot ${req.type.toLowerCase()}"></div>
+      <div class="req-info">
+        <div class="req-dates">${fmtDate(req.start_date)}${req.start_date !== req.end_date ? ' → ' + fmtDate(req.end_date) : ''}${halfLabel}</div>
+        <div class="req-meta">${req.type} · ${days} day${days!==1?'s':''} · Submitted ${fmtDate(req.created_at?.slice(0,10))}</div>
+        ${reviewNote}${cancelBtn}
+      </div>
+      <span class="req-status ${req.status}">${req.status}</span>
+    </div>`;
+  }).join('');
+}
+
+async function cancelRequest(id) {
+  if (!confirm('Cancel this time off request?')) return;
+  const r = await fetch(`/api/time-off/${id}/cancel`, {method:'PATCH'});
+  if (r.ok) { showToast('Request cancelled.'); await loadCalendarData(); loadMyRequests(); }
+  else { const d = await r.json(); showToast(d.error || 'Failed to cancel.', 'error'); }
+}
+
+// ── Helpers ──
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-CA', {month:'short', day:'numeric', year:'numeric'});
+}
+function dayCount(start, end) {
+  const s = new Date(start + 'T00:00:00'), e = new Date(end + 'T00:00:00');
+  return Math.round((e - s) / 86400000) + 1;
+}
+</script>
+</body>
+</html>

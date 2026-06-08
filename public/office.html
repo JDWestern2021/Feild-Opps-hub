@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
   <title>Office Dashboard — J&D Western Electric</title>
   <link rel="stylesheet" href="style.css"/>
   <link rel="stylesheet" href="theme.css"/>
@@ -327,6 +333,36 @@
     /* Grey "archived on main dashboard" label inside the project view */
     .archived-label { display:inline-block; font-size:10px; background:#e0e0e0; color:#666; padding:1px 7px; border-radius:8px; font-weight:600; vertical-align:middle; margin-left:6px; }
 
+    /* ── Time Off styles ── */
+    .to-cal-dow { text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-500);padding:10px 2px 6px; }
+    .to-cal-cell { min-height:80px;padding:5px;border-top:1px solid var(--gray-100);border-right:1px solid var(--gray-100);position:relative; }
+    .to-cal-cell:nth-child(7n) { border-right:none; }
+    .to-cal-cell.other-month .to-cal-num { color:var(--gray-300); }
+    .to-cal-cell.today { background:#fff8f0; }
+    .to-cal-cell.today .to-cal-num { background:var(--orange);color:white;border-radius:50%; }
+    .to-cal-num { width:24px;height:24px;font-size:12px;font-weight:600;color:var(--dark);display:flex;align-items:center;justify-content:center; }
+    .to-cal-stat { font-size:9px;font-weight:800;color:#1a6e35;background:#d4edda;border-radius:3px;padding:1px 4px;margin-top:2px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .to-cal-event { font-size:10px;font-weight:700;border-radius:3px;padding:2px 5px;margin-top:2px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer; }
+    .to-cal-event.approved { background:#d1e7ff;color:#084298; }
+    .to-cal-event.approved.vacation { background:#cce5ff;color:#004085; }
+    .to-cal-event.approved.sick     { background:#d4edda;color:#155724; }
+    .to-cal-event.approved.unpaid   { background:#e2e3e5;color:#383d41; }
+    .to-cal-event.approved.other    { background:#fce8b2;color:#856404; }
+    .to-cal-event.pending { background:repeating-linear-gradient(45deg,#f8f9fa,#f8f9fa 2px,#dee2e6 2px,#dee2e6 4px);color:#495057;border:1px solid #ced4da; }
+    .cal-nav-btn { background:none;border:1px solid rgba(255,255,255,.3);color:white;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:16px;font-weight:700; }
+    .cal-nav-btn:hover { background:rgba(255,255,255,.1); }
+    .to-req-card { background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px; }
+    .to-req-card .req-type-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:5px; }
+    .to-req-card .req-type-dot.vacation { background:#2563eb; }
+    .to-req-card .req-type-dot.sick     { background:var(--green); }
+    .to-req-card .req-type-dot.unpaid   { background:var(--gray-500); }
+    .to-req-card .req-type-dot.other    { background:var(--orange); }
+    .to-status-pill { padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;white-space:nowrap;flex-shrink:0; }
+    .to-status-pill.pending  { background:#fff3cd;color:#856404; }
+    .to-status-pill.approved { background:#d4edda;color:#155724; }
+    .to-status-pill.denied   { background:#f8d7da;color:#721c24; }
+    .to-status-pill.cancelled{ background:var(--gray-100);color:var(--gray-500); }
+
     @media (max-width: 900px) {
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .ticket-row { grid-template-columns: 90px 1fr 1fr 70px; }
@@ -351,12 +387,16 @@
       <span class="module">Office Dashboard</span>
     </div>
   </div>
-  <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
+  <button class="nav-hamburger" id="nav-hamburger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+  <nav class="header-nav" id="main-nav" style="display:flex;gap:4px;align-items:center;">
     <a href="#" id="nav-home">Home</a>
     <a href="#" id="nav-tickets" style="position:relative;">Time Tickets<span class="nav-badge" id="badge-tickets" style="display:none;"></span></a>
     <a href="#" id="nav-projects" style="position:relative;">Projects<span class="nav-badge" id="badge-projects" style="display:none;"></span></a>
     <a href="#" id="nav-pos" style="position:relative;">Purchase Orders<span class="nav-badge" id="badge-pos" style="display:none;"></span></a>
     <a href="#" id="nav-timesheets">Timesheets</a>
+    <a href="#" id="nav-timeoff" style="position:relative;">Time Off<span class="nav-badge" id="badge-timeoff" style="display:none;"></span></a>
     <a href="field.html" style="font-size:12px;opacity:.7;">+ New Ticket</a>
     <a href="team.html">Team</a>
     <a href="settings-admin.html">Settings</a>
@@ -555,6 +595,122 @@
             <tbody id="ts-day-tbody"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIME OFF VIEW -->
+  <div id="timeoff-view" style="display:none;">
+    <div class="flex-between" style="margin-bottom:16px;">
+      <h2 style="font-size:18px;font-weight:800;">Time Off Requests</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" id="btn-to-config">⚙ Settings</button>
+        <button class="btn btn-secondary btn-sm" id="btn-close-timeoff">← Back</button>
+      </div>
+    </div>
+
+    <!-- Sub-tabs: Requests | Calendar -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <button class="proj-tab active" id="to-tab-requests" onclick="showTOTab('requests')">📋 Pending Requests</button>
+      <button class="proj-tab" id="to-tab-calendar" onclick="showTOTab('calendar')">📅 Calendar</button>
+    </div>
+
+    <!-- PENDING REQUESTS TAB -->
+    <div id="to-requests-tab">
+      <!-- Quick stats bar -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;" id="to-stats-bar">
+        <div class="home-card" style="padding:14px 16px;cursor:pointer;" onclick="filterTORequests('pending')">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);">Pending</div>
+          <div style="font-size:28px;font-weight:800;" id="to-stat-pending">—</div>
+        </div>
+        <div class="home-card" style="padding:14px 16px;cursor:pointer;" onclick="filterTORequests('approved')">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1a6e35;">Approved</div>
+          <div style="font-size:28px;font-weight:800;" id="to-stat-approved">—</div>
+        </div>
+        <div class="home-card" style="padding:14px 16px;cursor:pointer;" onclick="filterTORequests('denied')">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--red);">Denied</div>
+          <div style="font-size:28px;font-weight:800;" id="to-stat-denied">—</div>
+        </div>
+        <div class="home-card" style="padding:14px 16px;cursor:pointer;" onclick="filterTORequests('')">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);">All</div>
+          <div style="font-size:28px;font-weight:800;" id="to-stat-all">—</div>
+        </div>
+      </div>
+
+      <div id="to-req-list"></div>
+    </div>
+
+    <!-- CALENDAR TAB -->
+    <div id="to-calendar-tab" style="display:none;">
+      <!-- Filter bar -->
+      <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px;">
+        <label style="font-weight:600;">Person:</label>
+        <select id="admin-cf-person" class="form-control" style="padding:5px 8px;width:auto;font-size:13px;">
+          <option value="">Everyone</option>
+        </select>
+        <label style="font-weight:600;">Type:</label>
+        <select id="admin-cf-type" class="form-control" style="padding:5px 8px;width:auto;font-size:13px;">
+          <option value="">All Types</option>
+          <option value="Vacation">Vacation</option>
+          <option value="Sick">Sick</option>
+          <option value="Unpaid">Unpaid</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <!-- Calendar -->
+      <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--dark);color:white;">
+          <button class="cal-nav-btn" id="admin-cal-prev">‹</button>
+          <h3 style="font-size:15px;font-weight:700;" id="admin-cal-title"></h3>
+          <button class="cal-nav-btn" id="admin-cal-next">›</button>
+        </div>
+        <div id="admin-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);">
+          <div class="to-cal-dow">Sun</div><div class="to-cal-dow">Mon</div><div class="to-cal-dow">Tue</div>
+          <div class="to-cal-dow">Wed</div><div class="to-cal-dow">Thu</div><div class="to-cal-dow">Fri</div><div class="to-cal-dow">Sat</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIME OFF CONFIG MODAL -->
+  <div class="modal-overlay" id="to-config-modal">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header"><h3>Time Off Settings</h3><button class="modal-close" onclick="$('to-config-modal').classList.remove('open')">×</button></div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Overlap Warning — Alert when more than this many people are off on the same day</label>
+          <input type="number" id="to-cfg-overlap" class="form-control" min="1" max="20" value="2"/>
+        </div>
+        <div style="margin-top:16px;font-size:13px;font-weight:700;color:var(--gray-700);">Optional Holidays (Off by default)</div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:13px;">
+          <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="to-cfg-heritage"/> Heritage Day (1st Monday of August)</label>
+          <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="to-cfg-boxing"/> Boxing Day (Dec 26)</label>
+          <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="to-cfg-easter"/> Easter Monday</label>
+          <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="to-cfg-truth"/> National Day for Truth &amp; Reconciliation (Sep 30)</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary btn-sm" id="btn-save-to-config">Save</button>
+        <button class="btn btn-secondary btn-sm" onclick="$('to-config-modal').classList.remove('open')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIME OFF REVIEW MODAL -->
+  <div class="modal-overlay" id="to-review-modal">
+    <div class="modal" style="max-width:460px;">
+      <div class="modal-header">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);margin-bottom:2px;">Review Time Off Request</div>
+          <h3 id="to-review-name" style="font-size:17px;"></h3>
+        </div>
+        <button class="modal-close" onclick="$('to-review-modal').classList.remove('open')">×</button>
+      </div>
+      <div class="modal-body" id="to-review-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-sm" id="btn-approve-req" style="background:#1a6e35;color:white;">✓ Approve</button>
+        <button class="btn btn-danger btn-sm" id="btn-deny-req">✗ Deny</button>
+        <button class="btn btn-secondary btn-sm" onclick="$('to-review-modal').classList.remove('open')">Close</button>
       </div>
     </div>
   </div>
@@ -889,6 +1045,24 @@ document.addEventListener('DOMContentLoaded', () => {
     await fetch('/api/auth/logout', {method:'POST'});
     location.href = '/login.html';
   });
+  // ── Mobile hamburger ──
+  const hamburger = $('nav-hamburger');
+  const mainNav   = $('main-nav');
+  if (hamburger && mainNav) {
+    hamburger.addEventListener('click', () => {
+      mainNav.classList.toggle('nav-open');
+    });
+    // Close nav when a link is clicked
+    mainNav.addEventListener('click', e => {
+      if (e.target.tagName === 'A') mainNav.classList.remove('nav-open');
+    });
+    // Close on outside click
+    document.addEventListener('click', e => {
+      if (!hamburger.contains(e.target) && !mainNav.contains(e.target)) {
+        mainNav.classList.remove('nav-open');
+      }
+    });
+  }
 });
 
 // ── Toast ──
@@ -938,6 +1112,8 @@ async function loadNavBadges() {
     setNavBadge('badge-projects', d.projects.outstanding_records || d.projects.outstanding || 0);
     // Purchase Orders: Open POs
     setNavBadge('badge-pos', d.pos.open || 0);
+    // Time Off: pending requests
+    setNavBadge('badge-timeoff', d.time_off?.pending || 0);
   } catch {}
 }
 
@@ -2463,7 +2639,7 @@ $('hm-link-proj').addEventListener('click', e => { e.preventDefault(); showProje
 $('hm-link-po').addEventListener('click',   e => { e.preventDefault(); showPOsView(); });
 
 function hideAllSpecialViews() {
-  ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view'].forEach(id => {
+  ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view','timeoff-view'].forEach(id => {
     const el = $(id); if (el) el.style.display = 'none';
   });
 }
@@ -3484,6 +3660,268 @@ $('nav-pos').addEventListener('click', e => {
   showPOsView();
 });
 $('btn-close-pos').addEventListener('click', hidePOsView);
+
+// ─────────────────────────────────────────────
+// TIME OFF — OFFICE ADMIN
+// ─────────────────────────────────────────────
+let adminCalYear  = new Date().getFullYear();
+let adminCalMonth = new Date().getMonth();
+let adminCalEvents  = [];
+let adminStatHols   = {};
+let toFilterStatus  = 'pending';
+let toReviewId      = null;
+
+function showTimeOffView() {
+  hideAllSpecialViews();
+  $('timeoff-view').style.display = 'block';
+  setNavActive('nav-timeoff');
+  showTOTab('requests');
+  loadTORequests();
+}
+
+$('nav-timeoff').addEventListener('click', e => { e.preventDefault(); showTimeOffView(); });
+$('btn-close-timeoff').addEventListener('click', () => showHomeView());
+
+function showTOTab(tab) {
+  $('to-requests-tab').style.display = tab === 'requests' ? '' : 'none';
+  $('to-calendar-tab').style.display = tab === 'calendar' ? '' : 'none';
+  $('to-tab-requests').classList.toggle('active', tab === 'requests');
+  $('to-tab-calendar').classList.toggle('active', tab === 'calendar');
+  if (tab === 'calendar') { loadAdminCalendarData().then(renderAdminCalendar); }
+}
+
+async function loadTORequests(filterStatus) {
+  if (filterStatus !== undefined) toFilterStatus = filterStatus;
+  const url = toFilterStatus ? `/api/time-off?status=${toFilterStatus}` : '/api/time-off';
+  const r = await fetch(url);
+  const all = r.ok ? await r.json() : [];
+  // Stats
+  const [all2] = await Promise.all([fetch('/api/time-off').then(r2=>r2.json()).catch(()=>[])]);
+  const counts = { pending: 0, approved: 0, denied: 0, cancelled: 0 };
+  all2.forEach(req => { if (counts[req.status] !== undefined) counts[req.status]++; });
+  $('to-stat-pending').textContent  = counts.pending;
+  $('to-stat-approved').textContent = counts.approved;
+  $('to-stat-denied').textContent   = counts.denied;
+  $('to-stat-all').textContent      = all2.length;
+  renderTOList(all);
+}
+
+function filterTORequests(status) { loadTORequests(status); }
+
+function renderTOList(reqs) {
+  const list = $('to-req-list');
+  if (!reqs.length) {
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--gray-500);font-size:14px;">No ${toFilterStatus || ''} requests found.</div>`;
+    return;
+  }
+  list.innerHTML = reqs.map(req => {
+    const days = dayCountTO(req.start_date, req.end_date);
+    const halfLabel = req.half_day ? ` <em style="font-size:11px;color:var(--gray-500);">(${req.half_day})</em>` : '';
+    const reviewInfo = req.reviewed_by
+      ? `<div style="font-size:12px;color:var(--gray-500);margin-top:3px;">Reviewed by ${esc(req.reviewed_by)} ${req.reviewed_at ? '· ' + fmtDate(req.reviewed_at.slice(0,10)) : ''}${req.review_note ? ' · "' + esc(req.review_note) + '"' : ''}</div>` : '';
+    const reviewBtn = req.status === 'pending'
+      ? `<div style="display:flex;gap:6px;margin-top:8px;"><button class="btn btn-sm" style="background:#1a6e35;color:white;" onclick="openTOReview(${req.id})">Review</button></div>` : '';
+    return `<div class="to-req-card">
+      <div class="req-type-dot ${req.type.toLowerCase()}"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:700;">${esc(req.user_name)}</div>
+            <div style="font-size:13px;color:var(--gray-700);margin-top:2px;">${req.type} · ${fmtDate(req.start_date)}${req.start_date !== req.end_date ? ' → ' + fmtDate(req.end_date) : ''}${halfLabel}</div>
+            <div style="font-size:12px;color:var(--gray-500);">${days} day${days!==1?'s':''} · Submitted ${fmtDate(req.created_at?.slice(0,10))}</div>
+            ${req.note ? `<div style="font-size:12px;color:var(--gray-500);font-style:italic;margin-top:3px;">"${esc(req.note)}"</div>` : ''}
+            ${reviewInfo}${reviewBtn}
+          </div>
+          <span class="to-status-pill ${req.status}">${req.status}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openTOReview(id) {
+  toReviewId = id;
+  const r = await fetch(`/api/time-off/${id}`);
+  if (!r.ok) return;
+  const req = await r.json();
+  const days = dayCountTO(req.start_date, req.end_date);
+  $('to-review-name').textContent = req.user_name;
+  $('to-review-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Type</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${req.type}</div></div>
+      <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Days</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${days} day${days!==1?'s':''}</div></div>
+      <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Start</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${fmtDate(req.start_date)}</div></div>
+      <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">End</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${fmtDate(req.end_date)}</div></div>
+      ${req.half_day ? `<div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Half Day</label><div style="font-size:14px;margin-top:4px;">${req.half_day}</div></div>` : ''}
+    </div>
+    ${req.note ? `<div style="background:var(--gray-50);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;"><em>"${esc(req.note)}"</em></div>` : ''}
+    <div class="form-group">
+      <label class="form-label">Optional note to employee</label>
+      <textarea id="to-review-note" class="form-control" rows="2" placeholder="e.g. Approved — enjoy your break! or Please re-submit after checking with your foreman."></textarea>
+    </div>
+    <div id="to-review-overlap" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;color:#856404;"></div>
+  `;
+  // Check for overlaps with other approved requests
+  const overlaps = adminCalEvents.filter(e =>
+    e.id !== id && e.status === 'approved' && e.start_date <= req.end_date && e.end_date >= req.start_date
+  );
+  if (overlaps.length > 0) {
+    const cfgR = await fetch('/api/time-off/config');
+    const cfg = cfgR.ok ? await cfgR.json() : {};
+    const warnAt = parseInt(cfg.overlap_warning_count) || 2;
+    if (overlaps.length >= warnAt) {
+      const names = [...new Set(overlaps.map(e => e.user_name))];
+      $('to-review-overlap').style.display = 'block';
+      $('to-review-overlap').innerHTML = `⚠️ <strong>Coverage warning:</strong> ${names.join(', ')} ${names.length===1?'is':'are'} already approved off during this period.`;
+    }
+  }
+  $('to-review-modal').classList.add('open');
+}
+
+$('btn-approve-req').addEventListener('click', () => submitTOReview('approved'));
+$('btn-deny-req').addEventListener('click', () => submitTOReview('denied'));
+
+async function submitTOReview(status) {
+  if (!toReviewId) return;
+  const note = $('to-review-note')?.value?.trim() || null;
+  const r = await fetch(`/api/time-off/${toReviewId}/review`, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ status, review_note: note })
+  });
+  if (r.ok) {
+    $('to-review-modal').classList.remove('open');
+    showToast(`Request ${status}`, status === 'approved' ? 'success' : '');
+    loadTORequests();
+    loadNavBadges();
+  } else {
+    const d = await r.json();
+    showToast(d.error || 'Failed', 'error');
+  }
+}
+
+// ── Admin calendar ──
+async function loadAdminCalendarData() {
+  const yr = adminCalYear;
+  const from = new Date(yr, adminCalMonth - 1, 1).toISOString().slice(0,10);
+  const to   = new Date(yr, adminCalMonth + 7, 1).toISOString().slice(0,10);
+  const [evRes, holRes] = await Promise.all([
+    fetch(`/api/time-off/calendar?from_date=${from}&to_date=${to}`),
+    fetch(`/api/time-off/holidays?from_year=${yr-1}&to_year=${yr+2}`)
+  ]);
+  adminCalEvents = evRes.ok ? await evRes.json() : [];
+  const hols = holRes.ok ? await holRes.json() : [];
+  adminStatHols = {};
+  hols.forEach(h => { adminStatHols[h.date] = h.name; });
+  // Populate person filter
+  const people = {};
+  adminCalEvents.forEach(e => { if (e.user_id) people[e.user_id] = e.user_name; });
+  const sel = $('admin-cf-person');
+  sel.innerHTML = '<option value="">Everyone</option>';
+  Object.entries(people).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id,name]) => {
+    sel.innerHTML += `<option value="${id}">${name}</option>`;
+  });
+}
+
+$('admin-cal-prev').addEventListener('click', () => { adminCalMonth--; if(adminCalMonth<0){adminCalMonth=11;adminCalYear--;} loadAdminCalendarData().then(renderAdminCalendar); });
+$('admin-cal-next').addEventListener('click', () => { adminCalMonth++; if(adminCalMonth>11){adminCalMonth=0;adminCalYear++;} loadAdminCalendarData().then(renderAdminCalendar); });
+$('admin-cf-person').addEventListener('change', renderAdminCalendar);
+$('admin-cf-type').addEventListener('change', renderAdminCalendar);
+
+function renderAdminCalendar() {
+  const filterPerson = $('admin-cf-person').value;
+  const filterType   = $('admin-cf-type').value;
+  const title = new Date(adminCalYear, adminCalMonth, 1).toLocaleDateString('en-CA', {month:'long',year:'numeric'});
+  $('admin-cal-title').textContent = title;
+  const firstDay = new Date(adminCalYear, adminCalMonth, 1).getDay();
+  const daysInMonth = new Date(adminCalYear, adminCalMonth + 1, 0).getDate();
+  const today = new Date().toISOString().slice(0,10);
+  const grid = $('admin-cal-grid');
+  while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+  const prevMonthDays = new Date(adminCalYear, adminCalMonth, 0).getDate();
+  for (let i = 0; i < firstDay; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'to-cal-cell other-month';
+    cell.innerHTML = `<div class="to-cal-num">${prevMonthDays - firstDay + 1 + i}</div>`;
+    grid.appendChild(cell);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${adminCalYear}-${String(adminCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'to-cal-cell' + (dateStr === today ? ' today' : '');
+    const numEl = document.createElement('div');
+    numEl.className = 'to-cal-num'; numEl.textContent = d; cell.appendChild(numEl);
+    if (adminStatHols[dateStr]) {
+      const span = document.createElement('span');
+      span.className = 'to-cal-stat'; span.title = adminStatHols[dateStr];
+      span.textContent = adminStatHols[dateStr]; cell.appendChild(span);
+    }
+    const dayEvents = adminCalEvents.filter(e => {
+      if (e.start_date > dateStr || e.end_date < dateStr) return false;
+      if (filterPerson && String(e.user_id) !== filterPerson) return false;
+      if (filterType && e.type !== filterType) return false;
+      return true;
+    });
+    dayEvents.forEach(e => {
+      const span = document.createElement('span');
+      span.className = `to-cal-event ${e.status} ${e.type.toLowerCase()}`;
+      const halfLabel = e.half_day ? ` (${e.half_day[0].toUpperCase()})` : '';
+      span.textContent = e.user_name + halfLabel;
+      span.title = `${e.user_name} — ${e.type} ${e.start_date} to ${e.end_date} [${e.status}]`;
+      if (e.status === 'pending') {
+        span.style.cursor = 'pointer';
+        span.addEventListener('click', () => openTOReview(e.id));
+      }
+      cell.appendChild(span);
+    });
+    // Overlap count badge
+    const approvedCount = dayEvents.filter(e => e.status === 'approved').length;
+    if (approvedCount >= 2) {
+      const badge = document.createElement('div');
+      badge.style.cssText = 'font-size:9px;font-weight:800;color:white;background:var(--orange);border-radius:10px;padding:1px 5px;margin-top:2px;display:inline-block;';
+      badge.textContent = `${approvedCount} off`;
+      cell.appendChild(badge);
+    }
+    grid.appendChild(cell);
+  }
+  const totalCells = firstDay + daysInMonth;
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 1; i <= remaining; i++) {
+    const cell = document.createElement('div'); cell.className = 'to-cal-cell other-month';
+    cell.innerHTML = `<div class="to-cal-num">${i}</div>`; grid.appendChild(cell);
+  }
+}
+
+// ── Time Off Config ──
+$('btn-to-config').addEventListener('click', async () => {
+  const r = await fetch('/api/time-off/config');
+  const cfg = r.ok ? await r.json() : {};
+  $('to-cfg-overlap').value    = cfg.overlap_warning_count || 2;
+  $('to-cfg-heritage').checked = !!cfg.optional_heritage_day;
+  $('to-cfg-boxing').checked   = !!cfg.optional_boxing_day;
+  $('to-cfg-easter').checked   = !!cfg.optional_easter_monday;
+  $('to-cfg-truth').checked    = !!cfg.optional_truth_rec_day;
+  $('to-config-modal').classList.add('open');
+});
+
+$('btn-save-to-config').addEventListener('click', async () => {
+  const r = await fetch('/api/time-off/config', {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      overlap_warning_count:  parseInt($('to-cfg-overlap').value) || 2,
+      optional_heritage_day:  $('to-cfg-heritage').checked ? 1 : 0,
+      optional_boxing_day:    $('to-cfg-boxing').checked   ? 1 : 0,
+      optional_easter_monday: $('to-cfg-easter').checked   ? 1 : 0,
+      optional_truth_rec_day: $('to-cfg-truth').checked    ? 1 : 0,
+    })
+  });
+  if (r.ok) { $('to-config-modal').classList.remove('open'); showToast('Settings saved', 'success'); }
+  else showToast('Failed to save', 'error');
+});
+
+function dayCountTO(start, end) {
+  const s = new Date(start + 'T00:00:00'), e = new Date(end + 'T00:00:00');
+  return Math.round((e - s) / 86400000) + 1;
+}
 
 // ── Audit log ──
 async function loadAuditLog(ticketId) {

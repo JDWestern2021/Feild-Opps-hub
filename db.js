@@ -166,6 +166,42 @@ async function initSchema() {
       created_at         TEXT NOT NULL,
       UNIQUE(employee_user_id, date)
     );
+
+    CREATE TABLE IF NOT EXISTS time_off_requests (
+      id              SERIAL PRIMARY KEY,
+      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_name       TEXT NOT NULL,
+      start_date      TEXT NOT NULL,
+      end_date        TEXT NOT NULL,
+      half_day        TEXT DEFAULT NULL,
+      type            TEXT NOT NULL DEFAULT 'Vacation',
+      note            TEXT,
+      status          TEXT NOT NULL DEFAULT 'pending',
+      reviewed_by_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      reviewed_by     TEXT,
+      reviewed_at     TEXT,
+      review_note     TEXT,
+      created_at      TEXT NOT NULL,
+      updated_at      TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS time_off_audit (
+      id          SERIAL PRIMARY KEY,
+      request_id  INTEGER NOT NULL REFERENCES time_off_requests(id) ON DELETE CASCADE,
+      user_name   TEXT NOT NULL,
+      action      TEXT NOT NULL,
+      details     TEXT,
+      created_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS time_off_config (
+      id                     INTEGER PRIMARY KEY DEFAULT 1,
+      overlap_warning_count  INTEGER NOT NULL DEFAULT 2,
+      optional_heritage_day  INTEGER NOT NULL DEFAULT 0,
+      optional_boxing_day    INTEGER NOT NULL DEFAULT 0,
+      optional_easter_monday INTEGER NOT NULL DEFAULT 0,
+      optional_truth_rec_day INTEGER NOT NULL DEFAULT 0
+    );
   `);
   // Seed default payroll config if not present
   await pool.query(`INSERT INTO payroll_config (id, cycle_start_date, period_days) VALUES (1, '2026-05-25', 14) ON CONFLICT DO NOTHING`);
@@ -174,6 +210,8 @@ async function initSchema() {
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS submitted_by_name TEXT`);
   // Add travel_hours column to ticket_employees
   await pool.query(`ALTER TABLE ticket_employees ADD COLUMN IF NOT EXISTS travel_hours REAL DEFAULT 0`);
+  // Seed default time-off config
+  await pool.query(`INSERT INTO time_off_config (id) VALUES (1) ON CONFLICT DO NOTHING`);
   console.log('  ✓ Database schema ready');
 }
 

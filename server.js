@@ -379,7 +379,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
   const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay());
   const ws = weekStart.toISOString().slice(0,10);
 
-  const [ttToday,ttWeek,ttPending,ttReviewed,ttEntered,projActive,projOut,projOutRec,projDone,posOpen,posEntWk,posReimb,activity] = await Promise.all([
+  const [ttToday,ttWeek,ttPending,ttReviewed,ttEntered,projActive,projOut,projOutRec,projDone,posOpen,posEntWk,posReimb,toPending,activity] = await Promise.all([
     pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date=$1 AND archived=0",[today]),
     pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date>=$1 AND archived=0",[ws]),
     pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE (ticket_status='Pending' OR ticket_status IS NULL) AND archived=0"),
@@ -398,6 +398,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
     pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE status='Open'"),
     pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE status='Entered' AND updated_at>=$1",[ws+'T00:00:00']),
     pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE needs_reimbursement=1 AND status='Open'"),
+    pool.query("SELECT COUNT(*) c FROM time_off_requests WHERE status='pending'"),
     pool.query(`(SELECT 'ticket' src,user_name,action,ticket_number ref,details,created_at FROM audit_log)
                 UNION ALL
                 (SELECT 'po' src,user_name,action,po_number ref,details,created_at FROM po_audit_log)
@@ -408,6 +409,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
     tickets: { today: parseInt(ttToday.rows[0].c), week: parseInt(ttWeek.rows[0].c), pending: parseInt(ttPending.rows[0].c), reviewed: parseInt(ttReviewed.rows[0].c), entered: parseInt(ttEntered.rows[0].c) },
     projects: { active: parseInt(projActive.rows[0].c), outstanding: parseInt(projOut.rows[0].c), outstanding_records: parseInt(projOutRec.rows[0].c), done: parseInt(projDone.rows[0].c) },
     pos: { open: parseInt(posOpen.rows[0].c), entered_week: parseInt(posEntWk.rows[0].c), reimbursement: parseInt(posReimb.rows[0].c) },
+    time_off: { pending: parseInt(toPending.rows[0].c) },
     activity: activity.rows,
   });
 });
@@ -1282,6 +1284,220 @@ app.get('/api/timesheets/:userId/export', requireAdmin, async (req, res) => {
 });
 
 // (export/all moved above /:userId route)
+
+// ─────────────────────────────────────────────
+// TIME OFF REQUESTS
+// ─────────────────────────────────────────────
+
+// ── Alberta statutory holiday helpers ──
+function calcEaster(year) {
+  // Anonymous Gregorian algorithm
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31); // 1-based
+  const day   = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function nthMonday(year, month, n) { // month 0-based, n 1-based
+  const d = new Date(Date.UTC(year, month, 1));
+  const dow = d.getUTCDay(); // 0=Sun
+  const delta = (1 - dow + 7) % 7; // days to first Monday
+  d.setUTCDate(1 + delta + (n - 1) * 7);
+  return d;
+}
+
+function mondayBefore(date) { // last Monday strictly before date
+  const d = new Date(date);
+  const dow = d.getUTCDay() || 7; // Mon=1 … Sun=7
+  d.setUTCDate(d.getUTCDate() - dow); // go to prev Sun
+  d.setUTCDate(d.getUTCDate() - 6);   // then back to Mon
+  // Actually: find the Monday before May 25
+  // Victoria Day = Monday before May 25 = last Monday on or before May 24
+  const target = new Date(date);
+  target.setUTCDate(target.getUTCDate() - 1); // May 24
+  const dow2 = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() - (dow2 - 1));
+  return target;
+}
+
+function iso(d) { return d.toISOString().slice(0, 10); }
+
+function getAlbertaStatHolidays(year, cfg = {}) {
+  const holidays = [];
+  function add(date, name, observed = false) {
+    let d = new Date(date);
+    // Observed rule: if Sat→Mon, if Sun→Mon for the 4 applicable holidays
+    if (observed) {
+      const dow = d.getUTCDay();
+      if (dow === 6) d.setUTCDate(d.getUTCDate() + 2); // Sat → Mon
+      else if (dow === 0) d.setUTCDate(d.getUTCDate() + 1); // Sun → Mon
+    }
+    holidays.push({ date: iso(d), name, year });
+  }
+
+  const easter = calcEaster(year);
+
+  // 9 mandatory Alberta holidays
+  add(new Date(Date.UTC(year, 0, 1)),  'New Year\'s Day', true);
+  add(nthMonday(year, 1, 3),           'Alberta Family Day');
+  const goodFriday = new Date(easter); goodFriday.setUTCDate(goodFriday.getUTCDate() - 2);
+  add(goodFriday,                      'Good Friday');
+  add(mondayBefore(new Date(Date.UTC(year, 4, 25))), 'Victoria Day');
+  add(new Date(Date.UTC(year, 6, 1)),  'Canada Day', true);
+  add(nthMonday(year, 8, 1),           'Labour Day');
+  add(nthMonday(year, 9, 2),           'Thanksgiving Day');
+  add(new Date(Date.UTC(year, 10, 11)), 'Remembrance Day', true);
+  add(new Date(Date.UTC(year, 11, 25)), 'Christmas Day', true);
+
+  // Optional holidays (off by default — flip via time_off_config)
+  if (cfg.optional_heritage_day) {
+    add(nthMonday(year, 7, 1), 'Heritage Day (Optional)');
+  }
+  if (cfg.optional_boxing_day) {
+    add(new Date(Date.UTC(year, 11, 26)), 'Boxing Day (Optional)');
+  }
+  if (cfg.optional_easter_monday) {
+    const em = new Date(easter); em.setUTCDate(em.getUTCDate() + 1);
+    add(em, 'Easter Monday (Optional)');
+  }
+  if (cfg.optional_truth_rec_day) {
+    add(new Date(Date.UTC(year, 8, 30)), 'National Day for Truth & Reconciliation (Optional)', true);
+  }
+
+  return holidays;
+}
+
+// ── Time-off config ──
+app.get('/api/time-off/config', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM time_off_config WHERE id=1');
+  res.json(rows[0] || {});
+});
+
+app.patch('/api/time-off/config', requireAdmin, async (req, res) => {
+  const { overlap_warning_count, optional_heritage_day, optional_boxing_day, optional_easter_monday, optional_truth_rec_day } = req.body;
+  await pool.query(`UPDATE time_off_config SET
+    overlap_warning_count = COALESCE($1, overlap_warning_count),
+    optional_heritage_day = COALESCE($2, optional_heritage_day),
+    optional_boxing_day   = COALESCE($3, optional_boxing_day),
+    optional_easter_monday= COALESCE($4, optional_easter_monday),
+    optional_truth_rec_day= COALESCE($5, optional_truth_rec_day)
+    WHERE id=1`,
+    [overlap_warning_count ?? null, optional_heritage_day ?? null, optional_boxing_day ?? null, optional_easter_monday ?? null, optional_truth_rec_day ?? null]);
+  res.json({ ok: true });
+});
+
+// ── Stat holidays for a year range ──
+app.get('/api/time-off/holidays', requireAuth, async (req, res) => {
+  const from = parseInt(req.query.from_year) || new Date().getFullYear();
+  const to   = parseInt(req.query.to_year)   || from + 1;
+  const { rows: cfgRows } = await pool.query('SELECT * FROM time_off_config WHERE id=1');
+  const cfg = cfgRows[0] || {};
+  const holidays = [];
+  for (let y = from; y <= to; y++) holidays.push(...getAlbertaStatHolidays(y, cfg));
+  res.json(holidays);
+});
+
+// ── Submit a time-off request ──
+app.post('/api/time-off', requireAuth, async (req, res) => {
+  const { start_date, end_date, type, note, half_day } = req.body;
+  if (!start_date || !end_date || !type) return res.status(400).json({ error: 'start_date, end_date, and type are required' });
+  if (start_date > end_date) return res.status(400).json({ error: 'Start date must be on or before end date' });
+  const validTypes = ['Vacation', 'Sick', 'Unpaid', 'Other'];
+  if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  const now = new Date().toISOString();
+  const { rows } = await pool.query(
+    `INSERT INTO time_off_requests (user_id,user_name,start_date,end_date,half_day,type,note,status,created_at,updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$8) RETURNING id`,
+    [req.user.id, req.user.name, start_date, end_date, half_day || null, type, note || null, now]
+  );
+  const id = rows[0].id;
+  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+    [id, req.user.name, 'submitted', `${type} request: ${start_date} to ${end_date}`, now]);
+  res.status(201).json({ ok: true, id });
+});
+
+// ── List time-off requests ──
+app.get('/api/time-off', requireAuth, async (req, res) => {
+  const { status, user_id, from_date, to_date } = req.query;
+  const params = []; let where = []; let p = 0;
+  if (req.user.role !== 'admin') {
+    // Field users see their own requests + all approved (for calendar awareness)
+    p++; where.push(`(r.user_id=$${p} OR r.status='approved')`); params.push(req.user.id);
+  } else {
+    if (user_id) { p++; where.push(`r.user_id=$${p}`); params.push(parseInt(user_id)); }
+    if (status)  { p++; where.push(`r.status=$${p}`);  params.push(status); }
+  }
+  if (from_date) { p++; where.push(`r.end_date>=$${p}`);   params.push(from_date); }
+  if (to_date)   { p++; where.push(`r.start_date<=$${p}`); params.push(to_date); }
+  const wc = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const { rows } = await pool.query(
+    `SELECT r.*, u.name AS requester_name FROM time_off_requests r
+     LEFT JOIN users u ON u.id=r.user_id ${wc} ORDER BY r.created_at DESC`, params);
+  res.json(rows);
+});
+
+// ── Calendar data: all non-cancelled, with overlap counts ──
+app.get('/api/time-off/calendar', requireAuth, async (req, res) => {
+  const { from_date, to_date } = req.query;
+  const params = []; let where = [`r.status IN ('pending','approved')`]; let p = 0;
+  if (from_date) { p++; where.push(`r.end_date>=$${p}`);   params.push(from_date); }
+  if (to_date)   { p++; where.push(`r.start_date<=$${p}`); params.push(to_date); }
+  const { rows } = await pool.query(
+    `SELECT r.id,r.user_id,r.user_name,r.start_date,r.end_date,r.half_day,r.type,r.note,r.status
+     FROM time_off_requests r WHERE ${where.join(' AND ')} ORDER BY r.start_date`, params);
+  res.json(rows);
+});
+
+// ── Get single request ──
+app.get('/api/time-off/:id', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  if (req.user.role !== 'admin' && rows[0].user_id !== req.user.id)
+    return res.status(403).json({ error: 'Forbidden' });
+  const { rows: audit } = await pool.query('SELECT * FROM time_off_audit WHERE request_id=$1 ORDER BY created_at ASC', [req.params.id]);
+  res.json({ ...rows[0], audit });
+});
+
+// ── Admin: approve or deny ──
+app.patch('/api/time-off/:id/review', requireAdmin, async (req, res) => {
+  const { status, review_note } = req.body;
+  if (!['approved', 'denied'].includes(status)) return res.status(400).json({ error: 'status must be approved or denied' });
+  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  if (rows[0].status !== 'pending') return res.status(400).json({ error: 'Can only review pending requests' });
+  const now = new Date().toISOString();
+  await pool.query(`UPDATE time_off_requests SET status=$1,reviewed_by_id=$2,reviewed_by=$3,reviewed_at=$4,review_note=$5,updated_at=$4 WHERE id=$6`,
+    [status, req.user.id, req.user.name, now, review_note || null, req.params.id]);
+  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+    [req.params.id, req.user.name, status, review_note ? `Note: ${review_note}` : null, now]);
+  res.json({ ok: true });
+});
+
+// ── Field user: cancel own pending request ──
+app.patch('/api/time-off/:id/cancel', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Forbidden' });
+  if (rows[0].status !== 'pending') return res.status(400).json({ error: 'Can only cancel pending requests' });
+  const now = new Date().toISOString();
+  await pool.query(`UPDATE time_off_requests SET status='cancelled',updated_at=$1 WHERE id=$2`, [now, req.params.id]);
+  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+    [req.params.id, req.user.name, 'cancelled', 'Request cancelled by requester', now]);
+  res.json({ ok: true });
+});
+
+// ── Dashboard overview includes pending time-off count ──
+// (Exposed via /api/time-off/pending-count for nav badge)
+app.get('/api/time-off/pending-count', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query("SELECT COUNT(*) AS c FROM time_off_requests WHERE status='pending'");
+  res.json({ count: parseInt(rows[0].c) });
+});
 
 // ─────────────────────────────────────────────
 // START
