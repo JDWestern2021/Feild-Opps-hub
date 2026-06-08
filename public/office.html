@@ -3792,6 +3792,9 @@ function showTimeOffView() {
   setNavActive('nav-timeoff');
   showTOTab('requests');
   loadTORequests();
+  // Pre-fetch calendar data in the background so it's ready when the user
+  // switches to the Calendar tab — and so the first render isn't empty.
+  loadAdminCalendarData().then(renderAdminCalendar);
 }
 
 $('nav-timeoff').addEventListener('click', e => { e.preventDefault(); showTimeOffView(); });
