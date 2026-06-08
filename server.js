@@ -1436,12 +1436,13 @@ app.post('/api/time-off', requireAuth, async (req, res) => {
 app.get('/api/time-off', requireAuth, async (req, res) => {
   const { status, user_id, from_date, to_date } = req.query;
   const params = []; let where = []; let p = 0;
-  if (req.user.role !== 'admin') {
-    // Field users see their own requests + all approved (for calendar awareness)
-    p++; where.push(`(r.user_id=$${p} OR r.status='approved')`); params.push(req.user.id);
-  } else {
+  if (canApproveTimeOff(req.user)) {
+    // Admins and approvers see all requests (with optional filters)
     if (user_id) { p++; where.push(`r.user_id=$${p}`); params.push(parseInt(user_id)); }
     if (status)  { p++; where.push(`r.status=$${p}`);  params.push(status); }
+  } else {
+    // Regular field users: own requests only (private — don't expose others' pending/denied)
+    p++; where.push(`r.user_id=$${p}`); params.push(req.user.id);
   }
   if (from_date) { p++; where.push(`r.end_date>=$${p}`);   params.push(from_date); }
   if (to_date)   { p++; where.push(`r.start_date<=$${p}`); params.push(to_date); }
@@ -1459,13 +1460,15 @@ app.get('/api/time-off/calendar', requireAuth, async (req, res) => {
   const { from_date, to_date } = req.query;
   let params = []; let where = []; let p = 0;
 
-  if (req.user.role !== 'admin') {
-    // own all status OR others' approved only
+  if (canApproveTimeOff(req.user)) {
+    // Admins and time-off approvers see all pending + approved
+    where.push(`r.status IN ('pending','approved')`);
+  } else {
+    // Regular field users: own requests (any non-cancelled status) + others' approved only
+    // Pending requests from other people are PRIVATE
     p++; params.push(req.user.id);
     where.push(`(r.user_id=$${p} OR r.status='approved')`);
     where.push(`r.status != 'cancelled'`);
-  } else {
-    where.push(`r.status IN ('pending','approved')`);
   }
 
   if (from_date) { p++; where.push(`r.end_date>=$${p}`);   params.push(from_date); }
@@ -1481,7 +1484,7 @@ app.get('/api/time-off/calendar', requireAuth, async (req, res) => {
 app.get('/api/time-off/:id', requireAuth, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  if (req.user.role !== 'admin' && rows[0].user_id !== req.user.id)
+  if (!canApproveTimeOff(req.user) && rows[0].user_id !== req.user.id)
     return res.status(403).json({ error: 'Forbidden' });
   const { rows: audit } = await pool.query('SELECT * FROM time_off_audit WHERE request_id=$1 ORDER BY created_at ASC', [req.params.id]);
   res.json({ ...rows[0], audit });

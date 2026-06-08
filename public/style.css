@@ -45,11 +45,14 @@ body {
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  min-width: 0;
+  overflow: hidden;
 }
 .header-brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0; /* brand never shrinks — logo + title stay visible */
 }
 .header-logo {
   height: 40px;
@@ -67,6 +70,16 @@ body {
 }
 .header-title .company { font-size: 11px; color: var(--gray-300); letter-spacing: 0.05em; text-transform: uppercase; }
 .header-title .module  { font-size: 15px; font-weight: 700; color: var(--white); letter-spacing: 0.02em; }
+/* Nav scrolls horizontally on all screen sizes so links never get clipped */
+.header-nav {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex-shrink: 1;
+  min-width: 0;
+  flex-wrap: nowrap !important;
+}
+.header-nav::-webkit-scrollbar { display: none; }
 .header-nav a {
   color: var(--gray-300);
   text-decoration: none;
@@ -74,6 +87,8 @@ body {
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .header-nav a:hover { background: rgba(255,255,255,0.1); color: var(--white); }
 .header-nav a.active { background: var(--orange); color: var(--white); }

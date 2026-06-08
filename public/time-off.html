@@ -498,7 +498,9 @@ function renderCalendar() {
           span.style.color = c.text;
         }
 
-        const label = isMine && e.status === 'pending' ? `⏳ ${e.user_name}` : e.user_name;
+        // Pending requests are only ever shown to the person who submitted them
+        // so if it's pending here, it's always "mine"
+        const label = e.status === 'pending' ? `⏳ ${e.user_name} (pending)` : e.user_name;
         span.textContent = label;
         span.title = `${e.user_name} — ${e.type} | ${e.start_date} to ${e.end_date}${e.half_day ? ' (' + e.half_day + ')' : ''}`;
         span.addEventListener('click', ev => { ev.stopPropagation(); showEventDetail(e); });
