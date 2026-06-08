@@ -357,12 +357,12 @@
       <span class="nav-card-arrow">→</span>
     </a>
 
-    <a href="time-off.html" class="nav-card" id="card-timeoff">
+    <a href="time-off.html" class="nav-card" id="card-timeoff" style="position:relative;">
       <div class="nav-card-icon">
         <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
       </div>
-      <h2>Time Off</h2>
-      <p>Request time off &amp; view the shared calendar</p>
+      <h2>Time Off <span id="to-notif-dot" style="display:none;background:#f47920;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:800;display:none;align-items:center;justify-content:center;vertical-align:middle;margin-left:4px;" title="You have a time off update">!</span></h2>
+      <p id="to-notif-text">Request time off &amp; view the shared calendar</p>
       <span class="nav-card-arrow">→</span>
     </a>
 
@@ -415,6 +415,33 @@
   if (s.logo_path) document.querySelector('.logo-wrap img').src = s.logo_path + '?t=' + Date.now();
 
   document.body.style.visibility = 'visible';
+
+  // Time Off notification dot
+  try {
+    const nr = await fetch('/api/time-off/my-notifications');
+    if (nr.ok) {
+      const notifs = await nr.json();
+      const seen = JSON.parse(localStorage.getItem('to_seen_ids') || '[]');
+      const unseen = notifs.filter(n => !seen.includes(n.id));
+      if (unseen.length) {
+        const dot = document.getElementById('to-notif-dot');
+        const txt = document.getElementById('to-notif-text');
+        dot.style.display = 'inline-flex';
+        const approved = unseen.filter(n => n.status === 'approved').length;
+        const denied   = unseen.filter(n => n.status === 'denied').length;
+        const parts = [];
+        if (approved) parts.push(`${approved} approved`);
+        if (denied)   parts.push(`${denied} denied`);
+        txt.textContent = `📬 Time off update: ${parts.join(' · ')} — tap to view`;
+        // Mark seen when card is clicked
+        document.getElementById('card-timeoff').addEventListener('click', () => {
+          const allIds = notifs.map(n => n.id);
+          const prev = JSON.parse(localStorage.getItem('to_seen_ids') || '[]');
+          localStorage.setItem('to_seen_ids', JSON.stringify([...new Set([...prev,...allIds])]));
+        }, { once: true });
+      }
+    }
+  } catch {}
 })();
 
 document.getElementById('logout-link').addEventListener('click', async e => {

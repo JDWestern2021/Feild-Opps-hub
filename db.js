@@ -212,6 +212,11 @@ async function initSchema() {
   await pool.query(`ALTER TABLE ticket_employees ADD COLUMN IF NOT EXISTS travel_hours REAL DEFAULT 0`);
   // Seed default time-off config
   await pool.query(`INSERT INTO time_off_config (id) VALUES (1) ON CONFLICT DO NOTHING`);
+  // Add return_to_work_date to time_off_requests
+  await pool.query(`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS return_to_work_date TEXT`);
+  // Add time_off tracking columns to timesheet_overrides
+  await pool.query(`ALTER TABLE timesheet_overrides ADD COLUMN IF NOT EXISTS is_time_off INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE timesheet_overrides ADD COLUMN IF NOT EXISTS time_off_request_id INTEGER REFERENCES time_off_requests(id) ON DELETE SET NULL`);
   console.log('  ✓ Database schema ready');
 }
 

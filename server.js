@@ -379,7 +379,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
   const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay());
   const ws = weekStart.toISOString().slice(0,10);
 
-  const [ttToday,ttWeek,ttPending,ttReviewed,ttEntered,projActive,projOut,projOutRec,projDone,posOpen,posEntWk,posReimb,toPending,activity] = await Promise.all([
+  const [ttToday,ttWeek,ttPending,ttReviewed,ttEntered,projActive,projOut,projOutRec,projDone,posOpen,posEntWk,posReimb,toPending,toUpcoming,toToday,activity] = await Promise.all([
     pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date=$1 AND archived=0",[today]),
     pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE date>=$1 AND archived=0",[ws]),
     pool.query("SELECT COUNT(*) c FROM daily_tickets WHERE (ticket_status='Pending' OR ticket_status IS NULL) AND archived=0"),
@@ -399,6 +399,8 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
     pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE status='Entered' AND updated_at>=$1",[ws+'T00:00:00']),
     pool.query("SELECT COUNT(*) c FROM purchase_orders WHERE needs_reimbursement=1 AND status='Open'"),
     pool.query("SELECT COUNT(*) c FROM time_off_requests WHERE status='pending'"),
+    pool.query("SELECT COUNT(*) c FROM time_off_requests WHERE status='approved' AND end_date >= $1",[today]),
+    pool.query("SELECT COUNT(*) c FROM time_off_requests WHERE status='approved' AND start_date <= $1 AND end_date >= $1",[today]),
     pool.query(`(SELECT 'ticket' src,user_name,action,ticket_number ref,details,created_at FROM audit_log)
                 UNION ALL
                 (SELECT 'po' src,user_name,action,po_number ref,details,created_at FROM po_audit_log)
@@ -409,7 +411,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
     tickets: { today: parseInt(ttToday.rows[0].c), week: parseInt(ttWeek.rows[0].c), pending: parseInt(ttPending.rows[0].c), reviewed: parseInt(ttReviewed.rows[0].c), entered: parseInt(ttEntered.rows[0].c) },
     projects: { active: parseInt(projActive.rows[0].c), outstanding: parseInt(projOut.rows[0].c), outstanding_records: parseInt(projOutRec.rows[0].c), done: parseInt(projDone.rows[0].c) },
     pos: { open: parseInt(posOpen.rows[0].c), entered_week: parseInt(posEntWk.rows[0].c), reimbursement: parseInt(posReimb.rows[0].c) },
-    time_off: { pending: parseInt(toPending.rows[0].c) },
+    time_off: { pending: parseInt(toPending.rows[0].c), upcoming: parseInt(toUpcoming.rows[0].c), today: parseInt(toToday.rows[0].c) },
     activity: activity.rows,
   });
 });
@@ -1062,6 +1064,15 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
     const override = overrideMap[dateStr];
 
     if (override) {
+      // Special case: time-off day
+      if (override.is_time_off) {
+        days.push({ date: dateStr, dow,
+          regular_hours: 0, overtime_hours: 0, travel_hours: 0, total_hours: 0,
+          approval_status: 'time_off', source: 'time_off',
+          job_name: 'Time Off', job_number: '', project_name: '', level: '',
+          ticket_numbers: '', time_off_request_id: override.time_off_request_id, entries });
+        continue;
+      }
       const reg    = parseFloat(override.regular_hours)  || 0;
       const ot     = parseFloat(override.overtime_hours) || 0;
       const travel = 0; // overrides don't store travel separately (leave at ticket value)
@@ -1404,20 +1415,20 @@ app.get('/api/time-off/holidays', requireAuth, async (req, res) => {
 
 // ── Submit a time-off request ──
 app.post('/api/time-off', requireAuth, async (req, res) => {
-  const { start_date, end_date, type, note, half_day } = req.body;
+  const { start_date, end_date, return_to_work_date, type, note, half_day } = req.body;
   if (!start_date || !end_date || !type) return res.status(400).json({ error: 'start_date, end_date, and type are required' });
   if (start_date > end_date) return res.status(400).json({ error: 'Start date must be on or before end date' });
   const validTypes = ['Vacation', 'Sick', 'Unpaid', 'Other'];
   if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid type' });
   const now = new Date().toISOString();
   const { rows } = await pool.query(
-    `INSERT INTO time_off_requests (user_id,user_name,start_date,end_date,half_day,type,note,status,created_at,updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$8) RETURNING id`,
-    [req.user.id, req.user.name, start_date, end_date, half_day || null, type, note || null, now]
+    `INSERT INTO time_off_requests (user_id,user_name,start_date,end_date,return_to_work_date,half_day,type,note,status,created_at,updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$9) RETURNING id`,
+    [req.user.id, req.user.name, start_date, end_date, return_to_work_date || null, half_day || null, type, note || null, now]
   );
   const id = rows[0].id;
   await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
-    [id, req.user.name, 'submitted', `${type} request: ${start_date} to ${end_date}`, now]);
+    [id, req.user.name, 'submitted', `${type} request: ${start_date} to ${end_date}, RTW: ${return_to_work_date||'not set'}`, now]);
   res.status(201).json({ ok: true, id });
 });
 
@@ -1441,14 +1452,27 @@ app.get('/api/time-off', requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-// ── Calendar data: all non-cancelled, with overlap counts ──
+// ── Calendar data ──
+// Admins: see all approved + pending
+// Field users: see their OWN (any status) + OTHER PEOPLE'S approved only (not pending from others)
 app.get('/api/time-off/calendar', requireAuth, async (req, res) => {
   const { from_date, to_date } = req.query;
-  const params = []; let where = [`r.status IN ('pending','approved')`]; let p = 0;
+  let params = []; let where = []; let p = 0;
+
+  if (req.user.role !== 'admin') {
+    // own all status OR others' approved only
+    p++; params.push(req.user.id);
+    where.push(`(r.user_id=$${p} OR r.status='approved')`);
+    where.push(`r.status != 'cancelled'`);
+  } else {
+    where.push(`r.status IN ('pending','approved')`);
+  }
+
   if (from_date) { p++; where.push(`r.end_date>=$${p}`);   params.push(from_date); }
   if (to_date)   { p++; where.push(`r.start_date<=$${p}`); params.push(to_date); }
+
   const { rows } = await pool.query(
-    `SELECT r.id,r.user_id,r.user_name,r.start_date,r.end_date,r.half_day,r.type,r.note,r.status
+    `SELECT r.id,r.user_id,r.user_name,r.start_date,r.end_date,r.return_to_work_date,r.half_day,r.type,r.note,r.status
      FROM time_off_requests r WHERE ${where.join(' AND ')} ORDER BY r.start_date`, params);
   res.json(rows);
 });
@@ -1463,6 +1487,33 @@ app.get('/api/time-off/:id', requireAuth, async (req, res) => {
   res.json({ ...rows[0], audit });
 });
 
+// ── Helper: create timesheet_override "Time Off" rows for each day in range ──
+async function createTimeOffTimesheetRows(requestId, userId, startDate, endDate) {
+  const s = new Date(startDate + 'T00:00:00Z');
+  const e = new Date(endDate   + 'T00:00:00Z');
+  const now = new Date().toISOString();
+  for (let d = new Date(s); d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
+    const dateStr = d.toISOString().slice(0, 10);
+    // Only insert if no existing non-time-off override for that day
+    await pool.query(`
+      INSERT INTO timesheet_overrides
+        (employee_user_id,date,regular_hours,overtime_hours,travel_hours,
+         original_regular,original_ot,original_travel,
+         edited_by_name,edit_reason,is_time_off,time_off_request_id,created_at)
+      VALUES ($1,$2,0,0,0,0,0,0,'System','Time Off Approved',1,$3,$4)
+      ON CONFLICT (employee_user_id,date) DO NOTHING`,
+      [userId, dateStr, requestId, now]);
+  }
+}
+
+// ── Helper: remove timesheet_override "Time Off" rows for a request ──
+async function removeTimeOffTimesheetRows(requestId) {
+  await pool.query(
+    `DELETE FROM timesheet_overrides WHERE time_off_request_id=$1 AND is_time_off=1`,
+    [requestId]
+  );
+}
+
 // ── Admin: approve or deny ──
 app.patch('/api/time-off/:id/review', requireAdmin, async (req, res) => {
   const { status, review_note } = req.body;
@@ -1470,11 +1521,16 @@ app.patch('/api/time-off/:id/review', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   if (rows[0].status !== 'pending') return res.status(400).json({ error: 'Can only review pending requests' });
+  const req_data = rows[0];
   const now = new Date().toISOString();
   await pool.query(`UPDATE time_off_requests SET status=$1,reviewed_by_id=$2,reviewed_by=$3,reviewed_at=$4,review_note=$5,updated_at=$4 WHERE id=$6`,
     [status, req.user.id, req.user.name, now, review_note || null, req.params.id]);
   await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
     [req.params.id, req.user.name, status, review_note ? `Note: ${review_note}` : null, now]);
+  // On approval: write time-off rows to timesheet
+  if (status === 'approved') {
+    await createTimeOffTimesheetRows(parseInt(req.params.id), req_data.user_id, req_data.start_date, req_data.end_date);
+  }
   res.json({ ok: true });
 });
 
@@ -1484,12 +1540,25 @@ app.patch('/api/time-off/:id/cancel', requireAuth, async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
     return res.status(403).json({ error: 'Forbidden' });
-  if (rows[0].status !== 'pending') return res.status(400).json({ error: 'Can only cancel pending requests' });
+  if (!['pending','approved'].includes(rows[0].status)) return res.status(400).json({ error: 'Can only cancel pending or approved requests' });
   const now = new Date().toISOString();
   await pool.query(`UPDATE time_off_requests SET status='cancelled',updated_at=$1 WHERE id=$2`, [now, req.params.id]);
   await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
-    [req.params.id, req.user.name, 'cancelled', 'Request cancelled by requester', now]);
+    [req.params.id, req.user.name, 'cancelled', 'Request cancelled', now]);
+  // Remove timesheet entries if they existed
+  await removeTimeOffTimesheetRows(parseInt(req.params.id));
   res.json({ ok: true });
+});
+
+// ── My notifications: approved/denied requests the user hasn't acknowledged ──
+app.get('/api/time-off/my-notifications', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id,type,start_date,end_date,status,reviewed_at,review_note
+     FROM time_off_requests
+     WHERE user_id=$1 AND status IN ('approved','denied') ORDER BY reviewed_at DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
 });
 
 // ── Dashboard overview includes pending time-off count ──

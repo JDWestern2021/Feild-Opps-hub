@@ -450,3 +450,23 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .nav-hamburger span { display: block; width: 20px; height: 2px; background: white; border-radius: 2px; transition: .2s; }
 }
+
+/* ═══════════════════════════════════════════
+   DATE INPUT OVERFLOW FIX (iOS Safari)
+   Ensure date inputs never overflow their grid cell
+   ═══════════════════════════════════════════ */
+input[type="date"].form-control {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* Ensure grid cells with date inputs don't overflow */
+.grid-2, .grid-3, .date-grid {
+  min-width: 0;
+}
+.grid-2 > *, .grid-3 > *, .date-grid > * {
+  min-width: 0;
+  overflow: hidden;
+}

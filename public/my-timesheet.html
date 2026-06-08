@@ -155,6 +155,21 @@ async function loadTimesheet(offset){
 
   $('day-rows').innerHTML=d.days.map(day=>{
     const weekend=day.dow==='Sat'||day.dow==='Sun';
+
+    // ── Time Off day ──
+    if (day.source==='time_off' || day.approval_status==='time_off') {
+      const rowClass=`day-row${weekend?' weekend':''}`;
+      return `<div class="${rowClass}" style="border-left:4px solid #7c3aed;background:linear-gradient(90deg,#f3e8ff 0%,transparent 60%);">
+        <span class="day-name${weekend?' weekend':''}">${day.date}</span>
+        <span>${day.dow}</span>
+        <span class="hrs-cell" style="color:#7c3aed;font-weight:700;">—</span>
+        <span class="hrs-cell" style="color:#7c3aed;">—</span>
+        <span class="hrs-cell" style="color:#7c3aed;">—</span>
+        <span style="font-size:12px;font-weight:700;color:#7c3aed;">🏖 Time Off</span>
+        <span><span class="source-badge" style="background:#ede9fe;color:#5b21b6;font-weight:700;">Approved</span></span>
+      </div>`;
+    }
+
     const hasHrs=day.total_hours>0;
     const isPending=day.approval_status==='pending';
     const isEntered=day.approval_status==='entered'||day.approval_status==='partial';
@@ -205,6 +220,15 @@ function buildTimesheetPrintHTML(data, printedByName) {
   const now = new Date().toLocaleString('en-CA',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
   const rows = days.map(day => {
+    if (day.source === 'time_off' || day.approval_status === 'time_off') {
+      return `<tr style="background:#f3e8ff;border-left:3px solid #7c3aed;">
+        <td>${escP(day.date)}</td>
+        <td>${escP(day.dow)}</td>
+        <td colspan="3" style="text-align:center;color:#7c3aed;font-weight:700;">Time Off</td>
+        <td colspan="2" style="color:#7c3aed;font-size:11px;">🏖 Approved Time Off</td>
+        <td><span style="background:#ede9fe;color:#5b21b6;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Time Off</span></td>
+      </tr>`;
+    }
     const isPending = day.approval_status === 'pending';
     const hasHrs = (day.total_hours || 0) > 0;
     const rowStyle = isPending ? 'color:#bbb;background:#fafafa;' : '';

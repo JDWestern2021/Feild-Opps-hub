@@ -432,6 +432,13 @@
         <div class="home-stat-row"><span>Pending reimbursement</span><span class="home-stat-num orange" id="hm-po-reimburse">—</span></div>
         <a href="#" class="view-link" id="hm-link-po">→ View All Purchase Orders</a>
       </div>
+      <div class="home-card" id="hm-card-timeoff" style="cursor:pointer;">
+        <div class="home-card-title">🏖 Time Off</div>
+        <div class="home-stat-row"><span>Pending approval</span><span class="home-stat-num orange" id="hm-to-pending">—</span></div>
+        <div class="home-stat-row"><span>Approved (upcoming)</span><span class="home-stat-num" id="hm-to-approved">—</span></div>
+        <div class="home-stat-row"><span>Off today</span><span class="home-stat-num" id="hm-to-today">—</span></div>
+        <a href="#" class="view-link" id="hm-link-to">→ Review Time Off Requests</a>
+      </div>
     </div>
     <div class="activity-feed">
       <h3>Recent Activity</h3>
@@ -657,6 +664,8 @@
           <option value="Other">Other</option>
         </select>
       </div>
+      <!-- Legend -->
+      <div id="admin-cal-legend" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:10px 14px;margin-bottom:10px;display:none;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;"></div>
       <!-- Calendar -->
       <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--dark);color:white;">
@@ -2608,6 +2617,10 @@ async function loadHomeOverview() {
     $('hm-po-open').textContent      = d.pos.open;
     $('hm-po-week').textContent      = d.pos.entered_week;
     $('hm-po-reimburse').textContent = d.pos.reimbursement;
+    // Time Off
+    $('hm-to-pending').textContent  = d.time_off?.pending  ?? '—';
+    $('hm-to-approved').textContent = d.time_off?.upcoming ?? '—';
+    $('hm-to-today').textContent    = d.time_off?.today    ?? '—';
     // Activity feed
     const actionLabel = {
       ticket_submitted:'Submitted ticket', ticket_viewed:'Viewed ticket',
@@ -2637,6 +2650,8 @@ async function loadHomeOverview() {
 $('hm-link-tt').addEventListener('click',   e => { e.preventDefault(); showTTDashboard(); });
 $('hm-link-proj').addEventListener('click', e => { e.preventDefault(); showProjectsView(); });
 $('hm-link-po').addEventListener('click',   e => { e.preventDefault(); showPOsView(); });
+$('hm-link-to').addEventListener('click',   e => { e.preventDefault(); showTimeOffView(); });
+$('hm-card-timeoff').addEventListener('click', () => showTimeOffView());
 
 function hideAllSpecialViews() {
   ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view','timeoff-view'].forEach(id => {
@@ -2769,6 +2784,18 @@ async function loadTSDetail(userId, offset) {
 
   const editing = $('ts-day-tbody').dataset.editing === '1';
   $('ts-day-tbody').innerHTML = d.days.map(day => {
+    // ── Time Off day ──
+    if (day.source === 'time_off' || day.approval_status === 'time_off') {
+      return `<tr style="background:linear-gradient(90deg,#f3e8ff 0%,transparent 80%);border-left:4px solid #7c3aed;">
+        <td>${day.date}</td><td>${day.dow}</td>
+        <td colspan="2" style="color:#7c3aed;font-weight:700;">🏖 Time Off</td>
+        <td></td>
+        <td style="text-align:center;color:#7c3aed;">—</td>
+        <td style="text-align:center;color:#7c3aed;">—</td>
+        <td style="text-align:center;color:#7c3aed;">—</td>
+        <td><span class="spill" style="background:#ede9fe;color:#5b21b6;font-size:10px;">Time Off</span></td>
+      </tr>`;
+    }
     const hasHrs = day.total_hours > 0;
     const isPending = day.approval_status === 'pending';
     const isEntered = day.approval_status === 'entered' || day.approval_status === 'partial';
@@ -2993,6 +3020,14 @@ function buildTimesheetPrintHTML(data, printedByName, pageOnly) {
   function fd(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});}
 
   const rows = days.map(day => {
+    if (day.source === 'time_off' || day.approval_status === 'time_off') {
+      return `<tr style="background:#f3e8ff;">
+        <td>${ep(day.date)}</td><td>${ep(day.dow)}</td>
+        <td colspan="3" style="text-align:center;color:#7c3aed;font-weight:700;">Time Off</td>
+        <td colspan="2" style="color:#7c3aed;font-size:11px;">🏖 Approved Time Off</td>
+        <td><span style="background:#ede9fe;color:#5b21b6;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;">Time Off</span></td>
+      </tr>`;
+    }
     const isPending = day.approval_status === 'pending';
     const hasHrs = (day.total_hours||0) > 0;
     const rowStyle = isPending ? 'color:#bbb;background:#fafafa;' : '';
@@ -3668,6 +3703,23 @@ let adminCalYear  = new Date().getFullYear();
 let adminCalMonth = new Date().getMonth();
 let adminCalEvents  = [];
 let adminStatHols   = {};
+
+// Per-user colour palette (same as field app — consistent across both views)
+const ADMIN_USER_PALETTE = [
+  {bg:'#dbeafe',text:'#1e40af',border:'#93c5fd'},
+  {bg:'#ede9fe',text:'#5b21b6',border:'#c4b5fd'},
+  {bg:'#fce7f3',text:'#9d174d',border:'#f9a8d4'},
+  {bg:'#d1fae5',text:'#065f46',border:'#6ee7b7'},
+  {bg:'#fef3c7',text:'#92400e',border:'#fcd34d'},
+  {bg:'#fee2e2',text:'#991b1b',border:'#fca5a5'},
+  {bg:'#cffafe',text:'#155e75',border:'#67e8f9'},
+  {bg:'#ecfccb',text:'#365314',border:'#bef264'},
+  {bg:'#f3e8ff',text:'#6b21a8',border:'#d8b4fe'},
+  {bg:'#ffedd5',text:'#9a3412',border:'#fdba74'},
+  {bg:'#ccfbf1',text:'#134e4a',border:'#5eead4'},
+  {bg:'#fef9c3',text:'#713f12',border:'#fde047'},
+];
+function adminUserColor(userId) { return ADMIN_USER_PALETTE[Math.abs(parseInt(userId) || 0) % ADMIN_USER_PALETTE.length]; }
 let toFilterStatus  = 'pending';
 let toReviewId      = null;
 
@@ -3729,6 +3781,7 @@ function renderTOList(reqs) {
             <div style="font-size:14px;font-weight:700;">${esc(req.user_name)}</div>
             <div style="font-size:13px;color:var(--gray-700);margin-top:2px;">${req.type} · ${fmtDate(req.start_date)}${req.start_date !== req.end_date ? ' → ' + fmtDate(req.end_date) : ''}${halfLabel}</div>
             <div style="font-size:12px;color:var(--gray-500);">${days} day${days!==1?'s':''} · Submitted ${fmtDate(req.created_at?.slice(0,10))}</div>
+            ${req.return_to_work_date ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px;">🏁 Returns: <strong>${fmtDate(req.return_to_work_date)}</strong></div>` : ''}
             ${req.note ? `<div style="font-size:12px;color:var(--gray-500);font-style:italic;margin-top:3px;">"${esc(req.note)}"</div>` : ''}
             ${reviewInfo}${reviewBtn}
           </div>
@@ -3752,6 +3805,7 @@ async function openTOReview(id) {
       <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Days</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${days} day${days!==1?'s':''}</div></div>
       <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Start</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${fmtDate(req.start_date)}</div></div>
       <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">End</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${fmtDate(req.end_date)}</div></div>
+      ${req.return_to_work_date ? `<div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">🏁 Return to Work</label><div style="font-size:15px;font-weight:700;color:var(--orange);margin-top:4px;">${fmtDate(req.return_to_work_date)}</div></div>` : ''}
       ${req.half_day ? `<div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Half Day</label><div style="font-size:14px;margin-top:4px;">${req.half_day}</div></div>` : ''}
     </div>
     ${req.note ? `<div style="background:var(--gray-50);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;"><em>"${esc(req.note)}"</em></div>` : ''}
@@ -3820,6 +3874,16 @@ async function loadAdminCalendarData() {
   Object.entries(people).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id,name]) => {
     sel.innerHTML += `<option value="${id}">${name}</option>`;
   });
+  // Render legend
+  const lg = $('admin-cal-legend');
+  const legendItems = Object.entries(people).sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name]) => {
+    const c = adminUserColor(id);
+    return `<div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:2px;background:${c.bg};border:1px solid ${c.border};flex-shrink:0;"></div><span>${name}</span></div>`;
+  });
+  if (legendItems.length) {
+    lg.style.display = 'flex';
+    lg.innerHTML = '<span style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;margin-right:4px;">WHO:</span>' + legendItems.join('');
+  } else { lg.style.display = 'none'; }
 }
 
 $('admin-cal-prev').addEventListener('click', () => { adminCalMonth--; if(adminCalMonth<0){adminCalMonth=11;adminCalYear--;} loadAdminCalendarData().then(renderAdminCalendar); });
@@ -3863,11 +3927,21 @@ function renderAdminCalendar() {
     });
     dayEvents.forEach(e => {
       const span = document.createElement('span');
-      span.className = `to-cal-event ${e.status} ${e.type.toLowerCase()}`;
+      const uc = adminUserColor(e.user_id);
       const halfLabel = e.half_day ? ` (${e.half_day[0].toUpperCase()})` : '';
       span.textContent = e.user_name + halfLabel;
-      span.title = `${e.user_name} — ${e.type} ${e.start_date} to ${e.end_date} [${e.status}]`;
+      span.title = `${e.user_name} — ${e.type} ${e.start_date} to ${e.end_date}${e.return_to_work_date ? ' · returns ' + e.return_to_work_date : ''} [${e.status}]`;
       if (e.status === 'pending') {
+        // Pending: striped with color border
+        span.className = 'to-cal-event pending';
+        span.style.color = uc.text;
+        span.style.borderColor = uc.border;
+        span.style.cursor = 'pointer';
+        span.addEventListener('click', () => openTOReview(e.id));
+      } else {
+        span.className = 'to-cal-event approved';
+        span.style.background = uc.bg;
+        span.style.color = uc.text;
         span.style.cursor = 'pointer';
         span.addEventListener('click', () => openTOReview(e.id));
       }
