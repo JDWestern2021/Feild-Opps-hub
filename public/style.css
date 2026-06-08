@@ -359,8 +359,8 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .modal { border-radius: 20px 20px 0 0; max-height: 92vh; max-width: 100%; }
   .modal-header { padding: 16px 18px 12px; }
   .modal-body   { padding: 14px 18px; }
-  .modal-footer { padding: 12px 18px; flex-wrap: wrap; }
-  .modal-footer .btn { flex: 1; justify-content: center; min-width: 80px; }
+  .modal-footer { padding: 12px 18px; flex-wrap: wrap; gap: 8px; }
+  .modal-footer .btn { flex: 1; justify-content: center; min-width: 80px; min-height: 44px; font-size: 15px; }
 
   /* ── Grid utilities ── */
   .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 12px; }
