@@ -3918,38 +3918,78 @@ $('btn-deny-req').addEventListener('click',   () => submitTOReview('denied'));
 
 let _toReviewSubmitting = false; // guard against double-tap on mobile
 
+// Core fetch wrapper — explicit credentials for iOS PWA standalone mode
+async function _doReviewFetch(id, status, note) {
+  const r = await fetch(`/api/time-off/${id}/review`, {
+    method: 'PATCH',
+    credentials: 'include',            // required for iOS home-screen PWA cookie handling
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, review_note: note })
+  });
+  // Parse body safely — a non-JSON error response (e.g. HTML 502 page) shouldn't
+  // mask itself as a "network error"
+  let data = null;
+  try { data = await r.json(); } catch { /* body wasn't JSON — treat as empty */ }
+  return { ok: r.ok, status: r.status, data };
+}
+
 async function submitTOReview(status) {
   if (!toReviewId || _toReviewSubmitting) return;
   _toReviewSubmitting = true;
 
+  const submitId   = toReviewId;   // capture now — cleared on success
   const approveBtn = $('btn-approve-req');
   const denyBtn    = $('btn-deny-req');
-  if (approveBtn) { approveBtn.disabled = true; approveBtn.textContent = status === 'approved' ? 'Approving…' : '✓ Approve'; }
-  if (denyBtn)    { denyBtn.disabled    = true; denyBtn.textContent    = status === 'denied'   ? 'Denying…'  : '✗ Deny'; }
+  const note       = $('to-review-note')?.value?.trim() || null;
 
+  // Visual feedback — lock buttons
+  const setButtons = (loading) => {
+    if (approveBtn) { approveBtn.disabled = loading; approveBtn.textContent = loading && status === 'approved' ? 'Approving…' : '✓ Approve'; }
+    if (denyBtn)    { denyBtn.disabled    = loading; denyBtn.textContent    = loading && status === 'denied'   ? 'Denying…'   : '✗ Deny';    }
+  };
+  setButtons(true);
+
+  let result = null;
   try {
-    const note = $('to-review-note')?.value?.trim() || null;
-    const r = await fetch(`/api/time-off/${toReviewId}/review`, {
-      method: 'PATCH', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ status, review_note: note })
-    });
-    if (r.ok) {
-      $('to-review-modal').classList.remove('open');
-      toReviewId = null;
-      showToast(status === 'approved' ? '✓ Request approved' : 'Request denied', status === 'approved' ? 'success' : '');
+    result = await _doReviewFetch(submitId, status, note);
+  } catch (networkErr) {
+    // First attempt failed — wait 900ms and retry once (handles brief iOS cellular hiccup)
+    try {
+      await new Promise(res => setTimeout(res, 900));
+      result = await _doReviewFetch(submitId, status, note);
+    } catch {
+      showToast('Could not reach the server. Check your connection and try again.', 'error');
+      setButtons(false);
+      _toReviewSubmitting = false;
+      return;
+    }
+  }
+
+  setButtons(false);
+  _toReviewSubmitting = false;
+
+  if (result.ok) {
+    // ── Success: close modal, return to requests list, refresh ──
+    toReviewId = null;
+    $('to-review-modal').classList.remove('open');
+
+    // Brief pause for the modal close animation, then switch to requests tab and refresh
+    setTimeout(() => {
+      showTOTab('requests');
       loadTORequests();
       loadNavBadges();
-      if ($('to-archive-tab').style.display !== 'none') loadTOArchive();
-    } else {
-      const d = await r.json();
-      showToast(d.error || 'Failed to update request', 'error');
-    }
-  } catch {
-    showToast('Network error — please try again', 'error');
-  } finally {
-    _toReviewSubmitting = false;
-    if (approveBtn) { approveBtn.disabled = false; approveBtn.textContent = '✓ Approve'; }
-    if (denyBtn)    { denyBtn.disabled    = false; denyBtn.textContent    = '✗ Deny'; }
+    }, 220);
+
+    showToast(
+      status === 'approved' ? '✓ Request approved' : '✗ Request denied',
+      status === 'approved' ? 'success' : ''
+    );
+  } else if (result.status === 401) {
+    // Session expired — redirect to login
+    showToast('Session expired — please sign in again', 'error');
+    setTimeout(() => { location.href = '/login.html'; }, 1500);
+  } else {
+    showToast(result.data?.error || `Failed to ${status} request`, 'error');
   }
 }
 
@@ -4044,9 +4084,9 @@ function updateArchiveDeleteBtn() {
 
 async function deleteTOArchiveItem(id) {
   if (!confirm('Permanently delete this time off record? This cannot be undone.')) return;
-  const r = await fetch(`/api/time-off/${id}`, {method:'DELETE'});
+  const r = await fetch(`/api/time-off/${id}`, {method:'DELETE', credentials:'include'});
   if (r.ok) { showToast('Record deleted.', 'success'); loadTOArchive(); loadTORequests(); loadNavBadges(); }
-  else { const d = await r.json(); showToast(d.error || 'Failed to delete.', 'error'); }
+  else { const d = await r.json().catch(()=>({})); showToast(d.error || 'Failed to delete.', 'error'); }
 }
 
 async function deleteSelectedArchive() {
@@ -4054,7 +4094,8 @@ async function deleteSelectedArchive() {
   if (!ids.length) return;
   if (!confirm(`Permanently delete ${ids.length} record${ids.length!==1?'s':''}? This cannot be undone.`)) return;
   const r = await fetch('/api/time-off/bulk-delete', {
-    method: 'DELETE', headers: {'Content-Type':'application/json'},
+    method: 'DELETE', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ ids })
   });
   if (r.ok) {

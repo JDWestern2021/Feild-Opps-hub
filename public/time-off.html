@@ -590,7 +590,7 @@ $('btn-submit-req').addEventListener('click', async () => {
   $('btn-submit-req').disabled = true;
   $('btn-submit-req').textContent = 'Submitting…';
   try {
-    const r = await fetch('/api/time-off', {
+    const r = await fetch('/api/time-off', { credentials: 'include',
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ type, start_date: start, end_date: end, return_to_work_date: rtw, half_day: halfDay||null, note: note||null })
     });
@@ -675,20 +675,20 @@ function attachSwipe(el) {
 
 async function cancelRequest(id) {
   if (!confirm('Cancel this time off request?')) return;
-  const r = await fetch(`/api/time-off/${id}/cancel`, {method:'PATCH'});
+  const r = await fetch(`/api/time-off/${id}/cancel`, {method:'PATCH', credentials:'include'});
   if (r.ok) { showToast('Request cancelled.'); await loadCalendarData(); loadPersonFilter(); loadMyRequests(); }
-  else { const d = await r.json(); showToast(d.error || 'Failed to cancel.', 'error'); }
+  else { const d = await r.json().catch(()=>({})); showToast(d.error || 'Failed to cancel.', 'error'); }
 }
 
 async function deleteRequest(id) {
   if (!confirm('Permanently delete this request? This cannot be undone.')) return;
   const el = $(`req-${id}`);
   if (el) el.classList.add('deleting');
-  const r = await fetch(`/api/time-off/${id}`, {method:'DELETE'});
+  const r = await fetch(`/api/time-off/${id}`, {method:'DELETE', credentials:'include'});
   if (r.ok) { showToast('Request deleted.'); setTimeout(() => loadMyRequests(), 300); }
   else {
     if (el) el.classList.remove('deleting');
-    const d = await r.json(); showToast(d.error || 'Failed to delete.', 'error');
+    const d = await r.json().catch(()=>({})); showToast(d.error || 'Failed to delete.', 'error');
   }
 }
 
@@ -742,10 +742,11 @@ $('btn-save-edit').addEventListener('click', async () => {
   $('btn-save-edit').disabled = true; $('btn-save-edit').textContent = 'Saving…';
   try {
     const r = await fetch(`/api/time-off/${editingId}`, {
-      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      method: 'PATCH', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ type, start_date: start, end_date: end, return_to_work_date: rtw||null, half_day: halfDay||null, note: note||null })
     });
-    const d = await r.json();
+    const d = await r.json().catch(()=>({}));
     if (!r.ok) { errEl.textContent = d.error || 'Failed to save.'; errEl.style.display='block'; return; }
     showToast('Request updated & re-submitted ✓', 'success');
     closeEditModal();
