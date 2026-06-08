@@ -1415,21 +1415,31 @@ app.get('/api/time-off/holidays', requireAuth, async (req, res) => {
 
 // ── Submit a time-off request ──
 app.post('/api/time-off', requireAuth, async (req, res) => {
-  const { start_date, end_date, return_to_work_date, type, note, half_day } = req.body;
-  if (!start_date || !end_date || !type) return res.status(400).json({ error: 'start_date, end_date, and type are required' });
-  if (start_date > end_date) return res.status(400).json({ error: 'Start date must be on or before end date' });
-  const validTypes = ['Vacation', 'Sick', 'Unpaid', 'Other'];
-  if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid type' });
-  const now = new Date().toISOString();
-  const { rows } = await pool.query(
-    `INSERT INTO time_off_requests (user_id,user_name,start_date,end_date,return_to_work_date,half_day,type,note,status,created_at,updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$9) RETURNING id`,
-    [req.user.id, req.user.name, start_date, end_date, return_to_work_date || null, half_day || null, type, note || null, now]
-  );
-  const id = rows[0].id;
-  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
-    [id, req.user.name, 'submitted', `${type} request: ${start_date} to ${end_date}, RTW: ${return_to_work_date||'not set'}`, now]);
-  res.status(201).json({ ok: true, id });
+  try {
+    const { start_date, end_date, return_to_work_date, type, note, half_day } = req.body;
+    if (!start_date || !end_date || !type) return res.status(400).json({ error: 'start_date, end_date, and type are required' });
+    if (start_date > end_date) return res.status(400).json({ error: 'Start date must be on or before end date' });
+    const validTypes = ['Vacation', 'Sick', 'Unpaid', 'Other'];
+    if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid type' });
+    const now = new Date().toISOString();
+    const { rows } = await pool.query(
+      `INSERT INTO time_off_requests (user_id,user_name,start_date,end_date,return_to_work_date,half_day,type,note,status,created_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$9) RETURNING id`,
+      [req.user.id, req.user.name, start_date, end_date, return_to_work_date || null, half_day || null, type, note || null, now]
+    );
+    const id = rows[0].id;
+    // Audit log is non-fatal — don't let a logging failure block the submission
+    try {
+      await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+        [id, req.user.name, 'submitted', `${type} request: ${start_date} to ${end_date}, RTW: ${return_to_work_date||'not set'}`, now]);
+    } catch (auditErr) {
+      console.error('time_off_audit insert failed (non-fatal):', auditErr.message);
+    }
+    res.status(201).json({ ok: true, id });
+  } catch (err) {
+    console.error('POST time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error submitting request' });
+  }
 });
 
 // ── List time-off requests ──

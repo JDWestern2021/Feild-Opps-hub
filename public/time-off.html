@@ -349,7 +349,7 @@ let calMonth = new Date().getMonth();
   checkNotifications();
 
   await loadCalendarData();
-  renderCalendar();
+  showTab('calendar');   // explicitly activate calendar tab so it's always visible on load
   loadPersonFilter();
 })();
 
@@ -594,7 +594,7 @@ $('btn-submit-req').addEventListener('click', async () => {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ type, start_date: start, end_date: end, return_to_work_date: rtw, half_day: halfDay||null, note: note||null })
     });
-    const d = await r.json();
+    const d = await r.json().catch(()=>({}));
     if (!r.ok) { errEl.textContent = d.error || 'Failed to submit.'; errEl.style.display='block'; return; }
     showToast('Time off request submitted!', 'success');
     const t1 = new Date(); t1.setDate(t1.getDate() + 1);
