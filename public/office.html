@@ -616,9 +616,10 @@
       </div>
     </div>
 
-    <!-- Sub-tabs: Requests | Calendar -->
-    <div style="display:flex;gap:6px;margin-bottom:16px;">
+    <!-- Sub-tabs: Requests | Archive | Calendar -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
       <button class="proj-tab active" id="to-tab-requests" onclick="showTOTab('requests')">📋 Pending Requests</button>
+      <button class="proj-tab" id="to-tab-archive"  onclick="showTOTab('archive')">🗂 Archive</button>
       <button class="proj-tab" id="to-tab-calendar" onclick="showTOTab('calendar')">📅 Calendar</button>
     </div>
 
@@ -643,8 +644,30 @@
           <div style="font-size:28px;font-weight:800;" id="to-stat-all">—</div>
         </div>
       </div>
-
       <div id="to-req-list"></div>
+    </div>
+
+    <!-- ARCHIVE TAB -->
+    <div id="to-archive-tab" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="to-archive-select-all" style="width:15px;height:15px;accent-color:var(--orange);cursor:pointer;" onchange="toggleSelectAllArchive(this.checked)"/>
+            Select All
+          </label>
+          <span id="to-archive-selected-count" style="font-size:12px;color:var(--gray-500);"></span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="to-archive-filter" class="form-control" style="padding:5px 10px;width:auto;font-size:13px;" onchange="loadTOArchive()">
+            <option value="">All Statuses</option>
+            <option value="approved">Approved</option>
+            <option value="denied">Denied</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-danger btn-sm" id="btn-archive-delete-selected" style="display:none;" onclick="deleteSelectedArchive()">🗑 Delete Selected</button>
+        </div>
+      </div>
+      <div id="to-archive-list"></div>
     </div>
 
     <!-- CALENDAR TAB -->
@@ -710,13 +733,13 @@
     <div class="modal" style="max-width:460px;">
       <div class="modal-header">
         <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);margin-bottom:2px;">Review Time Off Request</div>
-          <h3 id="to-review-name" style="font-size:17px;"></h3>
+          <div id="to-review-modal-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);margin-bottom:2px;">Review Time Off Request</div>
+          <h3 id="to-review-name" style="font-size:17px;display:flex;align-items:center;gap:8px;"></h3>
         </div>
         <button class="modal-close" onclick="$('to-review-modal').classList.remove('open')">×</button>
       </div>
       <div class="modal-body" id="to-review-body"></div>
-      <div class="modal-footer">
+      <div class="modal-footer" id="to-review-footer">
         <button class="btn btn-sm" id="btn-approve-req" style="background:#1a6e35;color:white;">✓ Approve</button>
         <button class="btn btn-danger btn-sm" id="btn-deny-req">✗ Deny</button>
         <button class="btn btn-secondary btn-sm" onclick="$('to-review-modal').classList.remove('open')">Close</button>
@@ -3759,10 +3782,13 @@ $('btn-close-timeoff').addEventListener('click', () => showHomeView());
 
 function showTOTab(tab) {
   $('to-requests-tab').style.display = tab === 'requests' ? '' : 'none';
+  $('to-archive-tab').style.display  = tab === 'archive'  ? '' : 'none';
   $('to-calendar-tab').style.display = tab === 'calendar' ? '' : 'none';
   $('to-tab-requests').classList.toggle('active', tab === 'requests');
+  $('to-tab-archive').classList.toggle('active',  tab === 'archive');
   $('to-tab-calendar').classList.toggle('active', tab === 'calendar');
   if (tab === 'calendar') { loadAdminCalendarData().then(renderAdminCalendar); }
+  if (tab === 'archive')  { loadTOArchive(); }
 }
 
 async function loadTORequests(filterStatus) {
@@ -3815,13 +3841,36 @@ function renderTOList(reqs) {
   }).join('');
 }
 
+const STATUS_PILL = {
+  pending:   'background:#fff3cd;color:#856404;',
+  approved:  'background:#d4edda;color:#155724;',
+  denied:    'background:#f8d7da;color:#721c24;',
+  cancelled: 'background:#e9ecef;color:#6c757d;',
+};
+
 async function openTOReview(id) {
   toReviewId = id;
   const r = await fetch(`/api/time-off/${id}`);
   if (!r.ok) return;
   const req = await r.json();
   const days = dayCountTO(req.start_date, req.end_date);
-  $('to-review-name').textContent = req.user_name;
+  const isPending = req.status === 'pending';
+
+  // Modal header label + status pill
+  $('to-review-modal-label').textContent = isPending ? 'Review Time Off Request' : 'Time Off Request — Details';
+  $('to-review-name').innerHTML = `${esc(req.user_name)}<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;${STATUS_PILL[req.status]||''}">${req.status}</span>`;
+
+  // Show/hide approve+deny buttons
+  $('btn-approve-req').style.display = isPending ? '' : 'none';
+  $('btn-deny-req').style.display    = isPending ? '' : 'none';
+
+  const reviewedSection = req.reviewed_by
+    ? `<div style="background:#f8f9fa;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px;color:var(--gray-600);">
+         <strong>Reviewed by:</strong> ${esc(req.reviewed_by)}
+         ${req.reviewed_at ? ` · ${fmtDate(req.reviewed_at.slice(0,10))}` : ''}
+         ${req.review_note ? `<br><em>"${esc(req.review_note)}"</em>` : ''}
+       </div>` : '';
+
   $('to-review-body').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
       <div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Type</label><div style="font-size:14px;font-weight:600;margin-top:4px;">${req.type}</div></div>
@@ -3832,24 +3881,30 @@ async function openTOReview(id) {
       ${req.half_day ? `<div style="grid-column:1/-1;"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500);">Half Day</label><div style="font-size:14px;margin-top:4px;">${req.half_day}</div></div>` : ''}
     </div>
     ${req.note ? `<div style="background:var(--gray-50);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;"><em>"${esc(req.note)}"</em></div>` : ''}
-    <div class="form-group">
-      <label class="form-label">Optional note to employee</label>
-      <textarea id="to-review-note" class="form-control" rows="2" placeholder="e.g. Approved — enjoy your break! or Please re-submit after checking with your foreman."></textarea>
-    </div>
-    <div id="to-review-overlap" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;color:#856404;"></div>
+    ${reviewedSection}
+    ${isPending ? `
+      <div class="form-group">
+        <label class="form-label">Optional note to employee</label>
+        <textarea id="to-review-note" class="form-control" rows="2" placeholder="e.g. Approved — enjoy your break!"></textarea>
+      </div>
+      <div id="to-review-overlap" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;color:#856404;"></div>
+    ` : ''}
   `;
-  // Check for overlaps with other approved requests
-  const overlaps = adminCalEvents.filter(e =>
-    e.id !== id && e.status === 'approved' && e.start_date <= req.end_date && e.end_date >= req.start_date
-  );
-  if (overlaps.length > 0) {
-    const cfgR = await fetch('/api/time-off/config');
-    const cfg = cfgR.ok ? await cfgR.json() : {};
-    const warnAt = parseInt(cfg.overlap_warning_count) || 2;
-    if (overlaps.length >= warnAt) {
-      const names = [...new Set(overlaps.map(e => e.user_name))];
-      $('to-review-overlap').style.display = 'block';
-      $('to-review-overlap').innerHTML = `⚠️ <strong>Coverage warning:</strong> ${names.join(', ')} ${names.length===1?'is':'are'} already approved off during this period.`;
+
+  // Overlap check — only for pending
+  if (isPending) {
+    const overlaps = adminCalEvents.filter(e =>
+      e.id !== id && e.status === 'approved' && e.start_date <= req.end_date && e.end_date >= req.start_date
+    );
+    if (overlaps.length > 0) {
+      const cfgR = await fetch('/api/time-off/config');
+      const cfg = cfgR.ok ? await cfgR.json() : {};
+      const warnAt = parseInt(cfg.overlap_warning_count) || 2;
+      if (overlaps.length >= warnAt) {
+        const names = [...new Set(overlaps.map(e => e.user_name))];
+        $('to-review-overlap').style.display = 'block';
+        $('to-review-overlap').innerHTML = `⚠️ <strong>Coverage warning:</strong> ${names.join(', ')} ${names.length===1?'is':'are'} already approved off during this period.`;
+      }
     }
   }
   $('to-review-modal').classList.add('open');
@@ -3870,10 +3925,132 @@ async function submitTOReview(status) {
     showToast(`Request ${status}`, status === 'approved' ? 'success' : '');
     loadTORequests();
     loadNavBadges();
+    // If archive tab is open, refresh it too
+    if ($('to-archive-tab').style.display !== 'none') loadTOArchive();
   } else {
     const d = await r.json();
     showToast(d.error || 'Failed', 'error');
   }
+}
+
+// ── Archive tab ──
+async function loadTOArchive() {
+  const filterStatus = $('to-archive-filter')?.value || '';
+  const url = filterStatus ? `/api/time-off?status=${filterStatus}` : '/api/time-off';
+  const all = await fetch(url).then(r => r.json()).catch(() => []);
+  // Archive = anything that's been resolved (approved, denied, cancelled)
+  const archived = all.filter(r => ['approved','denied','cancelled'].includes(r.status));
+  const list = $('to-archive-list');
+  if (!archived.length) {
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--gray-500);font-size:14px;">No archived requests${filterStatus ? ' with status "' + filterStatus + '"' : ''}.</div>`;
+    updateArchiveDeleteBtn();
+    return;
+  }
+  list.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;">
+      <thead>
+        <tr style="background:var(--dark);color:white;font-size:12px;">
+          <th style="padding:10px 12px;width:36px;"><input type="checkbox" id="to-arch-all-cb" style="width:14px;height:14px;accent-color:var(--orange);cursor:pointer;" onchange="toggleSelectAllArchive(this.checked)"/></th>
+          <th style="padding:10px 12px;text-align:left;font-weight:700;">Employee</th>
+          <th style="padding:10px 12px;text-align:left;font-weight:700;">Type</th>
+          <th style="padding:10px 12px;text-align:left;font-weight:700;">Dates</th>
+          <th style="padding:10px 12px;text-align:left;font-weight:700;">RTW</th>
+          <th style="padding:10px 12px;text-align:left;font-weight:700;">Days</th>
+          <th style="padding:10px 12px;text-align:left;font-weight:700;">Status</th>
+          <th style="padding:10px 12px;text-align:left;font-weight:700;">Reviewed By</th>
+          <th style="padding:10px 12px;width:60px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${archived.map(req => {
+          const days = dayCountTO(req.start_date, req.end_date);
+          const statusStyle = STATUS_PILL[req.status] || '';
+          const c = adminUserColor(req.user_id);
+          return `<tr class="to-archive-row" data-id="${req.id}" style="border-bottom:1px solid var(--gray-100);">
+            <td style="padding:10px 12px;">
+              <input type="checkbox" class="to-arch-cb" data-id="${req.id}" style="width:14px;height:14px;accent-color:var(--orange);cursor:pointer;" onchange="onArchiveCbChange()"/>
+            </td>
+            <td style="padding:10px 12px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:${c.bg};border:2px solid ${c.border};flex-shrink:0;"></div>
+                <span style="font-weight:600;font-size:13px;">${esc(req.user_name)}</span>
+              </div>
+            </td>
+            <td style="padding:10px 12px;font-size:13px;color:var(--gray-700);">${req.type}</td>
+            <td style="padding:10px 12px;font-size:13px;">
+              ${fmtDate(req.start_date)}${req.start_date !== req.end_date ? ' → ' + fmtDate(req.end_date) : ''}
+              ${req.half_day ? `<br><span style="font-size:11px;color:var(--gray-500);">${req.half_day}</span>` : ''}
+            </td>
+            <td style="padding:10px 12px;font-size:13px;color:var(--gray-600);">${req.return_to_work_date ? fmtDate(req.return_to_work_date) : '—'}</td>
+            <td style="padding:10px 12px;font-size:13px;">${days}d</td>
+            <td style="padding:10px 12px;">
+              <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;${statusStyle}">${req.status}</span>
+            </td>
+            <td style="padding:10px 12px;font-size:12px;color:var(--gray-500);">
+              ${req.reviewed_by ? esc(req.reviewed_by) : '—'}
+              ${req.review_note ? `<br><em style="font-size:11px;">"${esc(req.review_note)}"</em>` : ''}
+            </td>
+            <td style="padding:10px 12px;">
+              <button onclick="deleteTOArchiveItem(${req.id})" title="Delete" style="background:none;border:1px solid #dc3545;color:#dc3545;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-weight:700;" onmouseover="this.style.background='#dc3545';this.style.color='white'" onmouseout="this.style.background='none';this.style.color='#dc3545'">🗑</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  updateArchiveDeleteBtn();
+}
+
+function onArchiveCbChange() {
+  const all  = document.querySelectorAll('.to-arch-cb');
+  const checked = document.querySelectorAll('.to-arch-cb:checked');
+  const allCb = $('to-arch-all-cb') || $('to-archive-select-all');
+  if (allCb) allCb.checked = all.length > 0 && checked.length === all.length;
+  updateArchiveDeleteBtn();
+}
+
+function toggleSelectAllArchive(checked) {
+  document.querySelectorAll('.to-arch-cb').forEach(cb => cb.checked = checked);
+  // Sync both checkboxes
+  const cb1 = $('to-archive-select-all'), cb2 = $('to-arch-all-cb');
+  if (cb1) cb1.checked = checked;
+  if (cb2) cb2.checked = checked;
+  updateArchiveDeleteBtn();
+}
+
+function updateArchiveDeleteBtn() {
+  const count = document.querySelectorAll('.to-arch-cb:checked').length;
+  const btn = $('btn-archive-delete-selected');
+  if (!btn) return;
+  if (count > 0) {
+    btn.style.display = '';
+    btn.textContent = `🗑 Delete Selected (${count})`;
+  } else {
+    btn.style.display = 'none';
+  }
+  const countEl = $('to-archive-selected-count');
+  if (countEl) countEl.textContent = count > 0 ? `${count} selected` : '';
+}
+
+async function deleteTOArchiveItem(id) {
+  if (!confirm('Permanently delete this time off record? This cannot be undone.')) return;
+  const r = await fetch(`/api/time-off/${id}`, {method:'DELETE'});
+  if (r.ok) { showToast('Record deleted.', 'success'); loadTOArchive(); loadTORequests(); loadNavBadges(); }
+  else { const d = await r.json(); showToast(d.error || 'Failed to delete.', 'error'); }
+}
+
+async function deleteSelectedArchive() {
+  const ids = Array.from(document.querySelectorAll('.to-arch-cb:checked')).map(cb => parseInt(cb.dataset.id));
+  if (!ids.length) return;
+  if (!confirm(`Permanently delete ${ids.length} record${ids.length!==1?'s':''}? This cannot be undone.`)) return;
+  const r = await fetch('/api/time-off/bulk-delete', {
+    method: 'DELETE', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids })
+  });
+  if (r.ok) {
+    const d = await r.json();
+    showToast(`${d.deleted} record${d.deleted!==1?'s':''} deleted.`, 'success');
+    loadTOArchive(); loadTORequests(); loadNavBadges();
+  } else { const d = await r.json(); showToast(d.error || 'Failed to delete.', 'error'); }
 }
 
 // ── Admin calendar ──

@@ -1584,14 +1584,33 @@ app.patch('/api/time-off/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Field user: delete own cancelled request ──
+// ── Delete a request ──
+// Admin/approver: can delete any status; field user: can only delete own cancelled/denied
+// ── Bulk delete (admin/approver only) — MUST be before /:id route ──
+app.delete('/api/time-off/bulk-delete', requireAuth, async (req, res) => {
+  if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+  const safeIds = ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
+  if (!safeIds.length) return res.status(400).json({ error: 'No valid IDs' });
+  for (const id of safeIds) await removeTimeOffTimesheetRows(id);
+  const { rowCount } = await pool.query(
+    `DELETE FROM time_off_requests WHERE id = ANY($1::int[])`, [safeIds]
+  );
+  res.json({ ok: true, deleted: rowCount });
+});
+
+// ── Delete a single request ──
+// Admin/approver: any status; field user: own cancelled/denied only
 app.delete('/api/time-off/:id', requireAuth, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
-    return res.status(403).json({ error: 'Forbidden' });
-  if (!['cancelled','denied'].includes(rows[0].status))
-    return res.status(400).json({ error: 'Only cancelled or denied requests can be deleted' });
+  if (!canApproveTimeOff(req.user)) {
+    if (rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    if (!['cancelled','denied'].includes(rows[0].status))
+      return res.status(400).json({ error: 'Only cancelled or denied requests can be deleted' });
+  }
+  await removeTimeOffTimesheetRows(parseInt(req.params.id));
   await pool.query('DELETE FROM time_off_requests WHERE id=$1', [req.params.id]);
   res.json({ ok: true });
 });
