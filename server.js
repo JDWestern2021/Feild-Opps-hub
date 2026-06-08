@@ -1527,61 +1527,78 @@ function canApproveTimeOff(user) {
 
 app.patch('/api/time-off/:id/review', requireAuth, async (req, res) => {
   if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'You do not have permission to approve time off requests' });
-  const { status, review_note } = req.body;
-  if (!['approved', 'denied'].includes(status)) return res.status(400).json({ error: 'status must be approved or denied' });
-  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  if (rows[0].status !== 'pending') return res.status(400).json({ error: 'Can only review pending requests' });
-  const req_data = rows[0];
-  const now = new Date().toISOString();
-  await pool.query(`UPDATE time_off_requests SET status=$1,reviewed_by_id=$2,reviewed_by=$3,reviewed_at=$4,review_note=$5,updated_at=$4 WHERE id=$6`,
-    [status, req.user.id, req.user.name, now, review_note || null, req.params.id]);
-  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
-    [req.params.id, req.user.name, status, review_note ? `Note: ${review_note}` : null, now]);
-  // On approval: write time-off rows to timesheet
-  if (status === 'approved') {
-    await createTimeOffTimesheetRows(parseInt(req.params.id), req_data.user_id, req_data.start_date, req_data.end_date);
+  try {
+    const { status, review_note } = req.body;
+    if (!['approved', 'denied'].includes(status)) return res.status(400).json({ error: 'status must be approved or denied' });
+    const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].status !== 'pending') return res.status(400).json({ error: 'Can only review pending requests' });
+    const req_data = rows[0];
+    const now = new Date().toISOString();
+    await pool.query(`UPDATE time_off_requests SET status=$1,reviewed_by_id=$2,reviewed_by=$3,reviewed_at=$4,review_note=$5,updated_at=$4 WHERE id=$6`,
+      [status, req.user.id, req.user.name, now, review_note || null, req.params.id]);
+    await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+      [req.params.id, req.user.name, status, review_note ? `Note: ${review_note}` : null, now]);
+    // On approval: write time-off rows to timesheet (non-fatal — don't block approval if this fails)
+    if (status === 'approved') {
+      try {
+        await createTimeOffTimesheetRows(parseInt(req.params.id), req_data.user_id, req_data.start_date, req_data.end_date);
+      } catch (tsErr) {
+        console.error('createTimeOffTimesheetRows failed (non-fatal):', tsErr.message);
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('review time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error processing approval' });
   }
-  res.json({ ok: true });
 });
 
 // ── Field user: cancel own pending request ──
 app.patch('/api/time-off/:id/cancel', requireAuth, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
-    return res.status(403).json({ error: 'Forbidden' });
-  if (!['pending','approved'].includes(rows[0].status)) return res.status(400).json({ error: 'Can only cancel pending or approved requests' });
-  const now = new Date().toISOString();
-  await pool.query(`UPDATE time_off_requests SET status='cancelled',updated_at=$1 WHERE id=$2`, [now, req.params.id]);
-  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
-    [req.params.id, req.user.name, 'cancelled', 'Request cancelled', now]);
-  // Remove timesheet entries if they existed
-  await removeTimeOffTimesheetRows(parseInt(req.params.id));
-  res.json({ ok: true });
+  try {
+    const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
+      return res.status(403).json({ error: 'Forbidden' });
+    if (!['pending','approved'].includes(rows[0].status)) return res.status(400).json({ error: 'Can only cancel pending or approved requests' });
+    const now = new Date().toISOString();
+    await pool.query(`UPDATE time_off_requests SET status='cancelled',updated_at=$1 WHERE id=$2`, [now, req.params.id]);
+    await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+      [req.params.id, req.user.name, 'cancelled', 'Request cancelled', now]);
+    await removeTimeOffTimesheetRows(parseInt(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('cancel time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
 });
 
 // ── Field user: edit own pending or cancelled request ──
 app.patch('/api/time-off/:id', requireAuth, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
-    return res.status(403).json({ error: 'Forbidden' });
-  if (!['pending','cancelled'].includes(rows[0].status))
-    return res.status(400).json({ error: 'Only pending or cancelled requests can be edited' });
-  const { type, start_date, end_date, return_to_work_date, half_day, note } = req.body;
-  if (!type || !start_date || !end_date) return res.status(400).json({ error: 'type, start_date and end_date are required' });
-  if (start_date > end_date) return res.status(400).json({ error: 'start_date must be on or before end_date' });
-  const now = new Date().toISOString();
-  // Re-open as pending when editing a cancelled request
-  const newStatus = rows[0].status === 'cancelled' ? 'pending' : 'pending';
-  await pool.query(
-    `UPDATE time_off_requests SET type=$1,start_date=$2,end_date=$3,return_to_work_date=$4,half_day=$5,note=$6,status=$7,updated_at=$8 WHERE id=$9`,
-    [type, start_date, end_date, return_to_work_date || null, half_day || null, note || null, newStatus, now, req.params.id]
-  );
-  await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
-    [req.params.id, req.user.name, 'edited', `Edited and re-submitted as ${newStatus}`, now]);
-  res.json({ ok: true });
+  try {
+    const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
+      return res.status(403).json({ error: 'Forbidden' });
+    if (!['pending','cancelled'].includes(rows[0].status))
+      return res.status(400).json({ error: 'Only pending or cancelled requests can be edited' });
+    const { type, start_date, end_date, return_to_work_date, half_day, note } = req.body;
+    if (!type || !start_date || !end_date) return res.status(400).json({ error: 'type, start_date and end_date are required' });
+    if (start_date > end_date) return res.status(400).json({ error: 'start_date must be on or before end_date' });
+    const now = new Date().toISOString();
+    const newStatus = 'pending';
+    await pool.query(
+      `UPDATE time_off_requests SET type=$1,start_date=$2,end_date=$3,return_to_work_date=$4,half_day=$5,note=$6,status=$7,updated_at=$8 WHERE id=$9`,
+      [type, start_date, end_date, return_to_work_date || null, half_day || null, note || null, newStatus, now, req.params.id]
+    );
+    await pool.query('INSERT INTO time_off_audit (request_id,user_name,action,details,created_at) VALUES ($1,$2,$3,$4,$5)',
+      [req.params.id, req.user.name, 'edited', `Edited and re-submitted as ${newStatus}`, now]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('edit time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
 });
 
 // ── Delete a request ──
@@ -1589,30 +1606,40 @@ app.patch('/api/time-off/:id', requireAuth, async (req, res) => {
 // ── Bulk delete (admin/approver only) — MUST be before /:id route ──
 app.delete('/api/time-off/bulk-delete', requireAuth, async (req, res) => {
   if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
-  const safeIds = ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
-  if (!safeIds.length) return res.status(400).json({ error: 'No valid IDs' });
-  for (const id of safeIds) await removeTimeOffTimesheetRows(id);
-  const { rowCount } = await pool.query(
-    `DELETE FROM time_off_requests WHERE id = ANY($1::int[])`, [safeIds]
-  );
-  res.json({ ok: true, deleted: rowCount });
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+    const safeIds = ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (!safeIds.length) return res.status(400).json({ error: 'No valid IDs' });
+    for (const id of safeIds) await removeTimeOffTimesheetRows(id);
+    const { rowCount } = await pool.query(
+      `DELETE FROM time_off_requests WHERE id = ANY($1::int[])`, [safeIds]
+    );
+    res.json({ ok: true, deleted: rowCount });
+  } catch (err) {
+    console.error('bulk-delete time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
 });
 
 // ── Delete a single request ──
 // Admin/approver: any status; field user: own cancelled/denied only
 app.delete('/api/time-off/:id', requireAuth, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  if (!canApproveTimeOff(req.user)) {
-    if (rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-    if (!['cancelled','denied'].includes(rows[0].status))
-      return res.status(400).json({ error: 'Only cancelled or denied requests can be deleted' });
+  try {
+    const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (!canApproveTimeOff(req.user)) {
+      if (rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+      if (!['cancelled','denied'].includes(rows[0].status))
+        return res.status(400).json({ error: 'Only cancelled or denied requests can be deleted' });
+    }
+    await removeTimeOffTimesheetRows(parseInt(req.params.id));
+    await pool.query('DELETE FROM time_off_requests WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('delete time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
   }
-  await removeTimeOffTimesheetRows(parseInt(req.params.id));
-  await pool.query('DELETE FROM time_off_requests WHERE id=$1', [req.params.id]);
-  res.json({ ok: true });
 });
 
 // ── My notifications: approved/denied requests the user hasn't acknowledged ──
