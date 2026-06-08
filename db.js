@@ -217,6 +217,7 @@ async function initSchema() {
   // Add time_off tracking columns to timesheet_overrides
   await pool.query(`ALTER TABLE timesheet_overrides ADD COLUMN IF NOT EXISTS is_time_off INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE timesheet_overrides ADD COLUMN IF NOT EXISTS time_off_request_id INTEGER REFERENCES time_off_requests(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS archived INTEGER DEFAULT 0`);
   console.log('  ✓ Database schema ready');
 }
 

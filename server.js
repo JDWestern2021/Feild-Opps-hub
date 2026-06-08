@@ -1444,8 +1444,13 @@ app.post('/api/time-off', requireAuth, async (req, res) => {
 
 // ── List time-off requests ──
 app.get('/api/time-off', requireAuth, async (req, res) => {
-  const { status, user_id, from_date, to_date } = req.query;
+  const { status, user_id, from_date, to_date, archived } = req.query;
   const params = []; let where = []; let p = 0;
+
+  // archived=1 → show only archived; default → show only non-archived
+  const showArchived = archived === '1';
+  p++; where.push(`r.archived=$${p}`); params.push(showArchived ? 1 : 0);
+
   if (canApproveTimeOff(req.user)) {
     // Admins and approvers see all requests (with optional filters)
     if (user_id) { p++; where.push(`r.user_id=$${p}`); params.push(parseInt(user_id)); }
@@ -1469,6 +1474,9 @@ app.get('/api/time-off', requireAuth, async (req, res) => {
 app.get('/api/time-off/calendar', requireAuth, async (req, res) => {
   const { from_date, to_date } = req.query;
   let params = []; let where = []; let p = 0;
+
+  // Never show archived records on the calendar
+  where.push(`r.archived=0`);
 
   if (canApproveTimeOff(req.user)) {
     // Admins and time-off approvers see all pending + approved
@@ -1584,6 +1592,23 @@ app.patch('/api/time-off/:id/cancel', requireAuth, async (req, res) => {
   }
 });
 
+// ── Bulk archive (MUST be before /:id to avoid route collision) ──
+app.patch('/api/time-off/bulk-archive', requireAuth, async (req, res) => {
+  if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { ids, archived } = req.body;
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+    const safeIds = ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (!safeIds.length) return res.status(400).json({ error: 'No valid IDs' });
+    const val = archived ? 1 : 0;
+    await pool.query(`UPDATE time_off_requests SET archived=$1 WHERE id = ANY($2::int[])`, [val, safeIds]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('bulk-archive time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
 // ── Field user: edit own pending or cancelled request ──
 app.patch('/api/time-off/:id', requireAuth, async (req, res) => {
   try {
@@ -1607,6 +1632,19 @@ app.patch('/api/time-off/:id', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('edit time-off error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+// ── Archive / un-archive a single request (admin/approver only) ──
+app.patch('/api/time-off/:id/archive', requireAuth, async (req, res) => {
+  if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { archived } = req.body;
+    await pool.query(`UPDATE time_off_requests SET archived=$1 WHERE id=$2`, [archived ? 1 : 0, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('archive time-off error:', err.message);
     res.status(500).json({ error: err.message || 'Server error' });
   }
 });

@@ -217,19 +217,19 @@
     /* ── Nav notification badges ── */
     .nav-badge {
       position: absolute;
-      top: -6px;
-      right: -10px;
-      min-width: 17px;
-      height: 17px;
+      top: 1px;
+      right: -7px;
+      min-width: 14px;
+      height: 14px;
       background: #e53e3e;
       color: #fff;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 800;
-      border-radius: 10px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0 4px;
+      padding: 0 3px;
       line-height: 1;
       pointer-events: none;
     }
@@ -647,6 +647,17 @@
           <div style="font-size:28px;font-weight:800;" id="to-stat-all">—</div>
         </div>
       </div>
+      <!-- Bulk action bar — appears when any cards are checked -->
+      <div id="to-bulk-bar" style="display:none;background:var(--orange-light);border:1px solid rgba(244,121,32,.3);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--orange-dark);">
+          <input type="checkbox" id="to-req-select-all" style="width:14px;height:14px;accent-color:var(--orange);cursor:pointer;" onchange="toggleSelectAllRequests(this.checked)"/>
+          Select All
+        </label>
+        <span id="to-bulk-count" style="font-size:12px;color:var(--gray-600);margin-right:auto;"></span>
+        <button class="btn btn-sm" style="background:#1a6e35;color:white;" onclick="bulkArchiveRequests()">📦 Archive Selected</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkDeleteRequests()">🗑 Delete Selected</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearRequestSelection()">✕ Cancel</button>
+      </div>
       <div id="to-req-list"></div>
     </div>
 
@@ -668,6 +679,7 @@
             <option value="cancelled">Cancelled</option>
           </select>
           <button class="btn btn-danger btn-sm" id="btn-archive-delete-selected" style="display:none;" onclick="deleteSelectedArchive()">🗑 Delete Selected</button>
+          <button class="btn btn-sm" style="background:#6c757d;color:white;" onclick="unarchiveSelectedRequests()" id="btn-archive-unarchive" style="display:none;">↩ Restore Selected</button>
         </div>
       </div>
       <div id="to-archive-list"></div>
@@ -745,6 +757,8 @@
       <div class="modal-footer" id="to-review-footer">
         <button class="btn btn-sm" id="btn-approve-req" style="background:#1a6e35;color:white;">✓ Approve</button>
         <button class="btn btn-danger btn-sm" id="btn-deny-req">✗ Deny</button>
+        <button class="btn btn-sm" id="btn-archive-req" style="background:#6c757d;color:white;display:none;" onclick="archiveTORequest()">📦 Archive</button>
+        <button class="btn btn-danger btn-sm" id="btn-delete-req" style="display:none;" onclick="deleteTORequest()">🗑 Delete</button>
         <button class="btn btn-secondary btn-sm" onclick="$('to-review-modal').classList.remove('open')">Close</button>
       </div>
     </div>
@@ -3823,9 +3837,14 @@ function renderTOList(reqs) {
     const halfLabel = req.half_day ? ` <em style="font-size:11px;color:var(--gray-500);">(${req.half_day})</em>` : '';
     const reviewInfo = req.reviewed_by
       ? `<div style="font-size:12px;color:var(--gray-500);margin-top:3px;">Reviewed by ${esc(req.reviewed_by)} ${req.reviewed_at ? '· ' + fmtDate(req.reviewed_at.slice(0,10)) : ''}${req.review_note ? ' · "' + esc(req.review_note) + '"' : ''}</div>` : '';
-    const reviewBtn = req.status === 'pending'
-      ? `<div style="display:flex;gap:6px;margin-top:8px;"><button class="btn btn-sm" style="background:#1a6e35;color:white;" onclick="openTOReview(${req.id})">Review</button></div>` : '';
-    return `<div class="to-req-card">
+    const actionBtn = req.status === 'pending'
+      ? `<div style="display:flex;gap:6px;margin-top:8px;"><button class="btn btn-sm" style="background:#1a6e35;color:white;" onclick="event.stopPropagation();openTOReview(${req.id})">Review</button></div>`
+      : `<div style="display:flex;gap:6px;margin-top:8px;"><button class="btn btn-sm btn-secondary" style="font-size:12px;" onclick="event.stopPropagation();openTOReview(${req.id})">View Details</button></div>`;
+    return `<div class="to-req-card" style="cursor:pointer;" onclick="openTOReview(${req.id})">
+      <!-- Checkbox on left -->
+      <input type="checkbox" class="to-req-cb" data-id="${req.id}"
+        style="width:15px;height:15px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;margin-top:3px;"
+        onclick="event.stopPropagation()" onchange="onReqCbChange()"/>
       <div class="req-type-dot ${req.type.toLowerCase()}"></div>
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
@@ -3835,13 +3854,85 @@ function renderTOList(reqs) {
             <div style="font-size:12px;color:var(--gray-500);">${days} day${days!==1?'s':''} · Submitted ${fmtDate(req.created_at?.slice(0,10))}</div>
             ${req.return_to_work_date ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px;">🏁 Returns: <strong>${fmtDate(req.return_to_work_date)}</strong></div>` : ''}
             ${req.note ? `<div style="font-size:12px;color:var(--gray-500);font-style:italic;margin-top:3px;">"${esc(req.note)}"</div>` : ''}
-            ${reviewInfo}${reviewBtn}
+            ${reviewInfo}${actionBtn}
           </div>
           <span class="to-status-pill ${req.status}">${req.status}</span>
         </div>
       </div>
     </div>`;
   }).join('');
+}
+
+// ── Requests list checkbox / bulk selection ──
+function onReqCbChange() {
+  const checked = document.querySelectorAll('.to-req-cb:checked').length;
+  const total   = document.querySelectorAll('.to-req-cb').length;
+  const bar     = $('to-bulk-bar');
+  const selAll  = $('to-req-select-all');
+  if (checked > 0) {
+    bar.style.display = 'flex';
+    $('to-bulk-count').textContent = `${checked} selected`;
+    if (selAll) selAll.checked = checked === total;
+  } else {
+    bar.style.display = 'none';
+    if (selAll) selAll.checked = false;
+  }
+}
+
+function toggleSelectAllRequests(checked) {
+  document.querySelectorAll('.to-req-cb').forEach(cb => cb.checked = checked);
+  onReqCbChange();
+}
+
+function clearRequestSelection() {
+  document.querySelectorAll('.to-req-cb').forEach(cb => cb.checked = false);
+  $('to-bulk-bar').style.display = 'none';
+  const selAll = $('to-req-select-all'); if (selAll) selAll.checked = false;
+}
+
+function getSelectedReqIds() {
+  return [...document.querySelectorAll('.to-req-cb:checked')].map(cb => parseInt(cb.dataset.id));
+}
+
+async function bulkArchiveRequests() {
+  const ids = getSelectedReqIds();
+  if (!ids.length) return;
+  if (!confirm(`Archive ${ids.length} request${ids.length!==1?'s':''}? They will move to the Archive tab.`)) return;
+  const r = await fetch('/api/time-off/bulk-archive', {
+    method: 'PATCH', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids, archived: true })
+  });
+  const d = await r.json().catch(()=>({}));
+  if (r.ok) { showToast(`📦 ${ids.length} request${ids.length!==1?'s':''} archived`, 'success'); loadTORequests(); loadNavBadges(); }
+  else showToast(d.error || 'Failed to archive', 'error');
+}
+
+async function bulkDeleteRequests() {
+  const ids = getSelectedReqIds();
+  if (!ids.length) return;
+  if (!confirm(`Permanently delete ${ids.length} request${ids.length!==1?'s':''}? This cannot be undone.`)) return;
+  const r = await fetch('/api/time-off/bulk-delete', {
+    method: 'DELETE', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids })
+  });
+  const d = await r.json().catch(()=>({}));
+  if (r.ok) { showToast(`🗑 ${ids.length} request${ids.length!==1?'s':''} deleted`, ''); loadTORequests(); loadNavBadges(); }
+  else showToast(d.error || 'Failed to delete', 'error');
+}
+
+async function unarchiveSelectedRequests() {
+  const ids = [...document.querySelectorAll('.to-arch-cb:checked')].map(cb => parseInt(cb.dataset.id));
+  if (!ids.length) return;
+  const r = await fetch('/api/time-off/bulk-archive', {
+    method: 'PATCH', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids, archived: false })
+  });
+  const d = await r.json().catch(()=>({}));
+  if (r.ok) { showToast(`↩ ${ids.length} request${ids.length!==1?'s':''} restored`, 'success'); loadTOArchive(); }
+  else showToast(d.error || 'Failed to restore', 'error');
 }
 
 const STATUS_PILL = {
@@ -3863,9 +3954,11 @@ async function openTOReview(id) {
   $('to-review-modal-label').textContent = isPending ? 'Review Time Off Request' : 'Time Off Request — Details';
   $('to-review-name').innerHTML = `${esc(req.user_name)}<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;${STATUS_PILL[req.status]||''}">${req.status}</span>`;
 
-  // Show/hide approve+deny buttons
-  $('btn-approve-req').style.display = isPending ? '' : 'none';
-  $('btn-deny-req').style.display    = isPending ? '' : 'none';
+  // Show/hide action buttons based on status
+  $('btn-approve-req').style.display  = isPending ? '' : 'none';
+  $('btn-deny-req').style.display     = isPending ? '' : 'none';
+  $('btn-archive-req').style.display  = isPending ? 'none' : '';
+  $('btn-delete-req').style.display   = isPending ? 'none' : '';
 
   const reviewedSection = req.reviewed_by
     ? `<div style="background:#f8f9fa;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px;color:var(--gray-600);">
@@ -3993,13 +4086,50 @@ async function submitTOReview(status) {
   }
 }
 
+// ── Archive a single request from the review modal ──
+async function archiveTORequest() {
+  if (!toReviewId) return;
+  const id = toReviewId;
+  const r = await fetch(`/api/time-off/${id}/archive`, {
+    method: 'PATCH', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ archived: true })
+  });
+  const d = await r.json().catch(()=>({}));
+  if (r.ok) {
+    toReviewId = null;
+    $('to-review-modal').classList.remove('open');
+    showToast('📦 Request archived', 'success');
+    setTimeout(() => { loadTORequests(); loadNavBadges(); }, 220);
+  } else {
+    showToast(d.error || 'Failed to archive', 'error');
+  }
+}
+
+// ── Delete a single request from the review modal ──
+async function deleteTORequest() {
+  if (!toReviewId) return;
+  if (!confirm('Permanently delete this request? This cannot be undone.')) return;
+  const id = toReviewId;
+  const r = await fetch(`/api/time-off/${id}`, {
+    method: 'DELETE', credentials: 'include'
+  });
+  const d = await r.json().catch(()=>({}));
+  if (r.ok) {
+    toReviewId = null;
+    $('to-review-modal').classList.remove('open');
+    showToast('🗑 Request deleted', '');
+    setTimeout(() => { loadTORequests(); loadNavBadges(); }, 220);
+  } else {
+    showToast(d.error || 'Failed to delete', 'error');
+  }
+}
+
 // ── Archive tab ──
 async function loadTOArchive() {
   const filterStatus = $('to-archive-filter')?.value || '';
-  const url = filterStatus ? `/api/time-off?status=${filterStatus}` : '/api/time-off';
-  const all = await fetch(url).then(r => r.json()).catch(() => []);
-  // Archive = anything that's been resolved (approved, denied, cancelled)
-  const archived = all.filter(r => ['approved','denied','cancelled'].includes(r.status));
+  const url = filterStatus ? `/api/time-off?archived=1&status=${filterStatus}` : '/api/time-off?archived=1';
+  const archived = await fetch(url).then(r => r.json()).catch(() => []);
   const list = $('to-archive-list');
   if (!archived.length) {
     list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--gray-500);font-size:14px;">No archived requests${filterStatus ? ' with status "' + filterStatus + '"' : ''}.</div>`;
@@ -4041,11 +4171,17 @@ async function loadTOArchive() {
           Reviewed by ${esc(req.reviewed_by)}${req.review_note ? ` · <em>"${esc(req.review_note)}"</em>` : ''}
         </div>` : ''}
       </div>
-      <!-- Right: delete button -->
-      <button onclick="deleteTOArchiveItem(${req.id})" title="Delete this record"
-        style="background:none;border:1px solid #dc3545;color:#dc3545;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;font-weight:700;flex-shrink:0;align-self:flex-start;min-width:36px;min-height:36px;"
-        onmouseover="this.style.background='#dc3545';this.style.color='white'"
-        onmouseout="this.style.background='none';this.style.color='#dc3545'">🗑</button>
+      <!-- Right: restore + delete buttons -->
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-self:flex-start;">
+        <button onclick="restoreTOArchiveItem(${req.id})" title="Restore to active requests"
+          style="background:none;border:1px solid #6c757d;color:#6c757d;border-radius:8px;padding:5px 8px;font-size:12px;cursor:pointer;font-weight:700;min-width:36px;min-height:32px;"
+          onmouseover="this.style.background='#6c757d';this.style.color='white'"
+          onmouseout="this.style.background='none';this.style.color='#6c757d'">↩</button>
+        <button onclick="deleteTOArchiveItem(${req.id})" title="Permanently delete"
+          style="background:none;border:1px solid #dc3545;color:#dc3545;border-radius:8px;padding:5px 8px;font-size:12px;cursor:pointer;font-weight:700;min-width:36px;min-height:32px;"
+          onmouseover="this.style.background='#dc3545';this.style.color='white'"
+          onmouseout="this.style.background='none';this.style.color='#dc3545'">🗑</button>
+      </div>
     </div>`;
   }).join('');
   updateArchiveDeleteBtn();
@@ -4080,6 +4216,16 @@ function updateArchiveDeleteBtn() {
   }
   const countEl = $('to-archive-selected-count');
   if (countEl) countEl.textContent = count > 0 ? `${count} selected` : '';
+}
+
+async function restoreTOArchiveItem(id) {
+  const r = await fetch(`/api/time-off/${id}/archive`, {
+    method: 'PATCH', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ archived: false })
+  });
+  if (r.ok) { showToast('↩ Request restored to active list', 'success'); loadTOArchive(); loadTORequests(); loadNavBadges(); }
+  else { const d = await r.json().catch(()=>({})); showToast(d.error || 'Failed to restore.', 'error'); }
 }
 
 async function deleteTOArchiveItem(id) {
