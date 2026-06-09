@@ -1735,7 +1735,7 @@ async function openTicketEdit(id) {
   const projOpts = `<option value="">— No Project —</option>` +
     projects.map(p => `<option value="${p.id}" ${t.project_id==p.id?'selected':''}>${esc(p.name)}</option>`).join('');
 
-  const levOpts = ['Journeyman','4th Year Apprentice','3rd Year Apprentice','2nd Year Apprentice','1st Year Apprentice'];
+  const levOpts = ['Journeyman','4th Year Apprentice','3rd Year Apprentice','2nd Year Apprentice','1st Year Apprentice','Office Admin'];
 
   function empNameOpts(currentName) {
     const base = `<option value="">— Select employee —</option>`;
