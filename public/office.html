@@ -704,18 +704,33 @@
       </div>
       <!-- Legend -->
       <div id="admin-cal-legend" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:10px 14px;margin-bottom:10px;display:none;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;"></div>
+      <!-- Loading state -->
+      <div id="admin-cal-loading" style="display:none;text-align:center;padding:48px 20px;color:var(--gray-500);">
+        <div style="width:36px;height:36px;border:3px solid var(--orange-light);border-top-color:var(--orange);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div>
+        <div style="font-size:14px;">Loading calendar…</div>
+      </div>
+      <!-- Error state -->
+      <div id="admin-cal-error" style="display:none;text-align:center;padding:40px 20px;background:white;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:10px;">
+        <div style="font-size:32px;margin-bottom:8px;">⚠️</div>
+        <div style="font-weight:700;margin-bottom:6px;">Could not load calendar</div>
+        <div id="admin-cal-error-msg" style="font-size:13px;color:var(--gray-500);margin-bottom:16px;"></div>
+        <button class="btn btn-sm" style="background:var(--orange);color:white;" onclick="reloadAdminCalendar()">Retry</button>
+      </div>
       <!-- Calendar -->
-      <div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;">
+      <div id="admin-cal-wrap" style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--dark);color:white;">
-          <button class="cal-nav-btn" id="admin-cal-prev">‹</button>
-          <h3 style="font-size:15px;font-weight:700;" id="admin-cal-title"></h3>
-          <button class="cal-nav-btn" id="admin-cal-next">›</button>
+          <button class="cal-nav-btn" id="admin-cal-prev" style="font-size:13px;padding:5px 12px;">← Prev</button>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <h3 style="font-size:15px;font-weight:700;margin:0;" id="admin-cal-title"></h3>
+            <button id="admin-cal-today" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;border-radius:4px;padding:2px 10px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.04em;">TODAY</button>
+          </div>
+          <button class="cal-nav-btn" id="admin-cal-next" style="font-size:13px;padding:5px 12px;">Next →</button>
         </div>
         <div id="admin-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);">
           <div class="to-cal-dow">Sun</div><div class="to-cal-dow">Mon</div><div class="to-cal-dow">Tue</div>
           <div class="to-cal-dow">Wed</div><div class="to-cal-dow">Thu</div><div class="to-cal-dow">Fri</div><div class="to-cal-dow">Sat</div>
         </div>
-      </div>
+      </div><!-- /#admin-cal-wrap -->
     </div>
   </div>
 
@@ -1734,12 +1749,12 @@ async function openTicketEdit(id) {
   function buildEmpRow(e) {
     const name = e.employee_name || e.name || '';
     return `<tr class="edit-emp-row">
-      <td style="min-width:140px;"><select class="form-control edit-emp-name" style="padding:6px;font-size:13px;">${empNameOpts(name)}</select></td>
-      <td><select class="form-control edit-emp-level" style="padding:6px;font-size:12px;">${levOpts.map(l=>`<option ${l===(e.level||'Journeyman')?'selected':''}>${l}</option>`).join('')}</select></td>
-      <td><input type="number" class="form-control edit-emp-reg"    style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.regular_hours||0}"   min="0" max="24" step="0.5" title="Regular Hours"/></td>
-      <td><input type="number" class="form-control edit-emp-ot"     style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.overtime_hours||0}"  min="0" max="24" step="0.5" title="OT Hours"/></td>
-      <td><input type="number" class="form-control edit-emp-travel" style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.travel_hours||0}"    min="0" max="24" step="0.5" title="Travel Hours" placeholder="0"/></td>
-      <td><button type="button" style="background:none;border:none;color:#c0392b;font-size:18px;cursor:pointer;" onclick="this.closest('tr').remove()">×</button></td>
+      <td data-label="Employee" style="min-width:140px;"><select class="form-control edit-emp-name" style="padding:6px;font-size:13px;">${empNameOpts(name)}</select></td>
+      <td data-label="Level"><select class="form-control edit-emp-level" style="padding:6px;font-size:12px;">${levOpts.map(l=>`<option ${l===(e.level||'Journeyman')?'selected':''}>${l}</option>`).join('')}</select></td>
+      <td data-label="Reg Hrs"><input type="number" class="form-control edit-emp-reg"    style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.regular_hours||0}"   min="0" max="24" step="0.5" title="Regular Hours"/></td>
+      <td data-label="OT Hrs"><input type="number" class="form-control edit-emp-ot"     style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.overtime_hours||0}"  min="0" max="24" step="0.5" title="OT Hours"/></td>
+      <td data-label="Travel Hrs"><input type="number" class="form-control edit-emp-travel" style="padding:6px;font-size:13px;text-align:center;width:65px;" value="${e.travel_hours||0}"    min="0" max="24" step="0.5" title="Travel Hours" placeholder="0"/></td>
+      <td><button type="button" style="background:none;border:none;color:#c0392b;font-size:18px;cursor:pointer;min-height:44px;min-width:44px;" onclick="this.closest('tr').remove()">×</button></td>
     </tr>`;
   }
 
@@ -1749,7 +1764,7 @@ async function openTicketEdit(id) {
   const levOptsEsc = levOpts.map(l=>`<option>${l}</option>`).join('');
 
   $('modal-body').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+    <div class="edit-ticket-date-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
       <div class="form-group"><label class="form-label">Date <span class="required">*</span></label><input type="date" id="edit-date" class="form-control" value="${t.date||''}"/></div>
       <div class="form-group"><label class="form-label">Job Number</label><input type="text" id="edit-job-num" class="form-control" value="${esc(t.job_number||'')}"/></div>
     </div>
@@ -1757,8 +1772,8 @@ async function openTicketEdit(id) {
     <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Supervisor <span class="required">*</span></label><input type="text" id="edit-supervisor" class="form-control" value="${esc(t.supervisor||'')}"/></div>
     <div style="margin-bottom:10px;">
       <label class="form-label">Crew &amp; Hours</label>
-      <div style="overflow-x:auto;">
-      <table class="po-table" style="font-size:13px;min-width:500px;">
+      <div class="edit-emp-table-wrap" style="overflow-x:auto;">
+      <table class="po-table edit-emp-table" style="font-size:13px;min-width:500px;">
         <thead><tr><th>Employee</th><th>Level</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel Hrs</th><th></th></tr></thead>
         <tbody id="edit-emp-tbody">${empRows}</tbody>
       </table>
@@ -3782,7 +3797,19 @@ const ADMIN_USER_PALETTE = [
   {bg:'#ccfbf1',text:'#134e4a',border:'#5eead4'},
   {bg:'#fef9c3',text:'#713f12',border:'#fde047'},
 ];
-function adminUserColor(userId) { return ADMIN_USER_PALETTE[Math.abs(parseInt(userId) || 0) % ADMIN_USER_PALETTE.length]; }
+function hexToUserColor(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return {
+    bg: `rgba(${r},${g},${b},0.15)`,
+    text: lum > 0.65 ? `rgb(${Math.round(r*0.35)},${Math.round(g*0.35)},${Math.round(b*0.35)})` : hex,
+    border: hex
+  };
+}
+function adminUserColor(userId, hexOverride) {
+  if (hexOverride) return hexToUserColor(hexOverride);
+  return ADMIN_USER_PALETTE[Math.abs(parseInt(userId) || 0) % ADMIN_USER_PALETTE.length];
+}
 let toFilterStatus  = 'pending';
 let toReviewId      = null;
 
@@ -4143,7 +4170,7 @@ async function loadTOArchive() {
   list.innerHTML = archived.map(req => {
     const days = dayCountTO(req.start_date, req.end_date);
     const statusStyle = STATUS_PILL[req.status] || '';
-    const c = adminUserColor(req.user_id);
+    const c = adminUserColor(req.user_id, req.time_off_color);
     return `<div class="to-archive-card" data-id="${req.id}">
       <!-- Left: checkbox + color bar -->
       <div style="display:flex;align-items:flex-start;gap:10px;flex-shrink:0;">
@@ -4255,21 +4282,68 @@ async function deleteSelectedArchive() {
 }
 
 // ── Admin calendar ──
+let _adminCalCache = {};
+const ADMIN_CAL_CACHE_TTL = 5 * 60 * 1000;
+
+function _adminCalShowLoading(show) {
+  const loading = $('admin-cal-loading'), error = $('admin-cal-error'), wrap = $('admin-cal-wrap');
+  if (show) { loading.style.display = 'block'; error.style.display = 'none'; wrap.style.display = 'none'; }
+  else       { loading.style.display = 'none'; wrap.style.display = ''; }
+}
+function _adminCalShowError(msg) {
+  $('admin-cal-loading').style.display = 'none';
+  $('admin-cal-wrap').style.display = 'none';
+  $('admin-cal-error-msg').textContent = msg || 'Unknown error';
+  $('admin-cal-error').style.display = 'block';
+}
+function reloadAdminCalendar() {
+  const key = `${adminCalYear}-${adminCalMonth}`;
+  delete _adminCalCache[key];
+  loadAdminCalendarData().then(renderAdminCalendar);
+}
+
 async function loadAdminCalendarData() {
-  const yr = adminCalYear;
-  const from = new Date(yr, adminCalMonth - 1, 1).toISOString().slice(0,10);
-  const to   = new Date(yr, adminCalMonth + 7, 1).toISOString().slice(0,10);
-  const [evRes, holRes] = await Promise.all([
-    fetch(`/api/time-off/calendar?from_date=${from}&to_date=${to}`),
-    fetch(`/api/time-off/holidays?from_year=${yr-1}&to_year=${yr+2}`)
-  ]);
-  adminCalEvents = evRes.ok ? await evRes.json() : [];
-  const hols = holRes.ok ? await holRes.json() : [];
-  adminStatHols = {};
-  hols.forEach(h => { adminStatHols[h.date] = h.name; });
+  const yr  = adminCalYear;
+  const key = `${yr}-${adminCalMonth}`;
+
+  // Return cached data if still fresh
+  const cached = _adminCalCache[key];
+  if (cached && (Date.now() - cached.ts) < ADMIN_CAL_CACHE_TTL) {
+    adminCalEvents = cached.events;
+    adminStatHols  = cached.holidays;
+    // Re-populate filters from cache
+    _adminCalPopulateFilters();
+    return;
+  }
+
+  _adminCalShowLoading(true);
+  try {
+    const from = new Date(yr, adminCalMonth - 1, 1).toISOString().slice(0,10);
+    const to   = new Date(yr, adminCalMonth + 7, 1).toISOString().slice(0,10);
+    const [evRes, holRes] = await Promise.all([
+      fetch(`/api/time-off/calendar?from_date=${from}&to_date=${to}`),
+      fetch(`/api/time-off/holidays?from_year=${yr-1}&to_year=${yr+2}`)
+    ]);
+    if (!evRes.ok) throw new Error(`Calendar API returned ${evRes.status}`);
+    adminCalEvents = await evRes.json();
+    const hols = holRes.ok ? await holRes.json() : [];
+    adminStatHols = {};
+    hols.forEach(h => { adminStatHols[h.date] = h.name; });
+    // Cache result
+    _adminCalCache[key] = { events: adminCalEvents, holidays: adminStatHols, ts: Date.now() };
+    _adminCalShowLoading(false);
+    _adminCalPopulateFilters();
+  } catch (err) {
+    _adminCalShowError(err.message || 'Could not reach the server.');
+    throw err;
+  }
+}
+
+function _adminCalPopulateFilters() {
   // Populate person filter
   const people = {};
-  adminCalEvents.forEach(e => { if (e.user_id) people[e.user_id] = e.user_name; });
+  const peopleColors = {};
+  adminCalEvents.forEach(e => { if (e.user_id) { people[e.user_id] = e.user_name; if (e.time_off_color) peopleColors[e.user_id] = e.time_off_color; } });
   const sel = $('admin-cf-person');
   sel.innerHTML = '<option value="">Everyone</option>';
   Object.entries(people).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id,name]) => {
@@ -4278,7 +4352,7 @@ async function loadAdminCalendarData() {
   // Render legend
   const lg = $('admin-cal-legend');
   const legendItems = Object.entries(people).sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name]) => {
-    const c = adminUserColor(id);
+    const c = adminUserColor(id, peopleColors[id]);
     return `<div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:2px;background:${c.bg};border:1px solid ${c.border};flex-shrink:0;"></div><span>${name}</span></div>`;
   });
   if (legendItems.length) {
@@ -4289,6 +4363,12 @@ async function loadAdminCalendarData() {
 
 $('admin-cal-prev').addEventListener('click', () => { adminCalMonth--; if(adminCalMonth<0){adminCalMonth=11;adminCalYear--;} loadAdminCalendarData().then(renderAdminCalendar); });
 $('admin-cal-next').addEventListener('click', () => { adminCalMonth++; if(adminCalMonth>11){adminCalMonth=0;adminCalYear++;} loadAdminCalendarData().then(renderAdminCalendar); });
+$('admin-cal-today').addEventListener('click', () => {
+  const now = new Date();
+  adminCalYear = now.getFullYear();
+  adminCalMonth = now.getMonth();
+  loadAdminCalendarData().then(renderAdminCalendar);
+});
 $('admin-cf-person').addEventListener('change', renderAdminCalendar);
 $('admin-cf-type').addEventListener('change', renderAdminCalendar);
 
@@ -4328,7 +4408,7 @@ function renderAdminCalendar() {
     });
     dayEvents.forEach(e => {
       const span = document.createElement('span');
-      const uc = adminUserColor(e.user_id);
+      const uc = adminUserColor(e.user_id, e.time_off_color);
       const halfLabel = e.half_day ? ` (${e.half_day[0].toUpperCase()})` : '';
       span.textContent = e.user_name + halfLabel;
       span.title = `${e.user_name} — ${e.type} ${e.start_date} to ${e.end_date}${e.return_to_work_date ? ' · returns ' + e.return_to_work_date : ''} [${e.status}]`;

@@ -467,6 +467,77 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 }
 
 /* ═══════════════════════════════════════════
+   DAILY TICKET EDIT MODAL — MOBILE  ≤ 600px
+   Employee table rows stack vertically
+   ═══════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Date / Job-number 2-col grid → single column */
+  .edit-ticket-date-grid { grid-template-columns: 1fr !important; }
+
+  /* Employee table wrapper already has overflow-x:auto — on mobile,
+     switch to a card-stack layout instead */
+  .edit-emp-table-wrap { overflow-x: visible !important; }
+  .edit-emp-table { display: block; min-width: 0 !important; }
+  .edit-emp-table thead { display: none; }
+  .edit-emp-table tbody { display: block; }
+  .edit-emp-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-200);
+    margin-bottom: 4px;
+  }
+  .edit-emp-row td {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  /* Name spans full width */
+  .edit-emp-row td:first-child { grid-column: 1 / -1; }
+  /* Delete button: right-align, same row as last pair */
+  .edit-emp-row td:last-child {
+    grid-column: 2;
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+  /* Data-label pseudo-content above each cell */
+  .edit-emp-row td[data-label]::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--gray-500);
+    margin-bottom: 3px;
+  }
+  /* Inputs fill their cell */
+  .edit-emp-row td .form-control { width: 100%; box-sizing: border-box; font-size: 16px !important; }
+}
+
+/* ═══════════════════════════════════════════
+   TEAM TABLE — MOBILE  ≤ 768px
+   ═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Wrap team table in horizontal scroll */
+  .team-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .team-table      { min-width: 560px; }
+}
+
+/* ═══════════════════════════════════════════
+   TIME OFF ARCHIVE / REQUESTS TABLE — MOBILE
+   ═══════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .to-archive-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .to-archive-table      { min-width: 520px; }
+  /* Time-off calendar: shrink day cells */
+  .to-cal-cell { padding: 4px 2px !important; min-height: 50px !important; }
+  .to-cal-event { font-size: 10px !important; padding: 1px 3px !important; }
+  /* Admin calendar filters: stack */
+  #admin-cal-filter-bar { flex-direction: column !important; gap: 8px !important; }
+}
+
+/* ═══════════════════════════════════════════
    DATE INPUT OVERFLOW FIX (iOS Safari)
    Ensure date inputs never overflow their grid cell
    ═══════════════════════════════════════════ */

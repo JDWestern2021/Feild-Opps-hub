@@ -217,7 +217,7 @@ app.post('/api/auth/reset/:token', async (req, res) => {
 // ─────────────────────────────────────────────
 
 app.get('/api/users', requireAdmin, async (req, res) => {
-  const { rows } = await pool.query('SELECT id,name,email,role,status,permissions,created_at,last_login FROM users ORDER BY created_at DESC');
+  const { rows } = await pool.query('SELECT id,name,email,role,status,permissions,created_at,last_login,time_off_color FROM users ORDER BY created_at DESC');
   res.json(rows.map(u => ({
     ...u,
     permissions: u.role==='admin' ? 'time_ticket,get_po,office_dashboard' : (u.permissions||'time_ticket')
@@ -285,6 +285,17 @@ app.patch('/api/users/:id/permissions', requireAdmin, async (req, res) => {
   await pool.query('UPDATE users SET permissions=$1 WHERE id=$2', [cleaned, req.params.id]);
   logAction(req,'permissions_changed',null,null,`Permissions updated for ${user.name}: ${cleaned||'none'} by ${req.user.name}`);
   res.json({ ok: true, permissions: cleaned });
+});
+
+app.patch('/api/users/:id/color', requireAdmin, async (req, res) => {
+  try {
+    const { color } = req.body;
+    if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return res.status(400).json({ error: 'color must be a 6-digit hex (e.g. #93c5fd)' });
+    await pool.query('UPDATE users SET time_off_color=$1 WHERE id=$2', [color, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/users/:id/reset-password', requireAdmin, async (req, res) => {
@@ -1449,7 +1460,7 @@ app.get('/api/time-off', requireAuth, async (req, res) => {
 
   // archived=1 → show only archived; default → show only non-archived
   const showArchived = archived === '1';
-  p++; where.push(`r.archived=$${p}`); params.push(showArchived ? 1 : 0);
+  p++; where.push(`COALESCE(r.archived,0)=$${p}`); params.push(showArchived ? 1 : 0);
 
   if (canApproveTimeOff(req.user)) {
     // Admins and approvers see all requests (with optional filters)
@@ -1463,7 +1474,7 @@ app.get('/api/time-off', requireAuth, async (req, res) => {
   if (to_date)   { p++; where.push(`r.start_date<=$${p}`); params.push(to_date); }
   const wc = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await pool.query(
-    `SELECT r.*, u.name AS requester_name FROM time_off_requests r
+    `SELECT r.*, u.name AS requester_name, u.time_off_color FROM time_off_requests r
      LEFT JOIN users u ON u.id=r.user_id ${wc} ORDER BY r.created_at DESC`, params);
   res.json(rows);
 });
@@ -1472,40 +1483,50 @@ app.get('/api/time-off', requireAuth, async (req, res) => {
 // Admins: see all approved + pending
 // Field users: see their OWN (any status) + OTHER PEOPLE'S approved only (not pending from others)
 app.get('/api/time-off/calendar', requireAuth, async (req, res) => {
-  const { from_date, to_date } = req.query;
-  let params = []; let where = []; let p = 0;
+  try {
+    const { from_date, to_date } = req.query;
+    let params = []; let where = []; let p = 0;
 
-  // Never show archived records on the calendar
-  where.push(`r.archived=0`);
+    // Never show archived records on the calendar
+    where.push(`COALESCE(r.archived,0)=0`);
 
-  if (canApproveTimeOff(req.user)) {
-    // Admins and time-off approvers see all pending + approved
-    where.push(`r.status IN ('pending','approved')`);
-  } else {
-    // Regular field users: own requests (any non-cancelled status) + others' approved only
-    // Pending requests from other people are PRIVATE
-    p++; params.push(req.user.id);
-    where.push(`(r.user_id=$${p} OR r.status='approved')`);
-    where.push(`r.status != 'cancelled'`);
+    if (canApproveTimeOff(req.user)) {
+      // Admins and time-off approvers see all pending + approved
+      where.push(`r.status IN ('pending','approved')`);
+    } else {
+      // Regular field users: own requests (any non-cancelled status) + others' approved only
+      // Pending requests from other people are PRIVATE
+      p++; params.push(req.user.id);
+      where.push(`(r.user_id=$${p} OR r.status='approved')`);
+      where.push(`r.status != 'cancelled'`);
+    }
+
+    if (from_date) { p++; where.push(`r.end_date>=$${p}`);   params.push(from_date); }
+    if (to_date)   { p++; where.push(`r.start_date<=$${p}`); params.push(to_date); }
+
+    const { rows } = await pool.query(
+      `SELECT r.id,r.user_id,r.user_name,r.start_date,r.end_date,r.return_to_work_date,r.half_day,r.type,r.note,r.status,u.time_off_color
+       FROM time_off_requests r LEFT JOIN users u ON u.id=r.user_id WHERE ${where.join(' AND ')} ORDER BY r.start_date`, params);
+    res.json(rows);
+  } catch (err) {
+    console.error('calendar endpoint error:', err.message);
+    res.status(500).json({ error: err.message });
   }
-
-  if (from_date) { p++; where.push(`r.end_date>=$${p}`);   params.push(from_date); }
-  if (to_date)   { p++; where.push(`r.start_date<=$${p}`); params.push(to_date); }
-
-  const { rows } = await pool.query(
-    `SELECT r.id,r.user_id,r.user_name,r.start_date,r.end_date,r.return_to_work_date,r.half_day,r.type,r.note,r.status
-     FROM time_off_requests r WHERE ${where.join(' AND ')} ORDER BY r.start_date`, params);
-  res.json(rows);
 });
 
 // ── Get single request ──
 app.get('/api/time-off/:id', requireAuth, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  if (!canApproveTimeOff(req.user) && rows[0].user_id !== req.user.id)
-    return res.status(403).json({ error: 'Forbidden' });
-  const { rows: audit } = await pool.query('SELECT * FROM time_off_audit WHERE request_id=$1 ORDER BY created_at ASC', [req.params.id]);
-  res.json({ ...rows[0], audit });
+  try {
+    const { rows } = await pool.query('SELECT * FROM time_off_requests WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (!canApproveTimeOff(req.user) && rows[0].user_id !== req.user.id)
+      return res.status(403).json({ error: 'Forbidden' });
+    const { rows: audit } = await pool.query('SELECT * FROM time_off_audit WHERE request_id=$1 ORDER BY created_at ASC', [req.params.id]);
+    res.json({ ...rows[0], audit });
+  } catch (err) {
+    console.error('get time-off/:id error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Helper: create timesheet_override "Time Off" rows for each day in range ──

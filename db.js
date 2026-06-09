@@ -218,6 +218,15 @@ async function initSchema() {
   await pool.query(`ALTER TABLE timesheet_overrides ADD COLUMN IF NOT EXISTS is_time_off INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE timesheet_overrides ADD COLUMN IF NOT EXISTS time_off_request_id INTEGER REFERENCES time_off_requests(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS archived INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS time_off_color TEXT DEFAULT NULL`);
+  // Indexes for fast time-off calendar queries
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_status       ON time_off_requests(status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_start_date   ON time_off_requests(start_date)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_end_date     ON time_off_requests(end_date)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_user_id      ON time_off_requests(user_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_archived      ON time_off_requests(archived)`);
+  // Seed each user's color from the same deterministic palette currently used in the UI
+  await pool.query(`UPDATE users SET time_off_color = (ARRAY['#93c5fd','#c4b5fd','#f9a8d4','#6ee7b7','#fcd34d','#fca5a5','#67e8f9','#bef264','#d8b4fe','#fdba74','#5eead4','#fde047'])[((id % 12) + 1)::int] WHERE time_off_color IS NULL`);
   console.log('  ✓ Database schema ready');
 }
 

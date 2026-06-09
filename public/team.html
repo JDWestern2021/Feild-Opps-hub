@@ -137,10 +137,11 @@
       <span>Team Members</span>
       <span id="user-count" class="badge badge-gray">—</span>
     </div>
-    <div style="overflow-x:auto;">
-      <table class="user-table">
+    <div class="team-table-wrap" style="overflow-x:auto;">
+      <table class="user-table team-table">
         <thead>
           <tr>
+            <th>Color</th>
             <th>Name / Email</th>
             <th>Role</th>
             <th>Module Access</th>
@@ -271,6 +272,12 @@ async function loadUsers() {
     }).join('');
 
     return `<tr data-uid="${u.id}">
+      <td style="width:44px;text-align:center;padding:8px 6px;">
+        <input type="color" class="user-color-swatch" data-uid="${u.id}"
+          value="${u.time_off_color || '#93c5fd'}"
+          title="Calendar color for ${esc(u.name)} — click to change"
+          style="width:32px;height:32px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:none;"/>
+      </td>
       <td>
         <div style="font-weight:700;">${esc(u.name)}</div>
         <div style="font-size:11px;color:var(--gray-500);">${esc(u.email)}</div>
@@ -308,6 +315,21 @@ async function loadUsers() {
 
   // Permission checkboxes — save on change
   $('user-tbody').addEventListener('change', handlePermChange);
+
+  // Color swatch — save on change
+  $('user-tbody').addEventListener('change', async e => {
+    const swatch = e.target.closest('.user-color-swatch');
+    if (!swatch) return;
+    const uid = swatch.dataset.uid;
+    const color = swatch.value;
+    const r = await fetch(`/api/users/${uid}/color`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ color })
+    });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); alert(d.error || 'Failed to save color'); }
+    // else: saved silently — swatch already shows the new color visually
+  });
 
   // Role save buttons
   $('user-tbody').querySelectorAll('[data-action="save-role"]').forEach(btn => {
