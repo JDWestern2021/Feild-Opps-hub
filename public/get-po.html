@@ -329,8 +329,9 @@
 
 <script>
 const $ = id => document.getElementById(id);
-let currentUser = null;
-let lastPOData  = null; // stored after generation for print
+let currentUser    = null;
+let lastPOData     = null; // stored after generation for print
+let _poSubmitting  = false; // guard against double-tap
 
 function showToast(msg, type = '') {
   const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
@@ -395,6 +396,7 @@ function validateField(inputId, errId, condition) {
 // ── Submit ──
 $('po-form').addEventListener('submit', async e => {
   e.preventDefault();
+  if (_poSubmitting) return; // prevent double-tap
   let valid = true;
   valid = validateField('jobber_job_number', 'err-jobber', !$('jobber_job_number').value.trim()) && valid;
   valid = validateField('job_name',          'err-jobname', !$('job_name').value.trim()) && valid;
@@ -405,6 +407,7 @@ $('po-form').addEventListener('submit', async e => {
     return;
   }
 
+  _poSubmitting = true;
   const btn = $('submit-btn');
   $('submit-label').textContent = 'Generating…';
   $('submit-spinner').style.display = 'block';
@@ -451,6 +454,7 @@ $('po-form').addEventListener('submit', async e => {
     showConfirmation(data.po_number, payload, needsReimburse);
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
+    _poSubmitting = false;
     $('submit-label').textContent = 'Generate PO';
     $('submit-spinner').style.display = 'none';
     btn.disabled = false;
@@ -479,7 +483,7 @@ $('btn-another').addEventListener('click', () => {
   $('req-date').value = new Date().toLocaleDateString('en-CA', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
   $('reimbursement-section').style.display = 'none';
   $('project-section').style.display = 'none';
-  hideCreateProject();
+  _poSubmitting = false;
   $('submit-label').textContent = 'Generate PO';
   $('submit-spinner').style.display = 'none';
   $('submit-btn').disabled = false;
