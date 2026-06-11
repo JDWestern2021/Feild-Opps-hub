@@ -2157,10 +2157,18 @@ async function openProject(id) {
 // ── Project sub-tab rendering helpers ──
 
 function projTicketRow(t, showArchiveBtn = true) {
-  const reg = t.employees ? t.employees.reduce((s,e)=>s+e.regular_hours,0) : 0;
-  const ot  = t.employees ? t.employees.reduce((s,e)=>s+e.overtime_hours,0) : 0;
+  const reg    = t.employees ? t.employees.reduce((s,e)=>s+(e.regular_hours||0), 0) : 0;
+  const ot     = t.employees ? t.employees.reduce((s,e)=>s+(e.overtime_hours||0), 0) : 0;
+  const travel = t.employees ? t.employees.reduce((s,e)=>s+(e.travel_hours||0),   0) : 0;
   const ts  = t.ticket_status || 'Pending';
   const isOutstanding = ts === 'Pending' || ts === 'Reviewed';
+  // Status badge colours
+  const statusStyle = ts === 'Entered'
+    ? 'background:#d1fae5;color:#065f46;'
+    : ts === 'Reviewed'
+    ? 'background:#fef3c7;color:#92400e;'
+    : 'background:#fee2e2;color:#991b1b;'; // Pending
+  const statusBadge = `<span style="${statusStyle}font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;">${esc(ts)}</span>`;
   return `<tr data-id="${t.id}" data-archived="${t.archived ? 1 : 0}" class="${isOutstanding&&showArchiveBtn ? 'row-outstanding' : 'row-ok'}">
     <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb proj-tt-cb" data-id="${t.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
     <td>${fmtDate(t.date)}</td>
@@ -2168,18 +2176,17 @@ function projTicketRow(t, showArchiveBtn = true) {
     <td>${esc(t.job_name)}${t.archived ? ' <span class="archived-label">ARCHIVED</span>' : ''}</td>
     <td>${t.job_number ? esc(t.job_number) : '—'}</td>
     <td>${esc(t.supervisor)}</td>
-    <td><strong>${(reg+ot).toFixed(1)}</strong>${ot>0?` <span style="color:var(--orange);font-size:11px;font-weight:700;">+${ot.toFixed(1)}OT</span>`:''}</td>
-    <td onclick="event.stopPropagation()">
-      <div class="inline-status-form">
-        <select class="inline-status-select" data-ticket-id="${t.id}">
-          <option value="Pending"  ${ts==='Pending'  ?'selected':''}>Pending</option>
-          <option value="Reviewed" ${ts==='Reviewed' ?'selected':''}>Reviewed</option>
-          <option value="Entered"  ${ts==='Entered'  ?'selected':''}>Entered</option>
-        </select>
-        <button class="inline-save-btn" data-ticket-id="${t.id}" data-action="save-ticket-status">Save</button>
-      </div>
+    <td style="text-align:center;font-weight:700;">${reg > 0 ? reg.toFixed(1) : '—'}</td>
+    <td style="text-align:center;font-weight:700;color:${ot>0?'var(--orange)':'inherit'};">${ot > 0 ? ot.toFixed(1) : '—'}</td>
+    <td style="text-align:center;font-weight:700;color:${travel>0?'#2563eb':'inherit'};">${travel > 0 ? travel.toFixed(1) : '—'}</td>
+    <td>${statusBadge}</td>
+    <td onclick="event.stopPropagation()" style="white-space:nowrap;">
+      <button class="btn btn-sm" data-tid="${t.id}" data-archived="${t.archived?1:0}" data-action="proj-view-ticket" style="background:var(--dark);color:#fff;font-size:11px;padding:3px 8px;margin-right:3px;">View</button>
+      <button class="btn btn-sm" data-tid="${t.id}" data-archived="${t.archived?1:0}" data-action="proj-edit-ticket" style="background:var(--orange);color:#fff;font-size:11px;padding:3px 8px;margin-right:3px;">Edit</button>
+      ${showArchiveBtn
+        ? `<button class="btn btn-sm" data-tid="${t.id}" data-action="proj-archive-ticket" style="background:#6e6e6e;color:#fff;font-size:11px;padding:3px 8px;" title="Move to project archive">Archive</button>`
+        : `<button class="btn btn-sm" data-tid="${t.id}" data-action="proj-unarchive-ticket" style="background:#2563eb;color:#fff;font-size:11px;padding:3px 8px;">Restore</button>`}
     </td>
-    ${showArchiveBtn ? `<td onclick="event.stopPropagation()"><button class="btn btn-sm" data-tid="${t.id}" data-action="proj-archive-ticket" style="background:#6e6e6e;color:#fff;font-size:11px;padding:3px 8px;" title="Move to project archive">Archive</button></td>` : `<td onclick="event.stopPropagation()"><button class="btn btn-sm" data-tid="${t.id}" data-action="proj-unarchive-ticket" style="background:#2563eb;color:#fff;font-size:11px;padding:3px 8px;">Restore</button></td>`}
   </tr>`;
 }
 
@@ -2238,6 +2245,18 @@ function attachProjTableEvents(panel) {
       await saveProjectPOStatus(id, sel.value, btn.closest('tr'));
     });
   });
+  panel.querySelectorAll('[data-action="proj-view-ticket"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openDetail(btn.dataset.tid, btn.dataset.archived === '1');
+    });
+  });
+  panel.querySelectorAll('[data-action="proj-edit-ticket"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openDetail(btn.dataset.tid, btn.dataset.archived === '1').then(() => openTicketEdit(btn.dataset.tid));
+    });
+  });
   panel.querySelectorAll('[data-action="proj-archive-ticket"]').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
@@ -2264,7 +2283,7 @@ function attachProjTableEvents(panel) {
   });
 }
 
-const PROJ_TT_HEAD  = `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-tt-select-all" title="Select all"/></th><th>Date</th><th>Ticket #</th><th>Job Name</th><th>Job #</th><th>Supervisor</th><th>Hours</th><th>Status</th><th></th>`;
+const PROJ_TT_HEAD  = `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-tt-select-all" title="Select all"/></th><th>Date</th><th>Ticket #</th><th>Job Name</th><th>Job #</th><th>Supervisor</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel</th><th>Status</th><th></th>`;
 const PROJ_PO_HEAD  = `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-po-select-all" title="Select all"/></th><th>PO #</th><th>Date</th><th>By</th><th>Jobber #</th><th>Job Name</th><th>Supplier</th><th>Description</th><th>Amount</th><th>Status</th><th></th>`;
 
 function projBulkBar(type) {
