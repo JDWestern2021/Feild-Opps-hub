@@ -467,6 +467,38 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 }
 
 /* ═══════════════════════════════════════════
+   BACK BUTTON
+   ═══════════════════════════════════════════ */
+.back-bar {
+  display: flex;
+  align-items: center;
+  padding: 8px 0 4px;
+  margin-bottom: 4px;
+}
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  color: var(--gray-600);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px 6px 10px;
+  cursor: pointer;
+  min-height: 36px;
+  line-height: 1;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.back-btn:hover { border-color: var(--orange); color: var(--orange); background: var(--orange-light); }
+.back-btn svg   { flex-shrink: 0; }
+@media (max-width: 768px) {
+  .back-bar { padding: 10px 0 6px; }
+  .back-btn { min-height: 44px; font-size: 15px; padding: 10px 18px 10px 12px; }
+}
+
+/* ═══════════════════════════════════════════
    DAILY TICKET EDIT MODAL — MOBILE  ≤ 600px
    Employee table rows stack vertically
    ═══════════════════════════════════════════ */

@@ -409,6 +409,14 @@
 
 <div class="page-wrap">
 
+  <!-- BACK BUTTON (hidden on Home) -->
+  <div class="back-bar" id="back-bar" style="display:none;">
+    <button class="back-btn" id="back-btn" onclick="officeGoBack()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <span id="back-btn-label">Back</span>
+    </button>
+  </div>
+
   <!-- HOME VIEW (default) -->
   <div id="home-view">
     <div class="home-cards" id="home-cards-grid">
@@ -1088,6 +1096,27 @@ let activeTicketId = null;
 let activeTicketArchived = false;
 let archiveVisible = false;
 let currentUser = null;
+
+// ── Back-navigation state ──
+let _officeView = 'home'; // 'home' | 'tickets' | 'projects' | 'project-detail' | 'pos' | 'timesheets' | 'timeoff'
+function _setView(view) {
+  _officeView = view;
+  const bar = $('back-bar');
+  if (!bar) return;
+  if (view === 'home') { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const label = $('back-btn-label');
+  if (label) label.textContent = view === 'project-detail' ? 'Projects' : 'Home';
+}
+function officeGoBack() {
+  if (_officeView === 'project-detail') {
+    $('project-detail').style.display = 'none';
+    $('project-list-wrap').style.display = 'block';
+    _setView('projects');
+  } else {
+    showHomeView();
+  }
+}
 
 // ── Auth check ──
 (async () => {
@@ -2114,6 +2143,7 @@ async function openProject(id) {
   currentProjectId = id;
   $('project-list-wrap').style.display = 'none';
   $('project-detail').style.display = 'block';
+  _setView('project-detail');
   setProjectSubTab('tickets');
   $('ptab-panel-tickets').innerHTML = `<div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div>`;
   $('ptab-panel-pos').innerHTML = '';
@@ -2678,6 +2708,7 @@ function showProjectsView() {
   $('project-detail').style.display = 'none';
   $('project-list-wrap').style.display = 'block';
   switchProjectListTab('active');
+  _setView('projects');
 }
 
 function hideProjectsView() {
@@ -2692,6 +2723,7 @@ function showHomeView() {
   setNavActive('nav-home');
   loadHomeOverview();
   loadStats();
+  _setView('home');
 }
 function hideHomeView() {
   $('home-view').style.display = 'none';
@@ -2768,6 +2800,7 @@ function showTTDashboard() {
   setNavActive('nav-tickets');
   loadStats();
   loadTickets(1);
+  _setView('tickets');
 }
 
 // ── Stat card click handlers ──
@@ -2825,6 +2858,7 @@ function showTimesheetsView() {
   hideAllSpecialViews();
   $('timesheets-view').style.display = 'block';
   setNavActive('nav-timesheets');
+  _setView('timesheets');
   tsHasEditAccess = (currentUser?.permissions||'').split(',').includes('timesheet_edit');
   loadTSList(null);
 }
@@ -3780,6 +3814,7 @@ function showPOsView() {
   hideAllSpecialViews();
   $('pos-view').style.display = 'block';
   setNavActive('nav-pos');
+  _setView('pos');
   loadPOs();
 }
 
@@ -3836,6 +3871,7 @@ function showTimeOffView() {
   hideAllSpecialViews();
   $('timeoff-view').style.display = 'block';
   setNavActive('nav-timeoff');
+  _setView('timeoff');
   showTOTab('requests');
   loadTORequests();
   // Pre-fetch calendar data in the background so it's ready when the user
