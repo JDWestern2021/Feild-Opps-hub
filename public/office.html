@@ -1311,6 +1311,18 @@ function renderTickets(tickets, isArchived = false, listId = 'ticket-list') {
     const totalReg = t.employees.reduce((s, e) => s + e.regular_hours, 0);
     const totalOT  = t.employees.reduce((s, e) => s + e.overtime_hours, 0);
     const totalAll = totalReg + totalOT;
+    const has8Plus = t.employees.some(e => e.regular_hours > 8);
+    const otBadge  = totalOT > 0
+      ? (t.ot_approved === 0 || t.ot_approved === '0'
+          ? `<span style="background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-left:4px;">OT — Unapproved</span>`
+          : `<span style="background:#fed7aa;color:#c2410c;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-left:4px;">OT</span>`)
+      : '';
+    const reg8Badge = has8Plus
+      ? `<span style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-left:4px;">8+ Hrs</span>`
+      : '';
+    const dupBadge = (t.has_duplicate === 1 || t.has_duplicate === '1')
+      ? `<span style="background:#fef9c3;color:#854d0e;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-left:4px;">Duplicate</span>`
+      : '';
     return `
     <div class="ticket-row${isArchived ? ' archived-row' : ''}" data-id="${t.id}" data-archived="${isArchived ? 1 : 0}" role="button" tabindex="0" style="${isArchived ? 'opacity:0.75;' : ''}">
       <div class="ticket-date">
@@ -1318,7 +1330,7 @@ function renderTickets(tickets, isArchived = false, listId = 'ticket-list') {
         <div class="day">${fmtDay(t.date)}</div>
       </div>
       <div class="ticket-job">
-        <div class="job-name">${esc(t.job_name)}${isArchived ? ' <span style="font-size:10px;background:#e0e0e0;color:#666;padding:1px 6px;border-radius:8px;font-weight:600;vertical-align:middle;">ARCHIVED</span>' : ''}</div>
+        <div class="job-name">${esc(t.job_name)}${isArchived ? ' <span style="font-size:10px;background:#e0e0e0;color:#666;padding:1px 6px;border-radius:8px;font-weight:600;vertical-align:middle;">ARCHIVED</span>' : ''}${otBadge}${reg8Badge}${dupBadge}</div>
         <div class="job-num">${t.job_number ? '#' + esc(t.job_number) : ''}&nbsp;<span style="color:var(--gray-300);">·</span>&nbsp;${t.employees.length} worker${t.employees.length !== 1 ? 's' : ''}</div>
         <div class="ticket-subhead">Project: ${t.project_name ? esc(t.project_name) : 'No Project Assigned'}<span class="sep">·</span>Job #: ${t.job_number ? esc(t.job_number) : '—'}${t.submitted_by_name ? `<span class="sep">·</span>By: ${esc(t.submitted_by_name)}` : ''}</div>
       </div>
@@ -1636,6 +1648,43 @@ async function openDetail(id, isArchived = false) {
         </tbody>
       </table>
 
+      ${(totalOT > 0 || (t.has_duplicate === 1 || t.has_duplicate === '1') || t.employees.some(e=>(e.regular_hours||0)>8)) ? `
+      <div class="divider"></div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--orange);margin-bottom:10px;">⚠ Flags &amp; Approvals</div>
+      ${totalOT > 0 ? `
+        <div style="background:${t.ot_approved===0||t.ot_approved==='0'?'#fef2f2':'#fff7ed'};border:1px solid ${t.ot_approved===0||t.ot_approved==='0'?'#fca5a5':'#fed7aa'};border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:13px;color:${t.ot_approved===0||t.ot_approved==='0'?'#b91c1c':'#c2410c'};margin-bottom:8px;">
+            ${t.ot_approved===0||t.ot_approved==='0' ? '🔴 OT Not Approved' : t.ot_approved===1||t.ot_approved==='1' ? '🟢 OT Approved' : '🟡 OT — Approval Status Unknown'}
+          </div>
+          ${t.employees.filter(e=>(e.overtime_hours||0)>0).map(e=>`
+            <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;">
+              <span>${esc(e.employee_name)}</span>
+              <span style="font-weight:700;color:var(--orange);">${(e.overtime_hours).toFixed(1)} OT hrs</span>
+            </div>`).join('')}
+          ${t.ot_approved_by ? `<div style="margin-top:8px;font-size:12px;color:var(--gray-500);">Approver: <strong>${esc(t.ot_approved_by)}</strong>${t.ot_approval_ts ? ' · ' + fmtDateTime(t.ot_approval_ts) : ''}</div>` : ''}
+          ${(t.ot_approved===0||t.ot_approved==='0') ? `
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #fca5a5;">
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Approve OT — Approver Name</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input type="text" id="modal-ot-approver" placeholder="e.g. John Smith" style="flex:1;min-width:160px;padding:6px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;">
+              <button id="modal-ot-approve-btn" onclick="adminApproveOT(${t.id})" style="padding:6px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">✓ Approve OT</button>
+            </div>
+          </div>` : ''}
+        </div>` : ''}
+      ${t.employees.some(e=>(e.regular_hours||0)>8) ? `
+        <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:13px;">
+          <strong style="color:#854d0e;">⚠ Regular Hours &gt; 8</strong> — The following employees have more than 8 regular hours:
+          <ul style="margin:6px 0 0 16px;padding:0;">
+            ${t.employees.filter(e=>(e.regular_hours||0)>8).map(e=>`<li><strong>${esc(e.employee_name)}</strong>: ${(e.regular_hours).toFixed(1)} reg hrs</li>`).join('')}
+          </ul>
+        </div>` : ''}
+      ${(t.has_duplicate===1||t.has_duplicate==='1') ? `
+        <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:13px;">
+          <strong style="color:#92400e;">⚠ Duplicate Entry Detected</strong> — One or more employees on this ticket also have hours on another ticket for the same date.
+          ${t.duplicate_ticket_ids ? `<div style="margin-top:6px;font-size:12px;color:var(--gray-600);">Conflicting ticket IDs: ${esc(t.duplicate_ticket_ids)}</div>` : ''}
+        </div>` : ''}
+      ` : ''}
+
       <div class="divider"></div>
       <div class="detail-field full" style="margin-bottom:14px;">
         <label>Work Description</label>
@@ -1672,6 +1721,28 @@ async function openDetail(id, isArchived = false) {
     $('modal-delete').style.display = isArchived ? '' : 'none';
   } catch {
     $('modal-body').innerHTML = `<p style="color:var(--red);">Failed to load ticket details.</p>`;
+  }
+}
+
+async function adminApproveOT(ticketId) {
+  const approver = ($('modal-ot-approver') || {}).value || '';
+  if (!approver.trim()) { showToast('Enter approver name', 'error'); return; }
+  const btn = $('modal-ot-approve-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const res = await fetch('/api/tickets/' + ticketId + '/ot-approval', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ot_approved: true, ot_approved_by: approver.trim() })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+    showToast('OT approved', 'success');
+    openDetail(ticketId, activeTicketArchived);
+    loadTickets(currentPage);
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Approve OT'; }
   }
 }
 
@@ -2192,6 +2263,15 @@ function projTicketRow(t, showArchiveBtn = true) {
   const travel = t.employees ? t.employees.reduce((s,e)=>s+(e.travel_hours||0),   0) : 0;
   const ts  = t.ticket_status || 'Pending';
   const isOutstanding = ts === 'Pending' || ts === 'Reviewed';
+  const has8Plus = t.employees && t.employees.some(e => e.regular_hours > 8);
+  const otBadge  = ot > 0
+    ? ((t.ot_approved === 0 || t.ot_approved === '0')
+        ? ` <span style="background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;">OT—Unapp.</span>`
+        : ` <span style="background:#fed7aa;color:#c2410c;font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;">OT</span>`)
+    : '';
+  const reg8Badge = has8Plus ? ` <span style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;">8+</span>` : '';
+  const dupBadge  = (t.has_duplicate === 1 || t.has_duplicate === '1')
+    ? ` <span style="background:#fef9c3;color:#854d0e;font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;">Dup</span>` : '';
   // Status badge colours
   const statusStyle = ts === 'Entered'
     ? 'background:#d1fae5;color:#065f46;'
@@ -2203,7 +2283,7 @@ function projTicketRow(t, showArchiveBtn = true) {
     <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb proj-tt-cb" data-id="${t.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
     <td>${fmtDate(t.date)}</td>
     <td><strong style="color:var(--orange);font-size:12px;">${esc(t.ticket_number)}</strong></td>
-    <td>${esc(t.job_name)}${t.archived ? ' <span class="archived-label">ARCHIVED</span>' : ''}</td>
+    <td>${esc(t.job_name)}${t.archived ? ' <span class="archived-label">ARCHIVED</span>' : ''}${otBadge}${reg8Badge}${dupBadge}</td>
     <td>${t.job_number ? esc(t.job_number) : '—'}</td>
     <td>${esc(t.supervisor)}</td>
     <td style="text-align:center;font-weight:700;">${reg > 0 ? reg.toFixed(1) : '—'}</td>
@@ -2915,6 +2995,19 @@ async function loadTSDetail(userId, offset) {
 
   const editing = $('ts-day-tbody').dataset.editing === '1';
   $('ts-day-tbody').innerHTML = d.days.map(day => {
+    // ── Duplicate day ──
+    if (day.approval_status === 'duplicate') {
+      return `<tr style="background:#fef9c3;border-left:4px solid #f59e0b;">
+        <td>${day.date}</td><td>${day.dow}</td>
+        <td colspan="2" style="color:#92400e;font-weight:700;">⚠ Duplicate — Review Required</td>
+        <td></td>
+        <td style="text-align:center;color:#92400e;font-weight:700;">—</td>
+        <td style="text-align:center;color:#92400e;font-weight:700;">—</td>
+        <td style="text-align:center;color:#92400e;font-weight:700;">—</td>
+        <td><span class="spill" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fbbf24;">Duplicate</span>
+          ${day.ticket_numbers ? `<div style="font-size:10px;color:#92400e;margin-top:2px;">Tickets: ${esc(day.ticket_numbers)}</div>` : ''}</td>
+      </tr>`;
+    }
     // ── Time Off day ──
     if (day.source === 'time_off' || day.approval_status === 'time_off') {
       return `<tr style="background:linear-gradient(90deg,#f3e8ff 0%,transparent 80%);border-left:4px solid #7c3aed;">

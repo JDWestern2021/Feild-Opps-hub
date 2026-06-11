@@ -344,6 +344,58 @@
 
 </div>
 
+<!-- OT APPROVAL MODAL -->
+<div id="ot-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:20px 24px;color:#fff;">
+      <div style="font-size:22px;font-weight:700;margin-bottom:4px;">⚠ Overtime Detected</div>
+      <div style="opacity:.9;font-size:14px;">Overtime approval is required before this ticket can be submitted.</div>
+    </div>
+    <div style="padding:20px 24px;">
+      <div style="font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px;">Employees with OT</div>
+      <div id="ot-emp-list" style="margin-bottom:18px;border:1px solid #e5e7eb;border-radius:8px;padding:4px 12px;"></div>
+      <div style="font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px;">Was this overtime approved?</div>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:2px solid #e5e7eb;border-radius:8px;cursor:pointer;margin-bottom:8px;transition:border-color .15s;">
+        <input type="radio" name="ot-approved-radio" value="yes" style="width:18px;height:18px;accent-color:#f97316;">
+        <span style="font-weight:600;">Yes — overtime was pre-approved</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:2px solid #e5e7eb;border-radius:8px;cursor:pointer;transition:border-color .15s;">
+        <input type="radio" name="ot-approved-radio" value="no" style="width:18px;height:18px;accent-color:#f97316;">
+        <span style="font-weight:600;">No — submitting without OT approval</span>
+      </label>
+      <div id="ot-approver-section" style="display:none;margin-top:14px;">
+        <label style="display:block;font-weight:600;font-size:13px;margin-bottom:6px;">Approver's name <span style="color:#ef4444;">*</span></label>
+        <input type="text" id="ot-approver-input" placeholder="e.g. John Smith" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <div id="ot-unapproved-warn" style="display:none;margin-top:14px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;font-weight:600;">
+        ⚠ This ticket will be flagged for office review. The office admin will be notified that OT was not pre-approved.
+      </div>
+    </div>
+    <div style="padding:0 24px 20px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button id="ot-back-btn" style="flex:1;min-width:120px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:#374151;">← Go Back &amp; Edit</button>
+      <button id="ot-submit-btn" disabled style="flex:2;min-width:160px;padding:10px;border:none;border-radius:8px;background:#f97316;color:#fff;font-size:14px;font-weight:700;cursor:pointer;opacity:.5;transition:opacity .15s;">Submit Ticket →</button>
+    </div>
+  </div>
+</div>
+
+<!-- DUPLICATE ENTRY MODAL -->
+<div id="dup-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9001;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#fbbf24,#f59e0b);padding:20px 24px;color:#fff;">
+      <div style="font-size:22px;font-weight:700;margin-bottom:4px;">⚠ Possible Duplicate</div>
+      <div style="opacity:.9;font-size:14px;">One or more employees already have hours entered for this date.</div>
+    </div>
+    <div style="padding:20px 24px;">
+      <div id="dup-list" style="border:1px solid #e5e7eb;border-radius:8px;padding:4px 12px;margin-bottom:16px;"></div>
+      <p style="font-size:14px;color:#374151;margin:0;">Do you want to go back and review, or submit anyway?<br><span style="color:#92400e;font-weight:600;">Submitting anyway will flag the ticket for office review.</span></p>
+    </div>
+    <div style="padding:0 24px 20px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button id="dup-review-btn" style="flex:1;min-width:120px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:#374151;">← Review &amp; Edit</button>
+      <button id="dup-submit-btn" style="flex:2;min-width:160px;padding:10px;border:none;border-radius:8px;background:#f59e0b;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Submit Anyway →</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -463,6 +515,7 @@
       </td>
       <td>
         <input type="number" class="form-control hrs-input emp-reg" placeholder="0" min="0" max="24" step="0.5" value="${reg}"/>
+        <div class="reg-over8-warn" style="display:none;color:#92400e;font-size:11px;font-weight:600;margin-top:3px;padding:2px 0;">⚠ Over 8 regular hours — confirm this is correct</div>
       </td>
       <td>
         <input type="number" class="form-control hrs-input emp-ot" placeholder="0" min="0" max="24" step="0.5" value="${ot}"/>
@@ -479,6 +532,10 @@
       updateHoursSummary();
     });
     tr.querySelectorAll('.emp-reg, .emp-ot, .emp-travel').forEach(i => i.addEventListener('input', updateHoursSummary));
+    tr.querySelector('.emp-reg').addEventListener('input', function() {
+      const warn = tr.querySelector('.reg-over8-warn');
+      if (warn) warn.style.display = parseFloat(this.value) > 8 ? 'block' : 'none';
+    });
     tbody.appendChild(tr);
     updateHoursSummary();
     return tr;
@@ -526,16 +583,12 @@
     }
   }
 
-  // ── Submit ──
-  $('ticket-form').addEventListener('submit', async e => {
-    e.preventDefault();
+  // ── Multi-step submit state ──
+  let _pendingPayload = null;
+  let _pendingOTData  = null;
 
-    let valid = true;
-    valid = validateField('date', 'err-date', !$('date').value) && valid;
-    valid = validateField('job_name', 'err-job', !$('job_name').value.trim()) && valid;
-    valid = validateField('supervisor', 'err-supervisor', !$('supervisor').value.trim()) && valid;
-    valid = validateField('work_description', 'err-work', !$('work_description').value.trim()) && valid;
-
+  // ── Collect form data ──
+  function collectPayload() {
     const empRows = document.querySelectorAll('.employee-row');
     const employees = [];
     empRows.forEach(r => {
@@ -547,34 +600,12 @@
         name,
         user_id: uid ? parseInt(uid) : null,
         level: r.querySelector('.emp-level').value,
-        regular_hours:  parseFloat(r.querySelector('.emp-reg').value)    || 0,
-        overtime_hours: parseFloat(r.querySelector('.emp-ot').value)     || 0,
+        regular_hours:  parseFloat(r.querySelector('.emp-reg').value)     || 0,
+        overtime_hours: parseFloat(r.querySelector('.emp-ot').value)      || 0,
         travel_hours:   parseFloat(r.querySelector('.emp-travel')?.value) || 0
       });
     });
-    const empErr = $('err-employees');
-    if (employees.length === 0) {
-      empErr.style.display = 'block';
-      valid = false;
-    } else {
-      empErr.style.display = 'none';
-    }
-
-    if (!valid) {
-      showToast('Please fill in all required fields', 'error');
-      // scroll to first error
-      document.querySelector('.form-control.error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-
-    const btn = $('submit-btn');
-    const label = $('submit-label');
-    const spinner = $('submit-spinner');
-    btn.disabled = true;
-    label.textContent = 'Submitting…';
-    spinner.style.display = 'block';
-
-    const payload = {
+    return {
       date: $('date').value,
       job_name: $('job_name').value.trim(),
       job_number: $('job_number').value.trim(),
@@ -585,26 +616,164 @@
       project_id: ($('assign-project').checked && $('project_id').value) ? $('project_id').value : null,
       employees
     };
+  }
 
+  // ── Step 4: final POST ──
+  async function doSubmit(submittedWithDuplicate) {
+    $('submit-btn').disabled = true;
+    $('submit-label').textContent = 'Submitting…';
+    $('submit-spinner').style.display = 'block';
+    const payload = Object.assign({}, _pendingPayload, _pendingOTData || {}, { submitted_with_duplicate: submittedWithDuplicate });
     try {
       const res = await fetch('/api/tickets', {
-        method: 'POST',
+        method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      const data = await res.json().catch(function(){ return {}; });
       if (!res.ok) throw new Error(data.error || 'Server error');
-
       $('success-ref').textContent = data.ticket_number;
       $('form-card').style.display = 'none';
       $('success-screen').style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
-      btn.disabled = false;
-      label.textContent = 'Submit Time Ticket';
-      spinner.style.display = 'none';
+      $('submit-btn').disabled = false;
+      $('submit-label').textContent = 'Submit Time Ticket';
+      $('submit-spinner').style.display = 'none';
     }
+  }
+
+  // ── Step 3: duplicate check ──
+  async function checkDupsThenSubmit() {
+    try {
+      const names = _pendingPayload.employees.map(function(e){ return e.name; }).join(',');
+      const r = await fetch('/api/tickets/check-duplicates?date=' + encodeURIComponent(_pendingPayload.date) + '&names=' + encodeURIComponent(names), { credentials: 'include' });
+      const json = await r.json().catch(function(){ return { duplicates: [] }; });
+      const dups = json.duplicates || [];
+      if (dups.length > 0) { showDupModal(dups); return; }
+    } catch(ignored) {}
+    await doSubmit(false);
+  }
+
+  // ── Step 2a: OT modal ──
+  function showOTModal(otEmps) {
+    $('ot-emp-list').innerHTML = otEmps.map(function(e){
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6;">' +
+        '<span style="font-weight:600;">' + esc(e.name) + '</span>' +
+        '<span style="color:var(--orange);font-weight:700;">' + e.overtime_hours.toFixed(1) + ' OT hrs</span>' +
+        '</div>';
+    }).join('');
+    document.querySelectorAll('input[name="ot-approved-radio"]').forEach(function(r){ r.checked = false; });
+    $('ot-approver-section').style.display = 'none';
+    $('ot-unapproved-warn').style.display  = 'none';
+    $('ot-approver-input').value = '';
+    $('ot-submit-btn').disabled = true;
+    $('ot-modal').style.display = 'flex';
+  }
+  function hideOTModal() { $('ot-modal').style.display = 'none'; }
+
+  $('ot-modal').addEventListener('change', function(e) {
+    if (!e.target.matches('input[name="ot-approved-radio"]')) return;
+    $('ot-approver-section').style.display = e.target.value === 'yes' ? 'block' : 'none';
+    $('ot-unapproved-warn').style.display  = e.target.value === 'no'  ? 'block' : 'none';
+    _updateOTSubmitBtn();
+  });
+  $('ot-approver-input').addEventListener('input', _updateOTSubmitBtn);
+  function _updateOTSubmitBtn() {
+    var checked = document.querySelector('input[name="ot-approved-radio"]:checked');
+    var val = checked ? checked.value : null;
+    var ok = val === 'no' || (val === 'yes' && $('ot-approver-input').value.trim() !== '');
+    $('ot-submit-btn').disabled = !ok;
+    $('ot-submit-btn').style.opacity = ok ? '1' : '.5';
+    $('ot-submit-btn').style.cursor  = ok ? 'pointer' : 'not-allowed';
+  }
+
+  $('ot-back-btn').addEventListener('click', function() {
+    hideOTModal();
+    $('submit-btn').disabled = false;
+    $('submit-label').textContent = 'Submit Time Ticket';
+    $('submit-spinner').style.display = 'none';
+  });
+  $('ot-submit-btn').addEventListener('click', async function() {
+    var checked = document.querySelector('input[name="ot-approved-radio"]:checked');
+    var approved = checked && checked.value === 'yes';
+    _pendingOTData = {
+      ot_approved:    approved,
+      ot_approved_by: approved ? $('ot-approver-input').value.trim() : null
+    };
+    hideOTModal();
+    await checkDupsThenSubmit();
+  });
+
+  // ── Step 2b: duplicate modal ──
+  function showDupModal(dups) {
+    var byEmp = {};
+    dups.forEach(function(d){
+      if (!byEmp[d.employee_name]) byEmp[d.employee_name] = [];
+      byEmp[d.employee_name].push(d);
+    });
+    $('dup-list').innerHTML = Object.keys(byEmp).map(function(name){
+      var tickets = byEmp[name];
+      return '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;">' +
+        '<strong>' + esc(name) + '</strong> already has hours on: ' +
+        tickets.map(function(t){ return '<span style="color:var(--orange);font-weight:700;">' + esc(t.ticket_number) + '</span> (' + esc(t.job_name) + ')'; }).join(', ') +
+        ' for <strong>' + esc(_pendingPayload.date) + '</strong>' +
+        '</div>';
+    }).join('');
+    $('dup-modal').style.display = 'flex';
+  }
+  function hideDupModal() { $('dup-modal').style.display = 'none'; }
+
+  $('dup-review-btn').addEventListener('click', function() {
+    hideDupModal();
+    $('submit-btn').disabled = false;
+    $('submit-label').textContent = 'Submit Time Ticket';
+    $('submit-spinner').style.display = 'none';
+  });
+  $('dup-submit-btn').addEventListener('click', async function() {
+    hideDupModal();
+    await doSubmit(true);
+  });
+
+  // ── Step 1: form submit intercept ──
+  $('ticket-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    let valid = true;
+    valid = validateField('date', 'err-date', !$('date').value) && valid;
+    valid = validateField('job_name', 'err-job', !$('job_name').value.trim()) && valid;
+    valid = validateField('supervisor', 'err-supervisor', !$('supervisor').value.trim()) && valid;
+    valid = validateField('work_description', 'err-work', !$('work_description').value.trim()) && valid;
+
+    _pendingPayload = collectPayload();
+    const empErr = $('err-employees');
+    if (_pendingPayload.employees.length === 0) {
+      empErr.style.display = 'block'; valid = false;
+    } else { empErr.style.display = 'none'; }
+
+    if (!valid) {
+      showToast('Please fill in all required fields', 'error');
+      document.querySelector('.form-control.error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    $('submit-btn').disabled = true;
+    $('submit-label').textContent = 'Checking…';
+    $('submit-spinner').style.display = 'block';
+
+    const otEmps = _pendingPayload.employees.filter(function(emp){ return emp.overtime_hours > 0; });
+    if (otEmps.length > 0) {
+      // Must complete OT modal before submitting
+      $('submit-label').textContent = 'Submit Time Ticket';
+      $('submit-spinner').style.display = 'none';
+      $('submit-btn').disabled = false;
+      _pendingOTData = null;
+      showOTModal(otEmps);
+      return;
+    }
+    _pendingOTData = {};
+    await checkDupsThenSubmit();
   });
 
   $('new-ticket-btn').addEventListener('click', () => {

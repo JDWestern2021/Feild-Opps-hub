@@ -432,19 +432,25 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 
 app.post('/api/tickets', requireAuth, async (req, res) => {
-  const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id } = req.body;
+  const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id,
+          ot_approved, ot_approved_by, submitted_with_duplicate } = req.body;
   if (!date||!job_name||!supervisor||!work_description) return res.status(400).json({ error: 'Missing required fields' });
   if (!employees?.length) return res.status(400).json({ error: 'At least one employee required' });
   const ticket_number = generateTicketNumber();
   const submitted_at  = new Date().toISOString();
   const resolvedPid   = await resolveProjectId(project_id);
+  // Determine OT approval value
+  const hasOT = employees.some(e => parseFloat(e.overtime_hours) > 0);
+  const otApprovedVal  = hasOT ? (ot_approved ? 1 : 0)   : null;
+  const otApprovedBy   = hasOT ? (ot_approved_by || null) : null;
+  const otApprovalTs   = hasOT ? submitted_at              : null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-      [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid,req.user?.name||null]
+      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name,ot_approved,ot_approved_by,ot_approval_ts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+      [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid,req.user?.name||null,otApprovedVal,otApprovedBy,otApprovalTs]
     );
     const tid = rows[0].id;
     for (const e of employees) {
@@ -453,8 +459,29 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
         [tid, e.name.trim(), parseFloat(e.regular_hours)||0, parseFloat(e.overtime_hours)||0, e.level||'Journeyman', e.user_id||null, parseFloat(e.travel_hours)||0]
       );
     }
+    // ── Duplicate detection ──
+    const empNames = employees.map(e => e.name?.trim()).filter(Boolean);
+    if (empNames.length > 0) {
+      const { rows: dupRows } = await client.query(`
+        SELECT DISTINCT t.id FROM ticket_employees te
+        JOIN daily_tickets t ON t.id = te.ticket_id
+        WHERE t.date=$1 AND te.employee_name=ANY($2) AND COALESCE(t.archived,0)=0 AND t.id!=$3
+      `, [date, empNames, tid]);
+      if (dupRows.length > 0) {
+        const conflictIds = dupRows.map(r => r.id);
+        await client.query('UPDATE daily_tickets SET has_duplicate=1, duplicate_ticket_ids=$1 WHERE id=$2',
+          [conflictIds.join(','), tid]);
+        for (const cid of conflictIds) {
+          await client.query(`UPDATE daily_tickets SET has_duplicate=1,
+            duplicate_ticket_ids = CASE WHEN duplicate_ticket_ids IS NULL OR duplicate_ticket_ids=''
+              THEN $1::text ELSE duplicate_ticket_ids||','||$1::text END WHERE id=$2`,
+            [tid.toString(), cid]);
+        }
+      }
+    }
     await client.query('COMMIT');
-    logAction(req,'ticket_submitted',tid,ticket_number,`Submitted by ${req.user.name}`);
+    logAction(req,'ticket_submitted',tid,ticket_number,
+      `Submitted by ${req.user.name}${hasOT ? ` | OT: ${ot_approved?'approved':'UNAPPROVED'}${otApprovedBy?` by ${otApprovedBy}`:''}` : ''}${submitted_with_duplicate?' | submitted with duplicate warning':''}`);
     res.status(201).json({ id: tid, ticket_number, message: 'Ticket submitted successfully' });
   } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ error: 'Failed to save ticket' }); }
   finally { client.release(); }
@@ -513,6 +540,40 @@ app.get('/api/tickets/export/xlsx', requireAuth, async (req, res) => {
   res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition',`attachment; filename="${safeName}"`);
   res.send(buf);
+});
+
+// ── Check for duplicate employee entries on the same date ──
+app.get('/api/tickets/check-duplicates', requireAuth, async (req, res) => {
+  try {
+    const { date, names } = req.query;
+    if (!date || !names) return res.json({ duplicates: [] });
+    const nameList = names.split(',').map(n => n.trim()).filter(Boolean);
+    if (!nameList.length) return res.json({ duplicates: [] });
+    const { rows } = await pool.query(`
+      SELECT te.employee_name, t.id, t.ticket_number, t.job_name
+      FROM ticket_employees te
+      JOIN daily_tickets t ON t.id = te.ticket_id
+      WHERE t.date = $1 AND te.employee_name = ANY($2) AND COALESCE(t.archived, 0) = 0
+      ORDER BY t.submitted_at
+    `, [date, nameList]);
+    res.json({ duplicates: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: update OT approval on a ticket ──
+app.patch('/api/tickets/:id/ot-approval', requireAdmin, async (req, res) => {
+  try {
+    const { ot_approved, ot_approved_by } = req.body;
+    if (ot_approved === undefined) return res.status(400).json({ error: 'ot_approved required' });
+    const ts = new Date().toISOString();
+    await pool.query(
+      'UPDATE daily_tickets SET ot_approved=$1, ot_approved_by=$2, ot_approval_ts=$3 WHERE id=$4',
+      [ot_approved ? 1 : 0, ot_approved_by || req.user.name, ts, req.params.id]
+    );
+    logAction(req, 'ot_approval_updated', parseInt(req.params.id), null,
+      `OT ${ot_approved ? 'approved' : 'marked unapproved'} by ${req.user.name}${ot_approved_by ? ` — approver: ${ot_approved_by}` : ''}`);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/tickets/:id', requireAuth, async (req, res) => {
@@ -1039,11 +1100,12 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
       COALESCE(te.travel_hours, 0) AS travel_hours,
       COALESCE(te.level, 'Journeyman') AS level,
       t.supervisor,
-      t.updated_at
+      t.updated_at,
+      COALESCE(t.has_duplicate, 0) AS has_duplicate
     FROM ticket_employees te
     JOIN daily_tickets t ON t.id = te.ticket_id
     LEFT JOIN projects p ON p.id = t.project_id
-    WHERE te.user_id = $1 AND t.date >= $2 AND t.date <= $3
+    WHERE te.user_id = $1 AND t.date >= $2 AND t.date <= $3 AND COALESCE(t.archived,0)=0
     ORDER BY t.date, t.submitted_at`, [userId, periodStart, periodEnd]);
 
   // Manual overrides (applied on top of ticket data when present)
@@ -1099,6 +1161,20 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
         ticket_numbers: entries.map(e=>e.ticket_number).join(', '),
         edited_by_name: override.edited_by_name, edited_at: override.created_at, entries });
     } else if (entries.length > 0) {
+      // ── Duplicate detection: multiple tickets for same employee on same day ──
+      const ticketIds = [...new Set(entries.map(e => e.ticket_id))];
+      const isDuplicate = ticketIds.length > 1 && entries.some(e => e.has_duplicate);
+      if (isDuplicate) {
+        // Hours are excluded from totals until one ticket is archived
+        days.push({ date: dateStr, dow,
+          regular_hours: 0, overtime_hours: 0, travel_hours: 0, total_hours: 0,
+          approval_status: 'duplicate', source: 'duplicate',
+          ticket_numbers: entries.map(e=>e.ticket_number).join(', '),
+          job_name: entries.map(e=>e.job_name||'').filter(Boolean).join(' / '),
+          job_number: '', project_name: '', level: entries[0].level,
+          supervisor: entries[0].supervisor, entries });
+        continue;
+      }
       let dayReg = 0, dayOT = 0, dayTravel = 0;
       const allEntered = entries.every(e => e.ticket_status === 'Entered');
       const anyEntered = entries.some(e => e.ticket_status === 'Entered');

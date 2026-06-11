@@ -225,6 +225,13 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_end_date     ON time_off_requests(end_date)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_user_id      ON time_off_requests(user_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_archived      ON time_off_requests(archived)`);
+  // OT approval tracking on daily_tickets
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS ot_approved       INTEGER DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS ot_approved_by    TEXT    DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS ot_approval_ts    TEXT    DEFAULT NULL`);
+  // Duplicate-entry tracking on daily_tickets
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS has_duplicate         INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS duplicate_ticket_ids  TEXT    DEFAULT NULL`);
   // Seed each user's color from the same deterministic palette currently used in the UI
   await pool.query(`UPDATE users SET time_off_color = (ARRAY['#93c5fd','#c4b5fd','#f9a8d4','#6ee7b7','#fcd34d','#fca5a5','#67e8f9','#bef264','#d8b4fe','#fdba74','#5eead4','#fde047'])[((id % 12) + 1)::int] WHERE time_off_color IS NULL`);
   console.log('  ✓ Database schema ready');
