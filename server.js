@@ -1107,7 +1107,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
     LEFT JOIN projects p ON p.id = t.project_id
     JOIN users u ON u.id = $1
     WHERE (te.user_id = $1 OR (te.user_id IS NULL AND te.employee_name = u.name))
-      AND t.date >= $2 AND t.date <= $3 AND COALESCE(t.archived,0)=0
+      AND t.date >= $2 AND t.date <= $3
     ORDER BY t.date, t.submitted_at`, [userId, periodStart, periodEnd]);
 
   // Manual overrides (applied on top of ticket data when present)
