@@ -1234,7 +1234,7 @@ app.get('/api/timesheets', requireAdmin, async (req, res) => {
              COALESCE(SUM(te.travel_hours),0) AS travel
       FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
       WHERE (te.user_id=$1 OR (te.user_id IS NULL AND te.employee_name=$4))
-        AND t.date>=$2 AND t.date<=$3 AND COALESCE(t.ticket_status,'Pending')='Pending'`,
+        AND t.date>=$2 AND t.date<=$3 AND COALESCE(t.ticket_status,'Pending') != 'Entered'`,
       [u.id, period.start, period.end, u.name]);
     const reg=parseFloat(hrs[0].reg)||0, ot=parseFloat(hrs[0].ot)||0, travel=parseFloat(hrs[0].travel)||0;
     const pReg=parseFloat(pendHrs[0].reg)||0, pOt=parseFloat(pendHrs[0].ot)||0, pTravel=parseFloat(pendHrs[0].travel)||0;
