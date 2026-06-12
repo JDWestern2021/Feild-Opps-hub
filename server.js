@@ -1106,7 +1106,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
     JOIN daily_tickets t ON t.id = te.ticket_id
     LEFT JOIN projects p ON p.id = t.project_id
     JOIN users u ON u.id = $1
-    WHERE (te.user_id = $1 OR (te.user_id IS NULL AND te.employee_name = u.name))
+    WHERE (te.user_id = $1 OR (te.user_id IS NULL AND LOWER(TRIM(te.employee_name)) = LOWER(TRIM(u.name))))
       AND t.date >= $2 AND t.date <= $3
     ORDER BY t.date, t.submitted_at`, [userId, periodStart, periodEnd]);
 
@@ -1226,14 +1226,14 @@ app.get('/api/timesheets', requireAdmin, async (req, res) => {
       SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot,
              COALESCE(SUM(te.travel_hours),0) AS travel
       FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
-      WHERE (te.user_id=$1 OR (te.user_id IS NULL AND te.employee_name=$4))
+      WHERE (te.user_id=$1 OR (te.user_id IS NULL AND LOWER(TRIM(te.employee_name))=LOWER(TRIM($4))))
         AND t.date>=$2 AND t.date<=$3 AND t.ticket_status='Entered'`,
       [u.id, period.start, period.end, u.name]);
     const { rows: pendHrs } = await pool.query(`
       SELECT COALESCE(SUM(te.regular_hours),0) AS reg, COALESCE(SUM(te.overtime_hours),0) AS ot,
              COALESCE(SUM(te.travel_hours),0) AS travel
       FROM ticket_employees te JOIN daily_tickets t ON t.id=te.ticket_id
-      WHERE (te.user_id=$1 OR (te.user_id IS NULL AND te.employee_name=$4))
+      WHERE (te.user_id=$1 OR (te.user_id IS NULL AND LOWER(TRIM(te.employee_name))=LOWER(TRIM($4))))
         AND t.date>=$2 AND t.date<=$3 AND COALESCE(t.ticket_status,'Pending') != 'Entered'`,
       [u.id, period.start, period.end, u.name]);
     const reg=parseFloat(hrs[0].reg)||0, ot=parseFloat(hrs[0].ot)||0, travel=parseFloat(hrs[0].travel)||0;

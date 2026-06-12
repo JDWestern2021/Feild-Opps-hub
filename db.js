@@ -232,6 +232,14 @@ async function initSchema() {
   // Duplicate-entry tracking on daily_tickets
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS has_duplicate         INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS duplicate_ticket_ids  TEXT    DEFAULT NULL`);
+  // Backfill user_id on ticket_employees rows where it was never set (case-insensitive name match)
+  await pool.query(`
+    UPDATE ticket_employees te
+    SET user_id = u.id
+    FROM users u
+    WHERE te.user_id IS NULL
+      AND LOWER(TRIM(te.employee_name)) = LOWER(TRIM(u.name))
+  `);
   // Seed each user's color from the same deterministic palette currently used in the UI
   await pool.query(`UPDATE users SET time_off_color = (ARRAY['#93c5fd','#c4b5fd','#f9a8d4','#6ee7b7','#fcd34d','#fca5a5','#67e8f9','#bef264','#d8b4fe','#fdba74','#5eead4','#fde047'])[((id % 12) + 1)::int] WHERE time_off_color IS NULL`);
   console.log('  ✓ Database schema ready');
