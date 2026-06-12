@@ -1302,6 +1302,12 @@ app.get('/api/timesheets/export/all', requireAdmin, async (req, res) => {
 });
 
 // ── Admin: get one employee's full timesheet ──
+// Temporary diagnostic — list all users
+app.get('/api/debug/users', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query("SELECT id, name, role, status FROM users ORDER BY name");
+  res.json(rows);
+});
+
 // Temporary diagnostic — shows raw ticket_employees rows for a user
 app.get('/api/debug/ts/:userId', requireAdmin, async (req, res) => {
   const uid = parseInt(req.params.userId);
