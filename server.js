@@ -1177,28 +1177,25 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
           supervisor: entries[0].supervisor, entries });
         continue;
       }
-      let dayReg = 0, dayOT = 0, dayTravel = 0;
-      const allEntered = entries.every(e => e.ticket_status === 'Entered');
-      const anyEntered = entries.some(e => e.ticket_status === 'Entered');
+      // Push one row per ticket so mixed-status days show correctly
       entries.forEach(e => {
-        dayReg    += parseFloat(e.regular_hours) ||0;
-        dayOT     += parseFloat(e.overtime_hours)||0;
-        dayTravel += parseFloat(e.travel_hours)  ||0;
+        const reg    = parseFloat(e.regular_hours)  || 0;
+        const ot     = parseFloat(e.overtime_hours) || 0;
+        const travel = parseFloat(e.travel_hours)   || 0;
+        const isEntered = e.ticket_status === 'Entered';
+        if (isEntered) { enteredReg += reg; enteredOT += ot; enteredTravel += travel; }
+        else           { pendingReg += reg; pendingOT += ot; pendingTravel += travel; }
+        days.push({ date: dateStr, dow,
+          regular_hours: reg, overtime_hours: ot, travel_hours: travel,
+          total_hours: reg + ot + travel,
+          approval_status: isEntered ? 'entered' : 'pending', source: 'ticket',
+          job_number:   e.job_number   || '',
+          job_name:     e.job_name     || '',
+          project_name: e.project_name || '',
+          level: e.level,
+          ticket_numbers: e.ticket_number,
+          supervisor: e.supervisor, updated_at: e.updated_at, entries: [e] });
       });
-      const approvalStatus = allEntered ? 'entered' : (anyEntered ? 'partial' : 'pending');
-      if (allEntered) { enteredReg += dayReg; enteredOT += dayOT; enteredTravel += dayTravel; }
-      else            { pendingReg += dayReg; pendingOT += dayOT; pendingTravel += dayTravel; }
-      const first = entries[0];
-      days.push({ date: dateStr, dow,
-        regular_hours: dayReg, overtime_hours: dayOT, travel_hours: dayTravel,
-        total_hours: dayReg + dayOT + dayTravel,
-        approval_status: approvalStatus, source: 'ticket',
-        job_number: entries.map(e=>e.job_number||'').filter(Boolean).join(', '),
-        job_name:   entries.map(e=>e.job_name||'').filter(Boolean).join(', '),
-        project_name: [...new Set(entries.map(e=>e.project_name||'').filter(Boolean))].join(', '),
-        level: first.level,
-        ticket_numbers: entries.map(e=>e.ticket_number).join(', '),
-        supervisor: first.supervisor, updated_at: first.updated_at, entries });
     } else {
       days.push({ date: dateStr, dow,
         regular_hours: 0, overtime_hours: 0, travel_hours: 0, total_hours: 0,
