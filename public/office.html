@@ -2989,8 +2989,11 @@ async function loadTSDetail(userId, offset) {
   $('ts-period-label').textContent = `Pay Period: ${fmtDate(d.period.start)} — ${fmtDate(d.period.end)} · Payday: ${fmtDate(d.period.payday)}`;
   $('ts-detail-name').textContent = d.user.name;
   const pt = d.pending_totals||{};
-  const pendText = (pt.total||0) > 0 ? ` · <span style="color:#d9342b;font-size:12px;font-weight:700;">⚠ ${(pt.regular||0).toFixed(1)} reg / ${(pt.ot||0).toFixed(1)} OT / ${(pt.travel||0).toFixed(1)} travel PENDING — needs approval</span>` : '';
-  $('ts-detail-totals').innerHTML = `<span style="color:var(--green);font-weight:700;">Approved — Reg: ${d.totals.regular.toFixed(1)} · OT: ${d.totals.ot.toFixed(1)} · Travel: ${(d.totals.travel||0).toFixed(1)} hrs</span>${pendText}`;
+  const hasPending = (pt.total||0) > 0;
+  const pendLine = hasPending
+    ? `<div style="color:#b45309;font-weight:700;margin-top:3px;">⏳ Pending — Reg: ${(pt.regular||0).toFixed(1)} · OT: ${(pt.ot||0).toFixed(1)} · Travel: ${(pt.travel||0).toFixed(1)} hrs <span style="font-weight:400;font-size:11px;">(not yet approved)</span></div>`
+    : '';
+  $('ts-detail-totals').innerHTML = `<div style="color:var(--green);font-weight:700;">✓ Approved — Reg: ${d.totals.regular.toFixed(1)} · OT: ${d.totals.ot.toFixed(1)} · Travel: ${(d.totals.travel||0).toFixed(1)} hrs</div>${pendLine}`;
   $('ts-edit-btn').style.display = tsHasEditAccess ? '' : 'none';
 
   const editing = $('ts-day-tbody').dataset.editing === '1';
@@ -3026,9 +3029,9 @@ async function loadTSDetail(userId, offset) {
     const rowBg    = isPending ? 'background:rgba(217,52,43,0.05);border-left:3px solid #d9342b;' : isEntered ? 'background:rgba(40,167,69,0.07);border-left:3px solid #28a745;' : '';
     const hrsColor = isPending ? 'color:#d9342b;' : isEntered ? 'color:#155724;font-weight:700;' : 'color:var(--gray-400);';
     const statusBadge = isPending
-      ? `<span class="spill" style="background:#e0e0e0;color:#555;font-size:10px;">Pending</span>`
+      ? `<span class="spill" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;font-size:10px;font-weight:700;">Pending</span>`
       : isEntered
-        ? `<span class="spill" style="background:#d4edda;color:#155724;font-size:10px;">Entered</span>`
+        ? `<span class="spill" style="background:#d4edda;color:#155724;font-size:10px;">Approved</span>`
         : day.source === 'manual'
           ? `<span class="spill spill-reviewed" style="font-size:10px;">Edited</span>`
           : '';
@@ -3047,7 +3050,12 @@ async function loadTSDetail(userId, offset) {
     }
     return `<tr style="${rowBg}">
       <td>${day.date}</td><td>${day.dow}</td>
-      <td style="font-size:12px;" colspan="2">${day.job_number?`<span>Job: ${esc(day.job_number)}</span>`:''}${day.project_name?`<span style="color:var(--gray-500);"> | Project: ${esc(day.project_name)}</span>`:''}</td>
+      <td style="font-size:12px;" colspan="2">
+        ${day.job_name?`<span style="font-weight:600;">${esc(day.job_name)}</span>`:''}
+        ${day.job_number?`<span style="color:var(--gray-500);"> · #${esc(day.job_number)}</span>`:''}
+        ${day.ticket_numbers?`<span style="color:var(--gray-400);font-size:11px;"> · ${esc(day.ticket_numbers)}</span>`:''}
+        ${day.project_name?`<br><span style="color:var(--gray-500);font-size:11px;">Project: ${esc(day.project_name)}</span>`:''}
+      </td>
       <td style="font-size:12px;color:var(--gray-500);">${esc(day.level||'')}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</td>
