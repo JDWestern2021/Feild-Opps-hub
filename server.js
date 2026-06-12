@@ -1303,12 +1303,17 @@ app.get('/api/timesheets/export/all', requireAdmin, async (req, res) => {
 
 // ── Admin: get one employee's full timesheet ──
 app.get('/api/timesheets/:userId', requireAdmin, async (req, res) => {
-  const { base, days } = await getPayrollBase();
-  const offset = parseInt(req.query.offset ?? getCurrentPeriodOffset(base, days));
-  const period = calcPayPeriod(base, days, offset);
-  const ts = await buildTimesheet(parseInt(req.params.userId), period.start, period.end);
-  if (!ts) return res.status(404).json({ error: 'User not found' });
-  res.json({ ...ts, period, offset });
+  try {
+    const { base, days } = await getPayrollBase();
+    const offset = parseInt(req.query.offset ?? getCurrentPeriodOffset(base, days));
+    const period = calcPayPeriod(base, days, offset);
+    const ts = await buildTimesheet(parseInt(req.params.userId), period.start, period.end);
+    if (!ts) return res.status(404).json({ error: 'User not found' });
+    res.json({ ...ts, period, offset });
+  } catch (err) {
+    console.error('buildTimesheet error:', err.message, err.stack);
+    res.status(500).json({ error: 'Failed to load timesheet: ' + err.message });
+  }
 });
 
 // ── Field user: own timesheet ──

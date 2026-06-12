@@ -2982,7 +2982,13 @@ async function loadTSDetail(userId, offset) {
   $('ts-employee-list').style.display = 'none';
   $('ts-detail').style.display = 'block';
   const res = await fetch(`/api/timesheets/${userId}?offset=${offset ?? tsOffset}`);
-  if (!res.ok) return;
+  if (!res.ok) {
+    let msg = `Server error (${res.status})`;
+    try { const e = await res.json(); msg = e.error || msg; } catch(_) {}
+    $('ts-day-tbody').innerHTML = `<tr><td colspan="7" style="padding:20px;color:#dc2626;font-weight:600;text-align:center;">⚠ Could not load timesheet: ${esc(msg)}</td></tr>`;
+    $('ts-detail-totals').innerHTML = '';
+    return;
+  }
   const d = await res.json();
   lastTSDetailData = d;  // store for print
   tsOffset = d.offset;
