@@ -1302,6 +1302,24 @@ app.get('/api/timesheets/export/all', requireAdmin, async (req, res) => {
 });
 
 // ── Admin: get one employee's full timesheet ──
+// Temporary diagnostic — shows raw ticket_employees rows for a user
+app.get('/api/debug/ts/:userId', requireAdmin, async (req, res) => {
+  const uid = parseInt(req.params.userId);
+  const { rows: user } = await pool.query('SELECT id, name FROM users WHERE id=$1', [uid]);
+  const { rows: teRows } = await pool.query(
+    `SELECT te.id, te.ticket_id, te.employee_name, te.user_id, te.regular_hours, te.overtime_hours,
+            t.date, t.ticket_status, t.ticket_number
+     FROM ticket_employees te
+     JOIN daily_tickets t ON t.id = te.ticket_id
+     WHERE te.user_id=$1 OR LOWER(TRIM(te.employee_name))=LOWER(TRIM($2))
+     ORDER BY t.date`, [uid, user[0]?.name || '']);
+  const { rows: nameRows } = await pool.query(
+    `SELECT DISTINCT te.employee_name, te.user_id, COUNT(*) as cnt
+     FROM ticket_employees te WHERE LOWER(TRIM(te.employee_name)) LIKE LOWER($1)
+     GROUP BY te.employee_name, te.user_id`, [`%${(user[0]?.name||'').split(' ')[0]}%`]);
+  res.json({ user: user[0], matched_rows: teRows, name_variants: nameRows });
+});
+
 app.get('/api/timesheets/:userId', requireAdmin, async (req, res) => {
   try {
     const { base, days } = await getPayrollBase();
