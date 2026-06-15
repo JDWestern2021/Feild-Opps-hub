@@ -1009,6 +1009,7 @@
       <button class="btn btn-secondary btn-sm" id="modal-edit-btn">Edit</button>
       <button class="btn btn-sm" id="modal-print" style="background:#1c1c1e;color:white;">Print</button>
       <button class="btn btn-sm" id="modal-export" style="background:#1a6e35;color:white;">Export XLSX</button>
+      <button class="btn btn-secondary btn-sm" id="modal-back-ts" style="display:none;">← Back to Timesheet</button>
       <button class="btn btn-secondary btn-sm" id="modal-close-2">Close</button>
     </div>
   </div>
@@ -1746,12 +1747,26 @@ async function adminApproveOT(ticketId) {
   }
 }
 
+let tsOpenedFromTimesheet = false;
+
 function closeDetail() {
   $('detail-modal').classList.remove('open');
   activeTicketId = null;
   activeTicketArchived = false;
+  if (tsOpenedFromTimesheet) {
+    tsOpenedFromTimesheet = false;
+    $('modal-back-ts').style.display = 'none';
+    if (tsCurrentUserId != null) loadTSDetail(tsCurrentUserId, tsOffset);
+  }
 }
 
+function openDetailFromTS(ticketId) {
+  tsOpenedFromTimesheet = true;
+  $('modal-back-ts').style.display = '';
+  openDetail(ticketId);
+}
+
+$('modal-back-ts').addEventListener('click', closeDetail);
 $('modal-close').addEventListener('click', closeDetail);
 $('modal-close-2').addEventListener('click', closeDetail);
 $('detail-modal').addEventListener('click', e => { if (e.target === $('detail-modal')) closeDetail(); });
@@ -3054,6 +3069,8 @@ async function loadTSDetail(userId, offset) {
         <td>${statusBadge}</td>
       </tr>`;
     }
+    const ticketId = day.source === 'ticket' && day.entries && day.entries[0] ? day.entries[0].ticket_id : null;
+    const viewBtn = ticketId ? `<button onclick="openDetailFromTS(${ticketId})" style="margin-top:4px;padding:2px 8px;font-size:11px;background:transparent;border:1px solid var(--gray-300);border-radius:5px;cursor:pointer;color:var(--gray-600);">View Ticket →</button>` : '';
     return `<tr style="${rowBg}">
       <td>${day.date}</td><td>${day.dow}</td>
       <td style="font-size:12px;" colspan="2">
@@ -3061,6 +3078,7 @@ async function loadTSDetail(userId, offset) {
         ${day.job_number?`<span style="color:var(--gray-500);"> · #${esc(day.job_number)}</span>`:''}
         ${day.ticket_numbers?`<span style="color:var(--gray-400);font-size:11px;"> · ${esc(day.ticket_numbers)}</span>`:''}
         ${day.project_name?`<br><span style="color:var(--gray-500);font-size:11px;">Project: ${esc(day.project_name)}</span>`:''}
+        ${viewBtn}
       </td>
       <td style="font-size:12px;color:var(--gray-500);">${esc(day.level||'')}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
