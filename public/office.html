@@ -3054,19 +3054,6 @@ async function loadTSDetail(userId, offset) {
 
   const editing = $('ts-day-tbody').dataset.editing === '1';
   $('ts-day-tbody').innerHTML = d.days.map(day => {
-    // ── Duplicate day ──
-    if (day.approval_status === 'duplicate') {
-      return `<tr style="background:#fef9c3;border-left:4px solid #f59e0b;">
-        <td>${day.date}</td><td>${day.dow}</td>
-        <td colspan="2" style="color:#92400e;font-weight:700;">⚠ Duplicate — Review Required</td>
-        <td></td>
-        <td style="text-align:center;color:#92400e;font-weight:700;">—</td>
-        <td style="text-align:center;color:#92400e;font-weight:700;">—</td>
-        <td style="text-align:center;color:#92400e;font-weight:700;">—</td>
-        <td><span class="spill" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fbbf24;">Duplicate</span>
-          ${day.ticket_numbers ? `<div style="font-size:10px;color:#92400e;margin-top:2px;">Tickets: ${esc(day.ticket_numbers)}</div>` : ''}</td>
-      </tr>`;
-    }
     // ── Time Off day ──
     if (day.source === 'time_off' || day.approval_status === 'time_off') {
       return `<tr style="background:linear-gradient(90deg,#f3e8ff 0%,transparent 80%);border-left:4px solid #7c3aed;">
@@ -3092,6 +3079,7 @@ async function loadTSDetail(userId, offset) {
           ? `<span class="spill spill-reviewed" style="font-size:10px;">Edited</span>`
           : '';
     const editedStamp = day.edited_by_name ? `<div style="font-size:10px;color:#888;margin-top:2px;">Edited by ${esc(day.edited_by_name)}</div>` : day.updated_at && isEntered ? `<div style="font-size:10px;color:#888;margin-top:2px;">Updated ${fmtDateTime(day.updated_at)}</div>` : '';
+    const dupBadge = day.has_duplicate ? `<div style="margin-top:3px;"><span style="font-size:10px;background:#fef9c3;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 5px;">⚠ Review</span></div>` : '';
 
     const travelHrs = day.travel_hours || 0;
     if (editing && tsHasEditAccess) {
@@ -3119,7 +3107,7 @@ async function loadTSDetail(userId, offset) {
       <td style="text-align:center;${hrsColor}">${hasHrs?day.regular_hours.toFixed(1):'—'}</td>
       <td style="text-align:center;${hrsColor}">${hasHrs?day.overtime_hours.toFixed(1):'—'}</td>
       <td style="text-align:center;${hrsColor}">${travelHrs>0?travelHrs.toFixed(1):'—'}</td>
-      <td>${statusBadge}${editedStamp}</td>
+      <td>${statusBadge}${editedStamp}${dupBadge}</td>
     </tr>`;
   }).join('');
 }

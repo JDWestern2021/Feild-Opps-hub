@@ -1163,21 +1163,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
         ticket_numbers: entries.map(e=>e.ticket_number).join(', '),
         edited_by_name: override.edited_by_name, edited_at: override.created_at, entries });
     } else if (entries.length > 0) {
-      // ── Duplicate detection: multiple tickets for same employee on same day ──
-      const ticketIds = [...new Set(entries.map(e => e.ticket_id))];
-      const isDuplicate = ticketIds.length > 1 && entries.some(e => e.has_duplicate);
-      if (isDuplicate) {
-        // Hours are excluded from totals until one ticket is archived
-        days.push({ date: dateStr, dow,
-          regular_hours: 0, overtime_hours: 0, travel_hours: 0, total_hours: 0,
-          approval_status: 'duplicate', source: 'duplicate',
-          ticket_numbers: entries.map(e=>e.ticket_number).join(', '),
-          job_name: entries.map(e=>e.job_name||'').filter(Boolean).join(' / '),
-          job_number: '', project_name: '', level: entries[0].level,
-          supervisor: entries[0].supervisor, entries });
-        continue;
-      }
-      // Push one row per ticket so mixed-status days show correctly
+      // Push one row per ticket — hours always count, duplicate flag is informational only
       entries.forEach(e => {
         const reg    = parseFloat(e.regular_hours)  || 0;
         const ot     = parseFloat(e.overtime_hours) || 0;
@@ -1189,6 +1175,7 @@ async function buildTimesheet(userId, periodStart, periodEnd) {
           regular_hours: reg, overtime_hours: ot, travel_hours: travel,
           total_hours: reg + ot + travel,
           approval_status: isEntered ? 'entered' : 'pending', source: 'ticket',
+          has_duplicate: e.has_duplicate || 0,
           job_number:   e.job_number   || '',
           job_name:     e.job_name     || '',
           project_name: e.project_name || '',
