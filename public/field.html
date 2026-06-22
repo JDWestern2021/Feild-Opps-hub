@@ -280,10 +280,7 @@
       <div class="form-section">
         <div class="section-label">Work Details</div>
         <div class="form-group">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-            <label class="form-label" for="work_description" style="margin-bottom:0;">Work Description / Scope Performed <span class="required">*</span></label>
-            <button type="button" id="copy-work-desc" onclick="copyWorkDescription()" style="padding:3px 10px;font-size:12px;background:transparent;border:1px solid var(--gray-300);border-radius:5px;cursor:pointer;color:var(--gray-600);">Copy</button>
-          </div>
+          <label class="form-label" for="work_description">Work Description / Scope Performed <span class="required">*</span></label>
           <textarea id="work_description" name="work_description" class="form-control" rows="4" placeholder="Describe the work completed today — tasks, areas, scope..." required></textarea>
           <span class="form-error" id="err-work">Required</span>
         </div>
@@ -430,18 +427,6 @@
     t.textContent = msg;
     t.className = `show ${type}`;
     setTimeout(() => t.className = '', 3200);
-  }
-
-  function copyWorkDescription() {
-    const text = $('work_description').value.trim();
-    if (!text) { showToast('Nothing to copy — write your work description first.', ''); return; }
-    navigator.clipboard.writeText(text).then(() => {
-      const btn = $('copy-work-desc');
-      btn.textContent = 'Copied!';
-      btn.style.color = '#15803d';
-      btn.style.borderColor = '#15803d';
-      setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
-    });
   }
 
   // ── Set today's date ──
