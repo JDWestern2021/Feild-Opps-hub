@@ -1191,12 +1191,35 @@ function showToast(msg, type = '') {
 }
 
 function copyTicketWorkDesc(btn, text) {
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = 'Copied!';
-    btn.style.color = '#15803d';
+  const doConfirm = () => {
+    btn.textContent = '✓ Copied!';
+    btn.style.color = '#fff';
+    btn.style.background = '#15803d';
     btn.style.borderColor = '#15803d';
-    setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
-  });
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.style.color = '';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+    }, 2500);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(doConfirm).catch(() => fallbackCopy(btn, text, doConfirm));
+  } else {
+    fallbackCopy(btn, text, doConfirm);
+  }
+}
+
+function fallbackCopy(btn, text, doConfirm) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  doConfirm();
 }
 
 // ── Stats ──
