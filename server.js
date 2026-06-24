@@ -1,10 +1,12 @@
 require('dotenv').config(); // load .env in development
-const express  = require('express');
-const path     = require('path');
-const crypto   = require('crypto');
-const XLSX     = require('xlsx');
-const multer   = require('multer');
+const express    = require('express');
+const path       = require('path');
+const crypto     = require('crypto');
+const XLSX       = require('xlsx');
+const multer     = require('multer');
 const nodemailer = require('nodemailer');
+const helmet     = require('helmet');
+const rateLimit  = require('express-rate-limit');
 const { pool, connectWithRetry, initSchema } = require('./db');
 const { sessionMiddleware, requireAuth, requireAdmin, requirePermission, logAction, hashPassword, checkPassword, ensureDefaultAdmin } = require('./auth');
 
@@ -104,6 +106,29 @@ function logPOAction(req, poId, poNumber, action, details = null) {
   ).catch(err => console.error('PO audit error:', err.message));
 }
 
+// ── Security middleware ──────────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // disabled — inline scripts in HTML files would break
+}));
+
+// Rate limit login: max 10 attempts per 15 minutes per IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limit password reset: max 5 requests per hour per IP
+const resetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many password reset requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ─────────────────────────────────────────────
 // PUBLIC ROUTES
 // ─────────────────────────────────────────────
@@ -128,7 +153,7 @@ app.get('/api/auth/setup-needed', async (req, res) => {
   res.json({ needed: parseInt(rows[0].c) === 0 });
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   const { rows } = await pool.query('SELECT * FROM users WHERE LOWER(email)=$1', [email.toLowerCase().trim()]);
@@ -199,7 +224,7 @@ app.get('/api/auth/reset/:token', async (req, res) => {
   res.json(rows[0]);
 });
 
-app.post('/api/auth/reset/:token', async (req, res) => {
+app.post('/api/auth/reset/:token', resetLimiter, async (req, res) => {
   const { password } = req.body;
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   const { rows } = await pool.query(
@@ -1394,31 +1419,6 @@ app.get('/api/timesheets/export/all', requireAdmin, async (req, res) => {
   res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition',`attachment; filename="${fn}"`);
   res.send(buf);
-});
-
-// ── Admin: get one employee's full timesheet ──
-// Temporary diagnostic — list all users
-app.get('/api/debug/users', requireAdmin, async (req, res) => {
-  const { rows } = await pool.query("SELECT id, name, role, status FROM users ORDER BY name");
-  res.json(rows);
-});
-
-// Temporary diagnostic — shows raw ticket_employees rows for a user
-app.get('/api/debug/ts/:userId', requireAdmin, async (req, res) => {
-  const uid = parseInt(req.params.userId);
-  const { rows: user } = await pool.query('SELECT id, name FROM users WHERE id=$1', [uid]);
-  const { rows: teRows } = await pool.query(
-    `SELECT te.id, te.ticket_id, te.employee_name, te.user_id, te.regular_hours, te.overtime_hours,
-            t.date, t.ticket_status, t.ticket_number
-     FROM ticket_employees te
-     JOIN daily_tickets t ON t.id = te.ticket_id
-     WHERE te.user_id=$1 OR LOWER(TRIM(te.employee_name))=LOWER(TRIM($2))
-     ORDER BY t.date`, [uid, user[0]?.name || '']);
-  const { rows: nameRows } = await pool.query(
-    `SELECT DISTINCT te.employee_name, te.user_id, COUNT(*) as cnt
-     FROM ticket_employees te WHERE LOWER(TRIM(te.employee_name)) LIKE LOWER($1)
-     GROUP BY te.employee_name, te.user_id`, [`%${(user[0]?.name||'').split(' ')[0]}%`]);
-  res.json({ user: user[0], matched_rows: teRows, name_variants: nameRows });
 });
 
 app.get('/api/timesheets/:userId', requireAdmin, async (req, res) => {

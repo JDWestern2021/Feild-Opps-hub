@@ -14,7 +14,7 @@ function sessionMiddleware() {
     secret: process.env.SESSION_SECRET || 'jdw-field-ops-fallback-secret',
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 },
+    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000, secure: process.env.NODE_ENV === 'production' },
   });
 }
 
