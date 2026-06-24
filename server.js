@@ -2285,8 +2285,13 @@ app.get('/api/safety/:id', requireAuth, async (req, res) => {
 // Archive a safety form globally (admin only)
 app.patch('/api/safety/:id/archive', requireAdmin, async (req, res) => {
   try {
-    await pool.query('UPDATE safety_forms SET archived=1, archived_at=$1 WHERE id=$2',
-      [new Date().toISOString(), parseInt(req.params.id)]);
+    const { unarchive } = req.body || {};
+    if (unarchive) {
+      await pool.query('UPDATE safety_forms SET archived=0, archived_at=NULL WHERE id=$1', [parseInt(req.params.id)]);
+    } else {
+      await pool.query('UPDATE safety_forms SET archived=1, archived_at=$1 WHERE id=$2',
+        [new Date().toISOString(), parseInt(req.params.id)]);
+    }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2297,6 +2302,39 @@ app.patch('/api/safety/:id/project-archive', requireAdmin, async (req, res) => {
     const { archive } = req.body;
     await pool.query('UPDATE safety_forms SET project_archived=$1 WHERE id=$2',
       [archive ? 1 : 0, parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk-archive safety forms — must be before /:id route (admin only)
+app.post('/api/safety/bulk-archive', requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids required' });
+    const safe = ids.map(Number).filter(n => n > 0);
+    await pool.query(
+      `UPDATE safety_forms SET archived=1, archived_at=$1 WHERE id = ANY($2::int[])`,
+      [new Date().toISOString(), safe]
+    );
+    res.json({ ok: true, count: safe.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk-delete safety forms — must be before /:id route (admin only)
+app.delete('/api/safety/bulk-delete', requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids required' });
+    const safe = ids.map(Number).filter(n => n > 0);
+    await pool.query('DELETE FROM safety_forms WHERE id = ANY($1::int[])', [safe]);
+    res.json({ ok: true, count: safe.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Hard-delete a single safety form (admin only)
+app.delete('/api/safety/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM safety_forms WHERE id=$1', [parseInt(req.params.id)]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
