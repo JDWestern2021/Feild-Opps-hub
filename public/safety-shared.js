@@ -765,7 +765,6 @@
     { key: 'hazard',  label: 'Hazard',          type: 'text' },
     { key: 'risk',    label: 'Risk Level',       type: 'select', options: ['Low', 'Medium', 'High', 'Critical'] },
     { key: 'control', label: 'Control Measure',  type: 'text' },
-    { key: 'person',  label: 'Responsible',      type: 'text' },
   ];
   S.renderHazardRepeater = function ({ container, value = [], onChange }) {
     return S.renderRepeater({ container, id: 'hazards', cols: S.HAZARD_COLS, addLabel: 'Add Hazard', value, onChange, minRows: 1 });
@@ -1008,7 +1007,16 @@
     const url    = existing_id ? `/api/safety/${existing_id}` : '/api/safety';
     const method = existing_id ? 'PATCH' : 'POST';
     const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'Submission failed'); }
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      let msg = 'Submission failed';
+      try { msg = JSON.parse(text).error || msg; } catch {}
+      if (r.status === 413) msg = 'Form is too large to submit (too many photos/signatures). Try reducing photo count.';
+      if (r.status === 401) msg = 'You are not logged in. Please refresh the page and log in again.';
+      if (r.status === 403) msg = 'You do not have permission to submit this form.';
+      if (r.status === 400) msg = msg || 'Missing required field — check date and form type.';
+      throw new Error(`${msg} (HTTP ${r.status})`);
+    }
     return await r.json();
   };
 
