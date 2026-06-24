@@ -56,7 +56,7 @@
     _setup() {
       const c = this.canvas;
       this.ctx.strokeStyle = '#111827';
-      this.ctx.lineWidth   = 2.5;
+      this.ctx.lineWidth   = 2;
       this.ctx.lineCap     = 'round';
       this.ctx.lineJoin    = 'round';
       c.addEventListener('pointerdown', e => {
@@ -87,8 +87,12 @@
       );
     }
     _pt(e) {
+      // No ctx.scale applied — canvas buffer matches CSS size 1:1
+      // scaleX/Y handles any sub-pixel rounding discrepancy
       const r = this.canvas.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
+      const scaleX = this.canvas.width  / r.width;
+      const scaleY = this.canvas.height / r.height;
+      return { x: (e.clientX - r.left) * scaleX, y: (e.clientY - r.top) * scaleY };
     }
     clear() {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -152,10 +156,12 @@
 
   function _initSigCanvas() {
     const canvas = document.getElementById('sf-sig-canvas');
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width  = Math.round(canvas.offsetWidth  * dpr) || 800;
-    canvas.height = Math.round(canvas.offsetHeight * dpr) || 240;
-    canvas.getContext('2d').scale(dpr, dpr);
+    if (!canvas) return;
+    // Use getBoundingClientRect for accurate CSS size after layout —
+    // no DPR scaling so canvas pixels = CSS pixels, eliminating coordinate offset bugs on mobile
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = Math.round(rect.width)  || 480;
+    canvas.height = Math.round(rect.height) || 200;
     _sigPad = new SignaturePad(canvas);
   }
 
@@ -174,7 +180,8 @@
     }
     const ov = document.getElementById('sf-sig-overlay');
     ov.style.display = 'flex';
-    setTimeout(_initSigCanvas, 120);
+    // Two rAF calls ensure the browser has painted the modal before measuring canvas size
+    requestAnimationFrame(() => requestAnimationFrame(_initSigCanvas));
     return new Promise(res => { _sigResolve = res; });
   };
 
