@@ -412,15 +412,46 @@
         <option value="Submitted">Submitted</option>
       </select>
     </div>
+    <!-- Bulk action bar -->
+    <div id="sf-bulk-bar" style="display:none;align-items:center;gap:10px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:8px 14px;margin-bottom:10px;flex-wrap:wrap;">
+      <span id="sf-bulk-count" style="font-size:13px;font-weight:700;color:#92400e;"></span>
+      <button class="btn btn-secondary btn-sm" id="sf-bulk-archive-btn" style="font-size:12px;">📦 Archive Selected</button>
+      <button class="btn btn-sm" id="sf-bulk-delete-btn" style="font-size:12px;background:#dc2626;color:#fff;border:none;">🗑 Delete Selected</button>
+      <button class="btn btn-secondary btn-sm" id="sf-bulk-deselect-btn" style="font-size:12px;margin-left:auto;">✕ Deselect All</button>
+    </div>
     <div class="sf-table-wrap">
       <table class="sf-table">
         <thead>
-          <tr><th>Form #</th><th>Type</th><th>Submitted By</th><th>Date</th><th>Project</th><th>Status</th><th>Flags</th><th></th></tr>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" id="sf-select-all" title="Select all"></th>
+            <th>Form #</th><th>Type</th><th>Submitted By</th><th>Date</th><th>Project</th><th>Status</th><th>Flags</th><th></th>
+          </tr>
         </thead>
         <tbody id="sf-admin-tbody">
-          <tr><td colspan="8" class="sf-empty">Loading…</td></tr>
+          <tr><td colspan="9" class="sf-empty">Loading…</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Archived Safety Forms section -->
+    <div style="margin-top:28px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <div class="sf-section-heading" style="margin:0;">Archived Safety Forms</div>
+        <button class="btn btn-secondary btn-sm" id="sf-archived-toggle" style="font-size:12px;">Show ▾</button>
+        <button class="btn btn-secondary btn-sm" id="sf-archived-refresh" style="font-size:12px;display:none;">↻</button>
+      </div>
+      <div id="sf-archived-panel" style="display:none;">
+        <div class="sf-table-wrap">
+          <table class="sf-table">
+            <thead>
+              <tr><th>Form #</th><th>Type</th><th>Submitted By</th><th>Date</th><th>Project</th><th>Archived</th><th></th></tr>
+            </thead>
+            <tbody id="sf-archived-tbody">
+              <tr><td colspan="7" class="sf-empty">Click "Show" to load archived forms.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div class="sf-section-heading" style="margin-top:28px;">Fleet Vehicles</div>
@@ -1015,9 +1046,10 @@
     if (search) rows = rows.filter(r => (r.form_number || '').toLowerCase().includes(search) || (r.submitted_by || '').toLowerCase().includes(search) || (r.project_name || '').toLowerCase().includes(search));
     if (typeF) rows = rows.filter(r => r.form_type === typeF);
     if (statF) rows = rows.filter(r => r.status === statF);
-    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="sf-empty">No forms found</td></tr>'; return; }
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9" class="sf-empty">No forms found</td></tr>'; return; }
     tbody.innerHTML = rows.map(r => `
       <tr>
+        <td><input type="checkbox" class="sf-row-chk" data-id="${r.id}" onchange="sfUpdateBulkBar()"></td>
         <td style="font-size:.8rem;">${r.form_number || '—'}</td>
         <td>${Safety.formIcon(r.form_type)} ${Safety.formShort(r.form_type)}</td>
         <td>${r.submitted_by}</td>
@@ -1025,9 +1057,167 @@
         <td style="font-size:.8rem;">${r.project_name || '—'}</td>
         <td><span class="sf-chip ${r.status === 'Draft' ? 'sf-chip-draft' : 'sf-chip-submitted'}">${r.status}</span></td>
         <td style="font-size:.8rem;">${r.psi_flag ? '🔴 PSI' : ''}${r.wcb_flag ? '⚠️ WCB' : ''}</td>
-        <td>${Safety.formUrl(r.form_type) ? `<a href="${Safety.formUrl(r.form_type)}?id=${r.id}" class="sf-link-btn">View</a>` : ''}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${Safety.formUrl(r.form_type) ? `<a href="${Safety.formUrl(r.form_type)}?id=${r.id}" class="sf-link-btn">View</a>` : ''}
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="sfAdminArchiveOne(${r.id})">📦</button>
+          <button class="btn btn-sm" style="font-size:11px;background:#dc2626;color:#fff;border:none;" onclick="sfAdminDeleteOne(${r.id})">🗑</button>
+        </td>
+      </tr>`).join('');
+    sfUpdateBulkBar();
+  }
+
+  // ── Bulk select helpers ──────────────────────────────────────
+  function sfGetCheckedIds() {
+    return [...document.querySelectorAll('.sf-row-chk:checked')].map(el => parseInt(el.dataset.id));
+  }
+
+  window.sfUpdateBulkBar = function() {
+    const ids = sfGetCheckedIds();
+    const bar = document.getElementById('sf-bulk-bar');
+    if (!bar) return;
+    if (ids.length) {
+      bar.style.display = 'flex';
+      document.getElementById('sf-bulk-count').textContent = `${ids.length} form${ids.length > 1 ? 's' : ''} selected`;
+    } else {
+      bar.style.display = 'none';
+    }
+    const all = document.querySelectorAll('.sf-row-chk');
+    const selAll = document.getElementById('sf-select-all');
+    if (selAll) selAll.indeterminate = ids.length > 0 && ids.length < all.length;
+    if (selAll) selAll.checked = all.length > 0 && ids.length === all.length;
+  };
+
+  document.getElementById('sf-select-all').addEventListener('change', function() {
+    document.querySelectorAll('.sf-row-chk').forEach(el => el.checked = this.checked);
+    sfUpdateBulkBar();
+  });
+
+  document.getElementById('sf-bulk-deselect-btn').addEventListener('click', function() {
+    document.querySelectorAll('.sf-row-chk').forEach(el => el.checked = false);
+    const selAll = document.getElementById('sf-select-all');
+    if (selAll) { selAll.checked = false; selAll.indeterminate = false; }
+    sfUpdateBulkBar();
+  });
+
+  document.getElementById('sf-bulk-archive-btn').addEventListener('click', async function() {
+    const ids = sfGetCheckedIds();
+    if (!ids.length) return;
+    if (!confirm(`Archive ${ids.length} form${ids.length > 1 ? 's' : ''}? They will be removed from the main dashboard.`)) return;
+    try {
+      const r = await fetch('/api/safety/bulk-archive', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ids }) });
+      if (!r.ok) throw new Error(await r.text());
+      _adminForms = _adminForms.filter(f => !ids.includes(f.id));
+      renderAdminForms();
+      Safety.toast(`${ids.length} form${ids.length > 1 ? 's' : ''} archived.`,'success');
+    } catch(e) { Safety.toast('Archive failed: ' + e.message,'error'); }
+  });
+
+  document.getElementById('sf-bulk-delete-btn').addEventListener('click', async function() {
+    const ids = sfGetCheckedIds();
+    if (!ids.length) return;
+    if (!confirm(`Permanently delete ${ids.length} form${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    try {
+      const r = await fetch('/api/safety/bulk-delete', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ids }) });
+      if (!r.ok) throw new Error(await r.text());
+      _adminForms = _adminForms.filter(f => !ids.includes(f.id));
+      renderAdminForms();
+      Safety.toast(`${ids.length} form${ids.length > 1 ? 's' : ''} deleted.`,'success');
+    } catch(e) { Safety.toast('Delete failed: ' + e.message,'error'); }
+  });
+
+  // ── Individual archive / delete ──────────────────────────────
+  window.sfAdminArchiveOne = async function(id) {
+    if (!confirm('Archive this form? It will be removed from the main dashboard and visible in the Archived section below.')) return;
+    try {
+      const r = await fetch(`/api/safety/${id}/archive`, { method:'PATCH', headers:{'Content-Type':'application/json'} });
+      if (!r.ok) throw new Error(await r.text());
+      _adminForms = _adminForms.filter(f => f.id !== id);
+      renderAdminForms();
+      Safety.toast('Form archived.','success');
+    } catch(e) { Safety.toast('Archive failed: ' + e.message,'error'); }
+  };
+
+  window.sfAdminDeleteOne = async function(id) {
+    if (!confirm('Permanently delete this form? This cannot be undone.')) return;
+    try {
+      const r = await fetch(`/api/safety/${id}`, { method:'DELETE' });
+      if (!r.ok) throw new Error(await r.text());
+      _adminForms = _adminForms.filter(f => f.id !== id);
+      renderAdminForms();
+      Safety.toast('Form deleted.','success');
+    } catch(e) { Safety.toast('Delete failed: ' + e.message,'error'); }
+  };
+
+  // ── Archived forms section ───────────────────────────────────
+  let _sfArchivedForms = [], _sfArchivedLoaded = false;
+
+  async function sfLoadArchivedForms() {
+    const tbody = document.getElementById('sf-archived-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" class="sf-empty">Loading…</td></tr>';
+    try {
+      const r = await fetch('/api/safety/archived');
+      if (!r.ok) throw new Error('Server returned ' + r.status);
+      _sfArchivedForms = await r.json();
+      sfRenderArchivedForms();
+      _sfArchivedLoaded = true;
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="7" class="sf-empty" style="color:#dc2626;">Failed: ${_sfEsc(e.message)}</td></tr>`; }
+  }
+
+  function sfRenderArchivedForms() {
+    const tbody = document.getElementById('sf-archived-tbody');
+    if (!tbody) return;
+    if (!_sfArchivedForms.length) { tbody.innerHTML = '<tr><td colspan="7" class="sf-empty">No archived forms.</td></tr>'; return; }
+    tbody.innerHTML = _sfArchivedForms.map(r => `
+      <tr>
+        <td style="font-size:.8rem;">${_sfEsc(r.form_number || '—')}</td>
+        <td>${Safety.formIcon(r.form_type)} ${Safety.formShort(r.form_type)}</td>
+        <td>${_sfEsc(r.submitted_by)}</td>
+        <td>${Safety.fmtDate(r.date)}</td>
+        <td style="font-size:.8rem;">${_sfEsc(r.project_name || '—')}</td>
+        <td style="font-size:.75rem;color:#6b7280;">${r.archived_at ? Safety.fmtDate(r.archived_at.slice(0,10)) : '—'}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${Safety.formUrl(r.form_type) ? `<a href="${Safety.formUrl(r.form_type)}?id=${r.id}" class="sf-link-btn">View</a>` : ''}
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="sfAdminUnarchiveOne(${r.id})">↩ Restore</button>
+          <button class="btn btn-sm" style="font-size:11px;background:#dc2626;color:#fff;border:none;" onclick="sfAdminDeleteArchived(${r.id})">🗑</button>
+        </td>
       </tr>`).join('');
   }
+
+  window.sfAdminUnarchiveOne = async function(id) {
+    if (!confirm('Restore this form to the main submissions list?')) return;
+    try {
+      const r = await fetch(`/api/safety/${id}/archive`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ unarchive: true }) });
+      if (!r.ok) throw new Error(await r.text());
+      _sfArchivedForms = _sfArchivedForms.filter(f => f.id !== id);
+      sfRenderArchivedForms();
+      Safety.toast('Form restored to active submissions.','success');
+      // reload active list so it appears there too
+      loadAdminData();
+    } catch(e) { Safety.toast('Restore failed: ' + e.message,'error'); }
+  };
+
+  window.sfAdminDeleteArchived = async function(id) {
+    if (!confirm('Permanently delete this archived form?')) return;
+    try {
+      const r = await fetch(`/api/safety/${id}`, { method:'DELETE' });
+      if (!r.ok) throw new Error(await r.text());
+      _sfArchivedForms = _sfArchivedForms.filter(f => f.id !== id);
+      sfRenderArchivedForms();
+      Safety.toast('Form deleted.','success');
+    } catch(e) { Safety.toast('Delete failed: ' + e.message,'error'); }
+  };
+
+  const sfArchivedToggle = document.getElementById('sf-archived-toggle');
+  const sfArchivedRefresh = document.getElementById('sf-archived-refresh');
+  const sfArchivedPanel = document.getElementById('sf-archived-panel');
+  sfArchivedToggle.addEventListener('click', function() {
+    const open = sfArchivedPanel.style.display !== 'none';
+    sfArchivedPanel.style.display = open ? 'none' : 'block';
+    sfArchivedRefresh.style.display = open ? 'none' : 'inline-block';
+    sfArchivedToggle.textContent = open ? 'Show ▾' : 'Hide ▴';
+    if (!open && !_sfArchivedLoaded) sfLoadArchivedForms();
+  });
+  sfArchivedRefresh.addEventListener('click', sfLoadArchivedForms);
 
   document.getElementById('sf-admin-search').addEventListener('input', renderAdminForms);
   document.getElementById('sf-admin-type').addEventListener('change', renderAdminForms);
