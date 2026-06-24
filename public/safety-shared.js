@@ -87,9 +87,8 @@
       );
     }
     _pt(e) {
-      const r     = this.canvas.getBoundingClientRect();
-      const scale = this.canvas.width / r.width;
-      return { x: (e.clientX - r.left) * scale, y: (e.clientY - r.top) * scale };
+      const r = this.canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
     }
     clear() {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -175,7 +174,7 @@
     }
     const ov = document.getElementById('sf-sig-overlay');
     ov.style.display = 'flex';
-    setTimeout(_initSigCanvas, 60);
+    setTimeout(_initSigCanvas, 120);
     return new Promise(res => { _sigResolve = res; });
   };
 
