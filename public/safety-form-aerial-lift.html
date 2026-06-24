@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Aerial / EWP Pre-Use Inspection — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    .fp-header { background:#111827; color:#fff; position:sticky; top:0; z-index:100; }
+    .fp-header-inner { max-width:680px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+    .fp-back { color:rgba(255,255,255,.6); text-decoration:none; font-size:.85rem; padding:6px 10px; border:1px solid rgba(255,255,255,.15); border-radius:6px; white-space:nowrap; flex-shrink:0; }
+    .fp-header h1 { font-size:1rem; font-weight:800; margin:0; flex:1; }
+    .fp-header-sub { font-size:.72rem; color:rgba(255,255,255,.4); }
+    .fp-form-num { font-size:.72rem; background:rgba(244,121,32,.25); color:#F47920; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .fp-draft-bar { background:#f9fafb; border-bottom:1px solid #e5e7eb; padding:6px 16px; font-size:.75rem; color:#9ca3af; text-align:center; }
+
+    .fp-body { max-width:680px; margin:0 auto; padding:16px 16px 100px; }
+
+    .fp-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+    .fp-card-header { background:#f3f4f6; border-bottom:1px solid #e5e7eb; padding:11px 16px; font-weight:700; font-size:.88rem; color:#111827; display:flex; align-items:center; gap:8px; }
+    .fp-card-body { padding:16px; }
+
+    .fp-field { margin-bottom:14px; }
+    .fp-field:last-child { margin-bottom:0; }
+    .fp-label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fp-req { color:#ef4444; }
+    .fp-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media(max-width:480px){ .fp-grid-2{ grid-template-columns:1fr; } }
+
+    /* Yes/No toggles */
+    .defect-flag-row { display:flex; gap:10px; }
+    .defect-flag-btn {
+      flex:1; padding:14px 10px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.9rem; font-weight:700; cursor:pointer;
+      transition:all .15s; min-height:50px; text-align:center;
+    }
+    .defect-flag-btn.active-yes { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+    .defect-flag-btn.active-no  { background:#dcfce7; border-color:#16a34a; color:#166534; }
+
+    /* Site condition toggles */
+    .site-cond-row { margin-bottom:14px; }
+    .site-cond-row:last-child { margin-bottom:0; }
+    .site-cond-label { font-size:.82rem; font-weight:600; color:#374151; margin-bottom:6px; }
+    .site-cond-btns { display:flex; gap:10px; }
+    .site-cond-btn {
+      flex:1; padding:12px 10px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.88rem; font-weight:700; cursor:pointer;
+      transition:all .15s; min-height:46px; text-align:center;
+    }
+    .site-cond-btn.active-yes { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .site-cond-btn.active-no  { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+
+    /* Overall result */
+    .fp-result-row { display:flex; flex-direction:column; gap:10px; }
+    .fp-result-btn {
+      padding:14px 16px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.9rem; font-weight:700; cursor:pointer;
+      transition:all .15s; text-align:left;
+    }
+    .fp-result-btn:hover { border-color:#9ca3af; }
+    .fp-result-btn.active-pass    { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .fp-result-btn.active-repair  { background:#fff7ed; border-color:#d97706; color:#92400e; }
+    .fp-result-btn.active-replace { background:#fef9c3; border-color:#ca8a04; color:#713f12; }
+    .fp-result-btn.active-oos     { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+
+    .fp-oos-warning { display:none; background:#fef2f2; border:2px solid #dc2626; border-radius:8px; padding:14px 16px; margin-top:12px; color:#991b1b; font-weight:600; font-size:.9rem; }
+    .fp-oos-warning.visible { display:block; }
+
+    .fp-submit-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:12px 16px; display:flex; gap:10px; align-items:center; z-index:100; box-shadow:0 -2px 10px rgba(0,0,0,.08); }
+    .fp-draft-status { font-size:.75rem; color:#9ca3af; flex:1; }
+  </style>
+</head>
+<body>
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<div class="fp-header">
+  <div class="fp-header-inner">
+    <a href="safety.html" class="fp-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Aerial / EWP Pre-Use Inspection</h1>
+      <div class="fp-header-sub">Aerial Work Platform Pre-Use Inspection</div>
+    </div>
+    <div class="fp-form-num" id="form-num-badge" style="display:none;"></div>
+  </div>
+</div>
+<div class="fp-draft-bar" id="draft-bar">Fill out all sections, then submit or save a draft.</div>
+
+<div class="fp-body">
+
+  <!-- 1 · Operator & Equipment Info -->
+  <div class="fp-card">
+    <div class="fp-card-header">🏗 Operator &amp; Equipment Info</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Date <span class="fp-req">*</span></label>
+          <input type="date" id="f-date" class="form-control"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Operator Name</label>
+          <input type="text" id="f-operator" class="form-control" readonly style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;"/>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Project</label>
+        <select id="f-project" class="form-control">
+          <option value="">— Select project —</option>
+        </select>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Equipment Type</label>
+          <select id="f-equip-type" class="form-control">
+            <option value="">— Select —</option>
+            <option>Boom Lift</option>
+            <option>Scissor Lift</option>
+            <option>Telescopic Boom</option>
+            <option>Spider Lift</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Make / Model</label>
+          <input type="text" id="f-make-model" class="form-control" placeholder="e.g. JLG 400S"/>
+        </div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Serial / Unit Number</label>
+          <input type="text" id="f-serial" class="form-control" placeholder="Serial or unit #"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Maximum Working Height</label>
+          <input type="text" id="f-max-height" class="form-control" placeholder="e.g. 40 ft"/>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Site Location</label>
+        <div id="geo-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Controls & Electrical -->
+  <div class="fp-card">
+    <div class="fp-card-header">⚡ Pre-Use Check — Controls &amp; Electrical</div>
+    <div class="fp-card-body">
+      <div id="pfna-controls"></div>
+    </div>
+  </div>
+
+  <!-- 3 · Structure & Mechanicals -->
+  <div class="fp-card">
+    <div class="fp-card-header">🔩 Pre-Use Check — Structure &amp; Mechanicals</div>
+    <div class="fp-card-body">
+      <div id="pfna-structure"></div>
+    </div>
+  </div>
+
+  <!-- 4 · Safety Devices -->
+  <div class="fp-card">
+    <div class="fp-card-header">🦺 Pre-Use Check — Safety Devices</div>
+    <div class="fp-card-body">
+      <div id="pfna-safety"></div>
+    </div>
+  </div>
+
+  <!-- 5 · Environment & Site Conditions -->
+  <div class="fp-card">
+    <div class="fp-card-header">🌤 Environment &amp; Site Conditions</div>
+    <div class="fp-card-body">
+
+      <div class="site-cond-row">
+        <div class="site-cond-label">Wind speed acceptable</div>
+        <div class="site-cond-btns" data-cond="wind_ok">
+          <button type="button" class="site-cond-btn" data-val="yes">✓ Yes</button>
+          <button type="button" class="site-cond-btn" data-val="no">✗ No</button>
+        </div>
+      </div>
+
+      <div class="site-cond-row">
+        <div class="site-cond-label">Overhead hazards cleared</div>
+        <div class="site-cond-btns" data-cond="overhead_clear">
+          <button type="button" class="site-cond-btn" data-val="yes">✓ Yes</button>
+          <button type="button" class="site-cond-btn" data-val="no">✗ No</button>
+        </div>
+      </div>
+
+      <div class="site-cond-row">
+        <div class="site-cond-label">Ground condition assessed (level / stable)</div>
+        <div class="site-cond-btns" data-cond="ground_assessed">
+          <button type="button" class="site-cond-btn" data-val="yes">✓ Yes</button>
+          <button type="button" class="site-cond-btn" data-val="no">✗ No</button>
+        </div>
+      </div>
+
+      <div class="site-cond-row">
+        <div class="site-cond-label">Exclusion zone established</div>
+        <div class="site-cond-btns" data-cond="exclusion_zone">
+          <button type="button" class="site-cond-btn" data-val="yes">✓ Yes</button>
+          <button type="button" class="site-cond-btn" data-val="no">✗ No</button>
+        </div>
+      </div>
+
+      <div class="site-cond-row" style="margin-top:16px;">
+        <label class="fp-label">Weather Conditions</label>
+        <input type="text" id="f-weather" class="form-control" placeholder="e.g. Clear, 15°C, calm winds"/>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 6 · Overall Result -->
+  <div class="fp-card">
+    <div class="fp-card-header">✅ Overall Result <span class="fp-req">*</span></div>
+    <div class="fp-card-body">
+      <div class="fp-result-row" id="result-row">
+        <button type="button" class="fp-result-btn" data-val="pass" data-cls="active-pass">✓ Pass — No Defects Found</button>
+        <button type="button" class="fp-result-btn" data-val="repair" data-cls="active-repair">⚠ Defects Corrected — Equipment Passes After Correction</button>
+        <button type="button" class="fp-result-btn" data-val="replace" data-cls="active-replace">🔄 Equipment Replaced — Previous Unit Removed from Service</button>
+        <button type="button" class="fp-result-btn" data-val="oos" data-cls="active-oos">⛔ Out of Service — Do Not Use</button>
+      </div>
+      <div class="fp-oos-warning" id="oos-warning">
+        ⛔ This aerial work platform is Out of Service. Tag it, barricade it, and notify your supervisor immediately. Do not operate until repaired or replaced.
+      </div>
+      <div class="fp-field" style="margin-top:14px;">
+        <label class="fp-label">Comments</label>
+        <textarea id="f-comments" class="form-control" rows="3" placeholder="Describe any defects found, actions taken, or notes…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 · Corrective Actions -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Corrective Actions</div>
+    <div class="fp-card-body">
+      <div id="ca-container"></div>
+    </div>
+  </div>
+
+  <!-- 8 · Operator Sign-Off -->
+  <div class="fp-card">
+    <div class="fp-card-header">✍️ Operator Sign-Off</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">
+        I certify that I have completed this pre-use inspection and the result above accurately reflects the condition of the aerial work platform.
+      </p>
+      <div id="sig-container"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="fp-submit-bar">
+  <span class="fp-draft-status" id="fp-draft-status">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-secondary" id="btn-print" style="display:none;">🖨 Print</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit</button>
+</div>
+
+<div id="print-area"></div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href='/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href='/login.html'; return; }
+
+  const params     = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _autosaveTimer = null;
+  let _resultVal   = null;
+  let _sigField, _geoVal, _pfnaControls, _pfnaStructure, _pfnaSafety, _caRep;
+
+  // ── Site condition state ──────────────────────────────────────
+  const _siteConditions = {
+    wind_ok:       null,
+    overhead_clear: null,
+    ground_assessed: null,
+    exclusion_zone: null,
+  };
+
+  // ── Inspection items ──────────────────────────────────────────
+  const CONTROLS_ITEMS = [
+    { id: 'estop',         label: 'Emergency stop button' },
+    { id: 'ground_ctrl',   label: 'Ground controls functional' },
+    { id: 'platform_ctrl', label: 'Platform controls functional' },
+    { id: 'horn',          label: 'Horn / warning device' },
+    { id: 'lights',        label: 'Lights / strobes' },
+    { id: 'outrigger_ind', label: 'Outrigger / stabilizer indicators' },
+    { id: 'tilt_alarm',    label: 'Tilt alarm / sensors' },
+    { id: 'battery',       label: 'Engine / battery charge adequate' },
+  ];
+  const STRUCTURE_ITEMS = [
+    { id: 'boom_struct',   label: 'Boom / scissor structure (cracks, bends, welds)' },
+    { id: 'platform_rail', label: 'Platform / guardrails secure' },
+    { id: 'gate',          label: 'Entry gate / chain functional' },
+    { id: 'hyd_lines',     label: 'Hydraulic lines (no leaks)' },
+    { id: 'hyd_fluid',     label: 'Hydraulic fluid level' },
+    { id: 'fuel_level',    label: 'Fuel / battery level' },
+    { id: 'tires',         label: 'Tires / tracks / wheels' },
+    { id: 'axle_pins',     label: 'Axle pins and locking devices' },
+  ];
+  const SAFETY_ITEMS = [
+    { id: 'anchor_point',  label: 'Fall arrest anchor point present' },
+    { id: 'lanyard_attach',label: 'Lanyard attachment points' },
+    { id: 'harness_worn',  label: 'Safety harness worn by operator' },
+    { id: 'capacity_plate',label: 'Overload / capacity plate visible and legible' },
+    { id: 'fire_ext',      label: 'Fire extinguisher present (if required)' },
+    { id: 'ground_cond',   label: 'Ground condition assessed (level / stable)' },
+  ];
+
+  function initSections(values = {}) {
+    _pfnaControls  = Safety.renderPassFailSection({ container: document.getElementById('pfna-controls'),  sectionId: 'ctrl', items: CONTROLS_ITEMS,  values: values.controls  || {}, onChange: () => triggerAutosave() });
+    _pfnaStructure = Safety.renderPassFailSection({ container: document.getElementById('pfna-structure'), sectionId: 'str',  items: STRUCTURE_ITEMS, values: values.structure || {}, onChange: () => triggerAutosave() });
+    _pfnaSafety    = Safety.renderPassFailSection({ container: document.getElementById('pfna-safety'),    sectionId: 'saf',  items: SAFETY_ITEMS,    values: values.safety    || {}, onChange: () => triggerAutosave() });
+  }
+  initSections();
+
+  // ── Geo ───────────────────────────────────────────────────────
+  _geoVal = Safety.renderGeoField({ container: document.getElementById('geo-container'), label: '📍 Pin Location', onChange: () => triggerAutosave() });
+
+  // ── Site condition toggles ────────────────────────────────────
+  document.querySelectorAll('.site-cond-btns').forEach(group => {
+    group.addEventListener('click', e => {
+      const btn = e.target.closest('.site-cond-btn');
+      if (!btn) return;
+      const cond = group.dataset.cond;
+      const val  = btn.dataset.val;
+      _siteConditions[cond] = val;
+      group.querySelectorAll('.site-cond-btn').forEach(b => {
+        b.classList.remove('active-yes','active-no');
+      });
+      btn.classList.add(val === 'yes' ? 'active-yes' : 'active-no');
+      triggerAutosave();
+    });
+  });
+
+  function setSiteCond(cond, val) {
+    if (!val) return;
+    _siteConditions[cond] = val;
+    const group = document.querySelector(`.site-cond-btns[data-cond="${cond}"]`);
+    if (!group) return;
+    group.querySelectorAll('.site-cond-btn').forEach(b => {
+      b.classList.remove('active-yes','active-no');
+      if (b.dataset.val === val) b.classList.add(val === 'yes' ? 'active-yes' : 'active-no');
+    });
+  }
+
+  // ── Result buttons ────────────────────────────────────────────
+  document.getElementById('result-row').addEventListener('click', e => {
+    const btn = e.target.closest('.fp-result-btn');
+    if (!btn) return;
+    document.querySelectorAll('.fp-result-btn').forEach(b => b.className = 'fp-result-btn');
+    btn.classList.add(btn.dataset.cls);
+    _resultVal = btn.dataset.val;
+    document.getElementById('oos-warning').classList.toggle('visible', _resultVal === 'oos');
+    triggerAutosave();
+  });
+
+  // ── Corrective actions & signature ────────────────────────────
+  _caRep    = Safety.renderCorrectiveActions({ container: document.getElementById('ca-container'), onChange: () => triggerAutosave() });
+  _sigField = Safety.renderSignatureField({ container: document.getElementById('sig-container'), label: 'Operator Signature', required: true, onChange: () => triggerAutosave() });
+
+  // ── Load projects ─────────────────────────────────────────────
+  try {
+    const r = await fetch('/api/project-folders');
+    if (r.ok) {
+      const ps = await r.json();
+      const sel = document.getElementById('f-project');
+      ps.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + (p.job_numbers ? '  ·  ' + p.job_numbers : '');
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+
+  // ── Defaults ──────────────────────────────────────────────────
+  document.getElementById('f-date').value     = Safety.todayISO();
+  document.getElementById('f-operator').value = currentUser.name;
+
+  // ── Collect / fill ────────────────────────────────────────────
+  function collectFormData() {
+    return {
+      date:             document.getElementById('f-date').value,
+      operator:         document.getElementById('f-operator').value.trim(),
+      project_id:       document.getElementById('f-project').value || null,
+      equip_type:       document.getElementById('f-equip-type').value,
+      make_model:       document.getElementById('f-make-model').value.trim(),
+      serial:           document.getElementById('f-serial').value.trim(),
+      max_height:       document.getElementById('f-max-height').value.trim(),
+      geo:              _geoVal.getValue ? _geoVal.getValue() : null,
+      controls:         _pfnaControls.getValues(),
+      structure:        _pfnaStructure.getValues(),
+      safety:           _pfnaSafety.getValues(),
+      site_conditions:  { ..._siteConditions },
+      weather:          document.getElementById('f-weather').value.trim(),
+      overall_result:   _resultVal,
+      comments:         document.getElementById('f-comments').value.trim(),
+      corrective_actions: _caRep.getValues(),
+      operator_signature: _sigField.getValue(),
+    };
+  }
+
+  function setResultBtn(val) {
+    _resultVal = val;
+    document.querySelectorAll('.fp-result-btn').forEach(b => {
+      b.className = 'fp-result-btn';
+      if (b.dataset.val === val) b.classList.add(b.dataset.cls);
+    });
+    document.getElementById('oos-warning').classList.toggle('visible', val === 'oos');
+  }
+
+  function fillFormData(d) {
+    if (!d) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    set('f-date',       d.date);
+    set('f-operator',   d.operator);
+    set('f-project',    d.project_id);
+    set('f-equip-type', d.equip_type);
+    set('f-make-model', d.make_model);
+    set('f-serial',     d.serial);
+    set('f-max-height', d.max_height);
+    set('f-weather',    d.weather);
+    set('f-comments',   d.comments);
+    if (d.overall_result) setResultBtn(d.overall_result);
+    if (d.site_conditions) {
+      Object.entries(d.site_conditions).forEach(([k, v]) => setSiteCond(k, v));
+    }
+    initSections({ controls: d.controls, structure: d.structure, safety: d.safety });
+    if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
+    if (d.operator_signature) {
+      _sigField = Safety.renderSignatureField({ container: document.getElementById('sig-container'), label: 'Operator Signature', required: true, value: d.operator_signature, onChange: () => triggerAutosave() });
+    }
+  }
+
+  // ── Load existing ─────────────────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const form = await r.json();
+        fillFormData(typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data);
+        document.getElementById('form-num-badge').textContent = form.form_number;
+        document.getElementById('form-num-badge').style.display = '';
+        if (form.status === 'Submitted') {
+          document.getElementById('btn-submit').textContent = '✓ Submitted';
+          document.getElementById('btn-submit').disabled = true;
+          document.getElementById('btn-print').style.display = '';
+        }
+        setDraftStatus('Loaded from server');
+      }
+    } catch {}
+  } else {
+    const draft = Safety.DraftManager.load('aerial_lift', 'new');
+    if (draft) { fillFormData(draft); setDraftStatus('Draft restored · ' + Safety.fmtDT(draft._saved_at)); }
+  }
+
+  // ── Auto-save ─────────────────────────────────────────────────
+  function triggerAutosave() { clearTimeout(_autosaveTimer); _autosaveTimer = setTimeout(autosave, 1500); }
+  function setDraftStatus(msg) { document.getElementById('fp-draft-status').textContent = msg; document.getElementById('draft-bar').textContent = msg; }
+  async function autosave() {
+    Safety.DraftManager.save('aerial_lift', formId || 'new', collectFormData());
+    setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    if (formId && navigator.onLine) {
+      try { await fetch(`/api/safety/${formId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ form_data: collectFormData(), status:'Draft' }) }); } catch {}
+    }
+  }
+  ['f-date','f-operator','f-project','f-equip-type','f-make-model','f-serial','f-max-height','f-weather','f-comments']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+
+  // ── Save Draft ────────────────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('aerial_lift', formId || 'new', data);
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({ form_type:'aerial_lift', form_data:data, project_id:data.project_id, project_name:ps.value?ps.selectedOptions[0]?.text:'', status:'Draft', existing_id:formId });
+      if (result?.id && !formId) { formId=result.id; history.replaceState({},'','?id='+formId); }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved','success');
+    } catch { setDraftStatus('Saved locally'); Safety.toast('Saved locally — will sync when online','warning'); }
+  });
+
+  // ── Submit ────────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+    if (!data.date)     { Safety.toast('Date is required','error'); return; }
+    if (!data.operator) { Safety.toast('Operator name is required','error'); return; }
+    if (!_resultVal)    { Safety.toast('Overall result is required','error'); document.getElementById('result-row').scrollIntoView({behavior:'smooth'}); return; }
+    if (!_sigField.getValue()) { Safety.toast('Operator signature is required','error'); document.getElementById('sig-container').scrollIntoView({behavior:'smooth'}); return; }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent='Submitting…'; btn.disabled=true;
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({ form_type:'aerial_lift', form_data:data, project_id:data.project_id, project_name:ps.value?ps.selectedOptions[0]?.text:'', status:'Submitted', existing_id:formId });
+      if (result?.queued) { Safety.toast('Saved offline — will submit when connected','warning'); btn.textContent='Queued'; btn.disabled=false; return; }
+      if (result?.id) { formId=result.id; history.replaceState({},'','?id='+formId); document.getElementById('form-num-badge').textContent=result.form_number||''; document.getElementById('form-num-badge').style.display=''; }
+      for (const ca of (data.corrective_actions||[]).filter(a=>a.action)) {
+        try { await fetch('/api/corrective-actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_form_type:'aerial_lift',source_form_id:formId,source_form_number:result?.form_number,project_id:data.project_id,action:ca.action,assigned_to_name:ca.assigned_to||null,due_date:ca.due_date||null})}); } catch {}
+      }
+      Safety.DraftManager.remove('aerial_lift','new');
+      btn.textContent='✓ Submitted'; btn.disabled=false;
+      document.getElementById('btn-print').style.display='';
+      setDraftStatus('Submitted · ' + Safety.fmtDT(new Date().toISOString()));
+      Safety.toast('Aerial / EWP Pre-Use Inspection submitted!','success');
+    } catch(e) { btn.textContent='Submit'; btn.disabled=false; Safety.toast('Submission failed: '+e.message,'error'); }
+  });
+
+  // ── Print ─────────────────────────────────────────────────────
+  document.getElementById('btn-print').addEventListener('click', () => {
+    const data = collectFormData();
+    const projectName = document.getElementById('f-project').selectedOptions[0]?.text || '';
+    const resultLabels = { pass:'Pass — No Defects Found', repair:'Defects Corrected', replace:'Equipment Replaced', oos:'Out of Service — Do Not Use' };
+
+    const condLabel = v => v === 'yes' ? '✓ Yes' : v === 'no' ? '✗ No' : '—';
+    const sc = data.site_conditions || {};
+
+    function pfnaTable(values, items) {
+      return `<table style="width:100%;border-collapse:collapse;font-size:8pt;margin-top:4px;">
+        <tr style="background:#f0f0f0;">
+          <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:64%;">Item</th>
+          <th style="padding:4px 6px;text-align:center;border:1px solid #ddd;width:12%;">Pass</th>
+          <th style="padding:4px 6px;text-align:center;border:1px solid #ddd;width:12%;">Fail</th>
+          <th style="padding:4px 6px;text-align:center;border:1px solid #ddd;width:12%;">N/A</th>
+        </tr>
+        ${items.map(item => {
+          const v = (values||{})[item.id] || {};
+          return `<tr>
+            <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(item.label)}${v.state==='fail'&&v.detail?`<br><em style="color:#dc2626;font-size:7pt;">${Safety.esc(v.detail)}</em>`:''}</td>
+            <td style="text-align:center;border:1px solid #ddd;">${v.state==='pass'?'✓':''}</td>
+            <td style="text-align:center;border:1px solid #ddd;">${v.state==='fail'?'✗':''}</td>
+            <td style="text-align:center;border:1px solid #ddd;">${v.state==='na'?'—':''}</td>
+          </tr>`;
+        }).join('')}
+      </table>`;
+    }
+
+    Safety.printForm({
+      title: 'Aerial / EWP Pre-Use Inspection',
+      subtitle: 'Aerial Work Platform Pre-Use Inspection',
+      meta: { form_number: document.getElementById('form-num-badge').textContent, project_name: projectName, date: data.date },
+      sections: [
+        { title: 'Operator & Equipment Info', fields: [
+          { label: 'Date',                   value: Safety.fmtDate(data.date) },
+          { label: 'Operator',               value: data.operator || '—' },
+          { label: 'Project',                value: projectName || '—' },
+          { label: 'Equipment Type',         value: data.equip_type || '—' },
+          { label: 'Make / Model',           value: data.make_model || '—' },
+          { label: 'Serial / Unit #',        value: data.serial || '—' },
+          { label: 'Max Working Height',     value: data.max_height || '—' },
+          { label: 'Site Location',          value: data.geo?.address || '—', wide: true },
+        ]},
+        { title: 'Pre-Use Check — Controls & Electrical', html: pfnaTable(data.controls, CONTROLS_ITEMS) },
+        { title: 'Pre-Use Check — Structure & Mechanicals', html: pfnaTable(data.structure, STRUCTURE_ITEMS) },
+        { title: 'Pre-Use Check — Safety Devices', html: pfnaTable(data.safety, SAFETY_ITEMS) },
+        { title: 'Environment & Site Conditions', fields: [
+          { label: 'Wind speed acceptable',      value: condLabel(sc.wind_ok) },
+          { label: 'Overhead hazards cleared',   value: condLabel(sc.overhead_clear) },
+          { label: 'Ground condition assessed',  value: condLabel(sc.ground_assessed) },
+          { label: 'Exclusion zone established', value: condLabel(sc.exclusion_zone) },
+          { label: 'Weather conditions',         value: data.weather || '—', wide: true },
+        ]},
+        { title: 'Overall Result', fields: [
+          { label: 'Result',   value: resultLabels[data.overall_result] || '—', wide: true },
+          { label: 'Comments', value: data.comments || '—', wide: true },
+        ]},
+        { title: 'Operator Signature', html: data.operator_signature?.data_url
+          ? `<div><img src="${data.operator_signature.data_url}" style="max-height:55px;border-bottom:1px solid #ccc;padding-bottom:4px;"/><div style="font-size:7pt;color:#666;margin-top:3px;">${Safety.esc(data.operator_signature.signer_name)} — ${Safety.fmtDT(data.operator_signature.signed_at)}</div></div>`
+          : '<div style="height:44px;border-bottom:1px solid #999;width:200px;margin-bottom:4px;"></div><div style="font-size:7pt;color:#999;">Signature</div>'
+        },
+      ]
+    });
+  });
+
+  Safety.OfflineQueue._syncBanner();
+})();
+</script>
+</body>
+</html>

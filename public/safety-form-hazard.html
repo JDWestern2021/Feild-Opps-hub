@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Hazard Assessment — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    /* ── Page header ─────────────────────────────────────────── */
+    .flha-header {
+      background: #111827;
+      color: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .flha-header-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .flha-header-back {
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      font-size: 0.85rem;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .flha-header h1 {
+      font-size: 1rem;
+      font-weight: 800;
+      margin: 0;
+      flex: 1;
+    }
+    .flha-header-sub { font-size: 0.72rem; color: rgba(255,255,255,0.4); }
+    .flha-form-num {
+      font-size: 0.72rem;
+      background: rgba(244,121,32,0.25);
+      color: #F47920;
+      padding: 3px 8px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    /* ── Draft save bar ──────────────────────────────────────── */
+    .flha-draft-bar {
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 6px 16px;
+      font-size: 0.75rem;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    /* ── Form body ───────────────────────────────────────────── */
+    .flha-body {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 16px 16px 100px;
+    }
+
+    /* ── Section cards ───────────────────────────────────────── */
+    .sf-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .sf-card-header {
+      background: #f3f4f6;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 11px 16px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sf-card-header-icon { font-size: 1rem; }
+    .sf-card-body { padding: 16px; }
+
+    /* ── Field groups ────────────────────────────────────────── */
+    .sf-field { margin-bottom: 14px; }
+    .sf-field:last-child { margin-bottom: 0; }
+    .sf-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 5px;
+    }
+    .sf-req { color: #ef4444; }
+    .sf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .sf-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    @media (max-width: 540px) {
+      .sf-grid-2, .sf-grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ── PPE checkboxes ──────────────────────────────────────── */
+    .ppe-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+    }
+    .ppe-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all .15s;
+      background: #fff;
+    }
+    .ppe-item input[type=checkbox] { display: none; }
+    .ppe-item.checked { background: #111827; border-color: #111827; color: #fff; }
+    .ppe-icon { font-size: 1.1rem; }
+
+    /* ── Risk badge ──────────────────────────────────────────── */
+    .risk-low      { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size:.75rem; font-weight:700; }
+    .risk-medium   { background: #fef9c3; color: #854d0e; padding: 2px 8px; border-radius: 4px; font-size:.75rem; font-weight:700; }
+    .risk-high     { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size:.75rem; font-weight:700; }
+    .risk-critical { background: #7f1d1d; color: #fff; padding: 2px 8px; border-radius: 4px; font-size:.75rem; font-weight:700; }
+
+    /* ── Worker sign-off rows ────────────────────────────────── */
+    .sf-signoff-list { display: flex; flex-direction: column; gap: 10px; }
+    .sf-signoff-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+    }
+    .sf-signoff-name { font-weight: 600; font-size: 0.9rem; min-width: 120px; flex: 1; }
+    .sf-signoff-preview { flex: 1; max-width: 160px; }
+    .sf-signoff-preview img { max-height: 48px; border-radius: 4px; }
+    .sf-signoff-meta { font-size: 0.72rem; color: #6b7280; }
+    .sf-signoff-signed { color: #16a34a; font-size: 0.75rem; font-weight: 600; }
+
+    /* ── Submit bar ──────────────────────────────────────────── */
+    .sf-submit-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #fff;
+      border-top: 1px solid #e5e7eb;
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      z-index: 100;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+    }
+    .sf-draft-status { font-size: 0.75rem; color: #9ca3af; flex: 1; }
+  </style>
+</head>
+<body>
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<!-- ── Header ───────────────────────────────────────────────── -->
+<div class="flha-header">
+  <div class="flha-header-inner">
+    <a href="safety.html" class="flha-header-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Hazard Assessment</h1>
+      <div class="flha-header-sub">Field Level Hazard Assessment (FLHA)</div>
+    </div>
+    <div class="flha-form-num" id="form-num-badge" style="display:none;"></div>
+  </div>
+</div>
+<div class="flha-draft-bar" id="draft-bar">Fill out all sections, then submit or save a draft.</div>
+
+<!-- ── Form ─────────────────────────────────────────────────── -->
+<div class="flha-body">
+
+  <!-- 1 · Job Information -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">📋</span> Job Information</div>
+    <div class="sf-card-body">
+      <div class="sf-grid-2">
+        <div class="sf-field">
+          <label class="sf-label">Date <span class="sf-req">*</span></label>
+          <input type="date" id="f-date" class="form-control" required/>
+        </div>
+        <div class="sf-field">
+          <label class="sf-label">Start Time</label>
+          <input type="time" id="f-time" class="form-control"/>
+        </div>
+      </div>
+      <div class="sf-field">
+        <label class="sf-label">Project</label>
+        <select id="f-project" class="form-control">
+          <option value="">— Select project —</option>
+        </select>
+      </div>
+      <div class="sf-grid-2">
+        <div class="sf-field">
+          <label class="sf-label">Job Number</label>
+          <input type="text" id="f-job-num" class="form-control" placeholder="e.g. JD-2026-042"/>
+        </div>
+        <div class="sf-field">
+          <label class="sf-label">Supervisor / Foreman <span class="sf-req">*</span></label>
+          <select id="f-supervisor" class="form-control">
+            <option value="">— Select team member —</option>
+          </select>
+        </div>
+      </div>
+      <div class="sf-field">
+        <label class="sf-label">Weather / Conditions</label>
+        <select id="f-weather" class="form-control">
+          <option value="">— Select —</option>
+          <option>Clear / Sunny</option>
+          <option>Cloudy / Overcast</option>
+          <option>Rain / Drizzle</option>
+          <option>Snow / Sleet</option>
+          <option>Windy</option>
+          <option>Extreme Cold (below -20°C)</option>
+          <option>Extreme Heat (above 30°C)</option>
+          <option>Fog / Low Visibility</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Site Location -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">📍</span> Site Location</div>
+    <div class="sf-card-body">
+      <div class="sf-field">
+        <label class="sf-label">Site / Job Address <span class="sf-req">*</span></label>
+        <input type="text" id="f-site-address" class="form-control" placeholder="Street address or site description"/>
+      </div>
+      <div id="geo-container"></div>
+    </div>
+  </div>
+
+  <!-- 3 · Scope of Work -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">🔨</span> Scope of Work</div>
+    <div class="sf-card-body">
+      <div class="sf-field">
+        <label class="sf-label">Describe work to be performed <span class="sf-req">*</span></label>
+        <textarea id="f-scope" class="form-control" rows="4" placeholder="Describe all tasks to be completed today…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 · Workers on Site -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">👷</span> Workers on Site</div>
+    <div class="sf-card-body">
+      <div id="workers-container"></div>
+    </div>
+  </div>
+
+  <!-- 5 · Hazard Identification -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">⚠️</span> Hazard Identification &amp; Controls</div>
+    <div class="sf-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 10px;">Identify each hazard present, its risk level, and the control measure(s) in place.</p>
+
+      <!-- Quick-add common hazards -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Quick Add Common Hazards</div>
+        <div id="haz-quick-chips" style="display:flex;flex-wrap:wrap;gap:7px;"></div>
+      </div>
+
+      <div id="hazards-container"></div>
+    </div>
+  </div>
+
+  <!-- 6 · PPE Required -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">🦺</span> PPE Required</div>
+    <div class="sf-card-body">
+      <div class="ppe-grid" id="ppe-grid">
+        <!-- rendered by JS -->
+      </div>
+      <div class="sf-field" style="margin-top:12px;">
+        <label class="sf-label">Additional PPE / Notes</label>
+        <input type="text" id="f-ppe-other" class="form-control" placeholder="Any other PPE or requirements…"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 · Emergency Information -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">🚨</span> Emergency Information</div>
+    <div class="sf-card-body">
+      <div class="sf-grid-2">
+        <div class="sf-field">
+          <label class="sf-label">Nearest Hospital / EMS</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="f-hospital" class="form-control" placeholder="Hospital name or address" style="flex:1;"/>
+            <button type="button" id="btn-find-hospital" class="btn btn-secondary btn-sm" style="white-space:nowrap;flex-shrink:0;" title="Find nearest hospital">📍 Find</button>
+          </div>
+        </div>
+        <div class="sf-field">
+          <label class="sf-label">Emergency Muster Point</label>
+          <input type="text" id="f-muster" class="form-control" placeholder="Where to meet if evacuating"/>
+        </div>
+        <div class="sf-field">
+          <label class="sf-label">Emergency Contact Name</label>
+          <input type="text" id="f-emerg-name" class="form-control" placeholder="Name"/>
+        </div>
+        <div class="sf-field">
+          <label class="sf-label">Emergency Contact Phone</label>
+          <input type="tel" id="f-emerg-phone" class="form-control" placeholder="Phone number"/>
+        </div>
+      </div>
+      <div class="sf-field">
+        <label class="sf-label">First Aid Kit Location</label>
+        <input type="text" id="f-first-aid" class="form-control" placeholder="Where is the first aid kit on site?"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8 · Corrective Actions -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">📋</span> Corrective Actions Required</div>
+    <div class="sf-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 12px;">List any corrective actions that must be completed before or during work.</p>
+      <div id="ca-container"></div>
+    </div>
+  </div>
+
+  <!-- 9 · Worker Sign-Off -->
+  <div class="sf-card">
+    <div class="sf-card-header"><span class="sf-card-header-icon">✍️</span> Worker Acknowledgment &amp; Sign-Off</div>
+    <div class="sf-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">
+        By signing below, each worker confirms they have reviewed and understood this hazard assessment,
+        the identified hazards, and the required control measures.
+      </p>
+      <div class="sf-signoff-list" id="signoff-list">
+        <div style="color:#9ca3af;font-size:.85rem;padding:12px 0;">
+          Add workers in the "Workers on Site" section above to enable sign-off.
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-signer">+ Add Additional Signer</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /flha-body -->
+
+<!-- ── Submit Bar ────────────────────────────────────────────── -->
+<div class="sf-submit-bar">
+  <span class="sf-draft-status" id="sf-draft-status">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-secondary" id="btn-print" style="display:none;">🖨 Print</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit</button>
+</div>
+
+<div id="print-area"></div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  // ── Auth ──────────────────────────────────────────────────
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href = '/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href = '/login.html'; return; }
+
+  // ── State ─────────────────────────────────────────────────
+  const params    = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _signatures  = {};    // { workerName: {signer_name, signed_at, data_url} }
+  let _geoVal      = null;
+  let _workerRep, _hazardRep, _caRep;
+  let _autosaveTimer = null;
+
+  // ── PPE setup ─────────────────────────────────────────────
+  const PPE_ITEMS = [
+    { id: 'hard_hat',       label: 'Hard Hat',        icon: '⛑️' },
+    { id: 'safety_glasses', label: 'Safety Glasses',  icon: '🥽' },
+    { id: 'hi_vis',         label: 'Hi-Vis Vest',     icon: '🦺' },
+    { id: 'steel_toe',      label: 'Steel Toe Boots', icon: '🥾' },
+    { id: 'gloves',         label: 'Gloves',          icon: '🧤' },
+    { id: 'fall_prot',      label: 'Fall Protection', icon: '🪝' },
+    { id: 'hearing_prot',   label: 'Hearing Prot.',   icon: '🎧' },
+    { id: 'face_shield',    label: 'Face Shield',     icon: '🛡️' },
+    { id: 'respirator',     label: 'Respirator',      icon: '😷' },
+    { id: 'arc_flash',      label: 'Arc Flash PPE',   icon: '⚡' },
+  ];
+  let _ppeSelected = new Set();
+
+  function renderPPE() {
+    document.getElementById('ppe-grid').innerHTML = PPE_ITEMS.map(p => `
+      <label class="ppe-item${_ppeSelected.has(p.id) ? ' checked' : ''}" data-id="${p.id}">
+        <input type="checkbox" ${_ppeSelected.has(p.id) ? 'checked' : ''}/>
+        <span class="ppe-icon">${p.icon}</span>
+        <span>${p.label}</span>
+      </label>`).join('');
+    document.getElementById('ppe-grid').querySelectorAll('.ppe-item').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault(); // prevent label→checkbox double-fire
+        const id = el.dataset.id;
+        if (_ppeSelected.has(id)) _ppeSelected.delete(id); else _ppeSelected.add(id);
+        el.classList.toggle('checked', _ppeSelected.has(id));
+        triggerAutosave();
+      });
+    });
+  }
+
+  // ── Load projects ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/project-folders');
+    if (r.ok) {
+      const projects = await r.json();
+      const sel = document.getElementById('f-project');
+      projects.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + (p.job_numbers ? '  ·  ' + p.job_numbers : '');
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+
+  // ── Init components ───────────────────────────────────────
+  _geoVal = Safety.renderGeoField({
+    container: document.getElementById('geo-container'),
+    label: 'GPS Location (tap to capture)',
+    onChange: (val) => {
+      // Auto-fill the address field if it's empty
+      const addrEl = document.getElementById('f-site-address');
+      if (val?.address && !addrEl.value.trim()) {
+        addrEl.value = val.address.split(',').slice(0, 3).join(',').trim();
+      }
+      triggerAutosave();
+    }
+  });
+
+  _workerRep = Safety.renderWorkerSignOn({
+    container: document.getElementById('workers-container'),
+    onChange: (rows) => { renderSignoffList(rows); triggerAutosave(); }
+  });
+
+  _hazardRep = Safety.renderHazardRepeater({
+    container: document.getElementById('hazards-container'),
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Quick-add hazard chips ────────────────────────────────
+  const QUICK_HAZARDS = [
+    // ⚡ Electrical
+    { label: '⚡ Live Panel / Energized Equipment', hazard: 'Working Around Live Panel / Energized Equipment', risk: 'Critical', control: 'Confirm LOTO applied; test before touch; arc flash PPE required' },
+    { label: '⚡ Electrical Shock / Arc Flash',     hazard: 'Electrical Shock / Arc Flash Risk',              risk: 'Critical', control: 'Verify de-energized; arc flash boundary established; appropriate PPE' },
+    { label: '⚡ LOTO in Use Today',                hazard: 'Lockout / Tagout (LOTO) – Energy Isolation',    risk: 'High',     control: 'Follow LOTO procedure; personal lock applied; verify zero energy' },
+    { label: '⚡ Test Before Touch',                 hazard: 'Unverified Conductor / Assumed Dead Circuit',   risk: 'Critical', control: 'Test all conductors before contact; use appropriate meter and PPE' },
+    // 🏗 Heights
+    { label: '🏗 Working at Heights',               hazard: 'Working at Heights / Elevated Work',            risk: 'High',     control: 'Fall arrest system in use; harness inspected; anchor point confirmed' },
+    { label: '🏗 Ladder Use',                       hazard: 'Ladder Use / Access Equipment',                 risk: 'Medium',   control: '3-point contact; secured at top and bottom; correct angle' },
+    { label: '🏗 Aerial / EWP in Use',              hazard: 'Aerial Work Platform / Scissor Lift / Boom',    risk: 'High',     control: 'Pre-use inspection complete; harness attached to anchor; spotter present' },
+    { label: '🏗 Falling Objects',                  hazard: 'Falling Objects / Overhead Hazard',             risk: 'High',     control: 'Hard hats required; exclusion zone established below work area' },
+    // 🚧 General Site
+    { label: '🚧 Slip / Trip Hazard',               hazard: 'Slip / Trip / Fall Hazard',                     risk: 'Medium',   control: 'Housekeeping maintained; cables covered; adequate lighting' },
+    { label: '🚧 Heavy Lifting',                    hazard: 'Manual Handling / Heavy Lifting',               risk: 'Medium',   control: 'Lift with legs; team lift or mechanical aid for loads over 20 kg' },
+    { label: '🚧 Confined Space',                   hazard: 'Confined Space Entry',                          risk: 'High',     control: 'Entry permit required; atmospheric testing; attendant on site' },
+    { label: '🚧 Trenching / Excavation',           hazard: 'Trenching / Excavation / Underground Utilities', risk: 'High',    control: 'Call before you dig; shoring in place; no entry in unsupported trench' },
+    { label: '🚧 Working Near Traffic',             hazard: 'Working Near Traffic / Public',                 risk: 'High',     control: 'Traffic control plan in place; hi-vis vest worn; barriers set' },
+    { label: '❄ Extreme Weather',                  hazard: 'Extreme Weather / Temperature Stress',          risk: 'Medium',   control: 'Monitor conditions; rotate workers; appropriate layering / sun protection' },
+  ];
+
+  (function buildQuickChips() {
+    const chipsEl = document.getElementById('haz-quick-chips');
+    chipsEl.innerHTML = QUICK_HAZARDS.map((h, i) =>
+      `<button type="button" class="haz-quick-chip" data-idx="${i}"
+        style="padding:6px 11px;border:1.5px solid #d1d5db;border-radius:20px;background:#fff;
+               color:#374151;font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap;
+               transition:background .15s,border-color .15s;"
+        onmouseover="this.style.borderColor='#F47920';this.style.color='#F47920';"
+        onmouseout="this.style.borderColor='#d1d5db';this.style.color='#374151';"
+      >${h.label}</button>`
+    ).join('');
+
+    chipsEl.addEventListener('click', e => {
+      const chip = e.target.closest('.haz-quick-chip');
+      if (!chip) return;
+      const preset = QUICK_HAZARDS[+chip.dataset.idx];
+      const current = _hazardRep.getValues();
+      // Don't add duplicates
+      if (current.some(r => r.hazard === preset.hazard)) {
+        Safety.toast('That hazard is already in the list', 'warning'); return;
+      }
+      // Replace the first empty row, or append
+      const emptyIdx = current.findIndex(r => !r.hazard && !r.risk && !r.control);
+      if (emptyIdx >= 0) current[emptyIdx] = { hazard: preset.hazard, risk: preset.risk, control: preset.control, person: '' };
+      else current.push({ hazard: preset.hazard, risk: preset.risk, control: preset.control, person: '' });
+      _hazardRep.setValue(current);
+      triggerAutosave();
+    });
+  })();
+
+  _caRep = Safety.renderCorrectiveActions({
+    container: document.getElementById('ca-container'),
+    onChange: () => triggerAutosave()
+  });
+
+  renderPPE();
+
+  // ── Sign-off section ──────────────────────────────────────
+  function renderSignoffList(workers) {
+    const list = document.getElementById('signoff-list');
+    const named = (workers || []).filter(w => w.name && w.name.trim());
+    if (!named.length) {
+      list.innerHTML = '<div style="color:#9ca3af;font-size:.85rem;padding:12px 0;">Add workers above to enable sign-off.</div>';
+      return;
+    }
+    list.innerHTML = named.map(w => {
+      const sig = _signatures[w.name];
+      return `<div class="sf-signoff-row" data-worker="${Safety.esc(w.name)}">
+        <div class="sf-signoff-name">${Safety.esc(w.name)}<br><span style="font-size:.72rem;color:#9ca3af;font-weight:400;">${Safety.esc(w.role || '')}</span></div>
+        <div class="sf-signoff-preview">
+          ${sig?.data_url ? `<img src="${sig.data_url}" alt="Signature"/><div class="sf-signoff-meta">${Safety.fmtDT(sig.signed_at)}</div>` : '<span style="font-size:.78rem;color:#9ca3af;">Not signed</span>'}
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm sf-sign-btn">${sig?.data_url ? '✏️ Re-sign' : '✍️ Sign'}</button>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.sf-sign-btn').forEach(btn => {
+      const row = btn.closest('.sf-signoff-row');
+      const workerName = row.dataset.worker;
+      btn.addEventListener('click', async () => {
+        const result = await Safety.openSignatureModal({ prefillName: workerName, skipName: true });
+        if (result) {
+          _signatures[workerName] = result;
+          renderSignoffList(named);
+          triggerAutosave();
+        }
+      });
+    });
+  }
+  renderSignoffList([]);
+
+  document.getElementById('btn-add-signer').addEventListener('click', async () => {
+    // Show a bottom sheet: Team Member or Non-Team
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:flex-end;justify-content:center;';
+    sheet.innerHTML = `
+      <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:560px;padding:20px 16px 36px;">
+        <div style="font-weight:700;font-size:1rem;margin-bottom:16px;color:#111827;">Add Signer</div>
+        <button id="_as-team" style="width:100%;padding:14px;background:#111827;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;margin-bottom:10px;">👤 Add Team Member</button>
+        <button id="_as-guest" style="width:100%;padding:14px;background:#fff;color:#111827;border:2px solid #d1d5db;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;">＋ Add Non-Team Worker</button>
+        <button id="_as-close" style="width:100%;padding:12px;background:transparent;border:none;color:#9ca3af;font-size:.9rem;cursor:pointer;margin-top:6px;">Cancel</button>
+      </div>`;
+    document.body.appendChild(sheet);
+    sheet.querySelector('#_as-close').addEventListener('click', () => sheet.remove());
+    sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+
+    async function addAndSign(name, user_id = null) {
+      sheet.remove();
+      const result = await Safety.openSignatureModal({ prefillName: name, skipName: true });
+      if (result) {
+        _signatures[name] = result;
+        const currentWorkers = _workerRep.getValues();
+        if (!currentWorkers.some(w => w.name === name)) {
+          currentWorkers.push({ user_id: user_id || null, name, role: '' });
+          _workerRep.setValue(currentWorkers);
+        }
+        renderSignoffList(currentWorkers);
+        triggerAutosave();
+      }
+    }
+
+    sheet.querySelector('#_as-team').addEventListener('click', async () => {
+      sheet.remove();
+      const team = await Safety._fetchTeam();
+      const picker = document.createElement('div');
+      picker.className = 'wsign-picker';
+      function initials(n) { return (n||'?').split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2); }
+      picker.innerHTML = `
+        <div class="wsign-picker-sheet">
+          <div class="wsign-picker-head"><h3>Select Team Member</h3><button type="button" class="wsign-picker-close">Close</button></div>
+          <div class="wsign-picker-search"><input type="text" placeholder="Search by name…" autofocus/></div>
+          <div class="wsign-picker-list">
+            ${team.map(u => `<div class="wsign-picker-item" data-uid="${Safety.esc(u.id)}" data-name="${Safety.esc(u.name)}">
+              <div class="wsign-picker-av">${initials(u.name)}</div>
+              <div><div class="wsign-picker-name">${Safety.esc(u.name)}</div><div class="wsign-picker-sub">${Safety.esc(u.email||'')}</div></div>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      document.body.appendChild(picker);
+      picker.querySelector('input').addEventListener('input', e => {
+        const q = e.target.value.toLowerCase();
+        picker.querySelectorAll('.wsign-picker-item').forEach(el => { el.style.display = el.dataset.name.toLowerCase().includes(q) ? '' : 'none'; });
+      });
+      picker.querySelector('.wsign-picker-close').addEventListener('click', () => picker.remove());
+      picker.addEventListener('click', async e => {
+        const item = e.target.closest('.wsign-picker-item');
+        if (!item) return;
+        picker.remove();
+        await addAndSign(item.dataset.name, item.dataset.uid);
+      });
+    });
+
+    sheet.querySelector('#_as-guest').addEventListener('click', () => {
+      sheet.remove();
+      const gsheet = document.createElement('div');
+      gsheet.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:flex-end;justify-content:center;';
+      gsheet.innerHTML = `
+        <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:560px;padding:20px 16px 36px;">
+          <div style="font-weight:700;font-size:1rem;margin-bottom:14px;">Non-Team Worker</div>
+          <label style="display:block;font-size:.8rem;font-weight:600;margin-bottom:5px;">Full Name <span style="color:#ef4444">*</span></label>
+          <input id="_guest-name" class="form-control" type="text" placeholder="Full name" style="margin-bottom:10px;"/>
+          <label style="display:block;font-size:.8rem;font-weight:600;margin-bottom:5px;">Role / Company</label>
+          <input id="_guest-role" class="form-control" type="text" placeholder="e.g. Electrician, Sub…" style="margin-bottom:14px;"/>
+          <button id="_guest-save" style="width:100%;padding:14px;background:#111827;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;">Continue to Sign</button>
+          <button id="_guest-cancel" style="width:100%;padding:12px;background:transparent;border:none;color:#9ca3af;font-size:.9rem;cursor:pointer;margin-top:4px;">Cancel</button>
+        </div>`;
+      document.body.appendChild(gsheet);
+      gsheet.querySelector('#_guest-cancel').addEventListener('click', () => gsheet.remove());
+      document.getElementById('_guest-name').focus();
+      gsheet.querySelector('#_guest-save').addEventListener('click', async () => {
+        const name = document.getElementById('_guest-name').value.trim();
+        if (!name) { Safety.toast('Name is required', 'error'); return; }
+        gsheet.remove();
+        await addAndSign(name, null);
+      });
+    });
+  });
+
+  // ── Collect form data ─────────────────────────────────────
+  function collectFormData() {
+    return {
+      date:         document.getElementById('f-date').value,
+      time:         document.getElementById('f-time').value,
+      project_id:   document.getElementById('f-project').value || null,
+      job_number:   document.getElementById('f-job-num').value.trim(),
+      supervisor:   document.getElementById('f-supervisor').value.trim(),
+      weather:      document.getElementById('f-weather').value,
+      site_address: document.getElementById('f-site-address').value.trim(),
+      geo:          _geoVal.getValue ? _geoVal.getValue() : null,
+      scope:        document.getElementById('f-scope').value.trim(),
+      workers:      _workerRep.getValues(),
+      hazards:      _hazardRep.getValues(),
+      ppe:          [..._ppeSelected],
+      ppe_other:    document.getElementById('f-ppe-other').value.trim(),
+      hospital:     document.getElementById('f-hospital').value.trim(),
+      muster:       document.getElementById('f-muster').value.trim(),
+      emerg_name:   document.getElementById('f-emerg-name').value.trim(),
+      emerg_phone:  document.getElementById('f-emerg-phone').value.trim(),
+      first_aid:    document.getElementById('f-first-aid').value.trim(),
+      corrective_actions: _caRep.getValues(),
+      worker_signatures:  _signatures,
+      submitted_by: currentUser.name,
+    };
+  }
+
+  function fillFormData(d) {
+    if (!d) return;
+    if (d.date)         document.getElementById('f-date').value        = d.date;
+    if (d.time)         document.getElementById('f-time').value        = d.time;
+    if (d.project_id)   document.getElementById('f-project').value     = d.project_id;
+    if (d.job_number)   document.getElementById('f-job-num').value     = d.job_number;
+    if (d.supervisor)   document.getElementById('f-supervisor').value  = d.supervisor;
+    if (d.weather)      document.getElementById('f-weather').value     = d.weather;
+    if (d.site_address) document.getElementById('f-site-address').value = d.site_address;
+    if (d.scope)        document.getElementById('f-scope').value       = d.scope;
+    if (d.hospital)     document.getElementById('f-hospital').value    = d.hospital;
+    if (d.muster)       document.getElementById('f-muster').value      = d.muster;
+    if (d.emerg_name)   document.getElementById('f-emerg-name').value  = d.emerg_name;
+    if (d.emerg_phone)  document.getElementById('f-emerg-phone').value = d.emerg_phone;
+    if (d.first_aid)    document.getElementById('f-first-aid').value   = d.first_aid;
+    if (d.ppe_other)    document.getElementById('f-ppe-other').value   = d.ppe_other;
+    if (d.ppe)          { _ppeSelected = new Set(d.ppe); renderPPE(); }
+    if (d.workers?.length)  _workerRep.setValue(d.workers);
+    if (d.hazards?.length)  _hazardRep.setValue(d.hazards);
+    if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
+    if (d.worker_signatures) { _signatures = d.worker_signatures; renderSignoffList(d.workers || []); }
+  }
+
+  // ── Set default date ──────────────────────────────────────
+  document.getElementById('f-date').value = Safety.todayISO();
+  if (!document.getElementById('f-time').value) {
+    const now = new Date();
+    document.getElementById('f-time').value = now.toTimeString().slice(0, 5);
+  }
+
+  // ── Load existing form ────────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const form = await r.json();
+        const fd = typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data;
+        fillFormData(fd);
+        document.getElementById('form-num-badge').textContent = form.form_number;
+        document.getElementById('form-num-badge').style.display = '';
+        if (form.status === 'Submitted') {
+          document.getElementById('btn-submit').textContent = '✓ Submitted';
+          document.getElementById('btn-submit').disabled = true;
+          document.getElementById('btn-print').style.display = '';
+          // Show "Add My Signature" if current user is a listed worker but hasn't signed
+          const fd2 = fd || {};
+          const myWorker = (fd2.workers || []).find(w =>
+            (w.user_id && String(w.user_id) === String(currentUser.id)) ||
+            (!w.user_id && w.name && w.name.toLowerCase() === currentUser.name.toLowerCase())
+          );
+          const mySig = fd2.worker_signatures?.[myWorker?.name];
+          if (myWorker && !mySig?.data_url) {
+            const addSigBar = document.createElement('div');
+            addSigBar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#F47920;padding:12px 16px;z-index:200;display:flex;align-items:center;justify-content:space-between;';
+            addSigBar.innerHTML = `<span style="color:#fff;font-weight:700;font-size:.95rem;">You haven't signed this hazard assessment yet</span><button id="btn-add-my-sig" class="btn" style="background:#fff;color:#F47920;font-weight:700;">Sign Now</button>`;
+            document.body.appendChild(addSigBar);
+            document.getElementById('btn-add-my-sig').addEventListener('click', async () => {
+              const result = await Safety.openSignatureModal({ prefillName: myWorker.name, skipName: true });
+              if (result) {
+                _signatures[myWorker.name] = result;
+                // Patch the form on the server
+                const patchData = { ...fd2, worker_signatures: _signatures };
+                await fetch(`/api/safety/${formId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ form_data: patchData })
+                }).catch(() => {});
+                addSigBar.innerHTML = `<span style="color:#fff;font-weight:700;">✓ Signature saved!</span>`;
+                setTimeout(() => addSigBar.remove(), 2000);
+                renderSignoffList((fd2.workers || []));
+              }
+            });
+          }
+        }
+        setDraftStatus('Loaded from server');
+      }
+    } catch {}
+  } else {
+    // Try localStorage draft
+    const draft = Safety.DraftManager.load('hazard_assessment', 'new');
+    if (draft) {
+      fillFormData(draft);
+      setDraftStatus('Draft restored · ' + Safety.fmtDT(draft._saved_at));
+    }
+  }
+
+  // Populate supervisor dropdown with team members, pre-select current user
+  (async () => {
+    const team = await Safety._fetchTeam();
+    const sel = document.getElementById('f-supervisor');
+    const existing = sel.value;
+    team.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.name;
+      opt.textContent = u.name;
+      sel.appendChild(opt);
+    });
+    // Restore saved value or default to current user
+    if (existing) sel.value = existing;
+    else if (!sel.value) sel.value = currentUser.name;
+  })();
+
+  // ── Auto-save ─────────────────────────────────────────────
+  function triggerAutosave() {
+    clearTimeout(_autosaveTimer);
+    _autosaveTimer = setTimeout(autosave, 1500);
+  }
+
+  function setDraftStatus(msg) {
+    document.getElementById('sf-draft-status').textContent = msg;
+    document.getElementById('draft-bar').textContent = msg;
+  }
+
+  async function autosave() {
+    const data = collectFormData();
+    Safety.DraftManager.save('hazard_assessment', formId || 'new', data);
+    setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    // Also save to server if we already have an ID
+    if (formId && navigator.onLine) {
+      try {
+        await fetch(`/api/safety/${formId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ form_data: data, status: 'Draft' })
+        });
+      } catch {}
+    }
+  }
+
+  // Attach change listeners for auto-save
+  ['f-date','f-time','f-project','f-job-num','f-supervisor','f-weather','f-site-address',
+   'f-scope','f-hospital','f-muster','f-emerg-name','f-emerg-phone','f-first-aid','f-ppe-other']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+
+  // ── Save Draft button ─────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('hazard_assessment', formId || 'new', data);
+    setDraftStatus('Saving…');
+    try {
+      const result = await Safety.submitForm({
+        form_type: 'hazard_assessment',
+        form_data: data,
+        project_id:   data.project_id,
+        project_name: document.getElementById('f-project').selectedOptions[0]?.text || '',
+        job_number:   data.job_number,
+        status: 'Draft',
+        existing_id: formId
+      });
+      if (result?.id && !formId) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved', 'success');
+    } catch (e) {
+      setDraftStatus('Saved locally (offline)');
+      Safety.toast('Saved locally — will sync when online', 'warning');
+    }
+  });
+
+  // ── Submit ────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+
+    // Validate required fields
+    if (!data.date)        { Safety.toast('Date is required', 'error'); document.getElementById('f-date').focus(); return; }
+    if (!data.supervisor)  { Safety.toast('Supervisor name is required', 'error'); document.getElementById('f-supervisor').focus(); return; }
+    if (!data.site_address && !data.geo?.address){ Safety.toast('Site address or GPS location is required', 'error'); document.getElementById('f-site-address').focus(); return; }
+    if (!data.scope)       { Safety.toast('Scope of work is required', 'error'); document.getElementById('f-scope').focus(); return; }
+    if (!data.workers?.length || !data.workers.some(w => w.name)) {
+      Safety.toast('At least one worker must be listed', 'error'); return;
+    }
+    if (!data.hazards?.length || !data.hazards.some(h => h.hazard)) {
+      Safety.toast('At least one hazard must be identified', 'error'); return;
+    }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent = 'Submitting…'; btn.disabled = true;
+
+    try {
+      const projectSel = document.getElementById('f-project');
+      const projectName = projectSel.value ? projectSel.selectedOptions[0]?.text : '';
+      const result = await Safety.submitForm({
+        form_type: 'hazard_assessment',
+        form_data: data,
+        project_id:   data.project_id,
+        project_name: projectName,
+        job_number:   data.job_number,
+        status: 'Submitted',
+        existing_id: formId
+      });
+
+      if (result?.queued) {
+        Safety.toast('Saved offline — will submit when connected', 'warning');
+        btn.textContent = 'Queued';
+        return;
+      }
+
+      if (result?.id) {
+        formId = result.id;
+        history.replaceState({}, '', '?id=' + formId);
+        if (result.form_number) {
+          document.getElementById('form-num-badge').textContent = result.form_number;
+          document.getElementById('form-num-badge').style.display = '';
+        }
+      }
+
+      // Save corrective actions to register
+      const caItems = (data.corrective_actions || []).filter(a => a.action);
+      for (const ca of caItems) {
+        try {
+          await fetch('/api/corrective-actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              source_form_type:   'hazard_assessment',
+              source_form_id:     formId,
+              source_form_number: result.form_number,
+              project_id:         data.project_id,
+              action:             ca.action,
+              assigned_to_name:   ca.assigned_to || null,
+              due_date:           ca.due_date || null
+            })
+          });
+        } catch {}
+      }
+
+      // Notify unsigned team workers in-app
+      try {
+        await fetch('/api/safety/notify-workers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ form_id: formId, form_number: result.form_number, form_type: 'hazard_assessment' })
+        });
+      } catch {}
+
+      // Clear draft from localStorage
+      Safety.DraftManager.remove('hazard_assessment', 'new');
+      Safety.DraftManager.remove('hazard_assessment', formId);
+
+      btn.textContent = '✓ Submitted';
+      btn.disabled = false;
+      document.getElementById('btn-print').style.display = '';
+      setDraftStatus('Submitted · ' + Safety.fmtDT(new Date().toISOString()));
+      Safety.toast('Hazard Assessment submitted!', 'success');
+    } catch (e) {
+      btn.textContent = 'Submit';
+      btn.disabled = false;
+      Safety.toast('Submission failed: ' + e.message, 'error');
+    }
+  });
+
+  // ── Print ─────────────────────────────────────────────────
+  document.getElementById('btn-print').addEventListener('click', () => {
+    const data = collectFormData();
+    const project = document.getElementById('f-project').selectedOptions[0]?.text || data.job_number || '';
+    Safety.printForm({
+      title:    'Field Level Hazard Assessment',
+      subtitle: 'FLHA',
+      meta: {
+        form_number:  document.getElementById('form-num-badge').textContent,
+        project_name: project,
+        date:         data.date
+      },
+      sections: [
+        {
+          title: 'Job Information',
+          fields: [
+            { label: 'Date',             value: Safety.fmtDate(data.date) },
+            { label: 'Start Time',       value: data.time || '—' },
+            { label: 'Project',          value: project || '—' },
+            { label: 'Job Number',       value: data.job_number || '—' },
+            { label: 'Supervisor',       value: data.supervisor || '—' },
+            { label: 'Weather',          value: data.weather || '—' },
+            { label: 'Site Address',     value: data.site_address || '—', wide: true },
+            { label: 'GPS Location',     value: data.geo?.address || '—', wide: true },
+            { label: 'Scope of Work',    value: data.scope || '—', wide: true },
+          ]
+        },
+        {
+          title: 'Workers on Site',
+          html: `<table style="width:100%;border-collapse:collapse;font-size:8pt;">
+            <tr style="background:#f0f0f0;"><th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Name</th><th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Role</th></tr>
+            ${(data.workers||[]).map(w=>`<tr><td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(w.name||'')}</td><td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(w.role||'')}</td></tr>`).join('')}
+          </table>`
+        },
+        {
+          title: 'Hazard Identification & Controls',
+          html: `<table style="width:100%;border-collapse:collapse;font-size:8pt;">
+            <tr style="background:#f0f0f0;">
+              <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Hazard</th>
+              <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Risk</th>
+              <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Control Measure</th>
+              <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Responsible</th>
+            </tr>
+            ${(data.hazards||[]).map(h=>`<tr>
+              <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.hazard||'')}</td>
+              <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.risk||'')}</td>
+              <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.control||'')}</td>
+              <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.person||'')}</td>
+            </tr>`).join('')}
+          </table>`
+        },
+        {
+          title: 'PPE Required',
+          fields: [
+            { label: 'PPE', value: [..._ppeSelected].map(id=>PPE_ITEMS.find(p=>p.id===id)?.label||id).join(', ') || '—', wide: true },
+            { label: 'Additional PPE', value: data.ppe_other || '—' }
+          ]
+        },
+        {
+          title: 'Emergency Information',
+          fields: [
+            { label: 'Nearest Hospital',    value: data.hospital || '—' },
+            { label: 'Muster Point',        value: data.muster || '—' },
+            { label: 'Emergency Contact',   value: [data.emerg_name, data.emerg_phone].filter(Boolean).join(' · ') || '—' },
+            { label: 'First Aid Kit',       value: data.first_aid || '—' },
+          ]
+        },
+        {
+          title: 'Worker Sign-Off',
+          html: `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            ${(data.workers||[]).filter(w=>w.name).map(w=>{
+              const sig = _signatures[w.name];
+              return `<div style="border:1px solid #ccc;padding:6px;border-radius:4px;">
+                <div style="font-size:8pt;font-weight:700;">${Safety.esc(w.name)}</div>
+                <div style="font-size:7pt;color:#666;">${Safety.esc(w.role||'')}</div>
+                ${sig?.data_url ? `<img src="${sig.data_url}" style="max-height:40px;margin-top:4px;"/><div style="font-size:7pt;color:#666;">${Safety.fmtDT(sig.signed_at)}</div>` : '<div style="height:30px;border-bottom:1px solid #999;margin-top:8px;"></div><div style="font-size:7pt;color:#999;">Signature</div>'}
+              </div>`;
+            }).join('')}
+          </div>`
+        }
+      ]
+    });
+  });
+
+  // ── Find nearest hospital ─────────────────────────────────
+  document.getElementById('btn-find-hospital').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-find-hospital');
+    const inp = document.getElementById('f-hospital');
+    btn.textContent = '⏳'; btn.disabled = true;
+    try {
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000, enableHighAccuracy: true })
+      );
+      const { latitude: lat, longitude: lng } = pos.coords;
+      // Overpass API — find nearest hospital within 50 km
+      const query = `[out:json][timeout:10];(node["amenity"="hospital"](around:50000,${lat},${lng});way["amenity"="hospital"](around:50000,${lat},${lng}););out center 5;`;
+      const r = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+      });
+      const data = await r.json();
+      if (data.elements?.length) {
+        // Pick closest element
+        function dist(a, b, c, d) { return Math.hypot(a - c, b - d); }
+        const sorted = data.elements
+          .map(el => ({ ...el, _lat: el.lat || el.center?.lat, _lon: el.lon || el.center?.lon }))
+          .filter(el => el._lat && el._lon)
+          .sort((a, b) => dist(lat, lng, a._lat, a._lon) - dist(lat, lng, b._lat, b._lon));
+        const hospital = sorted[0];
+        const name = hospital.tags?.name || 'Hospital';
+        // Reverse geocode for address
+        let addr = '';
+        try {
+          const gr = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${hospital._lat}&lon=${hospital._lon}&format=json`, { headers: { 'User-Agent': 'JDFieldHub/1.0' } });
+          const gd = await gr.json();
+          addr = gd.display_name || '';
+        } catch {}
+        inp.value = addr ? `${name} — ${addr.split(',').slice(0,3).join(',')}` : name;
+        Safety.toast(`Found: ${name}`, 'success');
+      } else {
+        Safety.toast('No hospitals found nearby — enter manually', 'warning');
+      }
+    } catch (e) {
+      Safety.toast('Could not get location — enter hospital manually', 'warning');
+    }
+    btn.textContent = '📍 Find'; btn.disabled = false;
+    triggerAutosave();
+  });
+
+  // ── Offline banner ────────────────────────────────────────
+  Safety.OfflineQueue._syncBanner();
+
+})();
+</script>
+</body>
+</html>

@@ -27,7 +27,8 @@
     .cal-header h2 { font-size: 15px; font-weight: 700; }
     .cal-nav { background: none; border: 1px solid rgba(255,255,255,.3); color: white; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 16px; font-weight: 700; }
     .cal-nav:hover { background: rgba(255,255,255,.1); }
-    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .cal-grid-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); min-width: 490px; }
     .cal-dow { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); padding: 10px 2px 6px; }
     .cal-cell { min-height: 64px; padding: 4px 5px; border-top: 1px solid var(--gray-100); border-right: 1px solid var(--gray-100); position: relative; }
     .cal-cell:nth-child(7n) { border-right: none; }
@@ -192,9 +193,11 @@
         <h2 id="cal-title"></h2>
         <button class="cal-nav" id="cal-next">›</button>
       </div>
-      <div class="cal-grid" id="cal-grid">
-        <div class="cal-dow">Sun</div><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div>
-        <div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div><div class="cal-dow">Sat</div>
+      <div class="cal-grid-scroll">
+        <div class="cal-grid" id="cal-grid">
+          <div class="cal-dow">Sun</div><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div>
+          <div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div><div class="cal-dow">Sat</div>
+        </div>
       </div>
     </div>
   </div>

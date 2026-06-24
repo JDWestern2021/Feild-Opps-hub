@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Near Miss Report — J&amp;D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    .fp-header { background:#111827; color:#fff; position:sticky; top:0; z-index:100; }
+    .fp-header-inner { max-width:680px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+    .fp-back { color:rgba(255,255,255,.6); text-decoration:none; font-size:.85rem; padding:6px 10px; border:1px solid rgba(255,255,255,.15); border-radius:6px; white-space:nowrap; flex-shrink:0; }
+    .fp-header h1 { font-size:1rem; font-weight:800; margin:0; flex:1; }
+    .fp-header-sub { font-size:.72rem; color:rgba(255,255,255,.4); }
+    .fp-form-num { font-size:.72rem; background:rgba(244,121,32,.25); color:#F47920; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .fp-draft-bar { background:#f9fafb; border-bottom:1px solid #e5e7eb; padding:6px 16px; font-size:.75rem; color:#9ca3af; text-align:center; }
+
+    .fp-body { max-width:680px; margin:0 auto; padding:16px 16px 100px; }
+
+    .fp-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+    .fp-card-header { background:#f3f4f6; border-bottom:1px solid #e5e7eb; padding:11px 16px; font-weight:700; font-size:.88rem; color:#111827; display:flex; align-items:center; gap:8px; }
+    .fp-card-body { padding:16px; }
+
+    .fp-field { margin-bottom:14px; }
+    .fp-field:last-child { margin-bottom:0; }
+    .fp-label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fp-req { color:#ef4444; }
+    .fp-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media(max-width:480px){ .fp-grid-2{ grid-template-columns:1fr; } }
+
+    /* Type buttons */
+    .nm-type-group { display:flex; flex-direction:column; gap:8px; }
+    .nm-type-btn {
+      padding:12px 14px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.88rem; font-weight:600; cursor:pointer;
+      transition:all .15s; text-align:left; color:#374151;
+    }
+    .nm-type-btn:hover { border-color:#9ca3af; background:#f9fafb; }
+    .nm-type-btn.active { background:#111827; border-color:#111827; color:#fff; }
+
+    /* Severity buttons */
+    .sev-group { display:flex; flex-wrap:wrap; gap:8px; }
+    .sev-btn {
+      padding:10px 14px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.85rem; font-weight:600; cursor:pointer;
+      transition:all .15s; color:#374151; white-space:nowrap;
+    }
+    .sev-btn:hover { border-color:#9ca3af; }
+    .sev-btn.active-low      { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .sev-btn.active-medium   { background:#fef9c3; border-color:#ca8a04; color:#854d0e; }
+    .sev-btn.active-high     { background:#ffedd5; border-color:#ea580c; color:#9a3412; }
+    .sev-btn.active-critical { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+
+    /* Immediate causes grid */
+    .imm-cause-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    @media(max-width:480px){ .imm-cause-grid{ grid-template-columns:1fr; } }
+    .imm-cause-group-label { font-size:.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; margin:10px 0 6px; grid-column:1/-1; }
+    .imm-cause-btn {
+      padding:10px 12px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.82rem; font-weight:600; cursor:pointer;
+      transition:all .15s; text-align:left; color:#374151;
+    }
+    .imm-cause-btn:hover { border-color:#9ca3af; background:#f9fafb; }
+    .imm-cause-btn.active { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+
+    .fp-submit-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:12px 16px; display:flex; gap:10px; align-items:center; z-index:100; box-shadow:0 -2px 10px rgba(0,0,0,.08); }
+    .fp-draft-status { font-size:.75rem; color:#9ca3af; flex:1; }
+
+    /* People involved repeater */
+    .fp-person-card { border:1px solid #e5e7eb; border-radius:10px; padding:14px 14px 10px; margin-bottom:12px; background:#fafafa; position:relative; }
+    .fp-person-label { font-size:.72rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px; }
+    .fp-person-remove { position:absolute; top:10px; right:10px; background:none; border:none; font-size:1.1rem; color:#9ca3af; cursor:pointer; }
+  </style>
+</head>
+<body style="visibility:hidden;">
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<div class="fp-header">
+  <div class="fp-header-inner">
+    <a href="safety.html" class="fp-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Near Miss Report</h1>
+      <div class="fp-header-sub">Confidential · Admin Access Only</div>
+    </div>
+    <span id="form-num-badge" class="fp-form-num" style="display:none;"></span>
+  </div>
+</div>
+
+<div class="fp-draft-bar" id="draft-status-bar">Not saved</div>
+
+<div class="fp-body">
+
+  <!-- 1 · Near Miss Type -->
+  <div class="fp-card">
+    <div class="fp-card-header">🔍 What Type of Event Was This?</div>
+    <div class="fp-card-body">
+      <div class="nm-type-group" id="nm-type-group">
+        <button type="button" class="nm-type-btn" data-val="near_miss">⚠️ Near Miss — injury or damage almost occurred</button>
+        <button type="button" class="nm-type-btn" data-val="hazard_obs">👁 Hazard Observation — unsafe condition identified before an event</button>
+        <button type="button" class="nm-type-btn" data-val="unsafe_act">🚫 Unsafe Act Observed — someone performing a task unsafely</button>
+        <button type="button" class="nm-type-btn" data-val="property_averted">🏚 Property Damage Averted — equipment or property almost damaged</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Report Details -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Report Details</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Date <span class="fp-req">*</span></label>
+          <input type="date" id="f-date" class="form-control"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Approximate Time</label>
+          <input type="time" id="f-time" class="form-control"/>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Reported By</label>
+        <input type="text" id="f-reported-by" class="form-control" readonly style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;"/>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Project / Job Site</label>
+        <select id="f-project" class="form-control">
+          <option value="">— Select project —</option>
+        </select>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Specific Location on Site <span class="fp-req">*</span></label>
+        <input type="text" id="f-location" class="form-control" placeholder="e.g. Panel room, 2nd floor east, transformer yard"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · What Happened -->
+  <div class="fp-card">
+    <div class="fp-card-header">📝 What Happened</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Describe the near miss / event <span class="fp-req">*</span></label>
+        <textarea id="f-description" class="form-control" rows="4" placeholder="Describe what happened — be as specific as possible. Include sequence of events, tools or equipment involved, and any actions taken immediately after."></textarea>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">What task or activity was being performed?</label>
+        <input type="text" id="f-worker-activity" class="form-control" placeholder="e.g. Pulling wire in panel, operating aerial lift, installing breaker"/>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Equipment / Materials Involved</label>
+          <input type="text" id="f-equipment" class="form-control" placeholder="e.g. 600V breaker, aerial lift, conduit"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Environmental / Site Conditions</label>
+          <input type="text" id="f-env-conditions" class="form-control" placeholder="e.g. Wet floor, poor lighting, congested area"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 · Potential Outcome -->
+  <div class="fp-card">
+    <div class="fp-card-header">⚡ What Could Have Happened?</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">If this event had gone further, what was the potential outcome?</label>
+        <textarea id="f-potential-outcome" class="form-control" rows="3" placeholder="e.g. Worker could have received an arc flash burn; live conductor could have been touched causing electrocution; boom could have contacted overhead power line…"></textarea>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Potential Severity</label>
+        <div class="sev-group" id="sev-group">
+          <button type="button" class="sev-btn" data-val="minor" data-cls="active-low">🟢 Minor Injury</button>
+          <button type="button" class="sev-btn" data-val="serious" data-cls="active-high">🟠 Serious Injury</button>
+          <button type="button" class="sev-btn" data-val="fatality" data-cls="active-critical">🔴 Fatality</button>
+          <button type="button" class="sev-btn" data-val="property" data-cls="active-medium">🟡 Property Damage</button>
+          <button type="button" class="sev-btn" data-val="environmental" data-cls="active-medium">🟡 Environmental</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 · Immediate Causes -->
+  <div class="fp-card">
+    <div class="fp-card-header">🔎 Immediate Causes — What Led to This?</div>
+    <div class="fp-card-body">
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Select all that apply</label>
+        <div class="imm-cause-grid" id="imm-cause-grid">
+          <div class="imm-cause-group-label">Unsafe Acts</div>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_no_ppe">No / Improper PPE</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_procedure">Failed to Follow Procedure</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_distraction">Distraction / Inattention</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_rushing">Rushing / Shortcut</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_impaired">Fatigue / Impairment</button>
+          <div class="imm-cause-group-label">Unsafe Conditions</div>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_guarding">Inadequate Guarding</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_housekeeping">Poor Housekeeping</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_equip">Defective Equipment</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_environment">Hazardous Environment</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_no_procedure">No Procedure / Training</button>
+          <div class="imm-cause-group-label" style="color:#dc2626;">⚡ Electrical — Unsafe Acts</div>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_test_before_touch">Did Not Test Before Touch</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_lockout">No Lockout / Tagout (LOTO)</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_assumed_dead">Assumed Circuit was Dead</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_wrong_ppe">Wrong / No Arc Flash PPE</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_permit">No Energized Work Permit</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_bypassed_protection">Bypassed Safety Protection</button>
+          <div class="imm-cause-group-label" style="color:#dc2626;">⚡ Electrical — Unsafe Conditions</div>
+          <button type="button" class="imm-cause-btn" data-val="elec_live_cable">Live / Energized Cable Present</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_breaker_not_locked">Breaker Not Locked Out</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_arc_flash_label">No Arc Flash Label / Rating</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_damaged_insulation">Damaged Insulation / Wiring</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_improper_grounding">Improper / Missing Ground</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_overloaded_circuit">Overloaded Circuit</button>
+          <div class="imm-cause-group-label">Other</div>
+          <button type="button" class="imm-cause-btn" data-val="other_cause" style="grid-column:1/-1;">📝 Other — describe below</button>
+        </div>
+        <textarea id="f-cause-other" class="form-control" rows="2" placeholder="Describe the cause not listed above…" style="display:none;margin-top:8px;"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 · Root Cause & Contributing Factors -->
+  <div class="fp-card">
+    <div class="fp-card-header">🧩 Root Cause &amp; Contributing Factors</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Root Cause</label>
+        <textarea id="f-root-cause" class="form-control" rows="3" placeholder="What was the underlying or systemic root cause? (e.g. inadequate training, missing procedure, supervision gap, tool condition)"></textarea>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Contributing Factors</label>
+        <textarea id="f-contributing" class="form-control" rows="2" placeholder="Any other contributing factors (communication, schedule pressure, environmental…)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 · People Involved -->
+  <div class="fp-card">
+    <div class="fp-card-header">👷 People Involved</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 12px;">List workers who were directly involved in or witnessed the event.</p>
+      <div id="people-list"></div>
+      <button type="button" id="btn-add-person" style="width:100%;padding:11px;border:2px dashed #d1d5db;border-radius:8px;background:#fff;color:#374151;font-weight:600;font-size:.85rem;cursor:pointer;">＋ Add Person</button>
+    </div>
+  </div>
+
+  <!-- 8 · Photos -->
+  <div class="fp-card">
+    <div class="fp-card-header">📷 Photos</div>
+    <div class="fp-card-body">
+      <div id="nm-photos-wrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+      <label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:2px dashed #d1d5db;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600;color:#374151;">
+        📷 Add Photos
+        <input type="file" id="nm-photo-input" accept="image/*" capture="environment" multiple style="display:none;"/>
+      </label>
+    </div>
+  </div>
+
+  <!-- 9 · Corrective Actions -->
+  <div class="fp-card">
+    <div class="fp-card-header">✅ Corrective Actions</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Immediate action taken at the time</label>
+        <textarea id="f-immediate-action" class="form-control" rows="3" placeholder="What was done right away to address the hazard or unsafe condition? (e.g. work stopped, area barricaded, supervisor notified)"></textarea>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Follow-up corrective actions required</label>
+        <div id="ca-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10 · Supervisor Sign-Off -->
+  <div class="fp-card">
+    <div class="fp-card-header">✍️ Supervisor Sign-Off</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">The reporting supervisor confirms the above information is accurate and corrective actions have been or will be assigned.</p>
+      <div id="sup-sig-container"></div>
+    </div>
+  </div>
+
+</div><!-- /fp-body -->
+
+<div class="fp-submit-bar">
+  <span class="fp-draft-status" id="draft-status-inline">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit Report</button>
+</div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  // ── Auth + admin check ────────────────────────────────────
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href = '/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href = '/login.html'; return; }
+
+  if (currentUser.role !== 'admin') {
+    location.href = '/safety.html?msg=restricted';
+    return;
+  }
+
+  document.body.style.visibility = '';
+
+  // ── State ─────────────────────────────────────────────────
+  const params     = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _autosaveTimer = null;
+  let _nmType        = null;
+  let _potentialSev  = null;
+
+  // ── Defaults ─────────────────────────────────────────────
+  document.getElementById('f-date').value = Safety.todayISO();
+  document.getElementById('f-time').value = new Date().toTimeString().slice(0, 5);
+  document.getElementById('f-reported-by').value = currentUser.name;
+
+  // ── Load projects ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/projects');
+    if (r.ok) {
+      const ps = await r.json();
+      const sel = document.getElementById('f-project');
+      ps.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + (p.job_numbers ? '  ·  ' + p.job_numbers : '');
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+
+  // ── Autosave ──────────────────────────────────────────────
+  function setDraftStatus(msg) {
+    document.getElementById('draft-status-bar').textContent    = msg;
+    document.getElementById('draft-status-inline').textContent = msg;
+  }
+  function triggerAutosave() {
+    clearTimeout(_autosaveTimer);
+    _autosaveTimer = setTimeout(() => {
+      Safety.DraftManager.save('near_miss', formId || 'new', collectFormData());
+      setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    }, 800);
+  }
+
+  // ── Near miss type ────────────────────────────────────────
+  document.getElementById('nm-type-group').addEventListener('click', e => {
+    const btn = e.target.closest('.nm-type-btn');
+    if (!btn) return;
+    document.querySelectorAll('.nm-type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _nmType = btn.dataset.val;
+    triggerAutosave();
+  });
+
+  // ── Potential severity ────────────────────────────────────
+  document.getElementById('sev-group').addEventListener('click', e => {
+    const btn = e.target.closest('.sev-btn');
+    if (!btn) return;
+    document.querySelectorAll('.sev-btn').forEach(b => { b.className = 'sev-btn'; });
+    btn.classList.add(btn.dataset.cls);
+    _potentialSev = btn.dataset.val;
+    triggerAutosave();
+  });
+
+  // ── Immediate causes ──────────────────────────────────────
+  document.getElementById('imm-cause-grid').addEventListener('click', e => {
+    const btn = e.target.closest('.imm-cause-btn');
+    if (!btn) return;
+    btn.classList.toggle('active');
+    const otherActive = !!document.querySelector('.imm-cause-btn[data-val="other_cause"].active');
+    document.getElementById('f-cause-other').style.display = otherActive ? '' : 'none';
+    triggerAutosave();
+  });
+
+  function getImmCauses() {
+    return [...document.querySelectorAll('.imm-cause-btn.active')].map(b => b.dataset.val);
+  }
+  function fillImmCauses(arr) {
+    if (!arr?.length) return;
+    document.querySelectorAll('.imm-cause-btn').forEach(b => b.classList.toggle('active', arr.includes(b.dataset.val)));
+    const otherActive = !!document.querySelector('.imm-cause-btn[data-val="other_cause"].active');
+    document.getElementById('f-cause-other').style.display = otherActive ? '' : 'none';
+  }
+
+  // ── People involved repeater ──────────────────────────────
+  let _people = [{ name:'', title:'', role:'' }];
+
+  function _esc(v) { return (v||'').toString().replace(/"/g,'&quot;'); }
+
+  function renderPeople() {
+    const list = document.getElementById('people-list');
+    list.innerHTML = _people.map((p, i) => `
+      <div class="fp-person-card" data-idx="${i}">
+        ${_people.length > 1 ? `<button type="button" class="fp-person-remove" data-idx="${i}" title="Remove">✕</button>` : ''}
+        ${_people.length > 1 ? `<div class="fp-person-label">Person ${i + 1}</div>` : ''}
+        <div class="fp-grid-2">
+          <div class="fp-field">
+            <label class="fp-label">Name <span class="fp-req">*</span></label>
+            <input type="text" class="form-control pi-name" data-idx="${i}" value="${_esc(p.name)}" placeholder="Full name"/>
+          </div>
+          <div class="fp-field">
+            <label class="fp-label">Job Title / Trade</label>
+            <input type="text" class="form-control pi-title" data-idx="${i}" value="${_esc(p.title)}" placeholder="e.g. Journeyman, Apprentice"/>
+          </div>
+        </div>
+        <div class="fp-field" style="margin-bottom:0;">
+          <label class="fp-label">Role in Event</label>
+          <input type="text" class="form-control pi-role" data-idx="${i}" value="${_esc(p.role)}" placeholder="e.g. Direct involvement, witness, bystander"/>
+        </div>
+      </div>`).join('');
+
+    list.querySelectorAll('.fp-person-remove').forEach(btn => {
+      btn.addEventListener('click', () => { _people.splice(+btn.dataset.idx, 1); renderPeople(); triggerAutosave(); });
+    });
+    list.querySelectorAll('.pi-name').forEach(el => el.addEventListener('input', () => { _people[+el.dataset.idx].name = el.value; triggerAutosave(); }));
+    list.querySelectorAll('.pi-title').forEach(el => el.addEventListener('input', () => { _people[+el.dataset.idx].title = el.value; triggerAutosave(); }));
+    list.querySelectorAll('.pi-role').forEach(el => el.addEventListener('input', () => { _people[+el.dataset.idx].role = el.value; triggerAutosave(); }));
+  }
+
+  document.getElementById('btn-add-person').addEventListener('click', () => {
+    _people.push({ name:'', title:'', role:'' });
+    renderPeople(); triggerAutosave();
+  });
+
+  renderPeople();
+
+  // ── Photos ────────────────────────────────────────────────
+  let _photos = [];
+  function renderPhotos() {
+    const wrap = document.getElementById('nm-photos-wrap');
+    wrap.innerHTML = _photos.map((p, i) => `
+      <div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;cursor:pointer;" data-photo-idx="${i}">
+        <img src="${p.data_url}" style="width:100%;height:100%;object-fit:cover;"/>
+        <div style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;">✕</div>
+      </div>`).join('');
+    wrap.querySelectorAll('[data-photo-idx]').forEach(el => {
+      el.addEventListener('click', () => { _photos.splice(+el.dataset.photoIdx, 1); renderPhotos(); triggerAutosave(); });
+    });
+  }
+
+  document.getElementById('nm-photo-input').addEventListener('change', e => {
+    [...e.target.files].forEach(file => {
+      if (_photos.length >= 8) { Safety.toast('Maximum 8 photos', 'warning'); return; }
+      const reader = new FileReader();
+      reader.onload = ev => { _photos.push({ name: file.name, data_url: ev.target.result }); renderPhotos(); triggerAutosave(); };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  });
+
+  // ── Corrective actions ────────────────────────────────────
+  let _caRep;
+  _caRep = Safety.renderCorrectiveActions({
+    container: document.getElementById('ca-container'),
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Supervisor signature ──────────────────────────────────
+  let _supSig;
+  _supSig = Safety.renderSignatureField({
+    container: document.getElementById('sup-sig-container'),
+    label:     'Supervisor / Foreman Signature',
+    required:  true,
+    onChange:  () => triggerAutosave()
+  });
+
+  // ── Autosave listeners ────────────────────────────────────
+  ['f-date','f-time','f-location','f-worker-activity','f-description',
+   'f-equipment','f-env-conditions','f-potential-outcome',
+   'f-root-cause','f-contributing','f-immediate-action','f-cause-other']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+  document.getElementById('f-project').addEventListener('change', triggerAutosave);
+
+  // ── Collect form data ─────────────────────────────────────
+  function collectFormData() {
+    return {
+      date:              document.getElementById('f-date').value,
+      time:              document.getElementById('f-time').value,
+      reported_by:       currentUser.name,
+      nm_type:           _nmType,
+      project_id:        document.getElementById('f-project').value || null,
+      location:          document.getElementById('f-location').value.trim(),
+      description:       document.getElementById('f-description').value.trim(),
+      worker_activity:   document.getElementById('f-worker-activity').value.trim(),
+      equipment:         document.getElementById('f-equipment').value.trim(),
+      env_conditions:    document.getElementById('f-env-conditions').value.trim(),
+      potential_outcome: document.getElementById('f-potential-outcome').value.trim(),
+      potential_severity: _potentialSev,
+      immediate_causes:  getImmCauses(),
+      cause_other:       document.getElementById('f-cause-other').value.trim(),
+      root_cause:        document.getElementById('f-root-cause').value.trim(),
+      contributing_factors: document.getElementById('f-contributing').value.trim(),
+      people_involved:   _people,
+      photos:            _photos,
+      immediate_action:  document.getElementById('f-immediate-action').value.trim(),
+      corrective_actions: _caRep.getValues(),
+      supervisor_signature: _supSig?.getValue(),
+    };
+  }
+
+  // ── Fill form data ────────────────────────────────────────
+  function fillFormData(d) {
+    if (!d) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    set('f-date',             d.date);
+    set('f-time',             d.time);
+    set('f-project',          d.project_id);
+    set('f-location',         d.location);
+    set('f-description',      d.description);
+    set('f-worker-activity',  d.worker_activity);
+    set('f-equipment',        d.equipment);
+    set('f-env-conditions',   d.env_conditions);
+    set('f-potential-outcome', d.potential_outcome);
+    set('f-root-cause',       d.root_cause);
+    set('f-contributing',     d.contributing_factors);
+    set('f-immediate-action', d.immediate_action);
+
+    if (d.nm_type) {
+      _nmType = d.nm_type;
+      document.querySelectorAll('.nm-type-btn').forEach(b => b.classList.remove('active'));
+      const tb = document.querySelector(`.nm-type-btn[data-val="${d.nm_type}"]`);
+      if (tb) tb.classList.add('active');
+    }
+
+    if (d.potential_severity) {
+      _potentialSev = d.potential_severity;
+      const sb = document.querySelector(`.sev-btn[data-val="${d.potential_severity}"]`);
+      if (sb) { document.querySelectorAll('.sev-btn').forEach(b => b.className = 'sev-btn'); sb.classList.add(sb.dataset.cls); }
+    }
+
+    if (d.immediate_causes?.length) fillImmCauses(d.immediate_causes);
+    if (d.cause_other) { const el = document.getElementById('f-cause-other'); el.value = d.cause_other; el.style.display = ''; }
+
+    if (d.people_involved?.length) { _people = d.people_involved; renderPeople(); }
+    if (d.photos?.length) { _photos = d.photos; renderPhotos(); }
+    if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
+  }
+
+  // ── Load existing / draft ─────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const row = await r.json();
+        const fd = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : (row.form_data || {});
+        fillFormData(fd);
+        if (row.form_number) {
+          document.getElementById('form-num-badge').textContent = row.form_number;
+          document.getElementById('form-num-badge').style.display = '';
+        }
+        setDraftStatus(row.status === 'Submitted' ? 'Submitted' : 'Loaded');
+      }
+    } catch {}
+  } else {
+    const draft = Safety.DraftManager.load('near_miss', 'new');
+    if (draft) { fillFormData(draft); setDraftStatus('Draft restored'); }
+  }
+
+  // ── Save Draft ────────────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('near_miss', formId || 'new', data);
+    setDraftStatus('Saving…');
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({
+        form_type:    'near_miss',
+        form_data:    data,
+        project_id:   data.project_id,
+        project_name: ps.value ? ps.selectedOptions[0]?.text : '',
+        status:       'Draft',
+        existing_id:  formId
+      });
+      if (result?.id && !formId) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved', 'success');
+    } catch {
+      setDraftStatus('Saved locally (offline)');
+      Safety.toast('Saved locally — will sync when online', 'warning');
+    }
+  });
+
+  // ── Submit ────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+
+    if (!data.date)        { Safety.toast('Date is required', 'error'); document.getElementById('f-date').focus(); return; }
+    if (!data.location)    { Safety.toast('Location is required', 'error'); document.getElementById('f-location').focus(); return; }
+    if (!data.description) { Safety.toast('Description of what happened is required', 'error'); document.getElementById('f-description').focus(); return; }
+    if (!_supSig?.getValue()) { Safety.toast('Supervisor signature is required', 'error'); document.getElementById('sup-sig-container').scrollIntoView({behavior:'smooth'}); return; }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent = 'Submitting…'; btn.disabled = true;
+
+    try {
+      const ps = document.getElementById('f-project');
+      const projectName = ps.value ? ps.selectedOptions[0]?.text : '';
+      const result = await Safety.submitForm({
+        form_type:    'near_miss',
+        form_data:    data,
+        project_id:   data.project_id,
+        project_name: projectName,
+        status:       'Submitted',
+        existing_id:  formId
+      });
+      if (result?.id) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      Safety.DraftManager.remove('near_miss', 'new');
+      Safety.DraftManager.remove('near_miss', formId);
+      setDraftStatus('Submitted');
+      Safety.toast('Near Miss Report submitted', 'success');
+      btn.textContent = 'Submitted ✓'; btn.disabled = false;
+    } catch (err) {
+      Safety.toast('Submit failed — saved as draft', 'error');
+      btn.textContent = 'Submit Report'; btn.disabled = false;
+    }
+  });
+
+  // ── Offline banner ────────────────────────────────────────
+  function updateOfflineBanner() {
+    const pending = Safety.DraftManager.getPendingSync?.() || [];
+    const banner = document.getElementById('sf-offline-banner');
+    if (!navigator.onLine || pending.length) {
+      banner.style.display = '';
+      banner.querySelector('.sf-offline-count').textContent =
+        !navigator.onLine ? 'You are offline — changes saved locally' : `${pending.length} item(s) pending sync`;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+  window.addEventListener('online', updateOfflineBanner);
+  window.addEventListener('offline', updateOfflineBanner);
+  updateOfflineBanner();
+
+})();
+</script>
+</body>
+</html>

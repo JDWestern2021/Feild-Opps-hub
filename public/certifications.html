@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>My Safety Tickets — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { background:var(--gray-100); visibility:hidden; }
+    .page { max-width:700px; margin:0 auto; padding:16px 16px 80px; }
+
+    .cert-header { background:linear-gradient(135deg,#111 60%,#F47920 100%); border-radius:12px; padding:20px 24px; color:#fff; margin-bottom:20px; }
+    .cert-header h1 { font-size:20px; font-weight:800; margin:0 0 4px; }
+    .cert-header p  { font-size:13px; color:rgba(255,255,255,.7); margin:0; }
+
+    .cert-card {
+      background:#fff; border-radius:10px; border:1px solid #e5e7eb;
+      padding:16px; margin-bottom:12px; position:relative;
+    }
+    .cert-card-top { display:flex; align-items:flex-start; gap:12px; }
+    .cert-icon { font-size:28px; flex-shrink:0; line-height:1; }
+    .cert-info { flex:1; min-width:0; }
+    .cert-name { font-size:15px; font-weight:700; color:#111827; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cert-type { font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+    .cert-dates { font-size:12px; color:#6b7280; margin-top:6px; }
+    .cert-dates strong { color:#374151; }
+
+    .cert-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      font-size:11px; font-weight:700; border-radius:20px;
+      padding:3px 10px; margin-top:6px;
+    }
+    .badge-ok       { background:#dcfce7; color:#166534; }
+    .badge-soon-3   { background:#fef9c3; color:#854d0e; }
+    .badge-soon-1   { background:#ffedd5; color:#9a3412; }
+    .badge-expired  { background:#fee2e2; color:#991b1b; }
+    .badge-no-expiry{ background:#f3f4f6; color:#6b7280; }
+
+    .cert-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+    .cert-photo-thumb { width:60px; height:60px; border-radius:6px; object-fit:cover; border:1px solid #e5e7eb; cursor:pointer; flex-shrink:0; }
+    .cert-photo-placeholder { width:60px; height:60px; border-radius:6px; border:2px dashed #d1d5db; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; cursor:pointer; background:#f9fafb; }
+
+    .cert-notes { font-size:12px; color:#6b7280; margin-top:8px; font-style:italic; }
+
+    .add-btn-wrap { text-align:center; margin-bottom:20px; }
+    .add-btn { background:var(--orange,#F47920); color:#fff; border:none; border-radius:10px; padding:14px 28px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+
+    .empty-state { text-align:center; padding:48px 24px; color:#9ca3af; }
+    .empty-state .ei { font-size:48px; margin-bottom:12px; }
+    .empty-state p { font-size:14px; }
+
+    /* Modal */
+    .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:flex-end; justify-content:center; }
+    .modal-bg.open { display:flex; }
+    .modal-sheet { background:#fff; border-radius:20px 20px 0 0; padding:24px 20px 40px; width:100%; max-width:520px; max-height:92vh; overflow-y:auto; }
+    .modal-title { font-size:17px; font-weight:800; margin-bottom:18px; }
+    .modal-close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:#9ca3af; margin-top:-4px; }
+    .fld { margin-bottom:14px; }
+    .fld label { display:block; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+    .fld input, .fld select, .fld textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:14px; }
+    .fld textarea { rows:2; resize:vertical; }
+    .photo-upload-area { border:2px dashed #d1d5db; border-radius:8px; padding:20px; text-align:center; cursor:pointer; background:#f9fafb; position:relative; }
+    .photo-upload-area:hover { border-color:#F47920; }
+    .photo-preview { width:100%; max-height:200px; object-fit:contain; border-radius:6px; margin-top:10px; display:none; }
+    .modal-actions { display:flex; gap:10px; margin-top:18px; }
+    .modal-actions button { flex:1; padding:12px; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; }
+    .btn-save { background:#F47920; color:#fff; }
+    .btn-cancel { background:#f3f4f6; color:#374151; }
+    .btn-delete { background:#fee2e2; color:#991b1b; }
+
+    /* Photo lightbox */
+    .lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:2000; align-items:center; justify-content:center; }
+    .lightbox.open { display:flex; }
+    .lightbox img { max-width:95vw; max-height:90vh; border-radius:8px; object-fit:contain; }
+    .lightbox-close { position:absolute; top:16px; right:20px; background:none; border:none; color:#fff; font-size:32px; cursor:pointer; }
+
+    .section-label { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#9ca3af; margin:20px 0 10px; }
+  </style>
+</head>
+<body>
+<header style="background:#111;color:#fff;padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;">
+  <a href="index.html" style="color:#fff;text-decoration:none;font-size:13px;font-weight:600;">← Hub</a>
+  <span style="font-size:14px;font-weight:700;">My Safety Tickets</span>
+  <span id="hdr-user" style="font-size:12px;color:rgba(255,255,255,.6);"></span>
+</header>
+
+<div class="page">
+  <div class="cert-header">
+    <h1>🪪 My Safety Certifications</h1>
+    <p>Upload your tickets and keep track of expiry dates</p>
+  </div>
+
+  <div class="add-btn-wrap">
+    <button class="add-btn" id="btn-add-cert">+ Add Safety Ticket</button>
+  </div>
+
+  <div id="cert-list"><div class="empty-state"><div class="ei">🔄</div><p>Loading…</p></div></div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-bg" id="cert-modal">
+  <div class="modal-sheet">
+    <button class="modal-close" id="cert-modal-close">×</button>
+    <div class="modal-title" id="cert-modal-title">Add Safety Ticket</div>
+
+    <input type="hidden" id="cert-edit-id"/>
+
+    <div class="fld">
+      <label>Ticket / Certification Name *</label>
+      <input type="text" id="cert-name" placeholder="e.g. H2S Alive, First Aid, WHMIS"/>
+    </div>
+    <div class="fld">
+      <label>Type</label>
+      <select id="cert-type">
+        <option value="h2s">H2S Alive</option>
+        <option value="first_aid">First Aid / CPR</option>
+        <option value="whmis">WHMIS</option>
+        <option value="fall_protection">Fall Protection</option>
+        <option value="ground_disturbance">Ground Disturbance</option>
+        <option value="confined_space">Confined Space</option>
+        <option value="elevated_work">Elevated Work Platform</option>
+        <option value="flagging">Traffic Control / Flagging</option>
+        <option value="ppe">PPE / Safety Orientation</option>
+        <option value="electrical">Electrical Safety</option>
+        <option value="forklift">Forklift / Skid Steer</option>
+        <option value="driver">Driver's Abstract / License</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="fld" style="margin-bottom:0;">
+        <label>Issue Date</label>
+        <input type="date" id="cert-issued"/>
+      </div>
+      <div class="fld" style="margin-bottom:0;">
+        <label>Expiry Date</label>
+        <input type="date" id="cert-expiry"/>
+      </div>
+    </div>
+    <div class="fld" style="margin-top:14px;">
+      <label>Notes</label>
+      <textarea id="cert-notes" rows="2" placeholder="Provider, course number, any other details…"></textarea>
+    </div>
+    <div class="fld">
+      <label>Photo of Ticket Card</label>
+      <div class="photo-upload-area" id="photo-drop-area">
+        <div id="photo-prompt" style="color:#9ca3af;font-size:13px;">📷 Tap to take photo or upload image</div>
+        <img id="photo-preview" class="photo-preview" alt="Ticket photo"/>
+        <input type="file" id="cert-photo-input" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer;"/>
+      </div>
+      <button type="button" id="btn-clear-photo" style="display:none;margin-top:6px;background:none;border:1px solid #d1d5db;border-radius:6px;padding:4px 12px;font-size:12px;color:#6b7280;cursor:pointer;">✕ Remove photo</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cert-modal-cancel">Cancel</button>
+      <button class="btn-delete" id="cert-modal-delete" style="display:none;">Delete</button>
+      <button class="btn-save" id="cert-modal-save">Save Ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo lightbox -->
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightbox-close">×</button>
+  <img id="lightbox-img" src="" alt="Certification photo"/>
+</div>
+
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;display:none;z-index:3000;"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let _certs = [], _currentUser = null, _photoDataUrl = null, _photoType = null;
+
+const CERT_ICONS = { h2s:'💨', first_aid:'🩺', whmis:'⚗️', fall_protection:'🪝', ground_disturbance:'🏗️', confined_space:'🔲', elevated_work:'🏗️', flagging:'🚧', ppe:'🦺', electrical:'⚡', forklift:'🚜', driver:'🪪', other:'📋' };
+const CERT_LABELS = { h2s:'H2S Alive', first_aid:'First Aid / CPR', whmis:'WHMIS', fall_protection:'Fall Protection', ground_disturbance:'Ground Disturbance', confined_space:'Confined Space', elevated_work:'Elevated Work Platform', flagging:'Traffic Control / Flagging', ppe:'PPE / Safety Orientation', electrical:'Electrical Safety', forklift:'Forklift / Skid Steer', driver:"Driver's Abstract / License", other:'Other' };
+
+function toast(msg, ok=true) {
+  const t = $('toast'); t.textContent = msg; t.style.background = ok ? '#111' : '#dc2626';
+  t.style.display = 'block'; setTimeout(() => t.style.display='none', 3000);
+}
+
+function expiryStatus(expiry) {
+  if (!expiry) return { cls:'badge-no-expiry', label:'No expiry' };
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(expiry + 'T00:00:00');
+  const days = Math.round((exp - today) / 86400000);
+  if (days < 0)   return { cls:'badge-expired',  label:'Expired ' + Math.abs(days) + 'd ago' };
+  if (days <= 30)  return { cls:'badge-soon-1',   label:'Expires in ' + days + 'd ⚠' };
+  if (days <= 90)  return { cls:'badge-soon-3',   label:'Expires in ' + Math.round(days/7) + ' wks' };
+  return { cls:'badge-ok', label:'Valid · ' + exp.toLocaleDateString('en-CA',{month:'short',year:'numeric'}) };
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { year:'numeric', month:'short', day:'numeric' });
+}
+
+function renderCerts() {
+  const el = $('cert-list');
+  if (!_certs.length) {
+    el.innerHTML = `<div class="empty-state"><div class="ei">🪪</div><p>No safety tickets uploaded yet.<br>Tap <strong>Add Safety Ticket</strong> to get started.</p></div>`;
+    return;
+  }
+
+  // Group by status
+  const expired = _certs.filter(c => { if (!c.expiry_date) return false; return new Date(c.expiry_date+'T00:00:00') < new Date(); });
+  const soon    = _certs.filter(c => { if (!c.expiry_date) return false; const d=Math.round((new Date(c.expiry_date+'T00:00:00')-new Date())/86400000); return d>=0 && d<=90; });
+  const ok      = _certs.filter(c => { const s=expiryStatus(c.expiry_date); return s.cls==='badge-ok'||s.cls==='badge-no-expiry'; });
+
+  function certCard(c) {
+    const st = expiryStatus(c.expiry_date);
+    return `<div class="cert-card" data-id="${c.id}">
+      <div class="cert-card-top">
+        <div class="cert-icon">${CERT_ICONS[c.cert_type]||'📋'}</div>
+        <div class="cert-info">
+          <div class="cert-name">${esc(c.cert_name)}</div>
+          <div class="cert-type">${CERT_LABELS[c.cert_type]||c.cert_type}</div>
+          <div class="cert-dates">
+            ${c.issued_date ? `Issued: <strong>${fmtDate(c.issued_date)}</strong>` : ''}
+            ${c.issued_date && c.expiry_date ? ' · ' : ''}
+            ${c.expiry_date ? `Expires: <strong>${fmtDate(c.expiry_date)}</strong>` : ''}
+          </div>
+          <span class="cert-badge ${st.cls}">${st.label}</span>
+        </div>
+        ${c.has_photo ? `<img class="cert-photo-thumb" src="/api/certifications/${c.id}/photo" alt="Ticket" onclick="openLightbox('/api/certifications/${c.id}/photo')"/>` : ''}
+      </div>
+      ${c.notes ? `<div class="cert-notes">${esc(c.notes)}</div>` : ''}
+      <div class="cert-actions">
+        <button class="btn btn-sm btn-secondary" onclick="openEdit(${c.id})">✏️ Edit</button>
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+  if (expired.length) { html += `<div class="section-label">⚠ Expired (${expired.length})</div>${expired.map(certCard).join('')}`; }
+  if (soon.length)    { html += `<div class="section-label">⏰ Expiring Soon (${soon.length})</div>${soon.map(certCard).join('')}`; }
+  if (ok.length)      { html += `<div class="section-label">✅ Valid (${ok.length})</div>${ok.map(certCard).join('')}`; }
+  el.innerHTML = html;
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function loadCerts() {
+  try {
+    const r = await fetch('/api/certifications');
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const data = await r.json();
+    if (!Array.isArray(data)) throw new Error('Unexpected response');
+    _certs = data;
+    renderCerts();
+    checkPhotos();
+  } catch(e) { toast('Failed to load certifications: ' + e.message, false); }
+}
+
+async function checkPhotos() {
+  // Batch-check which certs have photos
+  for (const c of _certs) {
+    const img = document.querySelector(`.cert-card[data-id="${c.id}"] .cert-photo-thumb`);
+    if (img) {
+      img.onerror = () => img.style.display='none';
+    }
+  }
+}
+
+// Re-render: mark certs with photos
+function renderCertsWithPhotoCheck() {
+  renderCerts();
+  setTimeout(() => {
+    document.querySelectorAll('.cert-photo-thumb').forEach(img => {
+      img.onerror = () => img.style.display = 'none';
+    });
+  }, 100);
+}
+
+function openAdd() {
+  $('cert-edit-id').value = '';
+  $('cert-modal-title').textContent = 'Add Safety Ticket';
+  $('cert-name').value = '';
+  $('cert-type').value = 'other';
+  $('cert-issued').value = '';
+  $('cert-expiry').value = '';
+  $('cert-notes').value = '';
+  $('cert-modal-delete').style.display = 'none';
+  clearPhoto();
+  $('cert-modal').classList.add('open');
+}
+
+function openEdit(id) {
+  const c = _certs.find(x => x.id === id);
+  if (!c) return;
+  $('cert-edit-id').value = id;
+  $('cert-modal-title').textContent = 'Edit Ticket';
+  $('cert-name').value = c.cert_name || '';
+  $('cert-type').value = c.cert_type || 'other';
+  $('cert-issued').value = c.issued_date || '';
+  $('cert-expiry').value = c.expiry_date || '';
+  $('cert-notes').value = c.notes || '';
+  $('cert-modal-delete').style.display = '';
+  clearPhoto();
+  // Show existing photo if any
+  const photoUrl = `/api/certifications/${id}/photo`;
+  $('photo-preview').src = photoUrl;
+  $('photo-preview').style.display = 'block';
+  $('photo-prompt').style.display = 'none';
+  $('btn-clear-photo').style.display = '';
+  $('photo-preview').onerror = () => {
+    $('photo-preview').style.display = 'none';
+    $('photo-prompt').style.display = '';
+    $('btn-clear-photo').style.display = 'none';
+  };
+  $('cert-modal').classList.add('open');
+}
+
+function clearPhoto() {
+  _photoDataUrl = null; _photoType = null;
+  $('cert-photo-input').value = '';
+  $('photo-preview').src = '';
+  $('photo-preview').style.display = 'none';
+  $('photo-prompt').style.display = '';
+  $('btn-clear-photo').style.display = 'none';
+}
+
+function closeModal() { $('cert-modal').classList.remove('open'); }
+
+$('cert-modal-close').onclick = closeModal;
+$('cert-modal-cancel').onclick = closeModal;
+$('btn-add-cert').onclick = openAdd;
+
+$('cert-photo-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    _photoDataUrl = ev.target.result;
+    _photoType = file.type;
+    $('photo-preview').src = _photoDataUrl;
+    $('photo-preview').style.display = 'block';
+    $('photo-prompt').style.display = 'none';
+    $('btn-clear-photo').style.display = '';
+  };
+  reader.readAsDataURL(file);
+});
+
+$('btn-clear-photo').onclick = clearPhoto;
+
+$('cert-modal-save').onclick = async () => {
+  const name = $('cert-name').value.trim();
+  if (!name) { toast('Ticket name is required', false); return; }
+  const editId = $('cert-edit-id').value;
+  const payload = {
+    cert_name:   name,
+    cert_type:   $('cert-type').value,
+    issued_date: $('cert-issued').value || null,
+    expiry_date: $('cert-expiry').value || null,
+    notes:       $('cert-notes').value.trim() || null,
+  };
+  if (_photoDataUrl) { payload.photo_data = _photoDataUrl; payload.photo_type = _photoType; }
+
+  const btn = $('cert-modal-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await fetch(editId ? `/api/certifications/${editId}` : '/api/certifications', {
+      method: editId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Save failed');
+    closeModal();
+    toast(editId ? 'Ticket updated' : 'Ticket added');
+    await loadCerts();
+  } catch { toast('Save failed', false); }
+  finally { btn.disabled = false; btn.textContent = 'Save Ticket'; }
+};
+
+$('cert-modal-delete').onclick = async () => {
+  const editId = $('cert-edit-id').value;
+  if (!editId || !confirm('Delete this certification?')) return;
+  await fetch(`/api/certifications/${editId}`, { method:'DELETE' });
+  closeModal(); toast('Deleted');
+  await loadCerts();
+};
+
+function openLightbox(url) {
+  $('lightbox-img').src = url;
+  $('lightbox').classList.add('open');
+}
+$('lightbox-close').onclick = () => $('lightbox').classList.remove('open');
+$('lightbox').onclick = e => { if (e.target === $('lightbox')) $('lightbox').classList.remove('open'); };
+
+// Init
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  _currentUser = await r.json();
+  $('hdr-user').textContent = _currentUser.name;
+  document.body.style.visibility = 'visible';
+  await loadCerts();
+})();
+</script>
+</body>
+</html>

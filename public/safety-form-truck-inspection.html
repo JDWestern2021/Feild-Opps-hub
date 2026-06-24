@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Scheduled Truck Inspection — J&amp;D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    .fp-header { background:#111827; color:#fff; position:sticky; top:0; z-index:100; }
+    .fp-header-inner { max-width:720px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+    .fp-back { color:rgba(255,255,255,.6); text-decoration:none; font-size:.85rem; padding:6px 10px; border:1px solid rgba(255,255,255,.15); border-radius:6px; white-space:nowrap; flex-shrink:0; }
+    .fp-header h1 { font-size:1rem; font-weight:800; margin:0; flex:1; }
+    .fp-header-sub { font-size:.72rem; color:rgba(255,255,255,.4); }
+    .fp-form-num { font-size:.72rem; background:rgba(244,121,32,.25); color:#F47920; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .fp-draft-bar { background:#f9fafb; border-bottom:1px solid #e5e7eb; padding:6px 16px; font-size:.75rem; color:#9ca3af; text-align:center; }
+
+    .fp-body { max-width:720px; margin:0 auto; padding:16px 16px 100px; }
+
+    .fp-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+    .fp-card-header { background:#f3f4f6; border-bottom:1px solid #e5e7eb; padding:11px 16px; font-weight:700; font-size:.88rem; color:#111827; display:flex; align-items:center; gap:8px; }
+    .fp-card-body { padding:16px; }
+
+    .fp-field { margin-bottom:14px; }
+    .fp-field:last-child { margin-bottom:0; }
+    .fp-label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fp-req { color:#ef4444; }
+    .fp-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .fp-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    .fp-grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+    @media(max-width:540px){ .fp-grid-2,.fp-grid-3,.fp-grid-4{ grid-template-columns:1fr 1fr; } }
+    @media(max-width:400px){ .fp-grid-2,.fp-grid-3,.fp-grid-4{ grid-template-columns:1fr; } }
+
+    /* Tire measurement grid */
+    .tire-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .tire-card { border:1px solid #e5e7eb; border-radius:8px; padding:12px; background:#fafafa; }
+    .tire-card-label { font-size:.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+    .tire-measurements { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .tire-measure-wrap { }
+    .tire-measure-label { font-size:.72rem; color:#9ca3af; margin-bottom:3px; }
+    @media(max-width:400px){ .tire-grid{ grid-template-columns:1fr; } }
+
+    /* Service rows */
+    @media(max-width:480px){ .svc-row{ flex-wrap:wrap; } .svc-inputs{ flex-shrink:1; } .svc-inputs input{ width:90px; } }
+
+    /* Result banner */
+    .sti-result-row { display:flex; flex-direction:column; gap:8px; }
+    .sti-result-btn {
+      padding:14px 16px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.88rem; font-weight:700; cursor:pointer;
+      transition:all .15s; text-align:left; color:#374151;
+    }
+    .sti-result-btn:hover { border-color:#9ca3af; }
+    .sti-result-btn.active-pass   { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .sti-result-btn.active-attn   { background:#fef9c3; border-color:#ca8a04; color:#854d0e; }
+    .sti-result-btn.active-oos    { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+
+    /* Service tracking */
+    .svc-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f3f4f6; font-size:.85rem; }
+    .svc-row:last-child { border-bottom:none; padding-bottom:0; }
+    .svc-label { flex:1; font-weight:600; color:#374151; }
+    .svc-inputs { display:flex; gap:8px; flex-shrink:0; }
+    .svc-inputs input { width:110px; }
+
+    .fp-submit-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:12px 16px; display:flex; gap:10px; align-items:center; z-index:100; box-shadow:0 -2px 10px rgba(0,0,0,.08); }
+    .fp-draft-status { font-size:.75rem; color:#9ca3af; flex:1; }
+  </style>
+</head>
+<body style="visibility:hidden;">
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<div class="fp-header">
+  <div class="fp-header-inner">
+    <a href="safety.html" class="fp-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Scheduled Truck Inspection</h1>
+      <div class="fp-header-sub">Monthly / Scheduled Vehicle Inspection</div>
+    </div>
+    <span id="form-num-badge" class="fp-form-num" style="display:none;"></span>
+  </div>
+</div>
+
+<div class="fp-draft-bar" id="draft-status-bar">Not saved</div>
+
+<div class="fp-body">
+
+  <!-- 1 · Vehicle Information -->
+  <div class="fp-card">
+    <div class="fp-card-header">🚛 Vehicle Information</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Unit # / Vehicle ID <span class="fp-req">*</span></label>
+          <select id="f-vehicle" class="form-control">
+            <option value="">— Select vehicle —</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Or enter manually</label>
+          <input type="text" id="f-vehicle-manual" class="form-control" placeholder="Unit #, description"/>
+        </div>
+      </div>
+      <div class="fp-grid-3">
+        <div class="fp-field">
+          <label class="fp-label">Make</label>
+          <input type="text" id="f-make" class="form-control" placeholder="e.g. Ford"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Model</label>
+          <input type="text" id="f-model" class="form-control" placeholder="e.g. F-350"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Year</label>
+          <input type="text" id="f-year" class="form-control" placeholder="e.g. 2021"/>
+        </div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">License Plate</label>
+          <input type="text" id="f-plate" class="form-control" placeholder="Alberta plate #"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Current Odometer (km)</label>
+          <input type="number" id="f-odometer" class="form-control" placeholder="km"/>
+        </div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Inspection Date <span class="fp-req">*</span></label>
+          <input type="date" id="f-date" class="form-control"/>
+        </div>
+        <div class="fp-field" style="margin-bottom:0;">
+          <label class="fp-label">Inspector</label>
+          <input type="text" id="f-inspector" class="form-control" readonly style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Engine & Fluids -->
+  <div class="fp-card">
+    <div class="fp-card-header">🛢 Engine &amp; Fluids</div>
+    <div class="fp-card-body">
+      <div id="pfna-fluids"></div>
+    </div>
+  </div>
+
+  <!-- 3 · Belts, Hoses & Battery -->
+  <div class="fp-card">
+    <div class="fp-card-header">⚡ Belts, Hoses &amp; Battery</div>
+    <div class="fp-card-body">
+      <div id="pfna-belts"></div>
+    </div>
+  </div>
+
+  <!-- 4 · Brakes -->
+  <div class="fp-card">
+    <div class="fp-card-header">🛑 Brakes</div>
+    <div class="fp-card-body">
+      <div id="pfna-brakes"></div>
+    </div>
+  </div>
+
+  <!-- 5 · Tires & Wheels -->
+  <div class="fp-card">
+    <div class="fp-card-header">🔄 Tires &amp; Wheels</div>
+    <div class="fp-card-body">
+      <div id="pfna-tires"></div>
+      <div style="margin-top:14px;">
+        <div style="font-size:.78rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">Tread Depth &amp; Pressure per Tire</div>
+        <div class="tire-grid">
+          <div class="tire-card">
+            <div class="tire-card-label">🔵 Front Left</div>
+            <div class="tire-measurements">
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Tread (32nds)</div>
+                <input type="number" id="t-fl-tread" class="form-control" placeholder="32nds" min="0" max="32" step="1"/>
+              </div>
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Pressure (PSI)</div>
+                <input type="number" id="t-fl-psi" class="form-control" placeholder="PSI" min="0" max="120"/>
+              </div>
+            </div>
+          </div>
+          <div class="tire-card">
+            <div class="tire-card-label">🔵 Front Right</div>
+            <div class="tire-measurements">
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Tread (32nds)</div>
+                <input type="number" id="t-fr-tread" class="form-control" placeholder="32nds" min="0" max="32" step="1"/>
+              </div>
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Pressure (PSI)</div>
+                <input type="number" id="t-fr-psi" class="form-control" placeholder="PSI" min="0" max="120"/>
+              </div>
+            </div>
+          </div>
+          <div class="tire-card">
+            <div class="tire-card-label">🔴 Rear Left</div>
+            <div class="tire-measurements">
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Tread (32nds)</div>
+                <input type="number" id="t-rl-tread" class="form-control" placeholder="32nds" min="0" max="32" step="1"/>
+              </div>
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Pressure (PSI)</div>
+                <input type="number" id="t-rl-psi" class="form-control" placeholder="PSI" min="0" max="120"/>
+              </div>
+            </div>
+          </div>
+          <div class="tire-card">
+            <div class="tire-card-label">🔴 Rear Right</div>
+            <div class="tire-measurements">
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Tread (32nds)</div>
+                <input type="number" id="t-rr-tread" class="form-control" placeholder="32nds" min="0" max="32" step="1"/>
+              </div>
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Pressure (PSI)</div>
+                <input type="number" id="t-rr-psi" class="form-control" placeholder="PSI" min="0" max="120"/>
+              </div>
+            </div>
+          </div>
+          <div class="tire-card" style="grid-column:1/-1;">
+            <div class="tire-card-label">⬜ Spare Tire</div>
+            <div class="tire-measurements">
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Tread (32nds)</div>
+                <input type="number" id="t-sp-tread" class="form-control" placeholder="32nds" min="0" max="32" step="1"/>
+              </div>
+              <div class="tire-measure-wrap">
+                <div class="tire-measure-label">Pressure (PSI)</div>
+                <input type="number" id="t-sp-psi" class="form-control" placeholder="PSI" min="0" max="120"/>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 · Lights -->
+  <div class="fp-card">
+    <div class="fp-card-header">💡 Lights &amp; Signals</div>
+    <div class="fp-card-body">
+      <div id="pfna-lights"></div>
+    </div>
+  </div>
+
+  <!-- 7 · Exterior & Body -->
+  <div class="fp-card">
+    <div class="fp-card-header">🚘 Exterior &amp; Body</div>
+    <div class="fp-card-body">
+      <div id="pfna-exterior"></div>
+    </div>
+  </div>
+
+  <!-- 8 · Safety Equipment -->
+  <div class="fp-card">
+    <div class="fp-card-header">🦺 Safety Equipment</div>
+    <div class="fp-card-body">
+      <div id="pfna-safety"></div>
+      <div class="fp-field" style="margin-top:14px;margin-bottom:0;">
+        <label class="fp-label">Fire Extinguisher Last Service Date</label>
+        <input type="date" id="f-extinguisher-date" class="form-control"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9 · Interior & Controls -->
+  <div class="fp-card">
+    <div class="fp-card-header">🎛 Interior &amp; Controls</div>
+    <div class="fp-card-body">
+      <div id="pfna-interior"></div>
+    </div>
+  </div>
+
+  <!-- 10 · Service Tracking -->
+  <div class="fp-card">
+    <div class="fp-card-header">📅 Service Tracking</div>
+    <div class="fp-card-body">
+      <div class="svc-row">
+        <span class="svc-label">Next Oil Change Due (km)<br><span style="font-size:.75rem;font-weight:400;color:#9ca3af;">See sticker on window</span></span>
+        <div class="svc-inputs">
+          <input type="number" id="f-oil-km" class="form-control" placeholder="km due"/>
+        </div>
+      </div>
+      <div class="svc-row">
+        <span class="svc-label">Next Scheduled Service</span>
+        <div class="svc-inputs">
+          <input type="number" id="f-svc-km" class="form-control" placeholder="km due"/>
+          <input type="date" id="f-svc-date" class="form-control" title="Or by date"/>
+        </div>
+      </div>
+      <div class="svc-row">
+        <span class="svc-label">Registration Expiry</span>
+        <div class="svc-inputs">
+          <input type="date" id="f-reg-expiry" class="form-control"/>
+        </div>
+      </div>
+      <div class="svc-row">
+        <span class="svc-label">Insurance Expiry</span>
+        <div class="svc-inputs">
+          <input type="date" id="f-ins-expiry" class="form-control"/>
+        </div>
+      </div>
+      <div class="fp-field" style="margin-top:14px;margin-bottom:0;">
+        <label class="fp-label">Outstanding Items from Last Inspection</label>
+        <textarea id="f-outstanding" class="form-control" rows="2" placeholder="Any unresolved items carried forward from the previous inspection…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11 · Defects & Additional Notes -->
+  <div class="fp-card">
+    <div class="fp-card-header">⚠️ Defects &amp; Additional Notes</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Defects Found / Additional Notes</label>
+        <textarea id="f-defects" class="form-control" rows="4" placeholder="Summarize any defects found, repairs needed, or additional observations not captured in the sections above…"></textarea>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Photos</label>
+        <div id="sti-photos-wrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:2px dashed #d1d5db;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600;color:#374151;">
+          📷 Add Photos
+          <input type="file" id="sti-photo-input" accept="image/*" capture="environment" multiple style="display:none;"/>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 12 · Overall Result -->
+  <div class="fp-card">
+    <div class="fp-card-header">✅ Overall Inspection Result</div>
+    <div class="fp-card-body">
+      <div class="sti-result-row" id="result-row">
+        <button type="button" class="sti-result-btn" data-val="pass" data-cls="active-pass">✅ Pass — Vehicle is roadworthy, no defects requiring immediate attention</button>
+        <button type="button" class="sti-result-btn" data-val="attn" data-cls="active-attn">⚠️ Requires Attention — Vehicle may be operated but defects must be addressed by next inspection</button>
+        <button type="button" class="sti-result-btn" data-val="oos" data-cls="active-oos">🚫 Do Not Operate — Vehicle removed from service until defects are repaired</button>
+      </div>
+      <div id="oos-banner" style="display:none;background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:14px;margin-top:12px;color:#991b1b;font-weight:700;font-size:.9rem;">
+        ⛔ This vehicle must be removed from service. Do not operate until all defects are repaired and a re-inspection is completed. Notify management immediately.
+      </div>
+    </div>
+  </div>
+
+  <!-- 13 · Inspector Sign-Off -->
+  <div class="fp-card">
+    <div class="fp-card-header">✍️ Inspector Sign-Off</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">By signing, the inspector certifies this inspection was completed accurately and all findings have been recorded.</p>
+      <div id="inspector-sig-container"></div>
+    </div>
+  </div>
+
+</div><!-- /fp-body -->
+
+<div class="fp-submit-bar">
+  <span class="fp-draft-status" id="draft-status-inline">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit Inspection</button>
+</div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  // ── Auth ──────────────────────────────────────────────────
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href = '/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href = '/login.html'; return; }
+
+  document.body.style.visibility = '';
+
+  // ── State ─────────────────────────────────────────────────
+  const params     = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _autosaveTimer = null;
+  let _result        = null;
+
+  // ── Inspection item definitions ───────────────────────────
+  const FLUIDS_ITEMS = [
+    { id: 'oil_level',    label: 'Engine oil — level OK' },
+    { id: 'oil_cond',     label: 'Engine oil — condition (not black/gritty)' },
+    { id: 'coolant',      label: 'Coolant level OK' },
+    { id: 'brake_fluid',  label: 'Brake fluid level OK' },
+    { id: 'ps_fluid',     label: 'Power steering fluid level OK' },
+    { id: 'washer_fluid', label: 'Windshield washer fluid OK' },
+    { id: 'trans_fluid',  label: 'Transmission fluid OK (if applicable)' },
+    { id: 'no_leaks',     label: 'No fluid leaks visible (oil, coolant, fuel)' },
+  ];
+
+  const BELTS_ITEMS = [
+    { id: 'serpentine',   label: 'Serpentine / drive belt — no cracks or fraying' },
+    { id: 'coolant_hose', label: 'Coolant hoses — no cracks, soft spots, or bulges' },
+    { id: 'battery_term', label: 'Battery terminals — clean and tight' },
+    { id: 'battery_hold', label: 'Battery secure in tray' },
+    { id: 'charging',     label: 'Charging system / alternator light off' },
+  ];
+
+  const BRAKES_ITEMS = [
+    { id: 'pedal_feel',   label: 'Brake pedal — firm, no excessive travel' },
+    { id: 'parking',      label: 'Parking brake holds vehicle on grade' },
+    { id: 'abs_light',    label: 'ABS warning light off' },
+    { id: 'brake_light',  label: 'Brake warning light off' },
+    { id: 'no_noise',     label: 'No grinding, squealing, or pulling when braking' },
+  ];
+
+  const TIRES_ITEMS = [
+    { id: 'sidewalls',    label: 'Tire sidewalls — no cuts, bulges, or damage' },
+    { id: 'lug_torque',   label: 'Wheel lug nuts — all present, no visible looseness' },
+    { id: 'spare_mount',  label: 'Spare tire secure in mounting' },
+    { id: 'wheel_damage', label: 'Rims / wheels — no damage or cracks' },
+  ];
+
+  const LIGHTS_ITEMS = [
+    { id: 'headlights_lo', label: 'Headlights — low beam' },
+    { id: 'headlights_hi', label: 'Headlights — high beam' },
+    { id: 'tail_lights',   label: 'Tail lights' },
+    { id: 'brake_lights',  label: 'Brake lights (all)' },
+    { id: 'reverse',       label: 'Reverse / backup lights' },
+    { id: 'signals_f',     label: 'Turn signals — front' },
+    { id: 'signals_r',     label: 'Turn signals — rear' },
+    { id: 'hazards',       label: 'Hazard / 4-way flashers' },
+    { id: 'marker',        label: 'Clearance / marker lights' },
+    { id: 'backup_alarm',  label: 'Backup alarm / camera (if equipped)' },
+  ];
+
+  const EXTERIOR_ITEMS = [
+    { id: 'windshield',   label: 'Windshield — no cracks obstructing driver view' },
+    { id: 'wipers',       label: 'Wipers and washer spray work properly' },
+    { id: 'mirror_driver',label: 'Driver side mirror — secure and clean' },
+    { id: 'mirror_pass',  label: 'Passenger side mirror — secure and clean' },
+    { id: 'mirror_rear',  label: 'Rear view mirror (if applicable)' },
+    { id: 'body_damage',  label: 'Body / frame — no new damage affecting roadworthiness' },
+    { id: 'doors_latches',label: 'All doors open, close, and latch properly' },
+    { id: 'fuel_cap',     label: 'Fuel cap present and tight' },
+    { id: 'hitch',        label: 'Hitch / tow coupling (if equipped) — secure' },
+  ];
+
+  const SAFETY_ITEMS = [
+    { id: 'seatbelt_drv', label: 'Driver seatbelt — latches and retracts' },
+    { id: 'seatbelt_pass',label: 'Passenger seatbelt(s) — latches and retracts' },
+    { id: 'fire_ext',     label: 'Fire extinguisher — present in vehicle' },
+    { id: 'fire_charged', label: 'Fire extinguisher — pressure indicator in green' },
+    { id: 'first_aid',    label: 'First aid kit — present and stocked' },
+    { id: 'triangles',    label: 'Warning triangles or flares — present' },
+    { id: 'tow_straps',   label: 'Tow straps / recovery gear (if applicable)' },
+    { id: 'reg_ins',      label: 'Registration and insurance documents in vehicle' },
+    { id: 'hi_vis',       label: 'Hi-visibility vest(s) in vehicle' },
+  ];
+
+  const INTERIOR_ITEMS = [
+    { id: 'steering',     label: 'Steering — no excessive play or unusual noise' },
+    { id: 'horn',         label: 'Horn works' },
+    { id: 'gauges',       label: 'All gauges operating — no warning lights on' },
+    { id: 'hvac',         label: 'Heat / defrost working (critical for winter)' },
+    { id: 'interior_cln', label: 'Interior — clean, no loose items that could become projectiles' },
+    { id: 'fuel_level',   label: 'Fuel level adequate for work day' },
+  ];
+
+  // ── Render pass/fail sections ─────────────────────────────
+  let _pfFluids, _pfBelts, _pfBrakes, _pfTires, _pfLights, _pfExterior, _pfSafety, _pfInterior;
+
+  function initSections(values = {}) {
+    _pfFluids   = Safety.renderPassFailSection({ container: document.getElementById('pfna-fluids'),    sectionId: 'flu', items: FLUIDS_ITEMS,   values: values.fluids    || {}, onChange: () => triggerAutosave() });
+    _pfBelts    = Safety.renderPassFailSection({ container: document.getElementById('pfna-belts'),     sectionId: 'blt', items: BELTS_ITEMS,    values: values.belts     || {}, onChange: () => triggerAutosave() });
+    _pfBrakes   = Safety.renderPassFailSection({ container: document.getElementById('pfna-brakes'),    sectionId: 'brk', items: BRAKES_ITEMS,   values: values.brakes    || {}, onChange: () => triggerAutosave() });
+    _pfTires    = Safety.renderPassFailSection({ container: document.getElementById('pfna-tires'),     sectionId: 'tir', items: TIRES_ITEMS,    values: values.tires     || {}, onChange: () => triggerAutosave() });
+    _pfLights   = Safety.renderPassFailSection({ container: document.getElementById('pfna-lights'),    sectionId: 'lgt', items: LIGHTS_ITEMS,   values: values.lights    || {}, onChange: () => triggerAutosave() });
+    _pfExterior = Safety.renderPassFailSection({ container: document.getElementById('pfna-exterior'),  sectionId: 'ext', items: EXTERIOR_ITEMS, values: values.exterior  || {}, onChange: () => triggerAutosave() });
+    _pfSafety   = Safety.renderPassFailSection({ container: document.getElementById('pfna-safety'),    sectionId: 'saf', items: SAFETY_ITEMS,   values: values.safety    || {}, onChange: () => triggerAutosave() });
+    _pfInterior = Safety.renderPassFailSection({ container: document.getElementById('pfna-interior'),  sectionId: 'int', items: INTERIOR_ITEMS, values: values.interior  || {}, onChange: () => triggerAutosave() });
+  }
+
+  initSections();
+
+  // ── Defaults ─────────────────────────────────────────────
+  document.getElementById('f-date').value = Safety.todayISO();
+  document.getElementById('f-inspector').value = currentUser.name;
+
+  // ── Load vehicles ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/vehicles');
+    if (r.ok) {
+      const vehicles = await r.json();
+      const sel = document.getElementById('f-vehicle');
+      vehicles.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v.id;
+        o.textContent = [v.unit_number, v.year, v.make, v.model, v.plate].filter(Boolean).join(' · ');
+        o.dataset.make  = v.make  || '';
+        o.dataset.model = v.model || '';
+        o.dataset.year  = v.year  || '';
+        o.dataset.plate = v.plate || '';
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', () => {
+        const opt = sel.selectedOptions[0];
+        if (opt?.dataset.make) {
+          document.getElementById('f-make').value  = opt.dataset.make;
+          document.getElementById('f-model').value = opt.dataset.model;
+          document.getElementById('f-year').value  = opt.dataset.year;
+          document.getElementById('f-plate').value = opt.dataset.plate;
+        }
+        triggerAutosave();
+      });
+    }
+  } catch {}
+
+  // ── Overall result ────────────────────────────────────────
+  document.getElementById('result-row').addEventListener('click', e => {
+    const btn = e.target.closest('.sti-result-btn');
+    if (!btn) return;
+    document.querySelectorAll('.sti-result-btn').forEach(b => { b.className = 'sti-result-btn'; });
+    btn.classList.add(btn.dataset.cls);
+    _result = btn.dataset.val;
+    document.getElementById('oos-banner').style.display = _result === 'oos' ? '' : 'none';
+    triggerAutosave();
+  });
+
+  // ── Photos ────────────────────────────────────────────────
+  let _photos = [];
+  function renderPhotos() {
+    const wrap = document.getElementById('sti-photos-wrap');
+    wrap.innerHTML = _photos.map((p, i) => `
+      <div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;cursor:pointer;" data-photo-idx="${i}">
+        <img src="${p.data_url}" style="width:100%;height:100%;object-fit:cover;"/>
+        <div style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;">✕</div>
+      </div>`).join('');
+    wrap.querySelectorAll('[data-photo-idx]').forEach(el => {
+      el.addEventListener('click', () => { _photos.splice(+el.dataset.photoIdx, 1); renderPhotos(); triggerAutosave(); });
+    });
+  }
+  document.getElementById('sti-photo-input').addEventListener('change', e => {
+    [...e.target.files].forEach(file => {
+      if (_photos.length >= 10) { Safety.toast('Maximum 10 photos', 'warning'); return; }
+      const reader = new FileReader();
+      reader.onload = ev => { _photos.push({ name: file.name, data_url: ev.target.result }); renderPhotos(); triggerAutosave(); };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  });
+
+  // ── Inspector signature ───────────────────────────────────
+  let _inspSig = Safety.renderSignatureField({
+    container: document.getElementById('inspector-sig-container'),
+    label:     'Inspector Signature',
+    required:  true,
+    onChange:  () => triggerAutosave()
+  });
+
+  // ── Autosave ──────────────────────────────────────────────
+  function setDraftStatus(msg) {
+    document.getElementById('draft-status-bar').textContent    = msg;
+    document.getElementById('draft-status-inline').textContent = msg;
+  }
+  function triggerAutosave() {
+    clearTimeout(_autosaveTimer);
+    _autosaveTimer = setTimeout(() => {
+      Safety.DraftManager.save('maint_vehicle', formId || 'new', collectFormData());
+      setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    }, 800);
+  }
+
+  ['f-vehicle-manual','f-make','f-model','f-year','f-plate','f-odometer',
+   'f-defects','f-outstanding','f-extinguisher-date',
+   'f-oil-km','f-svc-km','f-svc-date','f-reg-expiry','f-ins-expiry',
+   't-fl-tread','t-fl-psi','t-fr-tread','t-fr-psi','t-rl-tread','t-rl-psi',
+   't-rr-tread','t-rr-psi','t-sp-tread','t-sp-psi']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+
+  // ── Collect form data ─────────────────────────────────────
+  function get(id) { return document.getElementById(id)?.value?.trim() || ''; }
+
+  function collectFormData() {
+    return {
+      date:           get('f-date'),
+      inspector:      currentUser.name,
+      vehicle_id:     get('f-vehicle'),
+      vehicle_manual: get('f-vehicle-manual'),
+      make:           get('f-make'),
+      model:          get('f-model'),
+      year:           get('f-year'),
+      plate:          get('f-plate'),
+      odometer:       get('f-odometer'),
+      fluids:         _pfFluids.getValues(),
+      belts:          _pfBelts.getValues(),
+      brakes:         _pfBrakes.getValues(),
+      tires:          _pfTires.getValues(),
+      tire_measurements: {
+        fl_tread: get('t-fl-tread'), fl_psi: get('t-fl-psi'),
+        fr_tread: get('t-fr-tread'), fr_psi: get('t-fr-psi'),
+        rl_tread: get('t-rl-tread'), rl_psi: get('t-rl-psi'),
+        rr_tread: get('t-rr-tread'), rr_psi: get('t-rr-psi'),
+        sp_tread: get('t-sp-tread'), sp_psi: get('t-sp-psi'),
+      },
+      lights:         _pfLights.getValues(),
+      exterior:       _pfExterior.getValues(),
+      safety_equip:   _pfSafety.getValues(),
+      interior:       _pfInterior.getValues(),
+      extinguisher_date: get('f-extinguisher-date'),
+      oil_change_km:  get('f-oil-km'),
+      service_km:     get('f-svc-km'),
+      service_date:   get('f-svc-date'),
+      reg_expiry:     get('f-reg-expiry'),
+      ins_expiry:     get('f-ins-expiry'),
+      outstanding:    get('f-outstanding'),
+      defects:        get('f-defects'),
+      photos:         _photos,
+      result:         _result,
+      inspector_signature: _inspSig.getValue(),
+    };
+  }
+
+  // ── Fill form data ────────────────────────────────────────
+  function fillFormData(d) {
+    if (!d) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
+    set('f-vehicle',         d.vehicle_id);
+    set('f-vehicle-manual',  d.vehicle_manual);
+    set('f-make',            d.make);
+    set('f-model',           d.model);
+    set('f-year',            d.year);
+    set('f-plate',           d.plate);
+    set('f-odometer',        d.odometer);
+    set('f-date',            d.date);
+    set('f-defects',         d.defects);
+    set('f-outstanding',     d.outstanding);
+    set('f-extinguisher-date', d.extinguisher_date);
+    set('f-oil-km',          d.oil_change_km);
+    set('f-svc-km',          d.service_km);
+    set('f-svc-date',        d.service_date);
+    set('f-reg-expiry',      d.reg_expiry);
+    set('f-ins-expiry',      d.ins_expiry);
+
+    if (d.tire_measurements) {
+      const tm = d.tire_measurements;
+      set('t-fl-tread', tm.fl_tread); set('t-fl-psi', tm.fl_psi);
+      set('t-fr-tread', tm.fr_tread); set('t-fr-psi', tm.fr_psi);
+      set('t-rl-tread', tm.rl_tread); set('t-rl-psi', tm.rl_psi);
+      set('t-rr-tread', tm.rr_tread); set('t-rr-psi', tm.rr_psi);
+      set('t-sp-tread', tm.sp_tread); set('t-sp-psi', tm.sp_psi);
+    }
+
+    initSections({
+      fluids:   d.fluids,
+      belts:    d.belts,
+      brakes:   d.brakes,
+      tires:    d.tires,
+      lights:   d.lights,
+      exterior: d.exterior,
+      safety:   d.safety_equip,
+      interior: d.interior,
+    });
+
+    if (d.result) {
+      _result = d.result;
+      const btn = document.querySelector(`.sti-result-btn[data-val="${d.result}"]`);
+      if (btn) { document.querySelectorAll('.sti-result-btn').forEach(b => b.className = 'sti-result-btn'); btn.classList.add(btn.dataset.cls); }
+      document.getElementById('oos-banner').style.display = d.result === 'oos' ? '' : 'none';
+    }
+
+    if (d.photos?.length) { _photos = d.photos; renderPhotos(); }
+  }
+
+  // ── Load existing / draft ─────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const row = await r.json();
+        const fd = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : (row.form_data || {});
+        fillFormData(fd);
+        if (row.form_number) {
+          document.getElementById('form-num-badge').textContent = row.form_number;
+          document.getElementById('form-num-badge').style.display = '';
+        }
+        setDraftStatus(row.status === 'Submitted' ? 'Submitted' : 'Loaded');
+      }
+    } catch {}
+  } else {
+    const draft = Safety.DraftManager.load('maint_vehicle', 'new');
+    if (draft) { fillFormData(draft); setDraftStatus('Draft restored'); }
+  }
+
+  // ── Save Draft ────────────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('maint_vehicle', formId || 'new', data);
+    setDraftStatus('Saving…');
+    try {
+      const result = await Safety.submitForm({
+        form_type:   'maint_vehicle',
+        form_data:   data,
+        status:      'Draft',
+        existing_id: formId
+      });
+      if (result?.id && !formId) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved', 'success');
+    } catch {
+      setDraftStatus('Saved locally (offline)');
+    }
+  });
+
+  // ── Submit ────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+    const vehicleId = data.vehicle_id || data.vehicle_manual;
+    if (!vehicleId) { Safety.toast('Vehicle is required', 'error'); document.getElementById('f-vehicle').focus(); return; }
+    if (!_result)   { Safety.toast('Overall inspection result is required', 'error'); document.getElementById('result-row').scrollIntoView({behavior:'smooth'}); return; }
+    if (!_inspSig.getValue()) { Safety.toast('Inspector signature is required', 'error'); document.getElementById('inspector-sig-container').scrollIntoView({behavior:'smooth'}); return; }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent = 'Submitting…'; btn.disabled = true;
+
+    try {
+      const vSel = document.getElementById('f-vehicle');
+      const vehicleName = vSel.value ? (vSel.selectedOptions[0]?.text || '') : data.vehicle_manual;
+      const result = await Safety.submitForm({
+        form_type:    'maint_vehicle',
+        form_data:    data,
+        project_name: vehicleName,
+        status:       'Submitted',
+        existing_id:  formId
+      });
+      if (result?.id) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      Safety.DraftManager.remove('maint_vehicle', 'new');
+      setDraftStatus('Submitted');
+      Safety.toast('Truck Inspection submitted', 'success');
+      btn.textContent = 'Submitted ✓'; btn.disabled = false;
+    } catch {
+      Safety.toast('Submit failed — saved as draft', 'error');
+      btn.textContent = 'Submit Inspection'; btn.disabled = false;
+    }
+  });
+
+  // ── Offline banner ────────────────────────────────────────
+  window.addEventListener('offline', () => { document.getElementById('sf-offline-banner').style.display = ''; document.querySelector('.sf-offline-count').textContent = 'You are offline — changes saved locally'; });
+  window.addEventListener('online',  () => { document.getElementById('sf-offline-banner').style.display = 'none'; });
+
+})();
+</script>
+</body>
+</html>

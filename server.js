@@ -216,6 +216,16 @@ app.post('/api/auth/reset/:token', async (req, res) => {
 // USER MANAGEMENT
 // ─────────────────────────────────────────────
 
+// Lightweight team list for safety form worker pickers (any authenticated user)
+app.get('/api/team-members', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email FROM users WHERE status='active' ORDER BY name ASC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/users', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT id,name,email,role,status,permissions,created_at,last_login,time_off_color FROM users ORDER BY created_at DESC');
   res.json(rows.map(u => ({
@@ -336,6 +346,100 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// WORKER CERTIFICATIONS
+// ─────────────────────────────────────────────
+
+// Get own certs (any worker) or all certs for a user (admin)
+app.get('/api/certifications', requireAuth, async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const userId = req.query.user_id && isAdmin ? parseInt(req.query.user_id) : req.user.id;
+    const { rows } = await pool.query(
+      `SELECT id, user_id, cert_name, cert_type, issued_date, expiry_date, notes, created_at, updated_at
+       FROM worker_certifications WHERE user_id=$1 ORDER BY expiry_date ASC NULLS LAST, cert_name ASC`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Admin: get all workers' certs with user info + expiry status
+app.get('/api/certifications/all', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT wc.id, wc.user_id, u.name AS user_name, wc.cert_name, wc.cert_type,
+              wc.issued_date, wc.expiry_date, wc.notes, wc.created_at
+       FROM worker_certifications wc
+       JOIN users u ON u.id = wc.user_id
+       WHERE u.status != 'deleted'
+       ORDER BY wc.expiry_date ASC NULLS LAST, u.name ASC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get cert photo
+app.get('/api/certifications/:id/photo', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT wc.photo_data, wc.photo_type, wc.user_id FROM worker_certifications wc WHERE wc.id=$1`,
+      [parseInt(req.params.id)]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (req.user.role !== 'admin' && rows[0].user_id !== req.user.id)
+      return res.status(403).json({ error: 'Forbidden' });
+    const base64 = (rows[0].photo_data || '').split(',')[1] || rows[0].photo_data;
+    res.set('Content-Type', rows[0].photo_type || 'image/jpeg');
+    res.send(Buffer.from(base64, 'base64'));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add cert (own)
+app.post('/api/certifications', requireAuth, async (req, res) => {
+  try {
+    const { cert_name, cert_type, issued_date, expiry_date, photo_data, photo_type, notes } = req.body;
+    if (!cert_name) return res.status(400).json({ error: 'cert_name required' });
+    const now = new Date().toISOString();
+    const { rows } = await pool.query(
+      `INSERT INTO worker_certifications (user_id, cert_name, cert_type, issued_date, expiry_date, photo_data, photo_type, notes, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, cert_name, cert_type, issued_date, expiry_date, notes, created_at`,
+      [req.user.id, cert_name, cert_type || 'other', issued_date || null, expiry_date || null,
+       photo_data || null, photo_type || null, notes || null, now]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Update cert (own or admin)
+app.patch('/api/certifications/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows: existing } = await pool.query('SELECT user_id FROM worker_certifications WHERE id=$1', [parseInt(req.params.id)]);
+    if (!existing[0]) return res.status(404).json({ error: 'Not found' });
+    if (req.user.role !== 'admin' && existing[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const { cert_name, cert_type, issued_date, expiry_date, photo_data, photo_type, notes } = req.body;
+    await pool.query(
+      `UPDATE worker_certifications SET cert_name=COALESCE($1,cert_name), cert_type=COALESCE($2,cert_type),
+       issued_date=$3, expiry_date=$4, notes=$5, photo_data=COALESCE($6,photo_data),
+       photo_type=COALESCE($7,photo_type), updated_at=$8 WHERE id=$9`,
+      [cert_name || null, cert_type || null, issued_date || null, expiry_date || null,
+       notes || null, photo_data || null, photo_type || null, new Date().toISOString(), parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete cert (own or admin)
+app.delete('/api/certifications/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT user_id FROM worker_certifications WHERE id=$1', [parseInt(req.params.id)]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (req.user.role !== 'admin' && rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    await pool.query('DELETE FROM worker_certifications WHERE id=$1', [parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
 // SETTINGS
 // ─────────────────────────────────────────────
 
@@ -433,7 +537,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
 
 app.post('/api/tickets', requireAuth, async (req, res) => {
   const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id,
-          ot_approved, ot_approved_by, submitted_with_duplicate } = req.body;
+          ot_approved, ot_approved_by, submitted_with_duplicate, vendor_signoff } = req.body;
   if (!date||!job_name||!supervisor||!work_description) return res.status(400).json({ error: 'Missing required fields' });
   if (!employees?.length) return res.status(400).json({ error: 'At least one employee required' });
   const ticket_number = generateTicketNumber();
@@ -448,9 +552,10 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name,ot_approved,ot_approved_by,ot_approval_ts)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
-      [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid,req.user?.name||null,otApprovedVal,otApprovedBy,otApprovalTs]
+      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name,ot_approved,ot_approved_by,ot_approval_ts,vendor_signoff)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+      [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid,req.user?.name||null,otApprovedVal,otApprovedBy,otApprovalTs,
+       vendor_signoff ? JSON.stringify(vendor_signoff) : null]
     );
     const tid = rows[0].id;
     for (const e of employees) {
@@ -761,8 +866,8 @@ app.post('/api/po', requirePermission('get_po'), async (req, res) => {
     const smtpHost = await getSetting('smtp_host');
     if (smtpHost) {
       try {
-        const { rows: admins } = await pool.query("SELECT email FROM users WHERE role='admin' AND status='active'");
-        const to = admins.map(a=>a.email).join(',');
+        const { rows: admins } = await pool.query("SELECT email, permissions FROM users WHERE status='active'");
+        const to = admins.filter(u => (u.permissions||'').split(',').includes('receive_emails')).map(u=>u.email).join(',');
         if (to) {
           const t = nodemailer.createTransport({ host: smtpHost, port: parseInt(await getSetting('smtp_port','587')), auth:{ user: await getSetting('smtp_user'), pass: await getSetting('smtp_pass') } });
           await t.sendMail({ from: await getSetting('smtp_from','noreply@jdwesternelectric.ca'), to, subject: `New PO Generated: ${po_number}`,
@@ -969,13 +1074,19 @@ app.get('/api/project-folders/:id', requireAdmin, async (req, res) => {
     [pr[0].id]
   );
   const { rows: allP } = await pool.query('SELECT * FROM purchase_orders WHERE project_id=$1 ORDER BY date DESC,created_at DESC',[pr[0].id]);
+  const { rows: allS } = await pool.query('SELECT id,form_type,form_number,submitted_by,submitted_at,date,status,project_archived,job_number FROM safety_forms WHERE project_id=$1 ORDER BY date DESC,submitted_at DESC',[pr[0].id]);
+  const { rows: allPS } = await pool.query('SELECT id,schedule_number,panel_name,voltage,main_breaker,num_circuits,created_by,created_at,status,project_archived FROM panel_schedules WHERE project_id=$1 ORDER BY created_at DESC',[pr[0].id]);
   const mapT = t => ({ ...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined });
   res.json({
     project: pr[0],
     tickets:          allT.filter(t=>!t.project_archived).map(mapT),
     purchase_orders:  allP.filter(p=>!p.project_archived),
+    safety_forms:     allS.filter(s=>!s.project_archived),
+    panel_schedules:  allPS.filter(ps=>!ps.project_archived),
     archived_tickets: allT.filter(t=> t.project_archived).map(mapT),
     archived_pos:     allP.filter(p=> p.project_archived),
+    archived_safety:  allS.filter(s=> s.project_archived),
+    archived_panels:  allPS.filter(ps=> ps.project_archived),
   });
 });
 
@@ -1821,6 +1932,796 @@ app.get('/api/time-off/pending-count', requireAuth, async (req, res) => {
   if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
   const { rows } = await pool.query("SELECT COUNT(*) AS c FROM time_off_requests WHERE status='pending'");
   res.json({ count: parseInt(rows[0].c) });
+});
+
+// ─────────────────────────────────────────────
+// SAFETY
+// ─────────────────────────────────────────────
+
+// Generate safety form number
+function generateSafetyNumber(type) {
+  const prefix = { flha: 'FLHA', jsa: 'JSA', incident: 'INC', inspection: 'INSP' }[type] || 'SAFE';
+  const now = new Date();
+  const stamp = now.getFullYear().toString() +
+    String(now.getMonth() + 1).padStart(2, '0') +
+    String(now.getDate()).padStart(2, '0') + '-' +
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0');
+  const rand = Math.floor(Math.random() * 9000) + 1000;
+  return `${prefix}-${stamp}-${rand}`;
+}
+
+// Forms where current user is listed as worker but hasn't signed
+app.get('/api/safety/pending-signatures', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, form_type, form_number, date, submitted_by, project_name, form_data
+       FROM safety_forms WHERE archived=0 AND status='Submitted'
+       ORDER BY submitted_at DESC LIMIT 100`
+    );
+    const userId   = String(req.user.id);
+    const userName = req.user.name.toLowerCase().trim();
+    // Flexible name match: "jeremy" matches "jeremy williams" and vice versa
+    const nameMatches = (wName) => {
+      const w = (wName || '').toLowerCase().trim();
+      return w === userName || userName.startsWith(w + ' ') || w.startsWith(userName + ' ');
+    };
+    const pending = rows.filter(f => {
+      try {
+        const d = typeof f.form_data === 'string' ? JSON.parse(f.form_data) : f.form_data;
+        const workers = d.workers || [];
+        const sigs    = d.worker_signatures || {};
+        const listed = workers.some(w =>
+          (w.user_id && String(w.user_id) === userId) ||
+          (!w.user_id && nameMatches(w.name))
+        );
+        const signed = workers.some(w =>
+          ((w.user_id && String(w.user_id) === userId) || (!w.user_id && nameMatches(w.name))) &&
+          w.signed_at
+        ) || Object.keys(sigs).some(k => nameMatches(k));
+        return listed && !signed;
+      } catch { return false; }
+    }).map(({ form_data, ...rest }) => rest);
+    res.json(pending);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// List archived safety forms (admin only)
+app.get('/api/safety/archived', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, form_type, form_number, project_name, job_number, submitted_by,
+              submitted_at, date, status
+       FROM safety_forms WHERE archived = 1 ORDER BY submitted_at DESC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// List safety forms (admin sees all, field sees own)
+// Form types restricted to admins only
+const ADMIN_ONLY_FORM_TYPES = ['incident_report','near_miss','corrective_action','ojt_record','emergency_review'];
+
+app.get('/api/safety', requireAuth, async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    if (isAdmin) {
+      const { rows } = await pool.query(
+        `SELECT id, form_type, form_number, project_name, job_number, submitted_by,
+                submitted_at, date, status, archived
+         FROM safety_forms WHERE archived = 0
+         ORDER BY submitted_at DESC LIMIT 500`
+      );
+      return res.json(rows);
+    }
+    // Non-admins: own forms only, admin-only types never visible
+    const placeholders = ADMIN_ONLY_FORM_TYPES.map((_, i) => `$${i + 2}`).join(',');
+    const { rows } = await pool.query(
+      `SELECT id, form_type, form_number, project_name, job_number, submitted_by,
+              submitted_at, date, status, archived
+       FROM safety_forms
+       WHERE archived = 0
+         AND submitted_by_id = $1
+         AND form_type NOT IN (${placeholders})
+       ORDER BY submitted_at DESC LIMIT 200`,
+      [req.user.id, ...ADMIN_ONLY_FORM_TYPES]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Submit a safety form
+app.post('/api/safety', requireAuth, async (req, res) => {
+  try {
+    const { form_type, project_id, job_number, date, form_data } = req.body;
+    if (!form_type || !date) return res.status(400).json({ error: 'form_type and date are required' });
+    const form_number = generateSafetyNumber(form_type);
+    // Resolve project name if project_id provided
+    let project_name = req.body.project_name || null;
+    if (project_id && !project_name) {
+      const { rows } = await pool.query('SELECT name FROM projects WHERE id=$1', [project_id]);
+      project_name = rows[0]?.name || null;
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO safety_forms (form_type, form_number, project_id, project_name, job_number,
+         submitted_by_id, submitted_by, submitted_at, date, status, form_data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Submitted',$10)
+       RETURNING id, form_number`,
+      [form_type, form_number, project_id || null, project_name, job_number || null,
+       req.user.id, req.user.name, new Date().toISOString(), date,
+       JSON.stringify(form_data || {})]
+    );
+    logAction(req, 'safety_form_submitted', rows[0].id, rows[0].form_number, `${form_type} submitted by ${req.user.name}`);
+    const formId     = rows[0].id;
+    const formNumber = rows[0].form_number;
+
+    // Update vehicle record when truck inspection is submitted
+    if (form_type === 'maint_vehicle' && form_data?.vehicle_id) {
+      const vid = parseInt(form_data.vehicle_id);
+      if (!isNaN(vid)) {
+        const updates = [];
+        const vals = [];
+        let idx = 1;
+        if (form_data.odometer) { updates.push(`current_odometer=$${idx++}`); vals.push(parseInt(form_data.odometer)); }
+        if (form_data.oil_change_km) { updates.push(`next_oil_change_km=$${idx++}`); vals.push(parseInt(form_data.oil_change_km)); }
+        updates.push(`last_inspection_date=$${idx++}`); vals.push(form_data.date || new Date().toISOString().slice(0,10));
+        if (updates.length) {
+          vals.push(vid);
+          await pool.query(`UPDATE vehicles SET ${updates.join(',')} WHERE id=$${idx}`, vals);
+        }
+      }
+    }
+
+    // Notify admins if inspection has failures, defects, corrective actions, or OOS result
+    notifyAdminsOnSafetyAlert(form_type, formNumber, formId, form_data, req.user.name, project_name).catch(() => {});
+
+    res.status(201).json({ id: formId, form_number: formNumber });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Safety alert notifications ────────────────────────────────────────────────
+const FORM_LABELS = {
+  fall_protection: 'Fall Protection Inspection',
+  hazard_assessment: 'Hazard Assessment',
+  aerial_ewp: 'Aerial / EWP Pre-Use',
+  vehicle_inspection: 'Vehicle Inspection',
+};
+
+async function createNotification(userId, type, title, body, link) {
+  await pool.query(
+    `INSERT INTO notifications (user_id, type, title, body, link, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [userId, type, title, body || null, link || null, new Date().toISOString()]
+  );
+}
+
+async function notifyAdminsOnSafetyAlert(form_type, formNumber, formId, form_data, submitterName, projectName) {
+  if (!form_data) return;
+
+  // Gather reasons to alert
+  const alerts = [];
+  const result = form_data.overall_result;
+  if (result === 'oos') alerts.push('Equipment marked OUT OF SERVICE');
+  if (result === 'replace') alerts.push('Equipment marked for replacement');
+
+  // Any pass/fail section with a fail
+  const pfSections = ['harness','lanyard','carabiner','aerial','vehicle'];
+  for (const sec of pfSections) {
+    const vals = form_data[sec];
+    if (!vals) continue;
+    const failItems = Object.entries(vals).filter(([,v]) => v && v.state === 'fail').map(([k]) => k);
+    if (failItems.length) alerts.push(`Failures in ${sec}: ${failItems.join(', ')}`);
+  }
+
+  // Defective flag set to yes
+  if (form_data.defect_flag === 'yes') alerts.push('Equipment was pre-tagged defective');
+
+  // Corrective actions logged
+  const cas = (form_data.corrective_actions || []).filter(c => c.action);
+  if (cas.length) alerts.push(`${cas.length} corrective action(s) logged`);
+
+  if (!alerts.length) return;
+
+  const formLabel = FORM_LABELS[form_type] || form_type.replace(/_/g,' ');
+  const title  = `⚠ Safety Alert — ${formLabel} ${formNumber}`;
+  const body   = `Submitted by ${submitterName}${projectName ? ' · ' + projectName : ''}.\n${alerts.join('\n')}`;
+  const link   = `/safety-form-${form_type.replace(/_/g,'-')}.html?id=${formId}`;
+
+  const { rows: admins } = await pool.query(
+    `SELECT id FROM users WHERE role='admin' AND status='active'`
+  );
+  for (const a of admins) {
+    await createNotification(a.id, 'safety_alert', title, body, link);
+  }
+}
+
+// Send in-app notifications to unsigned workers on a safety form
+app.post('/api/safety/notify-workers', requireAuth, async (req, res) => {
+  try {
+    const { form_id, form_number, form_type } = req.body;
+    if (!form_id) return res.status(400).json({ error: 'form_id required' });
+    const { rows } = await pool.query('SELECT form_data FROM safety_forms WHERE id=$1', [parseInt(form_id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const form_data = typeof rows[0].form_data === 'string' ? JSON.parse(rows[0].form_data) : rows[0].form_data;
+    const workers = form_data?.workers || [];
+    const sigs    = form_data?.worker_signatures || {};
+    const unsigned = workers.filter(w => {
+      if (!w.name) return false;
+      const wn = w.name.toLowerCase().trim();
+      return !Object.keys(sigs).some(k => {
+        const kn = k.toLowerCase().trim();
+        return kn === wn || wn.startsWith(kn + ' ') || kn.startsWith(wn + ' ');
+      });
+    });
+    const formSlug = (form_type || 'hazard-assessment').replace(/_/g, '-');
+    const link = `/safety-form-${formSlug}.html?id=${form_id}`;
+    let count = 0;
+    for (const w of unsigned) {
+      const { rows: urows } = await pool.query(
+        `SELECT id FROM users WHERE LOWER(TRIM(name))=LOWER(TRIM($1)) AND status='active' LIMIT 1`,
+        [w.name]
+      );
+      if (!urows[0]?.id) continue;
+      await createNotification(
+        urows[0].id,
+        'signature_request',
+        `Please sign Safety Form ${form_number || form_id}`,
+        `You have been added to a hazard assessment that requires your signature.`,
+        link
+      );
+      count++;
+    }
+    res.json({ ok: true, notified: count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Notification API endpoints
+app.get('/api/notifications', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, type, title, body, link, read, created_at
+       FROM notifications WHERE user_id=$1
+       ORDER BY created_at DESC LIMIT 50`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/notifications/:id/read', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE notifications SET read=1 WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/notifications/read-all', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`UPDATE notifications SET read=1 WHERE user_id=$1`, [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+async function sendSignatureRequestEmails(form_data, formId, formNumber, submitterName) {
+  const workers = form_data?.workers || [];
+  const sigs    = form_data?.worker_signatures || {};
+  const unsigned = workers.filter(w => w.name && !Object.keys(sigs).some(k => k.toLowerCase() === w.name.toLowerCase()));
+  if (!unsigned.length) return;
+
+  const smtpHost = await getSetting('smtp_host');
+  if (!smtpHost) return;
+
+  const transport = nodemailer.createTransport({
+    host: smtpHost,
+    port: parseInt(await getSetting('smtp_port', '587')),
+    auth: { user: await getSetting('smtp_user'), pass: await getSetting('smtp_pass') }
+  });
+  const fromAddr = await getSetting('smtp_from', 'noreply@jdwesternelectric.ca');
+  const appUrl   = await getSetting('app_url', 'http://localhost:3000');
+
+  for (const w of unsigned) {
+    const { rows } = await pool.query(
+      `SELECT email FROM users WHERE LOWER(TRIM(name))=LOWER(TRIM($1)) AND status='active' LIMIT 1`,
+      [w.name]
+    );
+    if (!rows[0]?.email) continue;
+    const link = `${appUrl}/safety-form-hazard.html?id=${formId}`;
+    await transport.sendMail({
+      from: fromAddr,
+      to: rows[0].email,
+      subject: `Action Required — Please sign Safety Form ${formNumber}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
+          <div style="background:#111827;padding:20px;border-radius:8px 8px 0 0;">
+            <h2 style="color:#F47920;margin:0;">J&amp;D Western Electric</h2>
+            <p style="color:rgba(255,255,255,.6);margin:4px 0 0;font-size:13px;">Field Operations Hub</p>
+          </div>
+          <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-radius:0 0 8px 8px;">
+            <p style="margin:0 0 16px;">Hi <strong>${w.name}</strong>,</p>
+            <p style="margin:0 0 16px;">
+              <strong>${submitterName}</strong> has submitted a Safety Form that requires your signature:
+            </p>
+            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin:0 0 20px;">
+              <div style="font-size:13px;color:#6b7280;">Form Number</div>
+              <div style="font-size:18px;font-weight:700;color:#111827;">${formNumber}</div>
+            </div>
+            <p style="margin:0 0 20px;font-size:14px;color:#374151;">
+              Please open the form on your phone, review the hazard assessment, and add your signature at the bottom.
+            </p>
+            <a href="${link}" style="display:block;background:#F47920;color:#fff;text-align:center;padding:14px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">
+              ✍️ Open Form &amp; Sign
+            </a>
+            <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;text-align:center;">
+              J&amp;D Western Electric Ltd &nbsp;·&nbsp; jdwesternelectric.ca
+            </p>
+          </div>
+        </div>`
+    });
+  }
+}
+
+// Get single safety form
+app.get('/api/safety/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM safety_forms WHERE id=$1', [parseInt(req.params.id)]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    // Admin-only form types are never accessible to non-admins
+    if (req.user.role !== 'admin' && ADMIN_ONLY_FORM_TYPES.includes(rows[0].form_type))
+      return res.status(403).json({ error: 'Access restricted to administrators' });
+    const fd = JSON.parse(rows[0].form_data || '{}');
+    const listedWorker = (fd.workers || []).some(w =>
+      (w.user_id && String(w.user_id) === String(req.user.id)) ||
+      (!w.user_id && w.name && w.name.toLowerCase() === req.user.name.toLowerCase())
+    );
+    if (req.user.role !== 'admin' && rows[0].submitted_by_id !== req.user.id && !listedWorker)
+      return res.status(403).json({ error: 'Forbidden' });
+    res.json({ ...rows[0], form_data: fd });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Archive a safety form globally (admin only)
+app.patch('/api/safety/:id/archive', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE safety_forms SET archived=1, archived_at=$1 WHERE id=$2',
+      [new Date().toISOString(), parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Archive/unarchive safety form within a project
+app.patch('/api/safety/:id/project-archive', requireAdmin, async (req, res) => {
+  try {
+    const { archive } = req.body;
+    await pool.query('UPDATE safety_forms SET project_archived=$1 WHERE id=$2',
+      [archive ? 1 : 0, parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Update / save draft safety form
+app.patch('/api/safety/:id', requireAuth, async (req, res) => {
+  try {
+    const { form_data, status, project_id, project_name, job_number } = req.body;
+    const { rows } = await pool.query('SELECT * FROM safety_forms WHERE id=$1', [parseInt(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const f = rows[0];
+    if (req.user.role !== 'admin' && ADMIN_ONLY_FORM_TYPES.includes(f.form_type))
+      return res.status(403).json({ error: 'Access restricted to administrators' });
+    const fd = typeof f.form_data === 'string' ? JSON.parse(f.form_data) : (f.form_data || {});
+    const listedWorker = (fd.workers || []).some(w =>
+      (w.user_id && String(w.user_id) === String(req.user.id)) ||
+      (!w.user_id && w.name && w.name.toLowerCase() === req.user.name.toLowerCase())
+    );
+    if (req.user.role !== 'admin' && f.submitted_by_id !== req.user.id && !listedWorker)
+      return res.status(403).json({ error: 'Forbidden' });
+    await pool.query(
+      `UPDATE safety_forms SET form_data=COALESCE($1,form_data), status=COALESCE($2,status),
+       project_id=COALESCE($3,project_id), project_name=COALESCE($4,project_name),
+       job_number=COALESCE($5,job_number) WHERE id=$6`,
+      [form_data ? JSON.stringify(form_data) : null, status, project_id, project_name, job_number, parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Set PSI / WCB flags (admin only)
+app.patch('/api/safety/:id/flags', requireAdmin, async (req, res) => {
+  try {
+    const { psi_flag, wcb_flag, reviewed_by } = req.body;
+    await pool.query(
+      `UPDATE safety_forms SET psi_flag=COALESCE($1,psi_flag), wcb_flag=COALESCE($2,wcb_flag),
+       reviewed_by=COALESCE($3,reviewed_by), reviewed_at=$4 WHERE id=$5`,
+      [psi_flag, wcb_flag, reviewed_by || req.user.name, new Date().toISOString(), parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// SAFETY PHOTO UPLOAD
+// ─────────────────────────────────────────────
+
+const safetyPhotoStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(__dirname, 'public', 'uploads', 'safety')),
+  filename:    (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `sp-${Date.now()}-${Math.random().toString(36).slice(2,8)}${ext}`);
+  }
+});
+const safetyPhotoUpload = multer({
+  storage: safetyPhotoStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('image/'))
+});
+
+app.post('/api/uploads/safety-photo', requireAuth, safetyPhotoUpload.single('photo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image file' });
+  const url = '/uploads/safety/' + req.file.filename;
+  try {
+    await pool.query(
+      `INSERT INTO safety_attachments (attachment_type, field_key, file_path, uploaded_by_id, uploaded_at)
+       VALUES ('photo', $1, $2, $3, $4)`,
+      [req.body.field_key || null, url, req.user.id, new Date().toISOString()]
+    );
+  } catch {}
+  res.json({ url, filename: req.file.filename });
+});
+
+// ─────────────────────────────────────────────
+// VEHICLES
+// ─────────────────────────────────────────────
+
+app.get('/api/vehicles', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM vehicles WHERE status != 'deleted' ORDER BY unit_number`);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/vehicles', requireAdmin, async (req, res) => {
+  try {
+    const { unit_number, make, model, year, vin, license_plate, notes } = req.body;
+    if (!unit_number) return res.status(400).json({ error: 'unit_number required' });
+    const { rows } = await pool.query(
+      `INSERT INTO vehicles (unit_number, make, model, year, vin, license_plate, notes, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [unit_number, make||null, model||null, year||null, vin||null, license_plate||null, notes||null, new Date().toISOString()]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/vehicles/:id', requireAdmin, async (req, res) => {
+  try {
+    const { unit_number, make, model, year, vin, license_plate, status, notes,
+            current_odometer, next_oil_change_km, last_oil_change_date } = req.body;
+    await pool.query(
+      `UPDATE vehicles SET unit_number=COALESCE($1,unit_number), make=COALESCE($2,make), model=COALESCE($3,model),
+       year=COALESCE($4,year), vin=COALESCE($5,vin), license_plate=COALESCE($6,license_plate),
+       status=COALESCE($7,status), notes=COALESCE($8,notes),
+       current_odometer=COALESCE($10,current_odometer),
+       next_oil_change_km=COALESCE($11,next_oil_change_km),
+       last_oil_change_date=COALESCE($12,last_oil_change_date)
+       WHERE id=$9`,
+      [unit_number, make, model, year, vin, license_plate, status, notes, parseInt(req.params.id),
+       current_odometer || null, next_oil_change_km || null, last_oil_change_date || null]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Vehicle maintenance status (for office dashboard)
+app.get('/api/vehicles/maintenance-status', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM vehicles WHERE status != 'deleted' ORDER BY unit_number`);
+    const result = rows.map(v => {
+      const kmUntil = (v.next_oil_change_km && v.current_odometer)
+        ? v.next_oil_change_km - v.current_odometer : null;
+      return {
+        ...v,
+        km_until_oil_change: kmUntil,
+        oil_change_status: kmUntil === null ? 'unknown'
+          : kmUntil <= 0 ? 'overdue'
+          : kmUntil <= 500 ? 'due_soon'
+          : 'ok'
+      };
+    });
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Vehicle documents
+app.get('/api/vehicles/:id/documents', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, file_type, uploaded_by, uploaded_at, notes FROM vehicle_documents WHERE vehicle_id=$1 ORDER BY uploaded_at DESC`,
+      [parseInt(req.params.id)]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/vehicles/:id/documents/:docId/file', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT data_url, name, file_type FROM vehicle_documents WHERE id=$1 AND vehicle_id=$2`, [parseInt(req.params.docId), parseInt(req.params.id)]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const doc = rows[0];
+    const base64 = doc.data_url.split(',')[1] || doc.data_url;
+    const buf = Buffer.from(base64, 'base64');
+    res.set('Content-Type', doc.file_type || 'application/octet-stream');
+    res.set('Content-Disposition', `inline; filename="${doc.name}"`);
+    res.send(buf);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/vehicles/:id/documents', requireAdmin, async (req, res) => {
+  try {
+    const { name, file_type, data_url, notes } = req.body;
+    if (!name || !data_url) return res.status(400).json({ error: 'name and data_url required' });
+    const { rows } = await pool.query(
+      `INSERT INTO vehicle_documents (vehicle_id, name, file_type, data_url, uploaded_by, uploaded_at, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, name, file_type, uploaded_by, uploaded_at, notes`,
+      [parseInt(req.params.id), name, file_type || null, data_url, req.user.name, new Date().toISOString(), notes || null]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/vehicles/:id/documents/:docId', requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM vehicle_documents WHERE id=$1 AND vehicle_id=$2`, [parseInt(req.params.docId), parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// SCHEDULED MAINTENANCE
+// ─────────────────────────────────────────────
+
+// Scheduled maintenance
+app.get('/api/scheduled-maintenance', requireAdmin, async (req, res) => {
+  try {
+    const vehicleId = req.query.vehicle_id ? parseInt(req.query.vehicle_id) : null;
+    const { rows } = await pool.query(
+      `SELECT sm.*, v.unit_number, v.make, v.model, v.year
+       FROM scheduled_maintenance sm
+       JOIN vehicles v ON v.id = sm.vehicle_id
+       ${vehicleId ? 'WHERE sm.vehicle_id=$1' : ''}
+       ORDER BY sm.scheduled_date ASC`,
+      vehicleId ? [vehicleId] : []
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/scheduled-maintenance', requireAdmin, async (req, res) => {
+  try {
+    const { vehicle_id, maintenance_type, title, scheduled_date, notes } = req.body;
+    if (!vehicle_id || !title || !scheduled_date) return res.status(400).json({ error: 'vehicle_id, title, scheduled_date required' });
+    const { rows } = await pool.query(
+      `INSERT INTO scheduled_maintenance (vehicle_id, maintenance_type, title, scheduled_date, notes, status, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7) RETURNING *`,
+      [parseInt(vehicle_id), maintenance_type || 'other', title, scheduled_date, notes || null, req.user.name, new Date().toISOString()]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/scheduled-maintenance/:id', requireAdmin, async (req, res) => {
+  try {
+    const { title, maintenance_type, scheduled_date, notes, status, completed_date, completed_notes } = req.body;
+    await pool.query(
+      `UPDATE scheduled_maintenance SET
+       title=COALESCE($1,title), maintenance_type=COALESCE($2,maintenance_type),
+       scheduled_date=COALESCE($3,scheduled_date), notes=COALESCE($4,notes),
+       status=COALESCE($5,status), completed_date=$6, completed_notes=$7
+       WHERE id=$8`,
+      [title||null, maintenance_type||null, scheduled_date||null, notes||null,
+       status||null, completed_date||null, completed_notes||null, parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/scheduled-maintenance/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM scheduled_maintenance WHERE id=$1`, [parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Vehicle inspection history (safety forms linked to a vehicle)
+app.get('/api/vehicles/:id/inspections', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, form_number, form_type, submitted_at, submitted_by, status, form_data
+       FROM safety_forms
+       WHERE vehicle_id=$1 AND archived=0
+       ORDER BY submitted_at DESC LIMIT 100`,
+      [parseInt(req.params.id)]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete vehicle (soft delete)
+app.delete('/api/vehicles/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`UPDATE vehicles SET status='deleted' WHERE id=$1`, [parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// CORRECTIVE ACTIONS
+// ─────────────────────────────────────────────
+
+app.get('/api/corrective-actions', requireAuth, async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const { status, project_id } = req.query;
+    let q = `SELECT ca.*, u.name as assigned_to_display
+             FROM corrective_actions ca
+             LEFT JOIN users u ON u.id = ca.assigned_to_id
+             WHERE 1=1`;
+    const params = [];
+    if (!isAdmin) { params.push(req.user.id); q += ` AND (ca.created_by_id=$${params.length} OR ca.assigned_to_id=$${params.length})`; }
+    if (status)     { params.push(status);     q += ` AND ca.status=$${params.length}`; }
+    if (project_id) { params.push(project_id); q += ` AND ca.project_id=$${params.length}`; }
+    q += ' ORDER BY ca.created_at DESC';
+    const { rows } = await pool.query(q, params);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/corrective-actions', requireAuth, async (req, res) => {
+  try {
+    const { source_form_type, source_form_id, source_form_number, project_id, action, assigned_to_id, assigned_to_name, due_date, notes } = req.body;
+    if (!action) return res.status(400).json({ error: 'action required' });
+    const { rows } = await pool.query(
+      `INSERT INTO corrective_actions (source_form_type, source_form_id, source_form_number, project_id,
+       action, assigned_to_id, assigned_to_name, due_date, notes, created_by_id, created_by_name, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [source_form_type||'manual', source_form_id||null, source_form_number||null, project_id||null,
+       action, assigned_to_id||null, assigned_to_name||null, due_date||null, notes||null,
+       req.user.id, req.user.name, new Date().toISOString()]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/corrective-actions/:id', requireAuth, async (req, res) => {
+  try {
+    const { action, assigned_to_id, assigned_to_name, due_date, completion_date, status, notes } = req.body;
+    await pool.query(
+      `UPDATE corrective_actions SET action=COALESCE($1,action), assigned_to_id=COALESCE($2,assigned_to_id),
+       assigned_to_name=COALESCE($3,assigned_to_name), due_date=COALESCE($4,due_date),
+       completion_date=COALESCE($5,completion_date), status=COALESCE($6,status),
+       notes=COALESCE($7,notes), updated_at=$8 WHERE id=$9`,
+      [action, assigned_to_id, assigned_to_name, due_date, completion_date, status, notes,
+       new Date().toISOString(), parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// PANEL SCHEDULES
+// ─────────────────────────────────────────────
+
+function generateScheduleNumber() {
+  const now = new Date();
+  const date = now.toISOString().slice(0,10).replace(/-/g,'');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `PS-${date}-${rand}`;
+}
+
+// List panel schedules (active)
+app.get('/api/panel-schedules', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, schedule_number, panel_name, voltage, main_breaker, bus_rating, enclosure_type,
+              num_circuits, project_id, project_name, job_number, created_by, created_at, updated_at, status
+       FROM panel_schedules WHERE archived=0 ORDER BY created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// List archived panel schedules
+app.get('/api/panel-schedules/archived', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, schedule_number, panel_name, voltage, project_name, created_by, created_at, archived_at
+       FROM panel_schedules WHERE archived=1 ORDER BY archived_at DESC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get single panel schedule
+app.get('/api/panel-schedules/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM panel_schedules WHERE id=$1', [parseInt(req.params.id)]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json({ ...rows[0], circuit_data: JSON.parse(rows[0].circuit_data || '[]') });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Create panel schedule
+app.post('/api/panel-schedules', requireAuth, async (req, res) => {
+  try {
+    const { panel_name, voltage, main_breaker, bus_rating, enclosure_type, num_circuits,
+            circuit_data, project_id, project_name, job_number } = req.body;
+    if (!panel_name) return res.status(400).json({ error: 'Panel name required' });
+    const schedule_number = generateScheduleNumber();
+    const now = new Date().toISOString();
+    const { rows } = await pool.query(
+      `INSERT INTO panel_schedules
+         (schedule_number, panel_name, voltage, main_breaker, bus_rating, enclosure_type,
+          num_circuits, circuit_data, project_id, project_name, job_number,
+          created_by_id, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       RETURNING id, schedule_number`,
+      [schedule_number, panel_name, voltage||'120/240V 1-Ph', main_breaker||null, bus_rating||null,
+       enclosure_type||null, parseInt(num_circuits)||24, JSON.stringify(circuit_data||[]),
+       project_id||null, project_name||null, job_number||null,
+       req.user.id, req.user.name, now]
+    );
+    res.json({ ok: true, id: rows[0].id, schedule_number: rows[0].schedule_number });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Update panel schedule
+app.patch('/api/panel-schedules/:id', requireAuth, async (req, res) => {
+  try {
+    const { panel_name, voltage, main_breaker, bus_rating, enclosure_type, num_circuits,
+            circuit_data, project_id, project_name, job_number } = req.body;
+    const now = new Date().toISOString();
+    await pool.query(
+      `UPDATE panel_schedules SET
+         panel_name=$1, voltage=$2, main_breaker=$3, bus_rating=$4, enclosure_type=$5,
+         num_circuits=$6, circuit_data=$7, project_id=$8, project_name=$9, job_number=$10,
+         updated_at=$11, updated_by=$12
+       WHERE id=$13`,
+      [panel_name, voltage||'120/240V 1-Ph', main_breaker||null, bus_rating||null, enclosure_type||null,
+       parseInt(num_circuits)||24, JSON.stringify(circuit_data||[]),
+       project_id||null, project_name||null, job_number||null,
+       now, req.user.name, parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Archive panel schedule (admin)
+app.patch('/api/panel-schedules/:id/archive', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE panel_schedules SET archived=1, archived_at=$1 WHERE id=$2',
+      [new Date().toISOString(), parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Unarchive panel schedule (admin)
+app.patch('/api/panel-schedules/:id/unarchive', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE panel_schedules SET archived=0, archived_at=NULL WHERE id=$1',
+      [parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Archive/unarchive within project
+app.patch('/api/panel-schedules/:id/project-archive', requireAdmin, async (req, res) => {
+  try {
+    const { archive } = req.body;
+    await pool.query('UPDATE panel_schedules SET project_archived=$1 WHERE id=$2',
+      [archive ? 1 : 0, parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─────────────────────────────────────────────

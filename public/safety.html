@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Safety — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    body { background: var(--gray-100); }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .safety-header {
+      background: #111827;
+      color: #fff;
+    }
+    .safety-header-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 16px 20px 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .safety-header-icon {
+      width: 44px; height: 44px;
+      background: var(--orange, #F47920);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .safety-header-icon svg { width: 26px; height: 26px; fill: #fff; }
+    .safety-header h1 { font-size: 1.2rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.1; }
+    .safety-header p  { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .safety-header-back {
+      margin-left: auto;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.8rem;
+      text-decoration: none;
+      padding: 6px 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────── */
+    .safety-tabs {
+      background: #1f2937;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      overflow-x: auto;
+      overflow-y: visible;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      padding-top: 8px;
+    }
+    .safety-tabs::-webkit-scrollbar { display: none; }
+    .safety-tab {
+      padding: 12px 20px;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all .15s;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .safety-tab.active { color: #fff; border-bottom-color: var(--orange, #F47920); }
+
+    /* ── Content area ────────────────────────────────────────── */
+    .safety-content {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 80px;
+    }
+    .safety-panel { display: none; }
+    .safety-panel.active { display: block; }
+
+    /* ── New Form button ─────────────────────────────────────── */
+    .sf-new-form-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--orange, #F47920);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 24px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(244,121,32,0.4);
+    }
+    .sf-new-form-btn:hover { opacity: 0.92; }
+
+    /* ── Section heading ─────────────────────────────────────── */
+    .sf-section-heading {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin: 20px 0 10px;
+    }
+
+    /* ── Submissions table ───────────────────────────────────── */
+    .sf-table-wrap { overflow-x: auto; }
+    .sf-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .sf-table th { background: #f3f4f6; text-align: left; padding: 8px 10px; font-size: 0.75rem; font-weight: 700; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
+    .sf-table td { padding: 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+    .sf-table tr:last-child td { border-bottom: none; }
+    .sf-table tr:hover td { background: #f9fafb; }
+    .sf-link-btn { color: var(--orange, #F47920); background: none; border: none; cursor: pointer; font-size: 0.82rem; padding: 0; text-decoration: underline; }
+    .sf-empty { color: #9ca3af; text-align: center; padding: 40px 20px; font-size: 0.9rem; }
+
+    /* ── Form picker modal ───────────────────────────────────── */
+    .sf-picker-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 8000;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 0;
+    }
+    .sf-picker-overlay.open { display: flex; }
+    .sf-picker-modal {
+      background: #fff;
+      border-radius: 18px 18px 0 0;
+      width: 100%;
+      max-width: 560px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding-bottom: env(safe-area-inset-bottom, 16px);
+    }
+    @media (min-width: 560px) {
+      .sf-picker-overlay { align-items: center; padding: 20px; }
+      .sf-picker-modal { border-radius: 14px; max-height: 90vh; }
+    }
+    .sf-picker-header {
+      position: sticky; top: 0;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 16px 20px 12px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .sf-picker-header h2 { font-size: 1.05rem; margin: 0; }
+    .sf-picker-close { background: none; border: none; font-size: 1.3rem; color: #6b7280; cursor: pointer; padding: 4px 8px; }
+    .sf-picker-body { padding: 12px 16px 20px; }
+    .sf-picker-group-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin: 16px 0 8px;
+    }
+    .sf-picker-group-label:first-child { margin-top: 4px; }
+    .sf-form-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .15s, background .15s;
+      background: #fff;
+      width: 100%;
+      text-align: left;
+    }
+    .sf-form-card:hover { border-color: var(--orange, #F47920); background: #fff7ed; }
+    .sf-form-card.coming-soon { opacity: 0.5; cursor: default; }
+    .sf-form-card.coming-soon:hover { border-color: #e5e7eb; background: #fff; }
+    .sf-form-card-icon { font-size: 1.5rem; width: 36px; text-align: center; flex-shrink: 0; }
+    .sf-form-card-info h3 { margin: 0 0 2px; font-size: 0.9rem; font-weight: 700; }
+    .sf-form-card-info p  { margin: 0; font-size: 0.75rem; color: #9ca3af; }
+    .sf-form-card-arrow { margin-left: auto; color: #d1d5db; flex-shrink: 0; }
+    .sf-coming-soon-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      background: #f3f4f6;
+      color: #9ca3af;
+      border-radius: 4px;
+      padding: 2px 6px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    /* ── Drafts list ─────────────────────────────────────────── */
+    .sf-draft-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sf-draft-card-body { flex: 1; min-width: 0; }
+    .sf-draft-card-body h3 { margin: 0 0 2px; font-size: 0.9rem; font-weight: 700; }
+    .sf-draft-card-body p  { margin: 0; font-size: 0.75rem; color: #9ca3af; }
+    .sf-draft-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+    /* ── Corrective actions ──────────────────────────────────── */
+    .sf-ca-badge-open     { background: #fee2e2; color: #991b1b; }
+    .sf-ca-badge-completed{ background: #dcfce7; color: #166534; }
+    .sf-ca-badge-overdue  { background: #fef2f2; color: #7f1d1d; border: 1px solid #fca5a5; }
+
+    /* ── Filters bar ─────────────────────────────────────────── */
+    .sf-filters {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .sf-filters select, .sf-filters input { padding: 7px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.82rem; background: #fff; }
+    .sf-filters input { flex: 1; min-width: 140px; }
+    .vpm-tab { transition: color .15s, border-color .15s; }
+    .vpm-tab.active { color: #F47920 !important; border-bottom-color: #F47920 !important; }
+    .vpm-panel { display:none; }
+    .vpm-panel.active { display:block; }
+    .sf-cal-day { min-height:72px; background:#fff; border:1px solid #e5e7eb; border-radius:6px; padding:4px; }
+    .sf-cal-day.today { border-color:#F47920; }
+    .sf-cal-day.other-month { background:#f9fafb; }
+    .sf-cal-header { text-align:center; padding:6px 0; font-size:11px; font-weight:700; text-transform:uppercase; color:#6b7280; }
+    .sf-cal-date { font-size:11px; font-weight:700; color:#374151; margin-bottom:2px; }
+    .sf-maint-chip { font-size:10px; font-weight:700; border-radius:4px; padding:2px 5px; margin-bottom:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+
+    /* ── Mobile responsiveness ───────────────────────────────── */
+    /* Ensure tab buttons don't flex-shrink */
+    .safety-tab { flex-shrink: 0; }
+    /* Upcoming maintenance list — wrap action buttons on narrow screens */
+    @media (max-width: 480px) {
+      /* Vehicle profile modal inner box: scrollable on small phones */
+      #sf-vehicle-profile-modal > div {
+        max-height: 95vh;
+        overflow-y: auto;
+      }
+      /* VPM tab text — shrink font so "Maint. Records" fits */
+      .vpm-tab {
+        font-size: 10px !important;
+        padding: 10px 6px !important;
+        letter-spacing: 0 !important;
+      }
+      /* Add Vehicle modal grid — collapse to single column */
+      #sf-vehicle-modal > div > div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+      /* Cert modal dates row — collapse to single column */
+      #sf-cert-modal div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+      /* Upcoming list rows — wrap action buttons below text */
+      #sf-upcoming-list > div {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      #sf-upcoming-list > div > div[style*="display:flex;gap:5px"] {
+        flex-shrink: 0;
+        margin-left: auto;
+      }
+      /* Worker profile modal — max-width fits screen */
+      #sf-worker-profile-modal > div {
+        max-width: calc(100vw - 32px) !important;
+        max-height: 95vh;
+        overflow-y: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div id="sf-offline-banner">
+  <span class="sf-offline-count"></span>
+</div>
+
+<!-- ── Header ───────────────────────────────────────────────── -->
+<div class="safety-header">
+  <div class="safety-header-inner">
+    <div class="safety-header-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-3-3 1.41-1.41L11 12.17l4.59-4.58L17 9l-6 6z"/></svg>
+    </div>
+    <div>
+      <h1>Safety</h1>
+      <p>J&amp;D Western Electric</p>
+    </div>
+    <a href="/" class="safety-header-back">← Hub</a>
+  </div>
+  <!-- Tab bar -->
+  <div class="safety-tabs" id="sf-tabs">
+    <button class="safety-tab active" data-tab="submissions">My Submissions</button>
+    <button class="safety-tab" data-tab="drafts">Drafts</button>
+    <button class="safety-tab" data-tab="actions">Open Actions</button>
+    <button class="safety-tab" data-tab="sign" id="sf-tab-sign" style="display:none;position:relative;">
+      Sign Required
+      <span id="sf-sign-badge" style="display:none;position:absolute;top:-6px;right:-8px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:9px;line-height:18px;text-align:center;padding:0 4px;"></span>
+    </button>
+    <button class="safety-tab" data-tab="certs">🪪 My Tickets</button>
+    <button class="safety-tab admin-only" data-tab="admin" style="display:none;">Admin</button>
+  </div>
+</div>
+
+<!-- ── Content ──────────────────────────────────────────────── -->
+<div class="safety-content">
+
+  <!-- ── Tab: Sign Required ─────────────────────────────────── -->
+  <div class="safety-panel" id="sf-panel-sign">
+    <div class="sf-section-heading">Forms Requiring Your Signature</div>
+    <div id="sf-sign-list"><p class="sf-empty" style="padding:24px 0;">Loading…</p></div>
+  </div>
+
+  <!-- New Form Button (always visible) -->
+  <button class="sf-new-form-btn" id="sf-new-form-btn">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+    Start New Safety Form
+  </button>
+
+  <!-- ── Tab: Submissions ───────────────────────────────────── -->
+  <div class="safety-panel active" id="sf-panel-submissions">
+    <div class="sf-section-heading">My Submissions</div>
+    <div class="sf-filters">
+      <input type="text" id="sf-sub-search" placeholder="Search…"/>
+      <select id="sf-sub-type-filter">
+        <option value="">All form types</option>
+      </select>
+    </div>
+    <div class="sf-table-wrap">
+      <table class="sf-table">
+        <thead>
+          <tr>
+            <th>Form</th>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Project</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sf-sub-tbody">
+          <tr><td colspan="6" class="sf-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: Drafts ────────────────────────────────────────── -->
+  <div class="safety-panel" id="sf-panel-drafts">
+    <div class="sf-section-heading">Local Drafts</div>
+    <div id="sf-drafts-list"></div>
+  </div>
+
+  <!-- ── Tab: Open Actions ─────────────────────────────────── -->
+  <div class="safety-panel" id="sf-panel-actions">
+    <div class="sf-section-heading">Corrective Actions Register</div>
+    <div class="sf-filters">
+      <select id="sf-ca-status">
+        <option value="">All statuses</option>
+        <option value="open">Open</option>
+        <option value="completed">Completed</option>
+        <option value="overdue">Overdue</option>
+      </select>
+    </div>
+    <div class="sf-table-wrap">
+      <table class="sf-table">
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Source</th>
+            <th>Assigned To</th>
+            <th>Due</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sf-ca-tbody">
+          <tr><td colspan="6" class="sf-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-secondary" id="sf-ca-add-btn">+ Add Corrective Action</button>
+    </div>
+  </div>
+
+  <!-- ── Tab: Admin ─────────────────────────────────────────── -->
+  <div class="safety-panel" id="sf-panel-admin">
+    <div class="sf-section-heading">All Submissions</div>
+    <div class="sf-filters">
+      <input type="text" id="sf-admin-search" placeholder="Search…"/>
+      <select id="sf-admin-type">
+        <option value="">All types</option>
+      </select>
+      <select id="sf-admin-status">
+        <option value="">All statuses</option>
+        <option value="Draft">Draft</option>
+        <option value="Submitted">Submitted</option>
+      </select>
+    </div>
+    <div class="sf-table-wrap">
+      <table class="sf-table">
+        <thead>
+          <tr><th>Form #</th><th>Type</th><th>Submitted By</th><th>Date</th><th>Project</th><th>Status</th><th>Flags</th><th></th></tr>
+        </thead>
+        <tbody id="sf-admin-tbody">
+          <tr><td colspan="8" class="sf-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sf-section-heading" style="margin-top:28px;">Fleet Vehicles</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-secondary btn-sm" id="sf-vehicle-add-btn">+ Add Vehicle</button>
+      <button class="btn btn-secondary btn-sm" id="sf-fleet-profile-refresh">↻ Refresh</button>
+    </div>
+    <div id="sf-vehicle-profile-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;"></div>
+
+    <div class="sf-section-heading" style="margin-top:28px;">Scheduled Maintenance Calendar</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="sf-cal-prev" class="btn btn-secondary btn-sm">‹</button>
+        <span id="sf-cal-month-label" style="font-size:14px;font-weight:700;min-width:130px;text-align:center;"></span>
+        <button id="sf-cal-next" class="btn btn-secondary btn-sm">›</button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="sf-sched-add-btn" style="background:var(--orange,#F47920);">+ Schedule Maintenance</button>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <div id="sf-maint-cal-grid" style="min-width:490px;display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+    </div>
+    <!-- Upcoming list -->
+    <div class="sf-section-heading" style="margin-top:20px;">Upcoming (Next 60 Days)</div>
+    <div id="sf-upcoming-list" style="margin-bottom:8px;"></div>
+
+    <div class="sf-section-heading" style="margin-top:28px;">Worker Certifications</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <select id="sf-certs-filter-worker" style="font-size:12px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="">All Workers</option>
+      </select>
+      <select id="sf-certs-filter-status" style="font-size:12px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="">All Statuses</option>
+        <option value="expired">Expired</option>
+        <option value="soon">Expiring ≤ 90 days</option>
+        <option value="ok">Valid</option>
+      </select>
+      <button class="btn btn-secondary btn-sm" id="sf-certs-refresh">↻ Refresh</button>
+    </div>
+    <!-- Worker profile card grid -->
+    <div id="sf-certs-worker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px;"></div>
+    <!-- Flat table shown when worker filter active -->
+    <div id="sf-certs-table-wrap" style="display:none;">
+      <div class="sf-table-wrap">
+        <table class="sf-table">
+          <thead><tr><th>Worker</th><th>Certification</th><th>Type</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+          <tbody id="sf-certs-tbody"><tr><td colspan="7" class="sf-empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: My Safety Tickets ───────────────────────────── -->
+  <div class="safety-panel" id="sf-panel-certs">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+      <div class="sf-section-heading" style="margin:0;">My Safety Certifications</div>
+      <button class="btn btn-primary btn-sm" id="sf-cert-add-btn" style="background:var(--orange,#F47920);">+ Add Ticket</button>
+    </div>
+    <div id="sf-cert-list"><p class="sf-empty" style="padding:24px 0;">Loading…</p></div>
+  </div>
+
+</div><!-- /safety-content -->
+
+<!-- Vehicle Profile Modal -->
+<div id="sf-vehicle-profile-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:550;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:700px;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:auto;">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:17px;font-weight:900;color:#111827;" id="vpm-title">Vehicle Profile</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px;" id="vpm-subtitle"></div>
+      </div>
+      <button onclick="document.getElementById('sf-vehicle-profile-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1;flex-shrink:0;">✕</button>
+    </div>
+    <!-- Tab bar -->
+    <div style="display:flex;border-bottom:2px solid #e5e7eb;">
+      <button class="vpm-tab active" data-vtab="inspections" style="flex:1;padding:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:none;background:none;cursor:pointer;border-bottom:2px solid #F47920;color:#F47920;">Inspections</button>
+      <button class="vpm-tab" data-vtab="records" style="flex:1;padding:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#6b7280;">Maint. Records</button>
+      <button class="vpm-tab" data-vtab="scheduled" style="flex:1;padding:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#6b7280;">Scheduled</button>
+    </div>
+    <div id="vpm-panel-inspections" class="vpm-panel" style="padding:16px 20px;max-height:55vh;overflow-y:auto;display:block;"></div>
+    <div id="vpm-panel-records" class="vpm-panel" style="padding:16px 20px;max-height:55vh;overflow-y:auto;">
+      <div style="text-align:right;margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" id="vpm-add-record-btn" style="background:var(--orange,#F47920);">+ Upload Record</button>
+      </div>
+      <div id="vpm-records-list"></div>
+    </div>
+    <div id="vpm-panel-scheduled" class="vpm-panel" style="padding:16px 20px;max-height:55vh;overflow-y:auto;">
+      <div style="text-align:right;margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" id="vpm-add-sched-btn" style="background:var(--orange,#F47920);">+ Schedule Task</button>
+      </div>
+      <div id="vpm-scheduled-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Vehicle Modal -->
+<div id="sf-vehicle-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:560;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <h3 style="font-size:15px;font-weight:800;" id="sf-vehicle-modal-title">Add Vehicle</h3>
+      <button onclick="document.getElementById('sf-vehicle-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <input type="hidden" id="sf-vehicle-edit-id"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Unit # *</label><input type="text" id="sf-v-unit" class="form-control" placeholder="e.g. T-01"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Year</label><input type="text" id="sf-v-year" class="form-control" placeholder="2020"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Make</label><input type="text" id="sf-v-make" class="form-control" placeholder="Ford"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Model</label><input type="text" id="sf-v-model" class="form-control" placeholder="F-350"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">License Plate</label><input type="text" id="sf-v-plate" class="form-control"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">VIN</label><input type="text" id="sf-v-vin" class="form-control"/></div>
+    </div>
+    <div style="margin-bottom:16px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Notes</label><textarea id="sf-v-notes" class="form-control" rows="2" style="resize:vertical;"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button id="sf-vehicle-modal-delete" class="btn btn-danger btn-sm" style="display:none;margin-right:auto;">Delete Vehicle</button>
+      <button onclick="document.getElementById('sf-vehicle-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
+      <button id="sf-vehicle-modal-save" class="btn btn-primary" style="background:var(--orange,#F47920);">Save Vehicle</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Record Modal (reused for vehicle docs) -->
+<div id="sf-record-upload-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:570;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="font-size:15px;font-weight:800;">Upload Maintenance Record</h3>
+      <button onclick="document.getElementById('sf-record-upload-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <input type="hidden" id="sf-rec-vehicle-id"/>
+    <div style="margin-bottom:12px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Document Name *</label><input type="text" id="sf-rec-name" class="form-control" placeholder="e.g. Oil Change Receipt — Jun 2026"/></div>
+    <div style="margin-bottom:12px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">File (PDF, JPG, PNG) *</label><input type="file" id="sf-rec-file" class="form-control" accept=".pdf,.jpg,.jpeg,.png"/></div>
+    <div style="margin-bottom:16px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Notes</label><input type="text" id="sf-rec-notes" class="form-control" placeholder="Optional notes"/></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="document.getElementById('sf-record-upload-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
+      <button id="sf-rec-upload-btn" class="btn btn-primary" style="background:var(--orange,#F47920);">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Maintenance Modal -->
+<div id="sf-sched-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:570;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="font-size:15px;font-weight:800;" id="sf-sched-modal-title">Schedule Maintenance</h3>
+      <button onclick="sfCloseSched()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <input type="hidden" id="sf-sched-edit-id"/>
+    <div style="margin-bottom:12px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Vehicle *</label>
+      <select id="sf-sched-vehicle" class="form-control"><option value="">Select vehicle…</option></select></div>
+    <div style="margin-bottom:12px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Type *</label>
+      <select id="sf-sched-type" class="form-control" onchange="sfSchedTypeChange(this.value)">
+        <option value="oil_change">Oil Change</option>
+        <option value="tire_rotation">Tire Rotation</option>
+        <option value="inspection">Inspection</option>
+        <option value="brake_service">Brake Service</option>
+        <option value="transmission">Transmission Service</option>
+        <option value="coolant">Coolant Flush</option>
+        <option value="other">Other…</option>
+      </select></div>
+    <div id="sf-sched-other-wrap" style="display:none;margin-bottom:12px;">
+      <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Describe the work *</label>
+      <input type="text" id="sf-sched-other-desc" class="form-control" placeholder="e.g. Differential fluid change, belt replacement…"/>
+    </div>
+    <input type="hidden" id="sf-sched-title"/>
+    <div style="margin-bottom:12px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Scheduled Date *</label><input type="date" id="sf-sched-date" class="form-control"/></div>
+    <div style="margin-bottom:16px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Notes</label><textarea id="sf-sched-notes" class="form-control" rows="2" style="resize:vertical;" placeholder="e.g. Mechanic name, shop, estimated cost…"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button id="sf-sched-delete-btn" style="display:none;margin-right:auto;" class="btn btn-danger btn-sm" onclick="sfDeleteSched()">Delete</button>
+      <button onclick="sfCloseSched()" class="btn btn-secondary">Cancel</button>
+      <button id="sf-sched-save-btn" class="btn btn-primary" style="background:var(--orange,#F47920);">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mark Complete Modal -->
+<div id="sf-complete-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:580;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:420px;max-width:95vw;">
+    <h3 style="font-size:15px;font-weight:800;margin-bottom:14px;">Mark as Complete</h3>
+    <input type="hidden" id="sf-complete-sched-id"/>
+    <div style="margin-bottom:12px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Completion Date</label><input type="date" id="sf-complete-date" class="form-control"/></div>
+    <div style="margin-bottom:16px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Notes</label><textarea id="sf-complete-notes" class="form-control" rows="2" style="resize:vertical;" placeholder="Work performed, shop used, cost…"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="document.getElementById('sf-complete-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
+      <button id="sf-complete-save-btn" class="btn btn-primary" style="background:#16a34a;color:#fff;">✓ Mark Complete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cert Add/Edit Modal ───────────────────────────────── -->
+<div class="sf-modal-overlay" id="sf-cert-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-end;justify-content:center;">
+  <div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 40px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <div style="font-size:16px;font-weight:800;" id="sf-cert-modal-title">Add Safety Ticket</div>
+      <button id="sf-cert-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1;">×</button>
+    </div>
+    <input type="hidden" id="sf-cert-edit-id"/>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Ticket / Certification Name *</label>
+      <input type="text" id="sf-cert-name" class="form-control" placeholder="e.g. H2S Alive, First Aid, WHMIS"/>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Type</label>
+      <select id="sf-cert-type" class="form-control">
+        <option value="h2s">H2S Alive</option>
+        <option value="first_aid">First Aid / CPR</option>
+        <option value="whmis">WHMIS</option>
+        <option value="fall_protection">Fall Protection</option>
+        <option value="ground_disturbance">Ground Disturbance</option>
+        <option value="confined_space">Confined Space</option>
+        <option value="elevated_work">Elevated Work Platform</option>
+        <option value="flagging">Traffic Control / Flagging</option>
+        <option value="ppe">PPE / Safety Orientation</option>
+        <option value="electrical">Electrical Safety</option>
+        <option value="forklift">Forklift / Skid Steer</option>
+        <option value="driver">Driver's Abstract / License</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Issue Date</label>
+        <input type="date" id="sf-cert-issued" class="form-control"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Expiry Date</label>
+        <input type="date" id="sf-cert-expiry" class="form-control"/>
+      </div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Notes</label>
+      <textarea id="sf-cert-notes" class="form-control" rows="2" placeholder="Provider, course number…" style="resize:vertical;"></textarea>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Photo of Ticket Card</label>
+      <div id="sf-cert-photo-area" style="border:2px dashed #d1d5db;border-radius:8px;padding:20px;text-align:center;background:#f9fafb;position:relative;cursor:pointer;">
+        <div id="sf-cert-photo-prompt" style="color:#9ca3af;font-size:13px;">📷 Tap to take photo or upload image</div>
+        <img id="sf-cert-photo-preview" style="display:none;max-width:100%;max-height:180px;border-radius:6px;object-fit:contain;" alt=""/>
+        <input type="file" id="sf-cert-photo-input" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer;"/>
+      </div>
+      <button type="button" id="sf-cert-photo-clear" style="display:none;margin-top:6px;background:none;border:1px solid #d1d5db;border-radius:6px;padding:4px 12px;font-size:12px;color:#6b7280;cursor:pointer;">✕ Remove photo</button>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button id="sf-cert-modal-cancel" style="flex:1;padding:12px;border:none;border-radius:8px;background:#f3f4f6;color:#374151;font-size:14px;font-weight:700;cursor:pointer;">Cancel</button>
+      <button id="sf-cert-modal-delete" style="display:none;flex:1;padding:12px;border:none;border-radius:8px;background:#fee2e2;color:#991b1b;font-size:14px;font-weight:700;cursor:pointer;">Delete</button>
+      <button id="sf-cert-modal-save" style="flex:1;padding:12px;border:none;border-radius:8px;background:#F47920;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Save Ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Photo lightbox ─────────────────────────────────────── -->
+<div id="sf-cert-lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:600;align-items:center;justify-content:center;">
+  <button id="sf-cert-lightbox-close" style="position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:36px;cursor:pointer;">×</button>
+  <img id="sf-cert-lightbox-img" style="max-width:95vw;max-height:90vh;border-radius:8px;object-fit:contain;" alt=""/>
+</div>
+
+<!-- ── Form Picker Modal ──────────────────────────────────── -->
+<div class="sf-picker-overlay" id="sf-picker-overlay">
+  <div class="sf-picker-modal">
+    <div class="sf-picker-header">
+      <h2>Start a Safety Form</h2>
+      <button class="sf-picker-close" id="sf-picker-close">✕</button>
+    </div>
+    <div class="sf-picker-body" id="sf-picker-body">
+      <!-- populated by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ── Corrective Action Quick-Add Modal ─────────────────── -->
+<div class="modal-overlay" id="sf-ca-modal" style="display:none;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Add Corrective Action</h2>
+      <button class="modal-close" id="sf-ca-modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Action / Item <span style="color:#ef4444">*</span></label>
+        <textarea id="sf-ca-action" class="form-control" rows="3" placeholder="Describe the corrective action required…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assigned To</label>
+        <select id="sf-ca-assignee" class="form-control"><option value="">— Select person —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Due Date</label>
+        <input type="date" id="sf-ca-due" class="form-control"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" id="sf-ca-notes" class="form-control" placeholder="Optional notes"/>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:flex-end;gap:10px;">
+      <button class="btn btn-secondary" id="sf-ca-cancel">Cancel</button>
+      <button class="btn btn-primary" id="sf-ca-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="print-area"></div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+  // ── Auth check ────────────────────────────────────────────
+  let currentUser = null;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { window.location.href = '/login.html'; return; }
+    currentUser = await r.json();
+  } catch { window.location.href = '/login.html'; return; }
+
+  document.body.style.visibility = '';
+
+  // Show redirect message if bounced from a restricted page
+  const _urlMsg = new URLSearchParams(location.search).get('msg');
+  if (_urlMsg === 'restricted') {
+    Safety.toast('That form is restricted to administrators only.', 'error');
+    history.replaceState(null, '', '/safety.html');
+  }
+
+  // Catch any runtime error so the page never stays white
+  try {
+
+  const isAdmin = currentUser.role === 'admin';
+
+  if (isAdmin) {
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+  }
+
+  // ── Tab switching ─────────────────────────────────────────
+  document.getElementById('sf-tabs').addEventListener('click', e => {
+    const tab = e.target.closest('.safety-tab');
+    if (!tab) return;
+    document.querySelectorAll('.safety-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.safety-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const panelId = 'sf-panel-' + tab.dataset.tab;
+    document.getElementById(panelId)?.classList.add('active');
+    if (tab.dataset.tab === 'drafts')        renderDrafts();
+    if (tab.dataset.tab === 'actions')       loadActions();
+    if (tab.dataset.tab === 'admin')         { loadAdminData(); loadVehicleProfiles(); sfLoadSchedMaint(); sfLoadAllCerts(); }
+    if (tab.dataset.tab === 'certs')         loadMyCerts();
+  });
+
+  // ── Form Picker ───────────────────────────────────────────
+  const ADMIN_ONLY_FORM_TYPES = ['incident_report','near_miss','corrective_action','ojt_record','emergency_review'];
+  const GROUPS = ['Pre-Work', 'Inspections', 'Reporting', 'Admin', 'Maintenance'];
+  function buildPicker() {
+    const body = document.getElementById('sf-picker-body');
+    let html = '';
+    GROUPS.forEach(group => {
+      let forms = Object.entries(Safety.FORM_TYPES).filter(([, v]) => v.group === group);
+      if (!isAdmin) forms = forms.filter(([key]) => !ADMIN_ONLY_FORM_TYPES.includes(key));
+      if (!forms.length) return;
+      html += `<div class="sf-picker-group-label">${group}</div>`;
+      forms.forEach(([key, info]) => {
+        const available = !!info.url;
+        if (available) {
+          html += `<a href="${info.url}" class="sf-form-card">
+            <span class="sf-form-card-icon">${info.icon}</span>
+            <div class="sf-form-card-info">
+              <h3>${info.label}</h3>
+              <p>Form ${info.short}</p>
+            </div>
+            <span class="sf-form-card-arrow">→</span>
+          </a>`;
+        } else {
+          html += `<div class="sf-form-card coming-soon" title="Coming soon">
+            <span class="sf-form-card-icon">${info.icon}</span>
+            <div class="sf-form-card-info">
+              <h3>${info.label}</h3>
+              <p>Form ${info.short}</p>
+            </div>
+            <span class="sf-coming-soon-badge">Coming soon</span>
+          </div>`;
+        }
+      });
+    });
+    body.innerHTML = html;
+  }
+  buildPicker();
+
+  document.getElementById('sf-new-form-btn').addEventListener('click', () => {
+    document.getElementById('sf-picker-overlay').classList.add('open');
+  });
+  document.getElementById('sf-picker-close').addEventListener('click', () => {
+    document.getElementById('sf-picker-overlay').classList.remove('open');
+  });
+  document.getElementById('sf-picker-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('sf-picker-overlay'))
+      document.getElementById('sf-picker-overlay').classList.remove('open');
+  });
+
+  // ── Populate type filters ─────────────────────────────────
+  function populateTypeSelects() {
+    const allOptions = Object.entries(Safety.FORM_TYPES)
+      .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+    const fieldOptions = Object.entries(Safety.FORM_TYPES)
+      .filter(([k]) => !ADMIN_ONLY_FORM_TYPES.includes(k))
+      .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+    // Admin type filter (office dashboard) gets all types
+    const adminEl = document.getElementById('sf-admin-type');
+    if (adminEl) adminEl.innerHTML = '<option value="">All form types</option>' + allOptions;
+    // Field worker type filter only shows non-restricted types
+    const subEl = document.getElementById('sf-sub-type-filter');
+    if (subEl) subEl.innerHTML = '<option value="">All form types</option>' + (isAdmin ? allOptions : fieldOptions);
+  }
+  populateTypeSelects();
+
+  // ── My Submissions ────────────────────────────────────────
+  let _submissions = [];
+  async function loadSubmissions() {
+    try {
+      const r = await fetch('/api/safety');
+      _submissions = await r.json();
+    } catch { _submissions = []; }
+    renderSubmissions();
+  }
+
+  function renderSubmissions() {
+    const search = document.getElementById('sf-sub-search').value.toLowerCase();
+    const typeF  = document.getElementById('sf-sub-type-filter').value;
+    const tbody  = document.getElementById('sf-sub-tbody');
+    let rows = _submissions;
+    if (search) rows = rows.filter(r =>
+      (r.form_number || '').toLowerCase().includes(search) ||
+      (r.project_name || '').toLowerCase().includes(search) ||
+      Safety.formLabel(r.form_type).toLowerCase().includes(search)
+    );
+    if (typeF) rows = rows.filter(r => r.form_type === typeF);
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="sf-empty">No submissions found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td><strong>${r.form_number || '—'}</strong></td>
+        <td>${Safety.formIcon(r.form_type)} ${Safety.formShort(r.form_type)}</td>
+        <td>${Safety.fmtDate(r.date)}</td>
+        <td>${r.project_name ? `<span style="font-size:.8rem;">${r.project_name}</span>` : '<span style="color:#9ca3af">—</span>'}</td>
+        <td><span class="sf-chip ${r.status === 'Draft' ? 'sf-chip-draft' : 'sf-chip-submitted'}">${r.status || 'Submitted'}</span></td>
+        <td>
+          ${Safety.formUrl(r.form_type) ? `<a href="${Safety.formUrl(r.form_type)}?id=${r.id}" class="sf-link-btn">Open</a>` : ''}
+        </td>
+      </tr>`).join('');
+  }
+
+  document.getElementById('sf-sub-search').addEventListener('input', renderSubmissions);
+  document.getElementById('sf-sub-type-filter').addEventListener('change', renderSubmissions);
+  loadSubmissions();
+
+  // ── Drafts ────────────────────────────────────────────────
+  function renderDrafts() {
+    const drafts = Safety.DraftManager.list();
+    const el = document.getElementById('sf-drafts-list');
+    if (!drafts.length) {
+      el.innerHTML = '<div class="sf-empty">No local drafts saved on this device.</div>';
+      return;
+    }
+    el.innerHTML = drafts.map(d => {
+      const info = Safety.FORM_TYPES[d.form_type] || {};
+      const savedAt = d._saved_at ? Safety.fmtDT(d._saved_at) : '—';
+      const url = info.url ? `${info.url}?draft=1&type=${d.form_type}&draftId=${d.form_id || 'new'}` : null;
+      return `<div class="sf-draft-card">
+        <span style="font-size:1.6rem;">${info.icon || '📄'}</span>
+        <div class="sf-draft-card-body">
+          <h3>${info.label || d.form_type}</h3>
+          <p>Saved ${savedAt}${d.project_name ? ' · ' + d.project_name : ''}</p>
+        </div>
+        <div class="sf-draft-card-actions">
+          ${url ? `<a href="${url}" class="btn btn-secondary btn-sm">Resume</a>` : '<span style="color:#9ca3af;font-size:.8rem;">Form not yet available</span>'}
+          <button class="btn btn-ghost btn-sm sf-draft-delete" data-key="${d.key}">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    el.querySelectorAll('.sf-draft-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        localStorage.removeItem(btn.dataset.key);
+        renderDrafts();
+      });
+    });
+  }
+
+  // ── Open Actions ──────────────────────────────────────────
+  let _actions = [];
+  async function loadActions() {
+    try {
+      const status = document.getElementById('sf-ca-status').value;
+      const url = '/api/corrective-actions' + (status ? `?status=${status}` : '');
+      const r = await fetch(url);
+      _actions = await r.json();
+    } catch { _actions = []; }
+    renderActions();
+  }
+
+  function renderActions() {
+    const tbody = document.getElementById('sf-ca-tbody');
+    if (!_actions.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="sf-empty">No corrective actions found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = _actions.map(a => {
+      const statusCls = { open: 'sf-chip-open', completed: 'sf-chip-completed', overdue: 'sf-chip-overdue' }[a.status] || 'sf-chip-submitted';
+      return `<tr>
+        <td style="max-width:200px;">${a.action}</td>
+        <td style="font-size:.8rem;color:#6b7280;">${Safety.formShort(a.source_form_type)}</td>
+        <td>${a.assigned_to_name || '—'}</td>
+        <td>${a.due_date ? Safety.fmtDate(a.due_date) : '—'}</td>
+        <td><span class="sf-chip ${statusCls}">${a.status}</span></td>
+        <td>
+          ${a.status !== 'completed' ? `<button class="sf-link-btn sf-ca-complete" data-id="${a.id}">Complete</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('.sf-ca-complete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await fetch(`/api/corrective-actions/${btn.dataset.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'completed', completion_date: new Date().toISOString().slice(0, 10) })
+        });
+        loadActions();
+      });
+    });
+  }
+
+  document.getElementById('sf-ca-status').addEventListener('change', loadActions);
+
+  // CA quick-add modal
+  let _caUsers = [];
+  async function openCAModal() {
+    if (!_caUsers.length) _caUsers = await Safety.loadUsers();
+    const sel = document.getElementById('sf-ca-assignee');
+    sel.innerHTML = '<option value="">— Select person —</option>' +
+      _caUsers.map(u => `<option value="${u.id}" data-name="${u.name}">${u.name}</option>`).join('');
+    document.getElementById('sf-ca-action').value = '';
+    document.getElementById('sf-ca-due').value = '';
+    document.getElementById('sf-ca-notes').value = '';
+    document.getElementById('sf-ca-modal').style.display = 'flex';
+  }
+  document.getElementById('sf-ca-add-btn').addEventListener('click', openCAModal);
+  document.getElementById('sf-ca-modal-close').addEventListener('click', () => document.getElementById('sf-ca-modal').style.display = 'none');
+  document.getElementById('sf-ca-cancel').addEventListener('click',  () => document.getElementById('sf-ca-modal').style.display = 'none');
+  document.getElementById('sf-ca-save').addEventListener('click', async () => {
+    const action = document.getElementById('sf-ca-action').value.trim();
+    if (!action) { Safety.toast('Action is required', 'error'); return; }
+    const sel = document.getElementById('sf-ca-assignee');
+    const opt = sel.options[sel.selectedIndex];
+    await fetch('/api/corrective-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_form_type: 'manual',
+        action,
+        assigned_to_id:   sel.value || null,
+        assigned_to_name: sel.value ? opt.dataset.name : null,
+        due_date:         document.getElementById('sf-ca-due').value || null,
+        notes:            document.getElementById('sf-ca-notes').value || null
+      })
+    });
+    document.getElementById('sf-ca-modal').style.display = 'none';
+    Safety.toast('Corrective action added', 'success');
+    loadActions();
+  });
+
+  // ── Admin ─────────────────────────────────────────────────
+  let _adminForms = [], _vehicles = [];
+  async function loadAdminData() {
+    if (!isAdmin) return;
+    await loadAdminForms();
+  }
+
+  async function loadAdminForms() {
+    try {
+      const [active, archived] = await Promise.all([
+        fetch('/api/safety').then(r => r.json()),
+        fetch('/api/safety/archived').then(r => r.json())
+      ]);
+      _adminForms = [...active, ...archived];
+    } catch { _adminForms = []; }
+    renderAdminForms();
+  }
+
+  function renderAdminForms() {
+    const search = document.getElementById('sf-admin-search').value.toLowerCase();
+    const typeF  = document.getElementById('sf-admin-type').value;
+    const statF  = document.getElementById('sf-admin-status').value;
+    const tbody  = document.getElementById('sf-admin-tbody');
+    let rows = _adminForms;
+    if (search) rows = rows.filter(r => (r.form_number || '').toLowerCase().includes(search) || (r.submitted_by || '').toLowerCase().includes(search) || (r.project_name || '').toLowerCase().includes(search));
+    if (typeF) rows = rows.filter(r => r.form_type === typeF);
+    if (statF) rows = rows.filter(r => r.status === statF);
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="sf-empty">No forms found</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td style="font-size:.8rem;">${r.form_number || '—'}</td>
+        <td>${Safety.formIcon(r.form_type)} ${Safety.formShort(r.form_type)}</td>
+        <td>${r.submitted_by}</td>
+        <td>${Safety.fmtDate(r.date)}</td>
+        <td style="font-size:.8rem;">${r.project_name || '—'}</td>
+        <td><span class="sf-chip ${r.status === 'Draft' ? 'sf-chip-draft' : 'sf-chip-submitted'}">${r.status}</span></td>
+        <td style="font-size:.8rem;">${r.psi_flag ? '🔴 PSI' : ''}${r.wcb_flag ? '⚠️ WCB' : ''}</td>
+        <td>${Safety.formUrl(r.form_type) ? `<a href="${Safety.formUrl(r.form_type)}?id=${r.id}" class="sf-link-btn">View</a>` : ''}</td>
+      </tr>`).join('');
+  }
+
+  document.getElementById('sf-admin-search').addEventListener('input', renderAdminForms);
+  document.getElementById('sf-admin-type').addEventListener('change', renderAdminForms);
+  document.getElementById('sf-admin-status').addEventListener('change', renderAdminForms);
+
+  // ── Fleet Vehicle Profiles ───────────────────────────────────
+  let _sfVehicles = [], _sfSchedMaint = [], _sfVpmVehicleId = null;
+  const MAINT_TYPE_LABELS = { oil_change:'Oil Change', tire_rotation:'Tire Rotation', inspection:'Inspection', brake_service:'Brake Service', transmission:'Transmission Service', coolant:'Coolant Flush', other:'Other' };
+  const MAINT_TYPE_COLORS = { oil_change:'#F47920', tire_rotation:'#3b82f6', inspection:'#8b5cf6', brake_service:'#ef4444', transmission:'#059669', coolant:'#0891b2', other:'#6b7280' };
+
+  async function loadVehicleProfiles() {
+    const grid = document.getElementById('sf-vehicle-profile-grid');
+    if (!grid) return;
+    try {
+      const r = await fetch('/api/vehicles/maintenance-status');
+      if (!r.ok) throw new Error(r.status);
+      _sfVehicles = await r.json();
+      renderVehicleProfileGrid();
+    } catch(e) { if (grid) grid.innerHTML = `<div style="color:#dc2626;font-size:13px;">Failed to load vehicles: ${e.message}</div>`; }
+  }
+
+  function renderVehicleProfileGrid() {
+    const grid = document.getElementById('sf-vehicle-profile-grid');
+    if (!grid) return;
+    if (!_sfVehicles.length) {
+      grid.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px 0;">No vehicles in fleet. Add one above.</div>';
+      return;
+    }
+    grid.innerHTML = _sfVehicles.map(v => {
+      const oilSt = v.oil_change_status;
+      const bg = oilSt==='overdue'?'#fee2e2':oilSt==='due_soon'?'#fef9c3':'#f0fdf4';
+      const border = oilSt==='overdue'?'#fca5a5':oilSt==='due_soon'?'#fde047':'#86efac';
+      const oilBadge = oilSt==='overdue'
+        ? `<span style="color:#991b1b;font-size:11px;font-weight:700;">⚠ Oil change OVERDUE</span>`
+        : oilSt==='due_soon'
+        ? `<span style="color:#854d0e;font-size:11px;font-weight:700;">⏰ Oil change due soon</span>`
+        : v.current_odometer
+        ? `<span style="color:#166534;font-size:11px;font-weight:700;">✅ Oil change OK</span>`
+        : `<span style="color:#9ca3af;font-size:11px;">No odometer data</span>`;
+      const vehicleName = [v.year, v.make, v.model].filter(Boolean).join(' ') || 'Unknown Vehicle';
+      const lastInsp = v.last_inspection_date ? `Last insp: ${v.last_inspection_date}` : 'No inspections';
+      return `<div style="background:${bg};border:1.5px solid ${border};border-radius:10px;padding:14px;cursor:pointer;" onclick="sfOpenVehicleProfile(${v.id})" onmouseover="this.style.boxShadow='0 2px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+        <div style="font-size:16px;font-weight:900;color:#111827;margin-bottom:2px;">${_sfEsc(v.unit_number||'—')}</div>
+        <div style="font-size:12px;color:#374151;margin-bottom:8px;">${_sfEsc(vehicleName)}</div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:6px;">${_sfEsc(v.license_plate||'No plate')}</div>
+        ${oilBadge}
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${lastInsp}</div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="event.stopPropagation();sfOpenVehicleProfile(${v.id})">View Profile →</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="event.stopPropagation();sfOpenVehicleEdit(${v.id})">✏️</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  window.sfOpenVehicleProfile = async function(vehicleId) {
+    _sfVpmVehicleId = vehicleId;
+    const v = _sfVehicles.find(x => x.id === vehicleId);
+    if (!v) return;
+    const vehicleName = [v.year, v.make, v.model].filter(Boolean).join(' ') || 'Vehicle';
+    document.getElementById('vpm-title').textContent = `${v.unit_number || 'Unit'} — ${vehicleName}`;
+    document.getElementById('vpm-subtitle').textContent = [v.license_plate, v.vin].filter(Boolean).join(' · ') || '';
+    // Reset tabs
+    document.querySelectorAll('.vpm-tab').forEach(t => { t.classList.remove('active'); t.style.color='#6b7280'; t.style.borderBottomColor='transparent'; });
+    document.querySelectorAll('.vpm-panel').forEach(p => p.style.display='none');
+    document.querySelector('.vpm-tab[data-vtab="inspections"]').classList.add('active');
+    document.querySelector('.vpm-tab[data-vtab="inspections"]').style.color='#F47920';
+    document.querySelector('.vpm-tab[data-vtab="inspections"]').style.borderBottomColor='#F47920';
+    document.getElementById('vpm-panel-inspections').style.display='block';
+    document.getElementById('sf-vehicle-profile-modal').style.display = 'flex';
+    // Pre-populate schedule vehicle select
+    document.getElementById('vpm-add-sched-btn').onclick = () => sfOpenSchedModal(null, vehicleId);
+    document.getElementById('vpm-add-record-btn').onclick = () => sfOpenRecordUpload(vehicleId);
+    // Load tabs
+    vpmLoadInspections(vehicleId);
+    vpmLoadRecords(vehicleId);
+    vpmLoadScheduled(vehicleId);
+  };
+
+  async function vpmLoadInspections(vehicleId) {
+    const el = document.getElementById('vpm-panel-inspections');
+    el.innerHTML = '<div style="color:#9ca3af;font-size:13px;">Loading…</div>';
+    try {
+      const r = await fetch(`/api/vehicles/${vehicleId}/inspections`);
+      if (!r.ok) throw new Error(r.status);
+      const rows = await r.json();
+      if (!rows.length) { el.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No inspection forms submitted for this vehicle yet.</div>'; return; }
+      const FORM_LABELS = { maint_vehicle:'Vehicle Inspection', truck_inspection:'Truck Inspection', flha:'FLHA', jsa:'JSA' };
+      el.innerHTML = rows.map(f => {
+        const d = new Date(f.submitted_at).toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});
+        return `<div style="padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;color:#111827;">${FORM_LABELS[f.form_type]||f.form_type} <span style="font-size:11px;color:#9ca3af;font-weight:400;">#${f.form_number||f.id}</span></div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">${d} · ${_sfEsc(f.submitted_by||'—')}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;${f.status==='Submitted'?'background:#dcfce7;color:#166534;':'background:#f3f4f6;color:#6b7280;'}">${f.status||'Draft'}</span>
+        </div>`;
+      }).join('');
+    } catch(e) { el.innerHTML = `<div style="color:#dc2626;font-size:13px;">Failed to load: ${e.message}</div>`; }
+  }
+
+  async function vpmLoadRecords(vehicleId) {
+    const el = document.getElementById('vpm-records-list');
+    el.innerHTML = '<div style="color:#9ca3af;font-size:13px;">Loading…</div>';
+    try {
+      const r = await fetch(`/api/vehicles/${vehicleId}/documents`);
+      if (!r.ok) throw new Error(r.status);
+      const docs = await r.json();
+      if (!docs.length) { el.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No records uploaded yet. Use + Upload Record to add receipts and mechanic records.</div>'; return; }
+      el.innerHTML = docs.map(d => {
+        const dt = new Date(d.uploaded_at).toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});
+        const ext = (d.file_type||'').includes('pdf') ? '📄' : '🖼';
+        return `<div style="padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+          <div style="font-size:24px;">${ext}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;color:#111827;">${_sfEsc(d.name)}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">${dt} · ${_sfEsc(d.uploaded_by||'—')}${d.notes?` · ${_sfEsc(d.notes)}`:''}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <a href="/api/vehicles/${vehicleId}/documents/${d.id}/file" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px;text-decoration:none;">View</a>
+            <button class="btn btn-secondary btn-sm" style="font-size:11px;color:#dc2626;border-color:#fca5a5;" onclick="sfDeleteVehicleDoc(${vehicleId},${d.id})">🗑</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { el.innerHTML = `<div style="color:#dc2626;font-size:13px;">Failed to load: ${e.message}</div>`; }
+  }
+
+  async function vpmLoadScheduled(vehicleId) {
+    const el = document.getElementById('vpm-scheduled-list');
+    el.innerHTML = '<div style="color:#9ca3af;font-size:13px;">Loading…</div>';
+    try {
+      const r = await fetch(`/api/scheduled-maintenance?vehicle_id=${vehicleId}`);
+      if (!r.ok) throw new Error(r.status);
+      const tasks = await r.json();
+      if (!tasks.length) { el.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No scheduled maintenance for this vehicle. Use + Schedule Task to add one.</div>'; return; }
+      const today = new Date(); today.setHours(0,0,0,0);
+      el.innerHTML = tasks.map(t => {
+        const isOverdue = t.status === 'scheduled' && new Date(t.scheduled_date+'T00:00:00') < today;
+        const bg = t.status==='completed'?'#f0fdf4':isOverdue?'#fee2e2':'#fff';
+        const border = t.status==='completed'?'#86efac':isOverdue?'#fca5a5':'#e5e7eb';
+        const typeColor = MAINT_TYPE_COLORS[t.maintenance_type] || '#6b7280';
+        const d = new Date(t.scheduled_date+'T00:00:00').toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});
+        return `<div style="padding:10px;background:${bg};border:1px solid ${border};border-radius:8px;margin-bottom:8px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <span style="background:${typeColor};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">${MAINT_TYPE_LABELS[t.maintenance_type]||t.maintenance_type}</span>
+                ${t.status==='completed'?'<span style="font-size:10px;font-weight:700;color:#166534;background:#dcfce7;padding:2px 7px;border-radius:20px;">✓ Completed</span>':isOverdue?'<span style="font-size:10px;font-weight:700;color:#991b1b;background:#fee2e2;padding:2px 7px;border-radius:20px;">⚠ Overdue</span>':''}
+              </div>
+              <div style="font-size:13px;font-weight:700;color:#111827;">${_sfEsc(t.title)}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px;">${t.status==='completed'?`Completed ${t.completed_date||''}`:d}${t.notes?` · ${_sfEsc(t.notes)}`:''}</div>
+              ${t.completed_notes?`<div style="font-size:12px;color:#374151;margin-top:3px;font-style:italic;">${_sfEsc(t.completed_notes)}</div>`:''}
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0;">
+              ${t.status!=='completed'?`<button class="btn btn-secondary btn-sm" style="font-size:10px;background:#dcfce7;color:#166534;border-color:#86efac;" onclick="sfOpenComplete(${t.id})">✓ Done</button>`:''}
+              <button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="sfOpenSchedModal(${t.id},${vehicleId})">✏️</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { el.innerHTML = `<div style="color:#dc2626;font-size:13px;">Failed to load: ${e.message}</div>`; }
+  }
+
+  window.sfDeleteVehicleDoc = async function(vehicleId, docId) {
+    if (!confirm('Delete this record?')) return;
+    await fetch(`/api/vehicles/${vehicleId}/documents/${docId}`, {method:'DELETE'});
+    vpmLoadRecords(vehicleId);
+  };
+
+  // ── Vehicle Profile Tab Switching ────────────────────────────
+  document.querySelectorAll('.vpm-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.vpm-tab').forEach(t => { t.classList.remove('active'); t.style.color='#6b7280'; t.style.borderBottomColor='transparent'; });
+      document.querySelectorAll('.vpm-panel').forEach(p => p.style.display='none');
+      tab.classList.add('active'); tab.style.color='#F47920'; tab.style.borderBottomColor='#F47920';
+      document.getElementById(`vpm-panel-${tab.dataset.vtab}`).style.display='block';
+    });
+  });
+
+  // ── Add/Edit Vehicle Modal ───────────────────────────────────
+  function sfOpenVehicleEdit(vehicleId) {
+    const isEdit = !!vehicleId;
+    document.getElementById('sf-vehicle-modal-title').textContent = isEdit ? 'Edit Vehicle' : 'Add Vehicle';
+    document.getElementById('sf-vehicle-edit-id').value = vehicleId || '';
+    document.getElementById('sf-vehicle-modal-delete').style.display = isEdit ? '' : 'none';
+    if (isEdit) {
+      const v = _sfVehicles.find(x => x.id === vehicleId);
+      if (!v) return;
+      document.getElementById('sf-v-unit').value  = v.unit_number || '';
+      document.getElementById('sf-v-year').value  = v.year || '';
+      document.getElementById('sf-v-make').value  = v.make || '';
+      document.getElementById('sf-v-model').value = v.model || '';
+      document.getElementById('sf-v-plate').value = v.license_plate || '';
+      document.getElementById('sf-v-vin').value   = v.vin || '';
+      document.getElementById('sf-v-notes').value = v.notes || '';
+    } else {
+      ['sf-v-unit','sf-v-year','sf-v-make','sf-v-model','sf-v-plate','sf-v-vin','sf-v-notes'].forEach(id => document.getElementById(id).value = '');
+    }
+    document.getElementById('sf-vehicle-modal').style.display = 'flex';
+  }
+
+  document.getElementById('sf-vehicle-add-btn').addEventListener('click', () => sfOpenVehicleEdit(null));
+  document.getElementById('sf-fleet-profile-refresh').addEventListener('click', () => { loadVehicleProfiles(); sfLoadSchedMaint(); });
+
+  document.getElementById('sf-vehicle-modal-save').addEventListener('click', async () => {
+    const unit = document.getElementById('sf-v-unit').value.trim();
+    if (!unit) { alert('Unit number is required.'); return; }
+    const editId = document.getElementById('sf-vehicle-edit-id').value;
+    const payload = { unit_number:unit, year:document.getElementById('sf-v-year').value.trim()||null, make:document.getElementById('sf-v-make').value.trim()||null, model:document.getElementById('sf-v-model').value.trim()||null, license_plate:document.getElementById('sf-v-plate').value.trim()||null, vin:document.getElementById('sf-v-vin').value.trim()||null, notes:document.getElementById('sf-v-notes').value.trim()||null };
+    const btn = document.getElementById('sf-vehicle-modal-save'); btn.disabled=true; btn.textContent='Saving…';
+    try {
+      const res = await fetch(editId ? `/api/vehicles/${editId}` : '/api/vehicles', { method:editId?'PATCH':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      if (!res.ok) throw new Error();
+      document.getElementById('sf-vehicle-modal').style.display='none';
+      await loadVehicleProfiles();
+      sfPopulateSchedVehicleSelect();
+    } catch { alert('Save failed.'); }
+    finally { btn.disabled=false; btn.textContent='Save Vehicle'; }
+  });
+
+  document.getElementById('sf-vehicle-modal-delete').addEventListener('click', async () => {
+    const editId = document.getElementById('sf-vehicle-edit-id').value;
+    if (!editId || !confirm('Delete this vehicle? All maintenance records will also be removed.')) return;
+    await fetch(`/api/vehicles/${editId}`, {method:'DELETE'});
+    document.getElementById('sf-vehicle-modal').style.display='none';
+    await loadVehicleProfiles();
+  });
+
+  // ── Record Upload ────────────────────────────────────────────
+  function sfOpenRecordUpload(vehicleId) {
+    document.getElementById('sf-rec-vehicle-id').value = vehicleId;
+    document.getElementById('sf-rec-name').value = '';
+    document.getElementById('sf-rec-file').value = '';
+    document.getElementById('sf-rec-notes').value = '';
+    document.getElementById('sf-record-upload-modal').style.display = 'flex';
+  }
+
+  document.getElementById('sf-rec-upload-btn').addEventListener('click', async () => {
+    const vehicleId = document.getElementById('sf-rec-vehicle-id').value;
+    const name = document.getElementById('sf-rec-name').value.trim();
+    const file = document.getElementById('sf-rec-file').files[0];
+    if (!name || !file) { alert('Name and file are required.'); return; }
+    const btn = document.getElementById('sf-rec-upload-btn'); btn.disabled=true; btn.textContent='Uploading…';
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try {
+        const res = await fetch(`/api/vehicles/${vehicleId}/documents`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name, file_type:file.type, data_url:ev.target.result, notes:document.getElementById('sf-rec-notes').value.trim()||null }) });
+        if (!res.ok) throw new Error();
+        document.getElementById('sf-record-upload-modal').style.display='none';
+        vpmLoadRecords(parseInt(vehicleId));
+      } catch { alert('Upload failed.'); }
+      finally { btn.disabled=false; btn.textContent='Upload'; }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ── Scheduled Maintenance Calendar ──────────────────────────
+  let _sfCalDate = new Date();
+  let _sfAllSched = [];
+
+  async function sfLoadSchedMaint() {
+    try {
+      const r = await fetch('/api/scheduled-maintenance');
+      if (!r.ok) throw new Error(r.status);
+      _sfAllSched = await r.json();
+      sfRenderCal();
+      sfRenderUpcoming();
+    } catch(e) { console.error('Sched maint load failed:', e.message); }
+  }
+
+  function sfRenderCal() {
+    const grid = document.getElementById('sf-maint-cal-grid');
+    if (!grid) return;
+    const year = _sfCalDate.getFullYear(), month = _sfCalDate.getMonth();
+    document.getElementById('sf-cal-month-label').textContent = new Date(year, month, 1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayStr = today.toISOString().slice(0,10);
+
+    const headers = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d =>
+      `<div class="sf-cal-header">${d}</div>`).join('');
+
+    const blanks = Array(firstDay).fill('<div class="sf-cal-day other-month"></div>').join('');
+
+    const days = Array.from({length:daysInMonth}, (_,i) => {
+      const dayNum = i+1;
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+      const isToday = dateStr === todayStr;
+      const dayTasks = _sfAllSched.filter(t => t.scheduled_date === dateStr && t.status !== 'completed');
+      const chips = dayTasks.map(t => {
+        const col = MAINT_TYPE_COLORS[t.maintenance_type] || '#6b7280';
+        return `<span class="sf-maint-chip" style="background:${col};color:#fff;" title="${_sfEsc(t.unit_number||'')} — ${_sfEsc(t.title)}" onclick="sfOpenSchedModal(${t.id},${t.vehicle_id})">${_sfEsc(t.unit_number||'?')} ${_sfEsc(t.title)}</span>`;
+      }).join('');
+      return `<div class="sf-cal-day${isToday?' today':''}" onclick="sfCalDayClick('${dateStr}')">
+        <div class="sf-cal-date">${dayNum}</div>
+        ${chips}
+      </div>`;
+    }).join('');
+
+    grid.innerHTML = headers + blanks + days;
+  }
+
+  function sfRenderUpcoming() {
+    const el = document.getElementById('sf-upcoming-list');
+    if (!el) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const cutoff = new Date(today); cutoff.setDate(cutoff.getDate()+60);
+    const upcoming = _sfAllSched.filter(t => {
+      if (t.status === 'completed') return false;
+      const d = new Date(t.scheduled_date+'T00:00:00');
+      return d <= cutoff;
+    }).sort((a,b) => a.scheduled_date.localeCompare(b.scheduled_date));
+
+    if (!upcoming.length) { el.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px 0;">No maintenance scheduled in the next 60 days.</div>'; return; }
+    el.innerHTML = upcoming.map(t => {
+      const d = new Date(t.scheduled_date+'T00:00:00');
+      const isOverdue = d < today;
+      const fmtDate = d.toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});
+      const typeColor = MAINT_TYPE_COLORS[t.maintenance_type] || '#6b7280';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid ${isOverdue?'#fca5a5':'#e5e7eb'};background:${isOverdue?'#fee2e2':'#fff'};border-radius:8px;margin-bottom:6px;">
+        <div style="background:${typeColor};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;">${MAINT_TYPE_LABELS[t.maintenance_type]||'Other'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_sfEsc(t.unit_number||'?')} — ${_sfEsc(t.title)}</div>
+          <div style="font-size:11px;color:${isOverdue?'#991b1b':'#6b7280'};">${isOverdue?'⚠ Overdue · ':''} ${fmtDate}</div>
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0;">
+          <button class="btn btn-secondary btn-sm" style="font-size:10px;background:#dcfce7;color:#166534;border-color:#86efac;" onclick="sfOpenComplete(${t.id})">✓</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="sfOpenSchedModal(${t.id},${t.vehicle_id})">✏️</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('sf-cal-prev').addEventListener('click', () => { _sfCalDate.setMonth(_sfCalDate.getMonth()-1); sfRenderCal(); });
+  document.getElementById('sf-cal-next').addEventListener('click', () => { _sfCalDate.setMonth(_sfCalDate.getMonth()+1); sfRenderCal(); });
+
+  function sfCalDayClick(dateStr) {
+    sfOpenSchedModal(null, null, dateStr);
+  }
+
+  function sfPopulateSchedVehicleSelect(preselect) {
+    const sel = document.getElementById('sf-sched-vehicle');
+    sel.innerHTML = '<option value="">Select vehicle…</option>' + _sfVehicles.map(v =>
+      `<option value="${v.id}" ${preselect==v.id?'selected':''}>${_sfEsc(v.unit_number||'?')} — ${_sfEsc([v.year,v.make,v.model].filter(Boolean).join(' '))}</option>`
+    ).join('');
+  }
+
+  window.sfSchedTypeChange = function(val) {
+    document.getElementById('sf-sched-other-wrap').style.display = val === 'other' ? 'block' : 'none';
+    if (val !== 'other') document.getElementById('sf-sched-other-desc').value = '';
+  };
+
+  window.sfOpenSchedModal = function(schedId, vehicleId, prefillDate) {
+    document.getElementById('sf-sched-edit-id').value = schedId || '';
+    document.getElementById('sf-sched-delete-btn').style.display = schedId ? '' : 'none';
+    document.getElementById('sf-sched-modal-title').textContent = schedId ? 'Edit Scheduled Task' : 'Schedule Maintenance';
+    sfPopulateSchedVehicleSelect(vehicleId);
+    if (schedId) {
+      const t = _sfAllSched.find(x => x.id === schedId);
+      if (!t) return;
+      document.getElementById('sf-sched-vehicle').value = t.vehicle_id;
+      const type = t.maintenance_type || 'other';
+      document.getElementById('sf-sched-type').value = type;
+      sfSchedTypeChange(type);
+      document.getElementById('sf-sched-other-desc').value = type === 'other' ? (t.title || '') : '';
+      document.getElementById('sf-sched-title').value = t.title || '';
+      document.getElementById('sf-sched-date').value  = t.scheduled_date || '';
+      document.getElementById('sf-sched-notes').value = t.notes || '';
+    } else {
+      if (vehicleId) document.getElementById('sf-sched-vehicle').value = vehicleId;
+      document.getElementById('sf-sched-type').value = 'oil_change';
+      sfSchedTypeChange('oil_change');
+      document.getElementById('sf-sched-other-desc').value = '';
+      document.getElementById('sf-sched-title').value = '';
+      document.getElementById('sf-sched-date').value  = prefillDate || '';
+      document.getElementById('sf-sched-notes').value = '';
+    }
+    document.getElementById('sf-sched-modal').style.display = 'flex';
+  };
+
+  window.sfCloseSched = function() { document.getElementById('sf-sched-modal').style.display='none'; };
+
+  document.getElementById('sf-sched-save-btn').addEventListener('click', async () => {
+    const vehicleId = document.getElementById('sf-sched-vehicle').value;
+    const type = document.getElementById('sf-sched-type').value;
+    const otherDesc = document.getElementById('sf-sched-other-desc').value.trim();
+    const title = type === 'other' ? otherDesc : (MAINT_TYPE_LABELS[type] || type);
+    const date = document.getElementById('sf-sched-date').value;
+    if (!vehicleId || !date) { alert('Vehicle and date are required.'); return; }
+    if (type === 'other' && !otherDesc) { alert('Please describe the maintenance work.'); document.getElementById('sf-sched-other-desc').focus(); return; }
+    document.getElementById('sf-sched-title').value = title;
+    const editId = document.getElementById('sf-sched-edit-id').value;
+    const payload = { vehicle_id:parseInt(vehicleId), maintenance_type:type, title, scheduled_date:date, notes:document.getElementById('sf-sched-notes').value.trim()||null };
+    const btn = document.getElementById('sf-sched-save-btn'); btn.disabled=true; btn.textContent='Saving…';
+    try {
+      const res = await fetch(editId ? `/api/scheduled-maintenance/${editId}` : '/api/scheduled-maintenance', { method:editId?'PATCH':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      if (!res.ok) throw new Error();
+      sfCloseSched();
+      await sfLoadSchedMaint();
+      if (_sfVpmVehicleId) vpmLoadScheduled(_sfVpmVehicleId);
+    } catch { alert('Save failed.'); }
+    finally { btn.disabled=false; btn.textContent='Save'; }
+  });
+
+  window.sfDeleteSched = async function() {
+    const editId = document.getElementById('sf-sched-edit-id').value;
+    if (!editId || !confirm('Delete this scheduled task?')) return;
+    await fetch(`/api/scheduled-maintenance/${editId}`, {method:'DELETE'});
+    sfCloseSched();
+    await sfLoadSchedMaint();
+    if (_sfVpmVehicleId) vpmLoadScheduled(_sfVpmVehicleId);
+  };
+
+  window.sfOpenComplete = function(schedId) {
+    document.getElementById('sf-complete-sched-id').value = schedId;
+    document.getElementById('sf-complete-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('sf-complete-notes').value = '';
+    document.getElementById('sf-complete-modal').style.display = 'flex';
+  };
+
+  document.getElementById('sf-complete-save-btn').addEventListener('click', async () => {
+    const schedId = document.getElementById('sf-complete-sched-id').value;
+    const btn = document.getElementById('sf-complete-save-btn'); btn.disabled=true; btn.textContent='Saving…';
+    try {
+      const res = await fetch(`/api/scheduled-maintenance/${schedId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ status:'completed', completed_date:document.getElementById('sf-complete-date').value, completed_notes:document.getElementById('sf-complete-notes').value.trim()||null }) });
+      if (!res.ok) throw new Error();
+      document.getElementById('sf-complete-modal').style.display='none';
+      await sfLoadSchedMaint();
+      if (_sfVpmVehicleId) vpmLoadScheduled(_sfVpmVehicleId);
+    } catch { alert('Save failed.'); }
+    finally { btn.disabled=false; btn.textContent='✓ Mark Complete'; }
+  });
+
+  document.getElementById('sf-sched-add-btn').addEventListener('click', () => sfOpenSchedModal(null, null));
+
+  // ── Pending signatures tab ────────────────────────────────
+  async function loadPendingSignatures() {
+    try {
+      const r = await fetch('/api/safety/pending-signatures');
+      if (!r.ok) return;
+      const pending = await r.json();
+      const tab   = document.getElementById('sf-tab-sign');
+      const badge = document.getElementById('sf-sign-badge');
+      const list  = document.getElementById('sf-sign-list');
+      if (!pending.length) {
+        tab.style.display = 'none';
+        list.innerHTML = '<p class="sf-empty" style="padding:24px 0;">No signatures required.</p>';
+        return;
+      }
+      tab.style.display = '';
+      badge.textContent = pending.length;
+      badge.style.display = '';
+      list.innerHTML = pending.map(f => {
+        const formUrl = Safety.formUrl(f.form_type) || 'safety-form-hazard.html';
+        return `
+        <a href="${formUrl}?id=${f.id}" style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #e5e7eb;text-decoration:none;color:inherit;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:42px;height:42px;border-radius:10px;background:#fff7ed;border:2px solid #f97316;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">✍️</div>
+            <div>
+              <div style="font-weight:700;font-size:.92rem;color:#111827;">${f.form_number} — ${Safety.formLabel(f.form_type)}</div>
+              <div style="font-size:.75rem;color:#6b7280;margin-top:2px;">${Safety.fmtDate(f.date)}${f.project_name ? ' · ' + f.project_name : ''} · submitted by ${f.submitted_by}</div>
+            </div>
+          </div>
+          <span style="background:#F47920;color:#fff;font-weight:700;font-size:.8rem;padding:6px 14px;border-radius:8px;flex-shrink:0;margin-left:12px;">Sign Now</span>
+        </a>`;
+      }).join('');
+      // Auto-switch to Sign tab if user hasn't manually chosen another tab
+      const activeTab = document.querySelector('.safety-tab.active');
+      if (activeTab && activeTab.dataset.tab === 'submissions') {
+        activeTab.classList.remove('active');
+        document.querySelectorAll('.safety-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('sf-panel-sign').classList.add('active');
+      }
+    } catch {}
+  }
+  loadPendingSignatures();
+
+  // ── Offline queue sync on load ────────────────────────────
+  Safety.OfflineQueue.flush();
+  Safety.OfflineQueue._syncBanner();
+
+  // ── Admin: Fleet Maintenance ──────────────────────────────────
+  async function sfLoadFleetMaint() {
+    const tbody = document.getElementById('sf-fleet-maint-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" class="sf-empty">Loading…</td></tr>';
+    try {
+      const vehicles = await fetch('/api/vehicles/maintenance-status').then(r => r.json());
+      if (!vehicles.length) { tbody.innerHTML = '<tr><td colspan="8" class="sf-empty">No vehicles in fleet.</td></tr>'; return; }
+      tbody.innerHTML = vehicles.map(v => {
+        const st = v.oil_change_status;
+        const badge = st==='overdue'
+          ? '<span style="background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;">⚠ OVERDUE</span>'
+          : st==='due_soon'
+          ? `<span style="background:#fef9c3;color:#854d0e;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;">Due Soon (${v.km_until_oil_change} km)</span>`
+          : st==='ok'
+          ? `<span style="background:#dcfce7;color:#166534;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;">OK (${v.km_until_oil_change} km)</span>`
+          : '<span style="font-size:11px;color:#9ca3af;">—</span>';
+        return `<tr>
+          <td style="font-weight:700;">${v.unit_number||'—'}</td>
+          <td>${[v.year,v.make,v.model].filter(Boolean).join(' ')||'—'}</td>
+          <td style="font-size:12px;">${v.license_plate||'—'}</td>
+          <td style="font-size:12px;">${v.current_odometer ? v.current_odometer.toLocaleString()+' km' : '—'}</td>
+          <td style="font-size:12px;">${v.next_oil_change_km ? v.next_oil_change_km.toLocaleString()+' km' : '—'}</td>
+          <td>${badge}</td>
+          <td style="font-size:12px;">${v.last_inspection_date||'—'}</td>
+          <td><button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="sfOpenFleetDocs(${v.id},'${(v.unit_number||v.make||'Vehicle').replace(/'/g,"\\'")}')">Records</button></td>
+        </tr>`;
+      }).join('');
+    } catch { tbody.innerHTML = '<tr><td colspan="8" class="sf-empty" style="color:#dc2626;">Failed to load.</td></tr>'; }
+  }
+
+  function sfOpenFleetDocs(vehicleId, vehicleName) {
+    if (typeof openFleetDocs === 'function') { openFleetDocs(vehicleId, vehicleName); return; }
+    window.open('office.html#fleet-' + vehicleId, '_blank');
+  }
+
+  // ── Admin: All Worker Certifications ─────────────────────────
+  function _sfEsc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  let _sfAllCerts = [];
+  const SF_CERT_TYPE_LABELS = { h2s:'H2S Alive', first_aid:'First Aid', whmis:'WHMIS', fall_protection:'Fall Protection', ground_disturbance:'Ground Disturbance', confined_space:'Confined Space', elevated_work:'Elevated Work Platform', flagging:'Flagging', ppe:'PPE / Orientation', electrical:'Electrical Safety', forklift:'Forklift / Skid Steer', driver:"Driver's Abstract", other:'Other' };
+  const SF_CERT_ICONS = { h2s:'💨', first_aid:'🩺', whmis:'⚗️', fall_protection:'🪝', ground_disturbance:'🏗️', confined_space:'🔲', elevated_work:'🏗️', flagging:'🚧', ppe:'🦺', electrical:'⚡', forklift:'🚜', driver:'🪪', other:'📋' };
+
+  function sfCertStatus(expiry) {
+    if (!expiry) return { cls:'background:#f3f4f6;color:#6b7280;', label:'No expiry', key:'ok' };
+    const today = new Date(); today.setHours(0,0,0,0);
+    const days = Math.round((new Date(expiry+'T00:00:00') - today) / 86400000);
+    if (days < 0)   return { cls:'background:#fee2e2;color:#991b1b;', label:'⚠ EXPIRED',           key:'expired' };
+    if (days <= 30)  return { cls:'background:#ffedd5;color:#9a3412;', label:`Expires in ${days}d`,  key:'soon' };
+    if (days <= 90)  return { cls:'background:#fef9c3;color:#854d0e;', label:`${Math.round(days/7)}w left`, key:'soon' };
+    return { cls:'background:#dcfce7;color:#166534;', label:'Valid', key:'ok' };
+  }
+
+  function sfFmtDate(d) { if (!d) return '—'; return new Date(d+'T00:00:00').toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'}); }
+
+  async function sfLoadAllCerts() {
+    const grid = document.getElementById('sf-certs-worker-grid');
+    if (!grid) return;
+    try {
+      const _r = await fetch('/api/certifications/all');
+      if (!_r.ok) throw new Error('Server returned ' + _r.status);
+      _sfAllCerts = await _r.json();
+      if (!Array.isArray(_sfAllCerts)) throw new Error('Unexpected response');
+      const workers = [...new Map(_sfAllCerts.map(c => [c.user_id, c.user_name])).entries()];
+      const sel = document.getElementById('sf-certs-filter-worker');
+      if (sel) sel.innerHTML = '<option value="">All Workers</option>' + workers.map(([id,name]) => `<option value="${id}">${_sfEsc(name)}</option>`).join('');
+      sfRenderCertsAdmin();
+    } catch { if (grid) grid.innerHTML = '<div style="color:#dc2626;font-size:13px;">Failed to load certifications.</div>'; }
+  }
+
+  function sfRenderCertsAdmin() {
+    const workerF = (document.getElementById('sf-certs-filter-worker')||{}).value || '';
+    const statusF = (document.getElementById('sf-certs-filter-status')||{}).value || '';
+    const grid = document.getElementById('sf-certs-worker-grid');
+    const tableWrap = document.getElementById('sf-certs-table-wrap');
+    if (!grid) return;
+
+    if (!workerF) {
+      const byWorker = new Map();
+      _sfAllCerts.forEach(c => { if (!byWorker.has(c.user_id)) byWorker.set(c.user_id, {name:c.user_name,certs:[]}); byWorker.get(c.user_id).certs.push(c); });
+      grid.innerHTML = [...byWorker.entries()].map(([uid, w]) => {
+        const expN  = w.certs.filter(c => sfCertStatus(c.expiry_date).key === 'expired').length;
+        const soonN = w.certs.filter(c => sfCertStatus(c.expiry_date).key === 'soon').length;
+        const bg = expN ? '#fee2e2' : soonN ? '#fef9c3' : '#f0fdf4';
+        const border = expN ? '#fca5a5' : soonN ? '#fde047' : '#86efac';
+        const alert = expN ? `<span style="color:#991b1b;font-weight:700;font-size:12px;">⚠ ${expN} expired</span>` :
+                      soonN ? `<span style="color:#854d0e;font-weight:700;font-size:12px;">⏰ ${soonN} expiring soon</span>` :
+                              `<span style="color:#166534;font-weight:700;font-size:12px;">✅ All valid</span>`;
+        const name = _sfEsc(w.name || '');
+        return `<div style="background:${bg};border:1.5px solid ${border};border-radius:10px;padding:12px;cursor:pointer;" onclick="sfOpenWorkerProfile(${uid})">
+          <div style="font-size:14px;font-weight:800;color:#111827;margin-bottom:3px;">${name}</div>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:7px;">${w.certs.length} ticket${w.certs.length!==1?'s':''}</div>
+          ${alert}
+          <div style="margin-top:8px;"><button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="event.stopPropagation();sfOpenWorkerProfile(${uid})">View &amp; Export →</button></div>
+        </div>`;
+      }).join('') || '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No certifications uploaded yet.</div>';
+      grid.style.display = 'grid';
+      if (tableWrap) tableWrap.style.display = 'none';
+    } else {
+      grid.style.display = 'none';
+      if (tableWrap) tableWrap.style.display = '';
+      let rows = _sfAllCerts.filter(c => String(c.user_id) === workerF);
+      if (statusF) rows = rows.filter(c => sfCertStatus(c.expiry_date).key === statusF);
+      const tbody = document.getElementById('sf-certs-tbody');
+      if (!tbody) return;
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="sf-empty">No certifications found.</td></tr>'; return; }
+      tbody.innerHTML = rows.map(c => {
+        const st = sfCertStatus(c.expiry_date);
+        const badge = `<span style="font-size:11px;font-weight:700;border-radius:20px;padding:2px 8px;${st.cls}">${st.label}</span>`;
+        return `<tr>
+          <td style="font-weight:600;">${_sfEsc(c.user_name||'')}</td>
+          <td>${_sfEsc(c.cert_name||'')}</td>
+          <td style="font-size:12px;color:#6b7280;">${SF_CERT_TYPE_LABELS[c.cert_type]||c.cert_type}</td>
+          <td style="font-size:12px;">${sfFmtDate(c.issued_date)}</td>
+          <td style="font-size:12px;">${sfFmtDate(c.expiry_date)}</td>
+          <td>${badge}</td>
+          <td><button class="btn btn-secondary btn-sm" style="font-size:11px;color:#dc2626;border-color:#fca5a5;" onclick="sfDeleteCert(${c.id},${c.user_id})">🗑</button></td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  async function sfDeleteCert(certId, userId) {
+    if (!confirm('Delete this certification? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/certifications/${certId}`, { method:'DELETE' });
+      if (!res.ok) throw new Error();
+      _sfAllCerts = _sfAllCerts.filter(c => c.id !== certId);
+      sfRenderCertsAdmin();
+    } catch { alert('Delete failed — please try again.'); }
+  }
+
+  window.sfOpenWorkerProfile = function sfOpenWorkerProfile(userId) {
+    const certs = _sfAllCerts.filter(c => c.user_id === userId);
+    if (!certs.length) return;
+    const workerName = certs[0].user_name;
+
+    const existing = document.getElementById('sf-worker-profile-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'sf-worker-profile-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+
+    const expiredN = certs.filter(c => sfCertStatus(c.expiry_date).key === 'expired').length;
+    const soonN    = certs.filter(c => sfCertStatus(c.expiry_date).key === 'soon').length;
+    const summary  = [certs.length+' ticket'+(certs.length!==1?'s':''), expiredN?expiredN+' expired':'', soonN?soonN+' expiring soon':''].filter(Boolean).join(' · ');
+
+    function certCard(c) {
+      const st = sfCertStatus(c.expiry_date);
+      return `<label id="sf-wpm-label-${c.id}" style="display:flex;align-items:flex-start;gap:10px;padding:11px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;cursor:pointer;background:#fff;">
+        <input type="checkbox" class="sf-wpm-cb" data-id="${c.id}" checked style="width:15px;height:15px;margin-top:3px;accent-color:#F47920;flex-shrink:0;" onchange="sfWpmUpdateCount()"/>
+        <div style="font-size:20px;flex-shrink:0;">${SF_CERT_ICONS[c.cert_type]||'📋'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;color:#111827;">${_sfEsc(c.cert_name||'')}</div>
+          <div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;margin-top:1px;">${SF_CERT_TYPE_LABELS[c.cert_type]||c.cert_type}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:3px;">
+            ${c.issued_date?'Issued: <strong>'+sfFmtDate(c.issued_date)+'</strong>':''}
+            ${c.issued_date&&c.expiry_date?' · ':''}
+            ${c.expiry_date?'Expires: <strong>'+sfFmtDate(c.expiry_date)+'</strong>':''}
+          </div>
+          <span style="display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:2px 8px;margin-top:3px;${st.cls}">${st.label}</span>
+          <button onclick="event.preventDefault();event.stopPropagation();sfDeleteCertFromProfile(${c.id},${userId})" style="display:block;margin-top:6px;background:none;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700;cursor:pointer;">🗑 Delete</button>
+        </div>
+      </label>`;
+    }
+
+    modal.innerHTML = `<div style="background:#fff;border-radius:14px;width:100%;max-width:600px;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:auto;">
+      <div style="padding:16px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div>
+          <div style="font-size:16px;font-weight:800;color:#111827;">${_sfEsc(workerName)}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px;">${summary}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+          <button id="sf-wpm-export-btn" class="btn btn-primary btn-sm" style="background:#F47920;">⬇ Export PDF</button>
+          <button onclick="document.getElementById('sf-worker-profile-modal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1;">✕</button>
+        </div>
+      </div>
+      <div style="padding:10px 18px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
+          <input type="checkbox" id="sf-wpm-select-all" checked style="width:14px;height:14px;accent-color:#F47920;"/> Select All
+        </label>
+        <span id="sf-wpm-sel-count" style="font-size:12px;color:#6b7280;">${certs.length} of ${certs.length} selected</span>
+      </div>
+      <div style="padding:12px 18px;max-height:60vh;overflow-y:auto;" id="sf-wpm-cert-list">
+        ${certs.map(certCard).join('')}
+      </div>
+    </div>`;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('sf-wpm-select-all').onchange = function() {
+      document.querySelectorAll('.sf-wpm-cb').forEach(cb => cb.checked = this.checked);
+      sfWpmUpdateCount();
+    };
+    document.getElementById('sf-wpm-export-btn').onclick = () => sfExportWorkerPDF(userId, workerName);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  };
+
+  window.sfWpmUpdateCount = function() {
+    const all = document.querySelectorAll('.sf-wpm-cb');
+    const sel = document.querySelectorAll('.sf-wpm-cb:checked');
+    const countEl = document.getElementById('sf-wpm-sel-count');
+    const allCb = document.getElementById('sf-wpm-select-all');
+    if (countEl) countEl.textContent = `${sel.length} of ${all.length} selected`;
+    if (allCb) { allCb.checked = sel.length === all.length; allCb.indeterminate = sel.length > 0 && sel.length < all.length; }
+  };
+
+  window.sfDeleteCertFromProfile = async function(certId, userId) {
+    if (!confirm('Delete this certification? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/certifications/${certId}`, { method:'DELETE' });
+      if (!res.ok) throw new Error();
+      _sfAllCerts = _sfAllCerts.filter(c => c.id !== certId);
+      const remaining = _sfAllCerts.filter(c => c.user_id === userId);
+      const modal = document.getElementById('sf-worker-profile-modal');
+      if (modal) modal.remove();
+      sfRenderCertsAdmin();
+      if (remaining.length) sfOpenWorkerProfile(userId);
+    } catch { alert('Delete failed — please try again.'); }
+  };
+
+  async function sfExportWorkerPDF(userId, workerName) {
+    const selectedIds = new Set([...document.querySelectorAll('.sf-wpm-cb:checked')].map(cb => Number(cb.dataset.id)));
+    if (!selectedIds.size) { alert('Select at least one ticket to export.'); return; }
+    const certs = _sfAllCerts.filter(c => c.user_id === userId && selectedIds.has(c.id));
+    const btn = document.getElementById('sf-wpm-export-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+
+    const photoMap = {};
+    await Promise.all(certs.map(async c => {
+      try {
+        const res = await fetch(`/api/certifications/${c.id}/photo`);
+        if (res.ok) { const blob = await res.blob(); photoMap[c.id] = await new Promise(resolve => { const r=new FileReader(); r.onload=e=>resolve(e.target.result); r.readAsDataURL(blob); }); }
+      } catch {}
+    }));
+
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ Export PDF'; }
+
+    const today = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+    const certPages = certs.map(c => {
+      const st = sfCertStatus(c.expiry_date);
+      const statusColor = st.key==='expired'?'#991b1b':st.key==='soon'?'#854d0e':'#166534';
+      const statusBg    = st.key==='expired'?'#fee2e2':st.key==='soon'?'#fef9c3':'#dcfce7';
+      const photo = photoMap[c.id] ? `<div style="text-align:center;margin:18px 0;"><img src="${photoMap[c.id]}" style="max-width:100%;max-height:300px;border-radius:8px;border:1px solid #e5e7eb;object-fit:contain;" alt=""/></div>` : '<div style="text-align:center;padding:36px;color:#9ca3af;border:2px dashed #e5e7eb;border-radius:8px;margin:18px 0;font-size:13px;">No photo on file</div>';
+      return `<div class="cert-page">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <div style="font-size:36px;">${SF_CERT_ICONS[c.cert_type]||'📋'}</div>
+          <div>
+            <div style="font-size:20px;font-weight:800;color:#111827;">${_sfEsc(c.cert_name||'')}</div>
+            <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">${SF_CERT_TYPE_LABELS[c.cert_type]||c.cert_type}</div>
+          </div>
+          <div style="margin-left:auto;background:${statusBg};color:${statusColor};font-size:12px;font-weight:800;padding:5px 12px;border-radius:20px;">${st.label}</div>
+        </div>
+        ${photo}
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;">
+          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;width:120px;">Holder</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(workerName)}</td></tr>
+          ${c.issued_date?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Issued</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${sfFmtDate(c.issued_date)}</td></tr>`:''}
+          ${c.expiry_date?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Expires</td><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;color:${statusColor};">${sfFmtDate(c.expiry_date)}</td></tr>`:''}
+          ${c.notes?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Notes</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(c.notes)}</td></tr>`:''}
+        </table>
+      </div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${_sfEsc(workerName)} — Safety Tickets</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;background:#fff;color:#111827;}.cover{padding:40px 36px 28px;border-bottom:3px solid #F47920;}.cert-page{padding:28px 36px;border-bottom:2px dashed #e5e7eb;page-break-inside:avoid;}.cert-page:last-child{border-bottom:none;}@media print{.cert-page{page-break-after:always;}.cert-page:last-child{page-break-after:avoid;}.no-print{display:none!important;}}.print-btn{position:fixed;bottom:20px;right:20px;background:#F47920;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);}</style>
+</head><body>
+<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
+<div class="cover"><div style="font-size:12px;color:#F47920;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">J&amp;D Western Electric — Safety Certifications</div><div style="font-size:24px;font-weight:900;color:#111827;margin-bottom:4px;">${_sfEsc(workerName)}</div><div style="font-size:13px;color:#6b7280;">${certs.length} ticket${certs.length!==1?'s':''} · Generated ${today}</div></div>
+${certPages}
+</body></html>`;
+
+    const win = window.open('','_blank');
+    win.document.write(html);
+    win.document.close();
+  }
+
+  // ── Wire up new admin filter/refresh controls ─────────────────
+  const sfCertsFilterWorker = document.getElementById('sf-certs-filter-worker');
+  const sfCertsFilterStatus = document.getElementById('sf-certs-filter-status');
+  if (sfCertsFilterWorker) sfCertsFilterWorker.addEventListener('change', sfRenderCertsAdmin);
+  if (sfCertsFilterStatus) sfCertsFilterStatus.addEventListener('change', sfRenderCertsAdmin);
+  const sfCertsRefresh = document.getElementById('sf-certs-refresh');
+  if (sfCertsRefresh) sfCertsRefresh.addEventListener('click', sfLoadAllCerts);
+  // sf-fleet-maint-refresh removed — replaced by sf-fleet-profile-refresh in loadVehicleProfiles
+
+  } catch(err) {
+    console.error('Safety page error:', err);
+    document.querySelector('.safety-content').innerHTML =
+      `<div style="padding:40px;color:#ef4444;font-family:monospace;font-size:0.85rem;">
+        <strong>Page error — check console</strong><br><br>${err.message}
+      </div>`;
+  }
+
+})();
+
+// ── My Safety Tickets (Certifications) ───────────────────────
+(function() {
+  const CERT_ICONS  = { h2s:'💨', first_aid:'🩺', whmis:'⚗️', fall_protection:'🪝', ground_disturbance:'🏗️', confined_space:'🔲', elevated_work:'🏗️', flagging:'🚧', ppe:'🦺', electrical:'⚡', forklift:'🚜', driver:'🪪', other:'📋' };
+  const CERT_LABELS = { h2s:'H2S Alive', first_aid:'First Aid / CPR', whmis:'WHMIS', fall_protection:'Fall Protection', ground_disturbance:'Ground Disturbance', confined_space:'Confined Space', elevated_work:'Elevated Work Platform', flagging:'Traffic Control / Flagging', ppe:'PPE / Safety Orientation', electrical:'Electrical Safety', forklift:'Forklift / Skid Steer', driver:"Driver's Abstract / License", other:'Other' };
+
+  let _certs = [], _certPhotoDataUrl = null, _certPhotoType = null;
+
+  function certStatus(expiry) {
+    if (!expiry) return { cls:'background:#f3f4f6;color:#6b7280;', label:'No expiry' };
+    const today = new Date(); today.setHours(0,0,0,0);
+    const days  = Math.round((new Date(expiry+'T00:00:00') - today) / 86400000);
+    if (days < 0)   return { cls:'background:#fee2e2;color:#991b1b;', label:'Expired '+ Math.abs(days) +'d ago' };
+    if (days <= 30)  return { cls:'background:#ffedd5;color:#9a3412;', label:'Expires in '+days+'d ⚠' };
+    if (days <= 90)  return { cls:'background:#fef9c3;color:#854d0e;', label:'Expires in '+Math.round(days/7)+'wks' };
+    return { cls:'background:#dcfce7;color:#166534;', label:'Valid' };
+  }
+
+  function fmtD(d) {
+    if (!d) return '—';
+    return new Date(d+'T00:00:00').toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});
+  }
+
+  function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  window.loadMyCerts = async function() {
+    const el = document.getElementById('sf-cert-list');
+    el.innerHTML = '<p class="sf-empty" style="padding:24px 0;">Loading…</p>';
+    try {
+      const _cr = await fetch('/api/certifications');
+      if (!_cr.ok) throw new Error('Server returned ' + _cr.status);
+      _certs = await _cr.json();
+      if (!Array.isArray(_certs)) throw new Error('Unexpected response');
+      renderMyCerts();
+    } catch(e) { el.innerHTML = `<p class="sf-empty" style="padding:24px 0;color:#dc2626;">Failed to load: ${e.message}</p>`; }
+  };
+
+  function renderMyCerts() {
+    const el = document.getElementById('sf-cert-list');
+    if (!_certs.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#9ca3af;"><div style="font-size:40px;margin-bottom:12px;">🪪</div><p style="font-size:14px;">No safety tickets uploaded yet.<br>Tap <strong>+ Add Ticket</strong> to get started.</p></div>';
+      return;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const expired = _certs.filter(c => c.expiry_date && new Date(c.expiry_date+'T00:00:00') < today);
+    const soon    = _certs.filter(c => { if (!c.expiry_date) return false; const d=Math.round((new Date(c.expiry_date+'T00:00:00')-today)/86400000); return d>=0&&d<=90; });
+    const ok      = _certs.filter(c => { const s=certStatus(c.expiry_date); return s.label==='No expiry'||s.label.startsWith('Valid'); });
+
+    function card(c) {
+      const st = certStatus(c.expiry_date);
+      return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;">
+        <div style="font-size:26px;flex-shrink:0;">${CERT_ICONS[c.cert_type]||'📋'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:2px;">${esc(c.cert_name)}</div>
+          <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;font-weight:600;">${CERT_LABELS[c.cert_type]||c.cert_type}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+            ${c.issued_date?'Issued: <strong>'+fmtD(c.issued_date)+'</strong>':''}
+            ${c.issued_date&&c.expiry_date?' · ':''}
+            ${c.expiry_date?'Expires: <strong>'+fmtD(c.expiry_date)+'</strong>':''}
+          </div>
+          <span style="display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:3px 9px;margin-top:5px;${st.cls}">${st.label}</span>
+          ${c.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px;font-style:italic;">${esc(c.notes)}</div>`:''}
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-secondary" onclick="sfCertEdit(${c.id})">✏️ Edit</button>
+            ${c.expiry_date?`<a href="/api/certifications/${c.id}/photo" target="_blank" class="btn btn-sm btn-secondary" onerror="this.style.display='none'">🖼 View Card</a>`:''}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    let html = '';
+    if (expired.length) html += `<div class="sf-section-heading">⚠ Expired (${expired.length})</div>${expired.map(card).join('')}`;
+    if (soon.length)    html += `<div class="sf-section-heading">⏰ Expiring Soon (${soon.length})</div>${soon.map(card).join('')}`;
+    if (ok.length)      html += `<div class="sf-section-heading">✅ Valid (${ok.length})</div>${ok.map(card).join('')}`;
+    el.innerHTML = html;
+
+    // Hide broken photo links
+    el.querySelectorAll('a[onerror]').forEach(a => {
+      const img = new Image(); img.src = a.href;
+      img.onerror = () => a.style.display='none';
+    });
+  }
+
+  function openCertModal(id) {
+    const isEdit = !!id;
+    document.getElementById('sf-cert-modal-title').textContent = isEdit ? 'Edit Ticket' : 'Add Safety Ticket';
+    document.getElementById('sf-cert-edit-id').value = id || '';
+    document.getElementById('sf-cert-modal-delete').style.display = isEdit ? '' : 'none';
+    clearCertPhoto();
+    if (isEdit) {
+      const c = _certs.find(x => x.id === id);
+      if (!c) return;
+      document.getElementById('sf-cert-name').value    = c.cert_name || '';
+      document.getElementById('sf-cert-type').value    = c.cert_type || 'other';
+      document.getElementById('sf-cert-issued').value  = c.issued_date || '';
+      document.getElementById('sf-cert-expiry').value  = c.expiry_date || '';
+      document.getElementById('sf-cert-notes').value   = c.notes || '';
+      // Show existing photo placeholder
+      const prev = document.getElementById('sf-cert-photo-preview');
+      prev.src = `/api/certifications/${id}/photo`;
+      prev.style.display = 'block';
+      document.getElementById('sf-cert-photo-prompt').style.display = 'none';
+      document.getElementById('sf-cert-photo-clear').style.display = '';
+      prev.onerror = () => { prev.style.display='none'; document.getElementById('sf-cert-photo-prompt').style.display=''; document.getElementById('sf-cert-photo-clear').style.display='none'; };
+    } else {
+      document.getElementById('sf-cert-name').value   = '';
+      document.getElementById('sf-cert-type').value   = 'other';
+      document.getElementById('sf-cert-issued').value = '';
+      document.getElementById('sf-cert-expiry').value = '';
+      document.getElementById('sf-cert-notes').value  = '';
+    }
+    document.getElementById('sf-cert-modal').style.display = 'flex';
+  }
+
+  function clearCertPhoto() {
+    _certPhotoDataUrl = null; _certPhotoType = null;
+    document.getElementById('sf-cert-photo-input').value = '';
+    document.getElementById('sf-cert-photo-preview').src = '';
+    document.getElementById('sf-cert-photo-preview').style.display = 'none';
+    document.getElementById('sf-cert-photo-prompt').style.display = '';
+    document.getElementById('sf-cert-photo-clear').style.display = 'none';
+  }
+
+  function closeCertModal() { document.getElementById('sf-cert-modal').style.display = 'none'; }
+
+  window.sfCertEdit = id => openCertModal(id);
+
+  document.getElementById('sf-cert-add-btn').onclick      = () => openCertModal(null);
+  document.getElementById('sf-cert-modal-close').onclick  = closeCertModal;
+  document.getElementById('sf-cert-modal-cancel').onclick = closeCertModal;
+
+  document.getElementById('sf-cert-photo-input').addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      _certPhotoDataUrl = ev.target.result; _certPhotoType = file.type;
+      const prev = document.getElementById('sf-cert-photo-preview');
+      prev.src = _certPhotoDataUrl; prev.style.display = 'block';
+      document.getElementById('sf-cert-photo-prompt').style.display = 'none';
+      document.getElementById('sf-cert-photo-clear').style.display = '';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('sf-cert-photo-clear').onclick = clearCertPhoto;
+
+  document.getElementById('sf-cert-lightbox-close').onclick = () => { document.getElementById('sf-cert-lightbox').style.display='none'; };
+  document.getElementById('sf-cert-lightbox').onclick = e => { if (e.target===document.getElementById('sf-cert-lightbox')) document.getElementById('sf-cert-lightbox').style.display='none'; };
+
+  document.getElementById('sf-cert-modal-save').onclick = async () => {
+    const name = document.getElementById('sf-cert-name').value.trim();
+    if (!name) { Safety.toast && Safety.toast('Ticket name is required','error'); return; }
+    const editId = document.getElementById('sf-cert-edit-id').value;
+    const payload = {
+      cert_name:   name,
+      cert_type:   document.getElementById('sf-cert-type').value,
+      issued_date: document.getElementById('sf-cert-issued').value || null,
+      expiry_date: document.getElementById('sf-cert-expiry').value || null,
+      notes:       document.getElementById('sf-cert-notes').value.trim() || null,
+    };
+    if (_certPhotoDataUrl) { payload.photo_data = _certPhotoDataUrl; payload.photo_type = _certPhotoType; }
+    const btn = document.getElementById('sf-cert-modal-save');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const res = await fetch(editId ? `/api/certifications/${editId}` : '/api/certifications', {
+        method: editId ? 'PATCH' : 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error();
+      closeCertModal();
+      await window.loadMyCerts();
+    } catch { alert('Save failed — please try again.'); }
+    finally { btn.disabled=false; btn.textContent='Save Ticket'; }
+  };
+
+  document.getElementById('sf-cert-modal-delete').onclick = async () => {
+    const editId = document.getElementById('sf-cert-edit-id').value;
+    if (!editId || !confirm('Delete this certification?')) return;
+    await fetch(`/api/certifications/${editId}`, {method:'DELETE'});
+    closeCertModal();
+    await window.loadMyCerts();
+  };
+})();
+</script>
+</body>
+</html>

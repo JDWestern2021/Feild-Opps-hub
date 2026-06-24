@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Incident Report — J&amp;D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    .fp-header { background:#111827; color:#fff; position:sticky; top:0; z-index:100; }
+    .fp-header-inner { max-width:680px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+    .fp-back { color:rgba(255,255,255,.6); text-decoration:none; font-size:.85rem; padding:6px 10px; border:1px solid rgba(255,255,255,.15); border-radius:6px; white-space:nowrap; flex-shrink:0; }
+    .fp-header h1 { font-size:1rem; font-weight:800; margin:0; flex:1; }
+    .fp-header-sub { font-size:.72rem; color:rgba(255,255,255,.4); }
+    .fp-form-num { font-size:.72rem; background:rgba(244,121,32,.25); color:#F47920; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .fp-draft-bar { background:#f9fafb; border-bottom:1px solid #e5e7eb; padding:6px 16px; font-size:.75rem; color:#9ca3af; text-align:center; }
+
+    .fp-body { max-width:680px; margin:0 auto; padding:16px 16px 100px; }
+
+    .fp-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+    .fp-card-header { background:#f3f4f6; border-bottom:1px solid #e5e7eb; padding:11px 16px; font-weight:700; font-size:.88rem; color:#111827; display:flex; align-items:center; gap:8px; }
+    .fp-card-body { padding:16px; }
+
+    .fp-field { margin-bottom:14px; }
+    .fp-field:last-child { margin-bottom:0; }
+    .fp-label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fp-req { color:#ef4444; }
+    .fp-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media(max-width:480px){ .fp-grid-2{ grid-template-columns:1fr; } }
+
+    /* Incident type buttons */
+    .inc-type-group { display:flex; flex-direction:column; gap:8px; }
+    .inc-type-btn {
+      padding:12px 14px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.88rem; font-weight:600; cursor:pointer;
+      transition:all .15s; text-align:left; color:#374151;
+    }
+    .inc-type-btn:hover { border-color:#9ca3af; background:#f9fafb; }
+    .inc-type-btn.active { background:#111827; border-color:#111827; color:#fff; }
+
+    /* Yes/No toggle */
+    .defect-flag-row { display:flex; gap:10px; }
+    .defect-flag-btn {
+      flex:1; padding:14px 10px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.9rem; font-weight:700; cursor:pointer;
+      transition:all .15s; min-height:50px; text-align:center;
+    }
+    .defect-flag-btn.active-yes { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+    .defect-flag-btn.active-no  { background:#dcfce7; border-color:#16a34a; color:#166534; }
+
+    /* Single-select button groups (employment, treatment, etc.) */
+    .btn-group-row { display:flex; flex-wrap:wrap; gap:8px; }
+    .btn-group-item {
+      padding:10px 14px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.85rem; font-weight:600; cursor:pointer;
+      transition:all .15s; color:#374151; white-space:nowrap;
+    }
+    .btn-group-item:hover { border-color:#9ca3af; background:#f9fafb; }
+    .btn-group-item.active { background:#111827; border-color:#111827; color:#fff; }
+
+    /* Immediate causes grid */
+    .imm-cause-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    @media(max-width:480px){ .imm-cause-grid{ grid-template-columns:1fr; } }
+    .imm-cause-group-label { font-size:.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; margin:10px 0 6px; grid-column:1/-1; }
+    .imm-cause-btn {
+      padding:10px 12px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.82rem; font-weight:600; cursor:pointer;
+      transition:all .15s; text-align:left; color:#374151;
+    }
+    .imm-cause-btn:hover { border-color:#9ca3af; background:#f9fafb; }
+    .imm-cause-btn.active { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+
+    /* Urgent banners */
+    .inc-banner-serious {
+      display:none; background:#fef2f2; border:2px solid #dc2626;
+      border-radius:8px; padding:14px 16px; margin-top:10px;
+      color:#991b1b; font-weight:700; font-size:.9rem; line-height:1.4;
+    }
+    .inc-banner-serious.visible { display:block; }
+    .inc-banner-wcb {
+      display:none; background:#fffbeb; border:2px solid #d97706;
+      border-radius:8px; padding:14px 16px; margin-top:10px;
+      color:#92400e; font-weight:700; font-size:.9rem; line-height:1.4;
+    }
+    .inc-banner-wcb.visible { display:block; }
+
+    .fp-submit-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:12px 16px; display:flex; gap:10px; align-items:center; z-index:100; box-shadow:0 -2px 10px rgba(0,0,0,.08); }
+    .fp-draft-status { font-size:.75rem; color:#9ca3af; flex:1; }
+  </style>
+</head>
+<body>
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<div class="fp-header">
+  <div class="fp-header-inner">
+    <a href="safety.html" class="fp-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Incident Report</h1>
+      <div class="fp-header-sub">Injury · Near Miss · Property Damage · Environmental</div>
+    </div>
+    <div class="fp-form-num" id="form-num-badge" style="display:none;"></div>
+  </div>
+</div>
+<div class="fp-draft-bar" id="draft-bar">Fill out all sections, then submit or save a draft.</div>
+
+<div class="fp-body">
+
+  <!-- 1 · Incident Classification -->
+  <div class="fp-card">
+    <div class="fp-card-header">🚨 Incident Classification</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Incident Type <span class="fp-req">*</span></label>
+        <div class="inc-type-group" id="inc-type-group">
+          <button type="button" class="inc-type-btn" data-val="injury">🩺 Injury / Illness</button>
+          <button type="button" class="inc-type-btn" data-val="near_miss">⚠️ Near Miss (No Injury)</button>
+          <button type="button" class="inc-type-btn" data-val="property">🔧 Property / Equipment Damage</button>
+          <button type="button" class="inc-type-btn" data-val="environmental">🌿 Environmental Release</button>
+          <button type="button" class="inc-type-btn" data-val="other">📝 Other</button>
+        </div>
+      </div>
+
+      <div class="fp-field">
+        <label class="fp-label">Was this a serious incident? <span style="font-size:.75rem;font-weight:400;color:#6b7280;">(death, hospital admission, uncontrolled explosion/fire/flood)</span></label>
+        <div class="defect-flag-row" id="serious-row">
+          <button type="button" class="defect-flag-btn" data-val="yes">⛔ Yes</button>
+          <button type="button" class="defect-flag-btn" data-val="no">✓ No</button>
+        </div>
+        <div class="inc-banner-serious" id="banner-serious">
+          ⚠️ SERIOUS INCIDENT — Call OHS immediately: 1-866-415-8690. Do not disturb the scene.
+        </div>
+      </div>
+
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Was WCB C040 required? <span style="font-size:.75rem;font-weight:400;color:#6b7280;">(injury needs more than first aid, lost time, or modified duties)</span></label>
+        <div class="defect-flag-row" id="wcb-required-row">
+          <button type="button" class="defect-flag-btn" data-val="yes">📋 Yes</button>
+          <button type="button" class="defect-flag-btn" data-val="no">✓ No</button>
+        </div>
+        <div class="inc-banner-wcb" id="banner-wcb">
+          📋 File WCB C040 within 72 hours at wcb.ab.ca
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Incident Details -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Incident Details</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Date of Incident <span class="fp-req">*</span></label>
+          <input type="date" id="f-date" class="form-control"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Time of Incident <span class="fp-req">*</span></label>
+          <input type="time" id="f-time" class="form-control"/>
+        </div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Reported By</label>
+          <input type="text" id="f-reported-by" class="form-control" readonly style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Project</label>
+          <select id="f-project" class="form-control">
+            <option value="">— Select project —</option>
+          </select>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Location / Address</label>
+        <input type="text" id="f-location" class="form-control" placeholder="Site address or location description"/>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">What was the worker doing at time of incident?</label>
+        <textarea id="f-worker-activity" class="form-control" rows="2" placeholder="Describe the task or activity being performed…"></textarea>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Describe what happened <span class="fp-req">*</span></label>
+        <textarea id="f-description" class="form-control" rows="4" placeholder="Describe the sequence of events leading to the incident…"></textarea>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Equipment / tools / materials involved</label>
+        <input type="text" id="f-equipment" class="form-control" placeholder="e.g. angle grinder, ladder, panel board"/>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Environmental conditions at time</label>
+        <input type="text" id="f-env-conditions" class="form-control" placeholder="Weather, lighting, ground conditions…"/>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Photos / Evidence</label>
+        <div id="incident-photos-wrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
+        <label style="display:flex;align-items:center;gap:8px;padding:12px;border:2px dashed #d1d5db;border-radius:8px;cursor:pointer;background:#f9fafb;color:#374151;font-size:.85rem;font-weight:600;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          Add Photo
+          <input type="file" id="incident-photo-input" accept="image/*" multiple style="display:none;"/>
+        </label>
+        <p style="font-size:.72rem;color:#9ca3af;margin:5px 0 0;">Photos are attached to the incident record. Tap a photo to remove it.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · Injured / Involved Person(s) -->
+  <div class="fp-card">
+    <div class="fp-card-header">🩺 Injured / Involved Person(s)</div>
+    <div class="fp-card-body">
+      <div id="injured-persons-list"></div>
+      <button type="button" id="btn-add-injured" style="width:100%;padding:11px;border:2px dashed #d1d5db;border-radius:8px;background:#fff;color:#374151;font-weight:600;font-size:.85rem;cursor:pointer;margin-top:4px;">＋ Add Another Person</button>
+    </div>
+  </div>
+
+  <!-- 4 · Witnesses -->
+  <div class="fp-card">
+    <div class="fp-card-header">👁 Witnesses</div>
+    <div class="fp-card-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button type="button" class="wsign-add-btn" id="btn-witness-team" style="flex:1;padding:11px;border:2px dashed #d1d5db;border-radius:8px;background:#fff;color:#374151;font-weight:600;font-size:.85rem;cursor:pointer;">👤 Add Team Member</button>
+        <button type="button" class="wsign-add-btn" id="btn-witness-manual" style="flex:1;padding:11px;border:2px dashed #d1d5db;border-radius:8px;background:#fff;color:#374151;font-weight:600;font-size:.85rem;cursor:pointer;">＋ Add External Witness</button>
+      </div>
+      <div id="witness-team-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
+      <div id="witnesses-container"></div>
+    </div>
+  </div>
+
+  <!-- 5 · Root Cause Analysis -->
+  <div class="fp-card">
+    <div class="fp-card-header">🔍 Root Cause Analysis</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Immediate Cause — Select all that apply</label>
+        <div class="imm-cause-grid" id="imm-cause-grid">
+          <div class="imm-cause-group-label">Unsafe Acts</div>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_no_ppe">No / Improper PPE</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_procedure">Failed to Follow Procedure</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_distraction">Distraction / Inattention</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_rushing">Rushing / Shortcut</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_act_impaired">Fatigue / Impairment</button>
+          <div class="imm-cause-group-label">Unsafe Conditions</div>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_guarding">Inadequate Guarding</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_housekeeping">Poor Housekeeping</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_equip">Defective Equipment</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_environment">Hazardous Environment</button>
+          <button type="button" class="imm-cause-btn" data-val="unsafe_cond_no_procedure">No Procedure / Training</button>
+          <div class="imm-cause-group-label" style="color:#dc2626;">⚡ Electrical — Unsafe Acts</div>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_test_before_touch">Did Not Test Before Touch</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_lockout">No Lockout / Tagout (LOTO)</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_assumed_dead">Assumed Circuit was Dead</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_wrong_ppe">Wrong / No Arc Flash PPE</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_permit">No Energized Work Permit</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_bypassed_protection">Bypassed Safety Protection</button>
+          <div class="imm-cause-group-label" style="color:#dc2626;">⚡ Electrical — Unsafe Conditions</div>
+          <button type="button" class="imm-cause-btn" data-val="elec_live_cable">Live / Energized Cable Present</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_breaker_not_locked">Breaker Not Locked Out</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_no_arc_flash_label">No Arc Flash Label / Rating</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_damaged_insulation">Damaged Insulation / Wiring</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_improper_grounding">Improper / Missing Ground</button>
+          <button type="button" class="imm-cause-btn" data-val="elec_overloaded_circuit">Overloaded Circuit</button>
+          <div class="imm-cause-group-label">Other</div>
+          <button type="button" class="imm-cause-btn" data-val="other_cause" style="grid-column:1/-1;">📝 Other — describe below</button>
+        </div>
+        <textarea id="f-cause-other" class="form-control" rows="2" placeholder="Describe the unsafe act or condition not listed above…" style="display:none;margin-top:8px;"></textarea>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Root Cause Description</label>
+        <textarea id="f-root-cause" class="form-control" rows="3" placeholder="Describe the underlying root cause — why did this happen?"></textarea>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Contributing Factors</label>
+        <textarea id="f-contributing" class="form-control" rows="2" placeholder="Any other contributing factors (management, training, communication gaps…)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 · Corrective Actions -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Corrective Actions</div>
+    <div class="fp-card-body">
+      <div id="ca-container"></div>
+    </div>
+  </div>
+
+  <!-- 7 · OHS / WCB Notifications -->
+  <div class="fp-card">
+    <div class="fp-card-header">📞 OHS / WCB Notifications</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">OHS contacted by phone? (if serious incident)</label>
+        <div class="defect-flag-row" id="ohs-contacted-row">
+          <button type="button" class="defect-flag-btn" data-val="yes">✓ Yes</button>
+          <button type="button" class="defect-flag-btn" data-val="no">✗ No</button>
+        </div>
+      </div>
+      <div class="fp-field" id="ohs-contact-name-wrap" style="display:none;">
+        <label class="fp-label">OHS contact name</label>
+        <input type="text" id="f-ohs-contact-name" class="form-control" placeholder="Name of OHS representative spoken to"/>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">WCB C040 submitted?</label>
+        <div class="defect-flag-row" id="wcb-submitted-row">
+          <button type="button" class="defect-flag-btn" data-val="yes">✓ Yes</button>
+          <button type="button" class="defect-flag-btn" data-val="no">✗ No</button>
+        </div>
+      </div>
+      <div class="fp-field" id="wcb-submit-date-wrap" style="display:none; margin-bottom:0;">
+        <label class="fp-label">WCB C040 submission date</label>
+        <input type="date" id="f-wcb-submit-date" class="form-control"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8 · Signatures -->
+  <div class="fp-card">
+    <div class="fp-card-header">✍️ Signatures</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 16px;">
+        Both the reporting supervisor and, where able, the involved worker must sign this report.
+      </p>
+      <div style="font-size:.8rem;font-weight:600;color:#374151;margin-bottom:8px;" id="sup-name-note"></div>
+      <div id="sup-sig-container"></div>
+      <div style="margin-top:20px;">
+        <div id="worker-sig-container"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="fp-submit-bar">
+  <span class="fp-draft-status" id="fp-draft-status">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-secondary" id="btn-print" style="display:none;">🖨 Print</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit</button>
+</div>
+
+<div id="print-area"></div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  // ── Auth ──────────────────────────────────────────────────
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href = '/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href = '/login.html'; return; }
+
+  if (currentUser.role !== 'admin') {
+    location.href = '/safety.html?msg=restricted';
+    return;
+  }
+
+  // ── State ─────────────────────────────────────────────────
+  const params     = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _autosaveTimer = null;
+
+  let _incidentType    = null;
+  let _isSerious       = null;
+  let _wcbRequired     = null;
+  let _empStatus       = null;
+  let _treatment       = null;
+  let _injuredContinued = null;
+  let _ohsContacted    = null;
+  let _wcbSubmitted    = null;
+
+  let _witnessRep, _caRep, _supSig, _workerSig;
+
+  // ── Defaults ──────────────────────────────────────────────
+  document.getElementById('f-date').value = Safety.todayISO();
+  document.getElementById('f-time').value = new Date().toTimeString().slice(0, 5);
+  document.getElementById('f-reported-by').value = currentUser.name;
+  document.getElementById('sup-name-note').textContent = 'Reporting supervisor: ' + currentUser.name;
+
+  // ── Load projects ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/project-folders');
+    if (r.ok) {
+      const ps = await r.json();
+      const sel = document.getElementById('f-project');
+      ps.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + (p.job_numbers ? '  ·  ' + p.job_numbers : '');
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+
+  // ── Incident type buttons ─────────────────────────────────
+  document.getElementById('inc-type-group').addEventListener('click', e => {
+    const btn = e.target.closest('.inc-type-btn');
+    if (!btn) return;
+    document.querySelectorAll('.inc-type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _incidentType = btn.dataset.val;
+    triggerAutosave();
+  });
+
+  // ── Serious incident toggle ───────────────────────────────
+  document.getElementById('serious-row').addEventListener('click', e => {
+    const btn = e.target.closest('.defect-flag-btn');
+    if (!btn) return;
+    _isSerious = btn.dataset.val;
+    document.querySelectorAll('#serious-row .defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+    btn.classList.add(_isSerious === 'yes' ? 'active-yes' : 'active-no');
+    document.getElementById('banner-serious').classList.toggle('visible', _isSerious === 'yes');
+    triggerAutosave();
+  });
+
+  // ── WCB required toggle ───────────────────────────────────
+  document.getElementById('wcb-required-row').addEventListener('click', e => {
+    const btn = e.target.closest('.defect-flag-btn');
+    if (!btn) return;
+    _wcbRequired = btn.dataset.val;
+    document.querySelectorAll('#wcb-required-row .defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+    btn.classList.add(_wcbRequired === 'yes' ? 'active-yes' : 'active-no');
+    document.getElementById('banner-wcb').classList.toggle('visible', _wcbRequired === 'yes');
+    triggerAutosave();
+  });
+
+  // ── Injured persons repeater ──────────────────────────────
+  let _injuredPersons = [{ name:'', title:'', emp_status:null, body_part:'', injury_nature:'', treatment:null, days_lost:'', continued:null }];
+
+  function renderInjuredPersons() {
+    const list = document.getElementById('injured-persons-list');
+    list.innerHTML = _injuredPersons.map((p, i) => `
+      <div class="fp-injured-person" data-idx="${i}" style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 14px 10px;margin-bottom:12px;background:#fafafa;position:relative;">
+        ${_injuredPersons.length > 1 ? `<button type="button" class="ip-remove-btn" data-idx="${i}" style="position:absolute;top:10px;right:10px;background:none;border:none;font-size:1.1rem;color:#9ca3af;cursor:pointer;" title="Remove">✕</button>` : ''}
+        ${_injuredPersons.length > 1 ? `<div style="font-size:.72rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Person ${i + 1}</div>` : ''}
+        <div class="fp-grid-2">
+          <div class="fp-field">
+            <label class="fp-label">Name <span class="fp-req">*</span></label>
+            <input type="text" class="form-control ip-name" data-idx="${i}" value="${_esc(p.name)}" placeholder="Full name"/>
+          </div>
+          <div class="fp-field">
+            <label class="fp-label">Job Title / Trade</label>
+            <input type="text" class="form-control ip-title" data-idx="${i}" value="${_esc(p.title)}" placeholder="e.g. Apprentice, Journeyman"/>
+          </div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Employment Status</label>
+          <div class="btn-group-row ip-emp-row" data-idx="${i}">
+            ${['employee','apprentice','subcontractor','visitor'].map(v => `<button type="button" class="btn-group-item${p.emp_status===v?' active':''}" data-val="${v}">${{employee:'Employee',apprentice:'Apprentice',subcontractor:'Sub-Contractor',visitor:'Visitor / Public'}[v]}</button>`).join('')}
+          </div>
+        </div>
+        <div class="fp-grid-2">
+          <div class="fp-field">
+            <label class="fp-label">Body Part Affected</label>
+            <input type="text" class="form-control ip-bodypart" data-idx="${i}" value="${_esc(p.body_part)}" placeholder="e.g. Left hand, lower back"/>
+          </div>
+          <div class="fp-field">
+            <label class="fp-label">Nature of Injury</label>
+            <input type="text" class="form-control ip-nature" data-idx="${i}" value="${_esc(p.injury_nature)}" placeholder="e.g. Laceration, burn, fracture"/>
+          </div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Medical Treatment Required</label>
+          <div class="btn-group-row ip-treatment-row" data-idx="${i}">
+            ${[['first_aid','🩹 First Aid Only'],['medical_aid','🏥 Medical Aid'],['hospital','🚑 Hospital'],['lost_time','📅 Lost Time'],['modified','🔄 Modified Duties'],['none','✓ None (near miss)']].map(([v,l]) => `<button type="button" class="btn-group-item${p.treatment===v?' active':''}" data-val="${v}">${l}</button>`).join('')}
+          </div>
+        </div>
+        <div class="fp-field ip-days-lost-wrap" data-idx="${i}" style="${(p.treatment==='hospital'||p.treatment==='lost_time')?'':'display:none;'}">
+          <label class="fp-label">Estimated days lost</label>
+          <input type="number" class="form-control ip-days-lost" data-idx="${i}" value="${_esc(p.days_lost)}" min="0" placeholder="Number of days"/>
+        </div>
+        <div class="fp-field" style="margin-bottom:0;">
+          <label class="fp-label">Was worker able to continue working that day?</label>
+          <div class="defect-flag-row ip-continued-row" data-idx="${i}">
+            <button type="button" class="defect-flag-btn${p.continued==='yes'?' active-no':''}" data-val="yes">✓ Yes</button>
+            <button type="button" class="defect-flag-btn${p.continued==='no'?' active-yes':''}" data-val="no">✗ No</button>
+          </div>
+        </div>
+      </div>`).join('');
+
+    list.querySelectorAll('.ip-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _injuredPersons.splice(parseInt(btn.dataset.idx), 1);
+        renderInjuredPersons(); triggerAutosave();
+      });
+    });
+    list.querySelectorAll('.ip-name').forEach(el => el.addEventListener('input', () => { _injuredPersons[+el.dataset.idx].name = el.value; triggerAutosave(); }));
+    list.querySelectorAll('.ip-title').forEach(el => el.addEventListener('input', () => { _injuredPersons[+el.dataset.idx].title = el.value; triggerAutosave(); }));
+    list.querySelectorAll('.ip-bodypart').forEach(el => el.addEventListener('input', () => { _injuredPersons[+el.dataset.idx].body_part = el.value; triggerAutosave(); }));
+    list.querySelectorAll('.ip-nature').forEach(el => el.addEventListener('input', () => { _injuredPersons[+el.dataset.idx].injury_nature = el.value; triggerAutosave(); }));
+    list.querySelectorAll('.ip-days-lost').forEach(el => el.addEventListener('input', () => { _injuredPersons[+el.dataset.idx].days_lost = el.value; triggerAutosave(); }));
+    list.querySelectorAll('.ip-emp-row').forEach(row => {
+      row.addEventListener('click', e => {
+        const btn = e.target.closest('.btn-group-item'); if (!btn) return;
+        const idx = +row.dataset.idx;
+        row.querySelectorAll('.btn-group-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _injuredPersons[idx].emp_status = btn.dataset.val; triggerAutosave();
+      });
+    });
+    list.querySelectorAll('.ip-treatment-row').forEach(row => {
+      row.addEventListener('click', e => {
+        const btn = e.target.closest('.btn-group-item'); if (!btn) return;
+        const idx = +row.dataset.idx;
+        row.querySelectorAll('.btn-group-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _injuredPersons[idx].treatment = btn.dataset.val;
+        const wrap = list.querySelector(`.ip-days-lost-wrap[data-idx="${idx}"]`);
+        if (wrap) wrap.style.display = (btn.dataset.val === 'hospital' || btn.dataset.val === 'lost_time') ? '' : 'none';
+        triggerAutosave();
+      });
+    });
+    list.querySelectorAll('.ip-continued-row').forEach(row => {
+      row.addEventListener('click', e => {
+        const btn = e.target.closest('.defect-flag-btn'); if (!btn) return;
+        const idx = +row.dataset.idx;
+        row.querySelectorAll('.defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+        btn.classList.add(btn.dataset.val === 'yes' ? 'active-no' : 'active-yes');
+        _injuredPersons[idx].continued = btn.dataset.val; triggerAutosave();
+      });
+    });
+  }
+
+  function _esc(v) { return (v || '').toString().replace(/"/g, '&quot;'); }
+
+  document.getElementById('btn-add-injured').addEventListener('click', () => {
+    _injuredPersons.push({ name:'', title:'', emp_status:null, body_part:'', injury_nature:'', treatment:null, days_lost:'', continued:null });
+    renderInjuredPersons(); triggerAutosave();
+  });
+
+  renderInjuredPersons();
+
+  // ── Immediate causes (multi-select) ───────────────────────
+  document.getElementById('imm-cause-grid').addEventListener('click', e => {
+    const btn = e.target.closest('.imm-cause-btn');
+    if (!btn) return;
+    btn.classList.toggle('active');
+    const otherActive = !!document.querySelector('.imm-cause-btn[data-val="other_cause"].active');
+    document.getElementById('f-cause-other').style.display = otherActive ? '' : 'none';
+    triggerAutosave();
+  });
+
+  function getImmCauses() {
+    return [...document.querySelectorAll('.imm-cause-btn.active')].map(b => b.dataset.val);
+  }
+
+  function fillImmCauses(arr) {
+    if (!arr || !arr.length) return;
+    document.querySelectorAll('.imm-cause-btn').forEach(b => {
+      b.classList.toggle('active', arr.includes(b.dataset.val));
+    });
+    const otherActive = !!document.querySelector('.imm-cause-btn[data-val="other_cause"].active');
+    document.getElementById('f-cause-other').style.display = otherActive ? '' : 'none';
+  }
+
+  // ── OHS contacted toggle ──────────────────────────────────
+  document.getElementById('ohs-contacted-row').addEventListener('click', e => {
+    const btn = e.target.closest('.defect-flag-btn');
+    if (!btn) return;
+    _ohsContacted = btn.dataset.val;
+    document.querySelectorAll('#ohs-contacted-row .defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+    btn.classList.add(_ohsContacted === 'yes' ? 'active-no' : 'active-yes');
+    document.getElementById('ohs-contact-name-wrap').style.display = _ohsContacted === 'yes' ? '' : 'none';
+    triggerAutosave();
+  });
+
+  // ── WCB submitted toggle ──────────────────────────────────
+  document.getElementById('wcb-submitted-row').addEventListener('click', e => {
+    const btn = e.target.closest('.defect-flag-btn');
+    if (!btn) return;
+    _wcbSubmitted = btn.dataset.val;
+    document.querySelectorAll('#wcb-submitted-row .defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+    btn.classList.add(_wcbSubmitted === 'yes' ? 'active-no' : 'active-yes');
+    document.getElementById('wcb-submit-date-wrap').style.display = _wcbSubmitted === 'yes' ? '' : 'none';
+    triggerAutosave();
+  });
+
+  // ── Photo upload ──────────────────────────────────────────
+  let _photos = []; // array of { name, data_url }
+  function renderPhotos() {
+    const wrap = document.getElementById('incident-photos-wrap');
+    wrap.innerHTML = _photos.map((p, i) => `
+      <div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;cursor:pointer;" data-photo-idx="${i}">
+        <img src="${p.data_url}" style="width:100%;height:100%;object-fit:cover;"/>
+        <div style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;">✕</div>
+      </div>`).join('');
+    wrap.querySelectorAll('[data-photo-idx]').forEach(el => {
+      el.addEventListener('click', () => {
+        _photos.splice(parseInt(el.dataset.photoIdx), 1);
+        renderPhotos(); triggerAutosave();
+      });
+    });
+  }
+  document.getElementById('incident-photo-input').addEventListener('change', async e => {
+    const files = [...e.target.files];
+    for (const f of files) {
+      const data_url = await new Promise(res => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.readAsDataURL(f); });
+      _photos.push({ name: f.name, data_url });
+    }
+    e.target.value = '';
+    renderPhotos(); triggerAutosave();
+  });
+
+  // ── Witness team picker ───────────────────────────────────
+  let _witnessTeam = []; // { user_id, name }
+  function renderWitnessTeam() {
+    const el = document.getElementById('witness-team-list');
+    el.innerHTML = _witnessTeam.map((w, i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+        <div style="width:30px;height:30px;border-radius:50%;background:#374151;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;">${w.name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase()}</div>
+        <span style="flex:1;font-weight:600;font-size:.88rem;">${Safety.esc(w.name)}</span>
+        <span style="font-size:.7rem;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:2px 6px;">Team</span>
+        <button type="button" data-tidx="${i}" style="width:26px;height:26px;border-radius:50%;border:1px solid #e5e7eb;background:transparent;cursor:pointer;color:#9ca3af;font-size:.8rem;">✕</button>
+      </div>`).join('');
+    el.querySelectorAll('[data-tidx]').forEach(btn => {
+      btn.addEventListener('click', () => { _witnessTeam.splice(parseInt(btn.dataset.tidx),1); renderWitnessTeam(); triggerAutosave(); });
+    });
+  }
+
+  document.getElementById('btn-witness-team').addEventListener('click', async () => {
+    const team = await Safety._fetchTeam();
+    const alreadyIds = new Set(_witnessTeam.map(w => String(w.user_id)));
+    const selected = new Set();
+    const modal = document.createElement('div');
+    modal.className = 'wsign-picker';
+    function initials(n) { return (n||'?').split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2); }
+    modal.innerHTML = `
+      <div class="wsign-picker-sheet" style="display:flex;flex-direction:column;max-height:85vh;">
+        <div class="wsign-picker-head"><h3>Add Team Witnesses</h3><button type="button" class="wsign-picker-close">Close</button></div>
+        <div style="padding:10px 16px;border-bottom:1px solid #e5e7eb;display:flex;gap:8px;align-items:center;">
+          <input type="text" placeholder="Search by name…" style="flex:1;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;box-sizing:border-box;" autofocus/>
+          <button type="button" id="_wt-selall" style="padding:9px 14px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">Select All</button>
+        </div>
+        <div class="wsign-picker-list" style="flex:1;overflow-y:auto;">
+          ${team.map(u => {
+            const already = alreadyIds.has(String(u.id));
+            return `<div class="wsign-picker-item" data-uid="${Safety.esc(u.id)}" data-name="${Safety.esc(u.name)}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f3f4f6;cursor:${already?'default':'pointer'};opacity:${already?.45:1};">
+              <div style="width:22px;height:22px;border:2px solid #d1d5db;border-radius:6px;background:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;" class="wt-chk">${already?'✓':''}</div>
+              <div class="wsign-picker-av">${initials(u.name)}</div>
+              <div><div class="wsign-picker-name">${Safety.esc(u.name)}</div><div class="wsign-picker-sub">${Safety.esc(u.email||'')}</div></div>
+              ${already?'<span class="wsign-picker-already">Added</span>':''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;">
+          <button type="button" id="_wt-confirm" style="flex:1;padding:14px;background:#F47920;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;opacity:.5;">Add Selected (0)</button>
+          <button type="button" class="wsign-picker-close" style="padding:14px 18px;background:#f3f4f6;border:none;border-radius:10px;font-weight:600;cursor:pointer;">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const confirmBtn = modal.querySelector('#_wt-confirm');
+    const selAllBtn  = modal.querySelector('#_wt-selall');
+    function updateConfirm() { confirmBtn.textContent = `Add Selected (${selected.size})`; confirmBtn.style.opacity = selected.size?'1':'.5'; }
+    function toggleItem(item) {
+      if (alreadyIds.has(item.dataset.uid)) return;
+      const chk = item.querySelector('.wt-chk');
+      if (selected.has(item.dataset.uid)) {
+        selected.delete(item.dataset.uid); chk.textContent=''; chk.style.background='#fff'; chk.style.borderColor='#d1d5db'; chk.style.color=''; item.style.background='';
+      } else {
+        selected.add(item.dataset.uid); chk.textContent='✓'; chk.style.background='#F47920'; chk.style.borderColor='#F47920'; chk.style.color='#fff'; item.style.background='#fff7ed';
+      }
+      updateConfirm();
+    }
+    modal.querySelector('.wsign-picker-list').addEventListener('click', e => { const item = e.target.closest('.wsign-picker-item'); if (item) toggleItem(item); });
+    modal.querySelector('input').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      modal.querySelectorAll('.wsign-picker-item').forEach(el => { el.style.display = el.dataset.name.toLowerCase().includes(q)?'':'none'; });
+    });
+    selAllBtn.addEventListener('click', () => {
+      const visible = [...modal.querySelectorAll('.wsign-picker-item')].filter(el => el.style.display!=='none' && !alreadyIds.has(el.dataset.uid));
+      const allChecked = visible.every(el => selected.has(el.dataset.uid));
+      visible.forEach(el => { if (allChecked) { if(selected.has(el.dataset.uid)) toggleItem(el); } else { if(!selected.has(el.dataset.uid)) toggleItem(el); } });
+      selAllBtn.textContent = allChecked ? 'Select All' : 'Deselect All';
+    });
+    modal.querySelectorAll('.wsign-picker-close').forEach(b => b.addEventListener('click', () => modal.remove()));
+    confirmBtn.addEventListener('click', () => {
+      if (!selected.size) return;
+      const teamMap = Object.fromEntries(team.map(u=>[String(u.id),u]));
+      selected.forEach(uid => { if (!_witnessTeam.some(w=>String(w.user_id)===uid)) { const u=teamMap[uid]; if(u) _witnessTeam.push({user_id:uid,name:u.name}); } });
+      renderWitnessTeam(); triggerAutosave(); modal.remove();
+    });
+  });
+
+  document.getElementById('btn-witness-manual').addEventListener('click', () => {
+    // Add a blank row to the manual repeater
+    const current = _witnessRep.getValues();
+    current.push({ name:'', contact:'', statement:'' });
+    _witnessRep.setValue(current);
+  });
+
+  // ── Witness repeater (external / non-team) ────────────────
+  _witnessRep = Safety.renderRepeater({
+    container: document.getElementById('witnesses-container'),
+    id: 'witnesses',
+    cols: [
+      { key: 'name',      label: 'Witness name',     type: 'text', flex: 2, placeholder: 'Witness name' },
+      { key: 'contact',   label: 'Phone or email',   type: 'text', flex: 2, placeholder: 'Phone or email' },
+      { key: 'statement', label: 'Brief statement',  type: 'text', flex: 4, placeholder: 'Brief statement' },
+    ],
+    addLabel: '+ Add External Witness',
+    value: [],
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Corrective actions ────────────────────────────────────
+  _caRep = Safety.renderCorrectiveActions({
+    container: document.getElementById('ca-container'),
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Signatures ────────────────────────────────────────────
+  _supSig = Safety.renderSignatureField({
+    container: document.getElementById('sup-sig-container'),
+    label: 'Supervisor Signature',
+    required: true,
+    onChange: () => triggerAutosave()
+  });
+
+  _workerSig = Safety.renderSignatureField({
+    container: document.getElementById('worker-sig-container'),
+    label: 'Worker Signature (if able)',
+    required: false,
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Collect form data ─────────────────────────────────────
+  function collectFormData() {
+    return {
+      date:              document.getElementById('f-date').value,
+      time:              document.getElementById('f-time').value,
+      reported_by:       currentUser.name,
+      incident_type:     _incidentType,
+      is_serious:        _isSerious,
+      wcb_required:      _wcbRequired,
+      project_id:        document.getElementById('f-project').value || null,
+      location:          document.getElementById('f-location').value.trim(),
+      worker_activity:   document.getElementById('f-worker-activity').value.trim(),
+      description:       document.getElementById('f-description').value.trim(),
+      equipment_involved: document.getElementById('f-equipment').value.trim(),
+      env_conditions:    document.getElementById('f-env-conditions').value.trim(),
+      injured_persons:   _injuredPersons,
+      photos:            _photos,
+      witness_team:      _witnessTeam,
+      witnesses:         _witnessRep.getValues(),
+      immediate_causes:  getImmCauses(),
+      cause_other:       document.getElementById('f-cause-other').value.trim(),
+      root_cause:        document.getElementById('f-root-cause').value.trim(),
+      contributing_factors: document.getElementById('f-contributing').value.trim(),
+      corrective_actions: _caRep.getValues(),
+      ohs_contacted:     _ohsContacted,
+      ohs_contact_name:  document.getElementById('f-ohs-contact-name').value.trim(),
+      wcb_submitted:     _wcbSubmitted,
+      wcb_submit_date:   document.getElementById('f-wcb-submit-date').value || null,
+      supervisor_signature: _supSig.getValue(),
+      worker_signature:  _workerSig.getValue(),
+    };
+  }
+
+  // ── Fill form data ────────────────────────────────────────
+  function setToggle(rowId, val, valYesClass = 'active-yes') {
+    if (!val) return;
+    document.querySelectorAll(`#${rowId} .defect-flag-btn`).forEach(b => b.className = 'defect-flag-btn');
+    const btn = document.querySelector(`#${rowId} .defect-flag-btn[data-val="${val}"]`);
+    if (btn) btn.classList.add(val === 'yes' ? valYesClass : 'active-no');
+  }
+
+  function fillFormData(d) {
+    if (!d) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    set('f-date',            d.date);
+    set('f-time',            d.time);
+    set('f-project',         d.project_id);
+    set('f-location',        d.location);
+    set('f-worker-activity', d.worker_activity);
+    set('f-description',     d.description);
+    set('f-equipment',       d.equipment_involved);
+    set('f-env-conditions',  d.env_conditions);
+    // Injured persons (support legacy single-person fields too)
+    if (d.injured_persons && d.injured_persons.length) {
+      _injuredPersons = d.injured_persons;
+    } else if (d.injured_name) {
+      _injuredPersons = [{ name: d.injured_name, title: d.injured_title || '', emp_status: d.emp_status || null, body_part: d.body_part || '', injury_nature: d.injury_nature || '', treatment: d.treatment || null, days_lost: d.days_lost || '', continued: d.injured_continued || null }];
+    }
+    renderInjuredPersons();
+    set('f-root-cause',      d.root_cause);
+    set('f-contributing',    d.contributing_factors);
+    set('f-ohs-contact-name', d.ohs_contact_name);
+    set('f-wcb-submit-date', d.wcb_submit_date);
+
+    // Incident type
+    if (d.incident_type) {
+      _incidentType = d.incident_type;
+      document.querySelectorAll('.inc-type-btn').forEach(b => b.classList.remove('active'));
+      const tb = document.querySelector(`.inc-type-btn[data-val="${d.incident_type}"]`);
+      if (tb) tb.classList.add('active');
+    }
+
+    // Serious
+    if (d.is_serious) {
+      _isSerious = d.is_serious;
+      setToggle('serious-row', d.is_serious, 'active-yes');
+      document.getElementById('banner-serious').classList.toggle('visible', d.is_serious === 'yes');
+    }
+
+    // WCB required
+    if (d.wcb_required) {
+      _wcbRequired = d.wcb_required;
+      setToggle('wcb-required-row', d.wcb_required, 'active-yes');
+      document.getElementById('banner-wcb').classList.toggle('visible', d.wcb_required === 'yes');
+    }
+
+    // Employment status
+    if (d.emp_status) {
+      _empStatus = d.emp_status;
+      document.querySelectorAll('#emp-status-row .btn-group-item').forEach(b => b.classList.remove('active'));
+      const eb = document.querySelector(`#emp-status-row .btn-group-item[data-val="${d.emp_status}"]`);
+      if (eb) eb.classList.add('active');
+    }
+
+    // Treatment
+    if (d.treatment) {
+      _treatment = d.treatment;
+      document.querySelectorAll('#treatment-row .btn-group-item').forEach(b => b.classList.remove('active'));
+      const tb2 = document.querySelector(`#treatment-row .btn-group-item[data-val="${d.treatment}"]`);
+      if (tb2) tb2.classList.add('active');
+      document.getElementById('f-days-lost-wrap').style.display =
+        (d.treatment === 'hospital' || d.treatment === 'lost_time') ? '' : 'none';
+    }
+
+    // Injured continued
+    if (d.injured_continued) {
+      _injuredContinued = d.injured_continued;
+      document.querySelectorAll('#injured-continued-row .defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+      const icb = document.querySelector(`#injured-continued-row .defect-flag-btn[data-val="${d.injured_continued}"]`);
+      if (icb) icb.classList.add(d.injured_continued === 'yes' ? 'active-no' : 'active-yes');
+    }
+
+    // Immediate causes
+    if (d.immediate_causes?.length) fillImmCauses(d.immediate_causes);
+    if (d.cause_other) { const el = document.getElementById('f-cause-other'); el.value = d.cause_other; el.style.display = ''; }
+
+    // Photos
+    if (d.photos?.length) { _photos = d.photos; renderPhotos(); }
+
+    // Team witnesses
+    if (d.witness_team?.length) { _witnessTeam = d.witness_team; renderWitnessTeam(); }
+
+    // External witnesses / corrective actions
+    if (d.witnesses?.length) _witnessRep.setValue(d.witnesses);
+    if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
+
+    // OHS contacted
+    if (d.ohs_contacted) {
+      _ohsContacted = d.ohs_contacted;
+      document.querySelectorAll('#ohs-contacted-row .defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+      const ob = document.querySelector(`#ohs-contacted-row .defect-flag-btn[data-val="${d.ohs_contacted}"]`);
+      if (ob) ob.classList.add(d.ohs_contacted === 'yes' ? 'active-no' : 'active-yes');
+      document.getElementById('ohs-contact-name-wrap').style.display = d.ohs_contacted === 'yes' ? '' : 'none';
+    }
+
+    // WCB submitted
+    if (d.wcb_submitted) {
+      _wcbSubmitted = d.wcb_submitted;
+      document.querySelectorAll('#wcb-submitted-row .defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+      const wb = document.querySelector(`#wcb-submitted-row .defect-flag-btn[data-val="${d.wcb_submitted}"]`);
+      if (wb) wb.classList.add(d.wcb_submitted === 'yes' ? 'active-no' : 'active-yes');
+      document.getElementById('wcb-submit-date-wrap').style.display = d.wcb_submitted === 'yes' ? '' : 'none';
+    }
+
+    // Signatures
+    if (d.supervisor_signature) {
+      _supSig = Safety.renderSignatureField({
+        container: document.getElementById('sup-sig-container'),
+        label: 'Supervisor Signature',
+        required: true,
+        value: d.supervisor_signature,
+        onChange: () => triggerAutosave()
+      });
+    }
+    if (d.worker_signature) {
+      _workerSig = Safety.renderSignatureField({
+        container: document.getElementById('worker-sig-container'),
+        label: 'Worker Signature (if able)',
+        required: false,
+        value: d.worker_signature,
+        onChange: () => triggerAutosave()
+      });
+    }
+  }
+
+  // ── Load existing form ────────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const form = await r.json();
+        const fd = typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data;
+        fillFormData(fd);
+        document.getElementById('form-num-badge').textContent = form.form_number;
+        document.getElementById('form-num-badge').style.display = '';
+        if (form.status === 'Submitted') {
+          document.getElementById('btn-submit').textContent = '✓ Submitted';
+          document.getElementById('btn-submit').disabled = true;
+          document.getElementById('btn-print').style.display = '';
+        }
+        setDraftStatus('Loaded from server');
+      }
+    } catch {}
+  } else {
+    const draft = Safety.DraftManager.load('incident_report', 'new');
+    if (draft) { fillFormData(draft); setDraftStatus('Draft restored · ' + Safety.fmtDT(draft._saved_at)); }
+  }
+
+  // ── Auto-save ─────────────────────────────────────────────
+  function triggerAutosave() { clearTimeout(_autosaveTimer); _autosaveTimer = setTimeout(autosave, 1500); }
+  function setDraftStatus(msg) {
+    document.getElementById('fp-draft-status').textContent = msg;
+    document.getElementById('draft-bar').textContent = msg;
+  }
+  async function autosave() {
+    const data = collectFormData();
+    Safety.DraftManager.save('incident_report', formId || 'new', data);
+    setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    if (formId && navigator.onLine) {
+      try {
+        await fetch(`/api/safety/${formId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ form_data: data, status: 'Draft' })
+        });
+      } catch {}
+    }
+  }
+
+  ['f-date','f-time','f-project','f-location','f-worker-activity','f-description',
+   'f-equipment','f-env-conditions','f-root-cause','f-contributing',
+   'f-ohs-contact-name','f-wcb-submit-date','f-cause-other']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+
+  // ── Save Draft ────────────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('incident_report', formId || 'new', data);
+    setDraftStatus('Saving…');
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({
+        form_type:    'incident_report',
+        form_data:    data,
+        project_id:   data.project_id,
+        project_name: ps.value ? ps.selectedOptions[0]?.text : '',
+        status:       'Draft',
+        existing_id:  formId
+      });
+      if (result?.id && !formId) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved', 'success');
+    } catch {
+      setDraftStatus('Saved locally (offline)');
+      Safety.toast('Saved locally — will sync when online', 'warning');
+    }
+  });
+
+  // ── Submit ────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+
+    if (!_incidentType)    { Safety.toast('Please select an incident type', 'error'); document.getElementById('inc-type-group').scrollIntoView({behavior:'smooth'}); return; }
+    if (!data.date)        { Safety.toast('Date of incident is required', 'error'); document.getElementById('f-date').focus(); return; }
+    if (!data.description) { Safety.toast('Incident description is required', 'error'); document.getElementById('f-description').focus(); return; }
+    if (!_injuredPersons[0]?.name){ Safety.toast('At least one injured / involved person name is required', 'error'); document.getElementById('injured-persons-list').scrollIntoView({behavior:'smooth'}); return; }
+    if (!_supSig.getValue()) { Safety.toast('Supervisor signature is required', 'error'); document.getElementById('sup-sig-container').scrollIntoView({behavior:'smooth'}); return; }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent = 'Submitting…'; btn.disabled = true;
+
+    try {
+      const ps = document.getElementById('f-project');
+      const projectName = ps.value ? ps.selectedOptions[0]?.text : '';
+      const result = await Safety.submitForm({
+        form_type:    'incident_report',
+        form_data:    data,
+        project_id:   data.project_id,
+        project_name: projectName,
+        status:       'Submitted',
+        existing_id:  formId
+      });
+
+      if (result?.queued) {
+        Safety.toast('Saved offline — will submit when connected', 'warning');
+        btn.textContent = 'Queued'; btn.disabled = false;
+        return;
+      }
+
+      if (result?.id) {
+        formId = result.id;
+        history.replaceState({}, '', '?id=' + formId);
+        if (result.form_number) {
+          document.getElementById('form-num-badge').textContent = result.form_number;
+          document.getElementById('form-num-badge').style.display = '';
+        }
+      }
+
+      // Save corrective actions to register
+      for (const ca of (data.corrective_actions || []).filter(a => a.action)) {
+        try {
+          await fetch('/api/corrective-actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              source_form_type:   'incident_report',
+              source_form_id:     formId,
+              source_form_number: result?.form_number,
+              project_id:         data.project_id,
+              action:             ca.action,
+              assigned_to_name:   ca.assigned_to || null,
+              due_date:           ca.due_date || null
+            })
+          });
+        } catch {}
+      }
+
+      Safety.DraftManager.remove('incident_report', 'new');
+      Safety.DraftManager.remove('incident_report', formId);
+
+      btn.textContent = '✓ Submitted'; btn.disabled = false;
+      document.getElementById('btn-print').style.display = '';
+      setDraftStatus('Submitted · ' + Safety.fmtDT(new Date().toISOString()));
+      Safety.toast('Incident Report submitted!', 'success');
+    } catch (e) {
+      btn.textContent = 'Submit'; btn.disabled = false;
+      Safety.toast('Submission failed: ' + e.message, 'error');
+    }
+  });
+
+  // ── Print ─────────────────────────────────────────────────
+  document.getElementById('btn-print').addEventListener('click', () => {
+    const data = collectFormData();
+    const projectName = document.getElementById('f-project').selectedOptions[0]?.text || '';
+
+    const incTypeLabels = {
+      injury: 'Injury / Illness',
+      near_miss: 'Near Miss (No Injury)',
+      property: 'Property / Equipment Damage',
+      environmental: 'Environmental Release',
+      other: 'Other'
+    };
+    const empLabels = {
+      employee: 'Employee', apprentice: 'Apprentice',
+      subcontractor: 'Sub-Contractor', visitor: 'Visitor / Public'
+    };
+    const treatmentLabels = {
+      first_aid: 'First Aid Only', medical_aid: 'Medical Aid (clinic/doctor)',
+      hospital: 'Hospital Admission', lost_time: 'Lost Time (missed work)',
+      modified: 'Modified Duties', none: 'None (near miss)'
+    };
+    const causeLabels = {
+      unsafe_act_no_ppe: 'No / Improper PPE',
+      unsafe_act_procedure: 'Failed to Follow Procedure',
+      unsafe_act_distraction: 'Distraction / Inattention',
+      unsafe_act_rushing: 'Rushing / Shortcut',
+      unsafe_act_impaired: 'Fatigue / Impairment',
+      unsafe_cond_guarding: 'Inadequate Guarding',
+      unsafe_cond_housekeeping: 'Poor Housekeeping',
+      unsafe_cond_equip: 'Defective Equipment',
+      unsafe_cond_environment: 'Hazardous Environment',
+      unsafe_cond_no_procedure: 'No Procedure / Training',
+      elec_no_test_before_touch: 'Did Not Test Before Touch',
+      elec_no_lockout: 'No Lockout / Tagout (LOTO)',
+      elec_assumed_dead: 'Assumed Circuit was Dead',
+      elec_wrong_ppe: 'Wrong / No Arc Flash PPE',
+      elec_no_permit: 'No Energized Work Permit',
+      elec_bypassed_protection: 'Bypassed Safety Protection',
+      elec_live_cable: 'Live / Energized Cable Present',
+      elec_breaker_not_locked: 'Breaker Not Locked Out',
+      elec_no_arc_flash_label: 'No Arc Flash Label / Rating',
+      elec_damaged_insulation: 'Damaged Insulation / Wiring',
+      elec_improper_grounding: 'Improper / Missing Ground',
+      elec_overloaded_circuit: 'Overloaded Circuit',
+      other_cause: 'Other (see description)',
+    };
+
+    const causesText = (data.immediate_causes || []).map(c => causeLabels[c] || c).join(', ') || '—';
+
+    const sigHtml = sig => sig?.data_url
+      ? `<div><img src="${sig.data_url}" style="max-height:55px;border-bottom:1px solid #ccc;padding-bottom:4px;"/><div style="font-size:7pt;color:#666;margin-top:3px;">${Safety.esc(sig.signer_name)} — ${Safety.fmtDT(sig.signed_at)}</div></div>`
+      : '<div style="height:44px;border-bottom:1px solid #999;width:200px;margin-bottom:4px;"></div><div style="font-size:7pt;color:#999;">Signature</div>';
+
+    Safety.printForm({
+      title:    'Incident Report',
+      subtitle: 'Injury · Near Miss · Property Damage · Environmental',
+      meta: {
+        form_number:  document.getElementById('form-num-badge').textContent,
+        project_name: projectName,
+        date:         data.date
+      },
+      sections: [
+        {
+          title: 'Incident Classification',
+          fields: [
+            { label: 'Incident Type',      value: incTypeLabels[data.incident_type] || '—' },
+            { label: 'Serious Incident?',  value: data.is_serious === 'yes' ? '⛔ YES — OHS notified' : data.is_serious === 'no' ? 'No' : '—' },
+            { label: 'WCB C040 Required?', value: data.wcb_required === 'yes' ? 'Yes — C040 required' : data.wcb_required === 'no' ? 'No' : '—' },
+          ]
+        },
+        {
+          title: 'Incident Details',
+          fields: [
+            { label: 'Date',             value: Safety.fmtDate(data.date) },
+            { label: 'Time',             value: data.time || '—' },
+            { label: 'Reported By',      value: data.reported_by || '—' },
+            { label: 'Project',          value: projectName || '—' },
+            { label: 'Location',         value: data.location || '—', wide: true },
+            { label: 'Worker Activity',  value: data.worker_activity || '—', wide: true },
+            { label: 'What Happened',    value: data.description || '—', wide: true },
+            { label: 'Equipment / Materials', value: data.equipment_involved || '—', wide: true },
+            { label: 'Environmental Conditions', value: data.env_conditions || '—', wide: true },
+          ]
+        },
+        ...((data.injured_persons && data.injured_persons.length ? data.injured_persons : (data.injured_name ? [{ name: data.injured_name, title: data.injured_title, emp_status: data.emp_status, body_part: data.body_part, injury_nature: data.injury_nature, treatment: data.treatment, days_lost: data.days_lost, continued: data.injured_continued }] : [])).map((p, i, arr) => ({
+          title: arr.length > 1 ? `🩺 Injured / Involved Person ${i + 1}` : '🩺 Injured / Involved Person',
+          fields: [
+            { label: 'Name',              value: p.name || '—' },
+            { label: 'Job Title / Trade', value: p.title || '—' },
+            { label: 'Employment Status', value: empLabels[p.emp_status] || '—' },
+            { label: 'Body Part Affected',value: p.body_part || '—' },
+            { label: 'Nature of Injury',  value: p.injury_nature || '—' },
+            { label: 'Medical Treatment', value: treatmentLabels[p.treatment] || '—' },
+            ...(p.days_lost ? [{ label: 'Estimated Days Lost', value: p.days_lost }] : []),
+            { label: 'Continued Working?', value: p.continued === 'yes' ? 'Yes' : p.continued === 'no' ? 'No' : '—' },
+          ]
+        }))),
+        {
+          title: 'Witnesses',
+          html: (data.witnesses || []).some(w => w.name)
+            ? `<table style="width:100%;border-collapse:collapse;font-size:8pt;">
+                <tr style="background:#f0f0f0;">
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:30%;">Name</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:25%;">Contact</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Statement</th>
+                </tr>
+                ${(data.witnesses || []).filter(w => w.name).map(w =>
+                  `<tr>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(w.name || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(w.contact || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(w.statement || '')}</td>
+                  </tr>`
+                ).join('')}
+              </table>`
+            : '<div style="color:#9ca3af;font-size:8pt;">No witnesses recorded.</div>'
+        },
+        {
+          title: 'Root Cause Analysis',
+          fields: [
+            { label: 'Immediate Causes',      value: causesText, wide: true },
+            ...(data.cause_other ? [{ label: 'Other Cause (described)', value: data.cause_other, wide: true }] : []),
+            { label: 'Root Cause Description',value: data.root_cause || '—', wide: true },
+            { label: 'Contributing Factors',  value: data.contributing_factors || '—', wide: true },
+          ]
+        },
+        {
+          title: 'Corrective Actions',
+          html: (data.corrective_actions || []).some(c => c.action)
+            ? `<table style="width:100%;border-collapse:collapse;font-size:8pt;">
+                <tr style="background:#f0f0f0;">
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Action</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:20%;">Assigned To</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:15%;">Due Date</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:15%;">Completed</th>
+                </tr>
+                ${(data.corrective_actions || []).filter(c => c.action).map(c =>
+                  `<tr>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(c.action || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(c.assigned_to || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(c.due_date || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(c.completion_date || '')}</td>
+                  </tr>`
+                ).join('')}
+              </table>`
+            : '<div style="color:#9ca3af;font-size:8pt;">None recorded.</div>'
+        },
+        {
+          title: 'OHS / WCB Notifications',
+          fields: [
+            { label: 'OHS Contacted by Phone?', value: data.ohs_contacted === 'yes' ? 'Yes' : data.ohs_contacted === 'no' ? 'No' : '—' },
+            ...(data.ohs_contact_name ? [{ label: 'OHS Contact Name', value: data.ohs_contact_name }] : []),
+            { label: 'WCB C040 Submitted?', value: data.wcb_submitted === 'yes' ? 'Yes' : data.wcb_submitted === 'no' ? 'No' : '—' },
+            ...(data.wcb_submit_date ? [{ label: 'WCB Submission Date', value: Safety.fmtDate(data.wcb_submit_date) }] : []),
+          ]
+        },
+        {
+          title: 'Reporting Supervisor Signature',
+          html: sigHtml(data.supervisor_signature)
+        },
+        {
+          title: 'Worker Signature (if able)',
+          html: sigHtml(data.worker_signature)
+        },
+      ]
+    });
+  });
+
+  Safety.OfflineQueue._syncBanner();
+
+})();
+</script>
+</body>
+</html>
