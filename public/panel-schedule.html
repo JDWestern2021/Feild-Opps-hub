@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Panel Schedule — J&D Western Electric</title>
+<link rel="icon" href="jd-logo.png"/>
+<style>
+:root {
+  --orange:#F47920;--orange-dark:#c75e0a;--green:#1a6e35;--red:#dc2626;
+  --navy:#1a3a5c;
+  --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;
+  --gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;
+  --gray-800:#1f2937;--gray-900:#111827;
+  --font:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:#f0f2f5;color:var(--gray-800);min-height:100vh;}
+header{background:var(--gray-900);color:#fff;padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+header .brand{font-weight:700;font-size:15px;color:#fff;text-decoration:none;display:flex;align-items:center;gap:10px;}
+header .brand img{width:28px;height:28px;border-radius:6px;}
+header nav{display:flex;gap:12px;align-items:center;}
+header nav a{color:rgba(255,255,255,.7);text-decoration:none;font-size:13px;}
+header nav a:hover{color:#fff;}
+.page{max-width:900px;margin:0 auto;padding:24px 16px 80px;}
+h1{font-size:20px;font-weight:700;color:var(--gray-900);margin-bottom:4px;}
+.subtitle{font-size:13px;color:var(--gray-500);margin-bottom:24px;}
+.card{background:#fff;border-radius:10px;border:1px solid var(--gray-200);margin-bottom:20px;}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;}
+.card-header h2{font-size:15px;font-weight:600;}
+.card-body{padding:20px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-group{display:flex;flex-direction:column;gap:4px;}
+label{font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.05em;}
+input,select,textarea{font-family:var(--font);font-size:14px;border:1px solid var(--gray-300);border-radius:6px;padding:8px 10px;width:100%;color:var(--gray-800);background:#fff;transition:border-color .15s;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px rgba(244,121,32,.12);}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:background .15s,opacity .15s;}
+.btn-primary{background:var(--orange);color:#fff;}.btn-primary:hover{background:var(--orange-dark);}
+.btn-secondary{background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-300);}.btn-secondary:hover{background:var(--gray-200);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* Panel grid – screen */
+.panel-grid-wrap{overflow-x:auto;}
+.panel-grid{width:100%;border-collapse:collapse;font-size:12px;}
+.panel-grid th{background:var(--navy);color:#fff;padding:7px 5px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+.panel-grid th.side-right{background:var(--orange-dark);}
+.panel-grid th.cct-col{background:var(--gray-700);width:36px;}
+.panel-grid td{padding:2px 3px;border:1px solid var(--gray-200);vertical-align:middle;}
+.panel-grid td.cct-num{text-align:center;font-weight:800;font-size:10px;color:var(--gray-500);background:var(--gray-50);width:34px;white-space:nowrap;}
+.panel-grid td.cct-num.row-a{border-bottom:1px dashed var(--gray-300);}
+.panel-grid td input,.panel-grid td select{border:none;border-radius:3px;padding:4px 5px;font-size:12px;background:transparent;width:100%;}
+.panel-grid td input:focus,.panel-grid td select:focus{background:#fff7ed;outline:1px solid var(--orange);}
+.panel-grid td.amp-col{width:58px;}
+.panel-grid td.pole-col{width:50px;}
+/* Alternate slot shading */
+.slot-a-row td{background:#fafafa;}
+.slot-b-row td{background:#fff;}
+.slot-b-row td.cct-num{background:#f3f4f6;}
+.slot-separator{border-top:2px solid var(--gray-200)!important;}
+
+/* Schedule list */
+.sched-table{width:100%;border-collapse:collapse;font-size:13px;}
+.sched-table th{background:var(--gray-50);padding:10px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:2px solid var(--gray-200);}
+.sched-table td{padding:10px 12px;border-bottom:1px solid var(--gray-100);vertical-align:middle;}
+.sched-table tr:hover td{background:var(--gray-50);}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-active{background:#d1fae5;color:#065f46;}
+.empty-state{text-align:center;padding:48px 24px;color:var(--gray-400);}
+.empty-state h3{font-size:15px;margin-bottom:6px;color:var(--gray-500);}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto;}
+.modal-overlay.hidden{display:none;}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:960px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-header{padding:16px 24px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;}
+.modal-header h2{font-size:16px;font-weight:700;}
+.modal-body{padding:20px 24px;max-height:80vh;overflow-y:auto;}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--gray-100);display:flex;justify-content:flex-end;gap:10px;}
+.close-btn{background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:22px;line-height:1;padding:0 4px;}
+.close-btn:hover{color:var(--gray-700);}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--gray-900);color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;display:none;max-width:320px;}
+.toast.show{display:block;}
+.toast.success{border-left:4px solid #22c55e;}
+.toast.error{border-left:4px solid var(--red);}
+
+/* ─── PRINT STYLES ─── */
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; font-family: Arial, Helvetica, sans-serif; margin: 0; }
+  body > * { display: none !important; }
+  #print-area { display: block !important; }
+
+  /* Tighter page — ~1 inch narrower than default */
+  @page { margin: 10mm 22mm; size: letter portrait; }
+
+  .print-page { page-break-after: always; }
+  .print-page:last-child { page-break-after: auto; }
+
+  /* ── Branded header ── */
+  .ph-outer {
+    background: #111827;
+    padding: 10px 14px 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0;
+  }
+  .ph-logo-block { display: flex; align-items: center; gap: 10px; }
+  .ph-logo { width: 48px; height: 48px; border-radius: 6px; }
+  .ph-company-name { font-size: 17px; font-weight: 900; color: #fff; letter-spacing: .03em; line-height: 1.1; }
+  .ph-tagline { font-size: 7.5px; color: #F47920; letter-spacing: .13em; text-transform: uppercase; margin-top: 3px; }
+  .ph-phone { font-size: 9px; color: rgba(255,255,255,.6); margin-top: 2px; }
+  .ph-title-block { text-align: right; }
+  .ph-title { font-size: 24px; font-weight: 900; color: #F47920; letter-spacing: .1em; text-transform: uppercase; line-height: 1; }
+  .ph-web { font-size: 8px; color: rgba(255,255,255,.45); margin-top: 3px; }
+
+  /* Orange accent bar under header */
+  .ph-accent { height: 4px; background: #F47920; margin-bottom: 7px; }
+
+  /* Panel info strip */
+  .pi-strip {
+    display: grid;
+    grid-template-columns: 2fr 1.1fr 1fr 1fr 1.2fr;
+    border: 1.5px solid #333;
+    margin-bottom: 5px;
+  }
+  .pi-cell { padding: 4px 8px; border-right: 1px solid #ccc; }
+  .pi-cell:last-child { border-right: none; }
+  .pi-label { font-size: 6.5px; font-weight: 700; text-transform: uppercase; color: #999; letter-spacing: .07em; }
+  .pi-value { font-size: 11px; font-weight: 700; color: #111; margin-top: 1px; }
+
+  /* Sub-header: schedule number + date */
+  .pi-meta { font-size: 7px; color: #bbb; margin-bottom: 5px; display: flex; justify-content: space-between; }
+
+  /* Circuit table — desc-col 50% so both sides get equal space */
+  .pt-table { width: 100%; border-collapse: collapse; font-size: 9.5px; table-layout: fixed; }
+  .pt-table col.desc-col { width: 50%; }
+  .pt-table col.pole-col { width: 20px; }
+  .pt-table col.amp-col  { width: 26px; }
+  .pt-table col.cct-col  { width: 24px; }
+
+  .pt-table th {
+    padding: 4px 4px;
+    text-align: center;
+    font-size: 7.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    border: 1px solid #888;
+  }
+  .pt-table th.left-hdr  { background: #1a3a5c; color: #fff; }
+  .pt-table th.right-hdr { background: #7a2e0a; color: #fff; }
+  .pt-table th.cct-hdr   { background: #374151; color: #fff; }
+  .pt-table th.desc-hdr  { text-align: left; padding-left: 5px; }
+
+  .pt-table td { padding: 2.5px 4px; border: 1px solid #d1d5db; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pt-table td.cct-td  { text-align: center; font-weight: 800; font-size: 8px; background: #f3f4f6; }
+  .pt-table td.pole-td { text-align: center; }
+  .pt-table td.amp-td  { text-align: center; }
+  .pt-table td.desc-td { max-width: 0; } /* forces text-overflow to work */
+
+  /* Slot A rows slightly tinted */
+  .pt-table tr.row-a td { background: #f9fafb; }
+  .pt-table tr.row-b td { background: #fff; }
+  .pt-table tr.row-a td.cct-td { background: #e5e7eb; }
+  .pt-table tr.row-b td.cct-td { background: #f3f4f6; }
+  /* Bold slot separator every 2 rows */
+  .pt-table tr.slot-top td { border-top: 1.5px solid #9ca3af; }
+
+  /* Footer */
+  .ph-footer {
+    margin-top: 8px;
+    border-top: 3px solid #F47920;
+    padding-top: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-size: 7.5px;
+    color: #9ca3af;
+  }
+  .ph-sig-block { display: flex; gap: 24px; }
+  .ph-sig-line { border-top: 1px solid #888; width: 130px; text-align: center; padding-top: 2px; font-size: 7px; color: #666; margin-top: 14px; }
+}
+
+#print-area { display: none; }
+@media(max-width:600px){.form-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="brand" href="index.html">
+    <img src="jd-logo.png" alt="J&D Logo"/>
+    J&amp;D Western Electric
+  </a>
+  <nav>
+    <a href="index.html">← Hub</a>
+    <a href="#" id="logout-btn">Sign Out</a>
+  </nav>
+</header>
+
+<div class="page">
+  <h1>Panel Schedules</h1>
+  <p class="subtitle">Create and manage electrical panel schedules linked to projects.</p>
+
+  <div id="list-section">
+    <div class="card">
+      <div class="card-header">
+        <h2>All Panel Schedules</h2>
+        <button class="btn btn-primary" id="btn-new-schedule">+ New Panel Schedule</button>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div id="schedule-list-wrap">
+          <div class="empty-state"><h3>Loading…</h3></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden print area -->
+<!-- Print Setup Modal -->
+<div class="modal-overlay hidden" id="print-setup-overlay">
+  <div class="modal" style="max-width:740px;width:97vw;">
+    <div class="modal-header">
+      <h2 style="font-size:16px;">🖨 Print Setup — Panel Schedule</h2>
+      <button class="close-btn" id="ps-close">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;gap:20px;align-items:flex-start;padding:20px;flex-wrap:wrap;">
+
+      <!-- Left: controls -->
+      <div style="flex-shrink:0;width:200px;">
+
+        <!-- Width -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px;">Width</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;">
+          <button class="ps-pw btn btn-sm btn-secondary" data-w="3.5">3½"</button>
+          <button class="ps-pw btn btn-sm btn-secondary" data-w="4">4"</button>
+          <button class="ps-pw btn btn-sm btn-secondary ps-recommended" data-w="5" style="position:relative;">5" <span style="position:absolute;top:-7px;right:-4px;background:#F47920;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:4px;line-height:1.4;">REC</span></button>
+          <button class="ps-pw btn btn-sm btn-secondary" data-w="6">6"</button>
+          <button class="ps-pw btn btn-sm btn-secondary" data-w="8.5" style="grid-column:span 2;">Full page (8½")</button>
+        </div>
+        <input type="range" id="ps-w-slider" min="3" max="8.5" step="0.25" value="8.5"
+               style="width:100%;accent-color:#F47920;margin-bottom:2px;"/>
+        <div style="text-align:center;font-size:13px;font-weight:700;color:#374151;margin-bottom:16px;" id="ps-w-label">8.5"  wide</div>
+
+        <!-- Height -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px;">Length</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;">
+          <button class="ps-ph btn btn-sm btn-secondary" data-h="8.5">8½"</button>
+          <button class="ps-ph btn btn-sm btn-secondary ps-recommended" data-h="9.5" style="position:relative;">9½" <span style="position:absolute;top:-7px;right:-4px;background:#F47920;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:4px;line-height:1.4;">REC</span></button>
+          <button class="ps-ph btn btn-sm btn-secondary" data-h="11">11"</button>
+          <button class="ps-ph btn btn-sm btn-secondary" data-h="14">14"</button>
+          <button class="ps-ph btn btn-sm btn-secondary" data-h="17">17"</button>
+          <button class="ps-ph btn btn-sm btn-secondary" data-h="22">22"</button>
+          <button class="ps-ph btn btn-sm btn-secondary" data-h="34">34"</button>
+        </div>
+        <input type="range" id="ps-h-slider" min="6" max="36" step="0.5" value="11"
+               style="width:100%;accent-color:#F47920;margin-bottom:2px;"/>
+        <div style="text-align:center;font-size:13px;font-weight:700;color:#374151;margin-bottom:16px;" id="ps-h-label">11"  long</div>
+
+        <!-- Size summary -->
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Page size</div>
+          <div style="font-size:18px;font-weight:900;color:#F47920;" id="ps-size-summary">8.5" × 11"</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:2px;" id="ps-size-hint">Letter — scale in print dialog</div>
+        </div>
+      </div>
+
+      <!-- Right: live preview -->
+      <div style="flex:1;min-width:220px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px;">Preview</div>
+        <div id="ps-preview-outer" style="background:#e5e7eb;border-radius:8px;padding:12px;overflow:auto;max-height:520px;">
+          <!-- clip div: sized to the scaled visual dimensions so overflow is exact -->
+          <div id="ps-preview-clip" style="position:relative;margin:0 auto;">
+            <!-- inner: full natural size, scaled from top-left, anchored at 0,0 -->
+            <div id="ps-preview-inner" style="position:absolute;top:0;left:0;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.2);">
+              <!-- populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <div style="font-size:11px;color:#9ca3af;flex:1;">Tip: use "Scale to fit page" in your printer dialog if needed.</div>
+      <button class="btn btn-secondary" id="ps-cancel">Cancel</button>
+      <button class="btn btn-primary" id="ps-print-now">🖨 Print Now</button>
+    </div>
+  </div>
+</div>
+
+<div id="print-area"></div>
+
+<!-- New / Edit Modal -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">New Panel Schedule</h2>
+      <button class="close-btn" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:20px;">
+        <div class="form-group">
+          <label>Panel Name / ID *</label>
+          <input type="text" id="f-panel-name" placeholder="e.g. Main Panel, Sub-Panel A"/>
+        </div>
+        <div class="form-group">
+          <label>Link to Project</label>
+          <select id="f-project">
+            <option value="">— No project —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Voltage</label>
+          <select id="f-voltage">
+            <option>120/240V 1-Ph</option>
+            <option>120/208V 1-Ph</option>
+            <option>120/208V 3-Ph</option>
+            <option>277/480V 3-Ph</option>
+            <option>600V 3-Ph</option>
+            <option>347/600V 3-Ph</option>
+            <option>120/240V 3-Ph</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Main Breaker (A)</label>
+          <select id="f-main-breaker">
+            <option value="">—</option>
+            <option>60</option><option>70</option><option>100</option><option>125</option>
+            <option>150</option><option>200</option><option>225</option><option>250</option>
+            <option>300</option><option>400</option><option>600</option><option>800</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Bus Rating (A)</label>
+          <select id="f-bus-rating">
+            <option value="">—</option>
+            <option>100</option><option>125</option><option>150</option><option>200</option>
+            <option>225</option><option>250</option><option>300</option><option>400</option>
+            <option>600</option><option>800</option><option>1000</option><option>1200</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Enclosure / Manufacturer</label>
+          <input type="text" id="f-enclosure" placeholder="e.g. Square D, Siemens, Eaton"/>
+        </div>
+        <div class="form-group">
+          <label>Number of Circuit Slots</label>
+          <select id="f-num-circuits" onchange="rebuildCircuitGrid()">
+            <option value="12">12</option>
+            <option value="20">20</option>
+            <option value="24" selected>24</option>
+            <option value="30">30</option>
+            <option value="36">36</option>
+            <option value="40">40</option>
+            <option value="42">42</option>
+            <option value="48">48</option>
+            <option value="60">60</option>
+            <option value="72">72</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-600);">Circuit Schedule</div>
+        <div style="font-size:11px;color:var(--gray-500);background:var(--gray-50);border:1px solid var(--gray-200);border-radius:6px;padding:5px 10px;">
+          Each slot shows <strong>A</strong> + <strong>B</strong> rows. Fill both rows for a <strong>tandem breaker</strong>; leave B blank for a single breaker.
+        </div>
+      </div>
+      <div class="panel-grid-wrap">
+        <table class="panel-grid" id="circuit-grid" style="table-layout:fixed;">
+          <colgroup>
+            <col style="width:50%;"/><col style="width:50px;"/><col style="width:56px;"/>
+            <col style="width:34px;"/><col style="width:34px;"/>
+            <col style="width:56px;"/><col style="width:50px;"/><col style="width:50%;"/>
+          </colgroup>
+          <thead>
+            <tr>
+              <th colspan="3">Left Side</th>
+              <th class="cct-col">CCT</th>
+              <th class="cct-col">CCT</th>
+              <th class="side-right" colspan="3">Right Side</th>
+            </tr>
+            <tr>
+              <th>Description</th><th>Poles</th><th>Amps</th>
+              <th class="cct-col">#</th><th class="cct-col">#</th>
+              <th class="side-right">Amps</th><th class="side-right">Poles</th><th class="side-right">Description</th>
+            </tr>
+          </thead>
+          <tbody id="circuit-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-save">Save Panel Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- View Modal -->
+<div class="modal-overlay hidden" id="view-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="view-panel-name" style="font-size:18px;"></h2>
+        <div id="view-panel-meta" style="font-size:12px;color:var(--gray-500);margin-top:2px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;" class="no-print">
+        <button class="btn btn-sm btn-secondary" id="view-print-btn">🖨 Print</button>
+        <button class="btn btn-sm btn-primary" id="view-edit-btn">Edit</button>
+        <button class="close-btn" id="view-close">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--gray-100);">
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);">Voltage</div><div id="view-voltage" style="font-size:14px;font-weight:600;margin-top:2px;"></div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);">Main Breaker</div><div id="view-main-breaker" style="font-size:14px;font-weight:600;margin-top:2px;"></div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);">Bus Rating</div><div id="view-bus-rating" style="font-size:14px;font-weight:600;margin-top:2px;"></div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);">Enclosure</div><div id="view-enclosure" style="font-size:14px;font-weight:600;margin-top:2px;"></div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);">Project</div><div id="view-project" style="font-size:14px;font-weight:600;margin-top:2px;"></div></div>
+      </div>
+      <div class="panel-grid-wrap">
+        <table class="panel-grid" id="view-grid" style="table-layout:fixed;">
+          <colgroup>
+            <col style="width:50%;"/><col style="width:50px;"/><col style="width:56px;"/>
+            <col style="width:34px;"/><col style="width:34px;"/>
+            <col style="width:56px;"/><col style="width:50px;"/><col style="width:50%;"/>
+          </colgroup>
+          <thead>
+            <tr>
+              <th colspan="3">Left Side</th>
+              <th class="cct-col">CCT</th><th class="cct-col">CCT</th>
+              <th class="side-right" colspan="3">Right Side</th>
+            </tr>
+            <tr>
+              <th>Description</th><th>Poles</th><th>Amps</th>
+              <th class="cct-col">#</th><th class="cct-col">#</th>
+              <th class="side-right">Amps</th><th class="side-right">Poles</th><th class="side-right">Description</th>
+            </tr>
+          </thead>
+          <tbody id="view-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer no-print">
+      <button class="btn btn-secondary" id="view-archive-btn" style="margin-right:auto;">Archive</button>
+      <button class="btn btn-secondary" id="view-close-footer">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const AMP_OPTIONS = ['','15','20','25','30','35','40','45','50','60','70','80','100','110','125','150','175','200','225','250','300','350','400'];
+const POLE_OPTIONS = ['','1','2','3'];
+
+let projects = [], schedules = [], editingId = null, viewingId = null, viewingData = null, currentUser = null;
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  clearTimeout(t._timer); t._timer = setTimeout(() => t.className = 'toast', 3000);
+}
+
+function ampSel(name, val='') {
+  return `<select name="${name}">${AMP_OPTIONS.map(a=>`<option value="${a}"${a===String(val)?'selected':''}>${a||'—'}</option>`).join('')}</select>`;
+}
+function poleSel(name, val='') {
+  return `<select name="${name}">${POLE_OPTIONS.map(p=>`<option value="${p}"${p===String(val)?'selected':''}>${p||'—'}</option>`).join('')}</select>`;
+}
+
+// Build the editable circuit grid.
+// Each "slot pair" (one left slot + one right slot) = 2 HTML rows: A and B.
+// left slot = odd circuit number, right slot = even circuit number
+// Row A: left (1A), right (2A). Row B: left (1B), right (2B). Then left (3A), right (4A) etc.
+function rebuildCircuitGrid(circuitData = []) {
+  const n    = parseInt(document.getElementById('f-num-circuits').value) || 24;
+  const slots = n / 2; // number of slot-pairs
+  const tbody = document.getElementById('circuit-tbody');
+  let html = '';
+  for (let i = 0; i < slots; i++) {
+    const leftSlot  = (i * 2) + 1;  // 1, 3, 5 ...
+    const rightSlot = (i * 2) + 2;  // 2, 4, 6 ...
+    const d = circuitData[i] || {};
+    const sep = i > 0 ? 'slot-separator' : '';
+    // Row A
+    html += `<tr class="slot-a-row">
+      <td><input type="text" name="la_desc_${i}" value="${esc(d.la_desc||d.left_desc||'')}" placeholder="Description"/></td>
+      <td class="pole-col">${poleSel('la_poles_'+i, d.la_poles||d.left_poles||'')}</td>
+      <td class="amp-col">${ampSel('la_amps_'+i, d.la_amps||d.left_amps||'')}</td>
+      <td class="cct-num row-a ${sep}">${leftSlot}A</td>
+      <td class="cct-num row-a ${sep}">${rightSlot}A</td>
+      <td class="amp-col">${ampSel('ra_amps_'+i, d.ra_amps||d.right_amps||'')}</td>
+      <td class="pole-col">${poleSel('ra_poles_'+i, d.ra_poles||d.right_poles||'')}</td>
+      <td><input type="text" name="ra_desc_${i}" value="${esc(d.ra_desc||d.right_desc||'')}" placeholder="Description"/></td>
+    </tr>`;
+    // Row B
+    html += `<tr class="slot-b-row">
+      <td><input type="text" name="lb_desc_${i}" value="${esc(d.lb_desc||'')}" placeholder="Tandem B (optional)"/></td>
+      <td class="pole-col">${poleSel('lb_poles_'+i, d.lb_poles||'')}</td>
+      <td class="amp-col">${ampSel('lb_amps_'+i, d.lb_amps||'')}</td>
+      <td class="cct-num">${leftSlot}B</td>
+      <td class="cct-num">${rightSlot}B</td>
+      <td class="amp-col">${ampSel('rb_amps_'+i, d.rb_amps||'')}</td>
+      <td class="pole-col">${poleSel('rb_poles_'+i, d.rb_poles||'')}</td>
+      <td><input type="text" name="rb_desc_${i}" value="${esc(d.rb_desc||'')}" placeholder="Tandem B (optional)"/></td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+function collectCircuitData() {
+  const n    = parseInt(document.getElementById('f-num-circuits').value) || 24;
+  const slots = n / 2;
+  const data = [];
+  const g = name => { const el = document.querySelector(`[name="${name}"]`); return el ? el.value.trim() : ''; };
+  for (let i = 0; i < slots; i++) {
+    data.push({
+      la_desc: g('la_desc_'+i), la_poles: g('la_poles_'+i), la_amps: g('la_amps_'+i),
+      lb_desc: g('lb_desc_'+i), lb_poles: g('lb_poles_'+i), lb_amps: g('lb_amps_'+i),
+      ra_desc: g('ra_desc_'+i), ra_poles: g('ra_poles_'+i), ra_amps: g('ra_amps_'+i),
+      rb_desc: g('rb_desc_'+i), rb_poles: g('rb_poles_'+i), rb_amps: g('rb_amps_'+i),
+    });
+  }
+  return data;
+}
+
+function openModal(schedule = null) {
+  editingId = schedule ? schedule.id : null;
+  document.getElementById('modal-title').textContent = schedule ? 'Edit Panel Schedule' : 'New Panel Schedule';
+  document.getElementById('f-panel-name').value   = schedule ? schedule.panel_name : '';
+  document.getElementById('f-voltage').value      = schedule ? schedule.voltage : '120/240V 1-Ph';
+  document.getElementById('f-main-breaker').value = schedule ? (schedule.main_breaker||'') : '';
+  document.getElementById('f-bus-rating').value   = schedule ? (schedule.bus_rating||'') : '';
+  document.getElementById('f-enclosure').value    = schedule ? (schedule.enclosure_type||'') : '';
+  document.getElementById('f-num-circuits').value = schedule ? String(schedule.num_circuits) : '24';
+  const psel = document.getElementById('f-project');
+  psel.innerHTML = '<option value="">— No project —</option>' +
+    projects.map(p=>`<option value="${p.id}"${schedule&&schedule.project_id==p.id?' selected':''}>${esc(p.name)}</option>`).join('');
+  const circuits = schedule ? (Array.isArray(schedule.circuit_data) ? schedule.circuit_data : []) : [];
+  rebuildCircuitGrid(circuits);
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+// Build the read-only view tbody — same A/B layout
+function buildViewRows(s) {
+  const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
+  const slots = s.num_circuits / 2;
+  let html = '';
+  for (let i = 0; i < slots; i++) {
+    const d = circuits[i] || {};
+    const leftSlot  = (i*2)+1;
+    const rightSlot = (i*2)+2;
+    const sep = i > 0 ? 'slot-separator' : '';
+    html += `<tr class="slot-a-row">
+      <td>${esc(d.la_desc||d.left_desc||'')}</td>
+      <td class="cct-num" style="background:transparent;">${d.la_poles||d.left_poles||''}</td>
+      <td class="cct-num" style="background:transparent;">${d.la_amps||d.left_amps||''}</td>
+      <td class="cct-num row-a ${sep}">${leftSlot}A</td>
+      <td class="cct-num row-a ${sep}">${rightSlot}A</td>
+      <td class="cct-num" style="background:transparent;">${d.ra_amps||d.right_amps||''}</td>
+      <td class="cct-num" style="background:transparent;">${d.ra_poles||d.right_poles||''}</td>
+      <td>${esc(d.ra_desc||d.right_desc||'')}</td>
+    </tr>
+    <tr class="slot-b-row">
+      <td style="color:var(--gray-400);font-style:italic;">${esc(d.lb_desc||'')}</td>
+      <td class="cct-num" style="background:transparent;">${d.lb_poles||''}</td>
+      <td class="cct-num" style="background:transparent;">${d.lb_amps||''}</td>
+      <td class="cct-num">${leftSlot}B</td>
+      <td class="cct-num">${rightSlot}B</td>
+      <td class="cct-num" style="background:transparent;">${d.rb_amps||''}</td>
+      <td class="cct-num" style="background:transparent;">${d.rb_poles||''}</td>
+      <td style="color:var(--gray-400);font-style:italic;">${esc(d.rb_desc||'')}</td>
+    </tr>`;
+  }
+  return html;
+}
+
+async function openView(id) {
+  viewingId = id;
+  try {
+    const res = await fetch('/api/panel-schedules/' + id);
+    const s   = await res.json();
+    viewingData = s;
+    document.getElementById('view-panel-name').textContent   = s.panel_name;
+    document.getElementById('view-voltage').textContent      = s.voltage || '—';
+    document.getElementById('view-main-breaker').textContent = s.main_breaker ? s.main_breaker + ' A' : '—';
+    document.getElementById('view-bus-rating').textContent   = s.bus_rating ? s.bus_rating + ' A' : '—';
+    document.getElementById('view-enclosure').textContent    = s.enclosure_type || '—';
+    document.getElementById('view-project').textContent      = s.project_name || '—';
+    document.getElementById('view-panel-meta').textContent   =
+      `Schedule # ${s.schedule_number}  ·  Created by ${s.created_by}  ·  ${s.created_at ? s.created_at.slice(0,10) : ''}`;
+    document.getElementById('view-tbody').innerHTML = buildViewRows(s);
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    document.getElementById('view-edit-btn').style.display    = isAdmin ? '' : 'none';
+    document.getElementById('view-archive-btn').style.display = isAdmin ? '' : 'none';
+    document.getElementById('view-overlay').classList.remove('hidden');
+  } catch { showToast('Failed to load panel schedule', 'error'); }
+}
+
+// ── Print ──
+function printSchedule(s, widthIn, heightIn) {
+  if (!s) return;
+  const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
+  const slots = s.num_circuits / 2;
+  let rows = '';
+  for (let i = 0; i < slots; i++) {
+    const d = circuits[i] || {};
+    const ls = (i*2)+1, rs = (i*2)+2;
+    rows += `
+      <tr class="row-a slot-top">
+        <td class="desc-td">${esc(d.la_desc||d.left_desc||'')}</td>
+        <td class="pole-td">${d.la_poles||d.left_poles||''}</td>
+        <td class="amp-td">${d.la_amps||d.left_amps||''}</td>
+        <td class="cct-td">${ls}A</td>
+        <td class="cct-td">${rs}A</td>
+        <td class="amp-td">${d.ra_amps||d.right_amps||''}</td>
+        <td class="pole-td">${d.ra_poles||d.right_poles||''}</td>
+        <td class="desc-td">${esc(d.ra_desc||d.right_desc||'')}</td>
+      </tr>
+      <tr class="row-b">
+        <td class="desc-td" style="font-style:italic;color:#888;">${esc(d.lb_desc||'')}</td>
+        <td class="pole-td">${d.lb_poles||''}</td>
+        <td class="amp-td">${d.lb_amps||''}</td>
+        <td class="cct-td">${ls}B</td>
+        <td class="cct-td">${rs}B</td>
+        <td class="amp-td">${d.rb_amps||''}</td>
+        <td class="pole-td">${d.rb_poles||''}</td>
+        <td class="desc-td" style="font-style:italic;color:#888;">${esc(d.rb_desc||'')}</td>
+      </tr>`;
+  }
+
+  const logoSrc = window.location.origin + '/logo-bolt.png';
+  const printDate = new Date().toLocaleDateString('en-CA');
+  const w = parseFloat(widthIn)  || 8.5;
+  const h = parseFloat(heightIn) || 11;
+
+  // Always print on letter paper. The schedule is a w×h rectangle in the top-left
+  // corner — sized exactly, no user scaling needed. Text stays full-size and legible.
+  const pw = window.open('', '_blank', 'width=1,height=1');
+  if (!pw) { alert('Allow pop-ups for this site to print.'); return; }
+  pw.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; margin:0; padding:0; }
+  @page { size:letter portrait; margin:0; }
+  body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
+
+  /* The schedule occupies exactly w×h on the letter page — no zoom, no scaling */
+  .print-page {
+    width:${w}in;
+    height:${h}in;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* Header */
+  .ph-outer { background:#111827; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; gap:8px; }
+  .ph-logo-block { display:flex; align-items:center; gap:10px; min-width:0; overflow:hidden; }
+  .ph-logo { width:54px; height:54px; border-radius:6px; flex-shrink:0; }
+  .ph-company-name { font-size:20px; font-weight:900; color:#fff; letter-spacing:.02em; line-height:1.1; white-space:nowrap; }
+  .ph-phone { font-size:11px; color:rgba(255,255,255,.75); margin-top:3px; white-space:nowrap; }
+  .ph-title-block { text-align:right; flex-shrink:0; }
+  .ph-title { font-size:18px; font-weight:900; color:#F47920; letter-spacing:.08em; text-transform:uppercase; line-height:1; }
+  .ph-sub  { font-size:8px; color:rgba(255,255,255,.5); margin-top:3px; }
+  .ph-accent { height:4px; background:#F47920; flex-shrink:0; }
+
+  /* Info strip */
+  .pi-strip { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1.2fr; border:1px solid #333; flex-shrink:0; }
+  .pi-cell { padding:3px 5px; border-right:1px solid #ccc; overflow:hidden; }
+  .pi-cell:last-child { border-right:none; }
+  .pi-label { font-size:5.5px; font-weight:700; text-transform:uppercase; color:#999; letter-spacing:.06em; }
+  .pi-value { font-size:9px; font-weight:700; color:#111; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pi-meta  { font-size:6px; color:#bbb; padding:2px 4px; display:flex; justify-content:space-between; flex-shrink:0; }
+
+  /* Circuit table — fills all remaining height so rows stretch to fill the label */
+  .tbl-wrap { flex:1; overflow:hidden; }
+  .pt-table { width:100%; height:100%; border-collapse:collapse; font-size:8px; table-layout:fixed; }
+  .pt-table col.desc-col { width:50%; }
+  .pt-table col.pole-col { width:16px; }
+  .pt-table col.amp-col  { width:22px; }
+  .pt-table col.cct-col  { width:20px; }
+  .pt-table th { padding:3px 2px; text-align:center; font-size:6px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; border:1px solid #888; }
+  .pt-table th.left-hdr  { background:#1a3a5c; color:#fff; }
+  .pt-table th.right-hdr { background:#7a2e0a; color:#fff; }
+  .pt-table th.cct-hdr   { background:#374151; color:#fff; }
+  .pt-table th.desc-hdr  { text-align:left; padding-left:4px; }
+  .pt-table td { padding:2px 3px; border:1px solid #d1d5db; vertical-align:middle; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8px; }
+  .pt-table td.cct-td  { text-align:center; font-weight:800; font-size:7px; background:#f3f4f6; }
+  .pt-table td.pole-td { text-align:center; }
+  .pt-table td.amp-td  { text-align:center; }
+  .pt-table td.desc-td { max-width:0; }
+  .pt-table tr.row-a td     { background:#f9fafb; }
+  .pt-table tr.row-b td     { background:#fff; }
+  .pt-table tr.row-a td.cct-td { background:#e5e7eb; }
+  .pt-table tr.row-b td.cct-td { background:#f3f4f6; }
+  .pt-table tr.slot-top td  { border-top:1.5px solid #9ca3af; }
+
+  /* Footer */
+  .ph-footer { background:#111827; padding:8px 12px; flex-shrink:0; text-align:center; }
+  .ph-footer-tagline { font-size:10px; font-weight:900; color:#F47920; letter-spacing:.12em; text-transform:uppercase; }
+  .ph-footer-phone { font-size:8px; color:rgba(255,255,255,.6); margin-top:2px; letter-spacing:.04em; }
+</style>
+</head><body>
+<div class="print-page">
+  <div class="ph-outer">
+    <div class="ph-logo-block">
+      <img class="ph-logo" src="${logoSrc}" alt="J&D Logo"/>
+      <div style="min-width:0;overflow:hidden;">
+        <div class="ph-company-name">J&amp;D WESTERN ELECTRIC</div>
+        <div class="ph-phone">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca</div>
+      </div>
+    </div>
+  </div>
+  <div class="ph-accent"></div>
+  <div class="pi-strip">
+    <div class="pi-cell"><div class="pi-label">Panel</div><div class="pi-value">${esc(s.panel_name)}</div></div>
+    <div class="pi-cell"><div class="pi-label">Voltage</div><div class="pi-value">${esc(s.voltage||'—')}</div></div>
+    <div class="pi-cell"><div class="pi-label">Main</div><div class="pi-value">${s.main_breaker ? s.main_breaker+'A' : '—'}</div></div>
+    <div class="pi-cell"><div class="pi-label">Bus</div><div class="pi-value">${s.bus_rating ? s.bus_rating+'A' : '—'}</div></div>
+    <div class="pi-cell"><div class="pi-label">Type</div><div class="pi-value">${esc(s.enclosure_type||'—')}</div></div>
+  </div>
+  <div class="pi-meta">
+    <span>${s.project_name ? esc(s.project_name) : ''}</span>
+    <span>${printDate}</span>
+  </div>
+  <div class="tbl-wrap">
+    <table class="pt-table">
+      <colgroup>
+        <col class="desc-col"/><col class="pole-col"/><col class="amp-col"/>
+        <col class="cct-col"/><col class="cct-col"/>
+        <col class="amp-col"/><col class="pole-col"/><col class="desc-col"/>
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="left-hdr desc-hdr" colspan="3">LEFT SIDE</th>
+          <th class="cct-hdr" colspan="2">CCT</th>
+          <th class="right-hdr desc-hdr" colspan="3">RIGHT SIDE</th>
+        </tr>
+        <tr>
+          <th class="left-hdr desc-hdr">Description</th>
+          <th class="left-hdr">P</th><th class="left-hdr">A</th>
+          <th class="cct-hdr">#</th><th class="cct-hdr">#</th>
+          <th class="right-hdr">A</th><th class="right-hdr">P</th>
+          <th class="right-hdr desc-hdr">Description</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  <div class="ph-footer">
+    <div class="ph-footer-tagline">Power &nbsp;&bull;&nbsp; Performance &nbsp;&bull;&nbsp; Peace of Mind</div>
+    <div class="ph-footer-phone">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca</div>
+  </div>
+</div>
+<script>window.onload = function(){ window.print(); window.close(); }<\/script>
+</body></html>`);
+  pw.document.close();
+}
+
+// ── Print Setup Modal ──
+let _psData = null, _psWidth = 8.5, _psHeight = 11;
+
+function openPrintSetup(s) {
+  _psData   = s;
+  _psWidth  = 8.5;
+  _psHeight = 11;
+  document.getElementById('view-overlay').classList.add('hidden');
+  document.getElementById('print-setup-overlay').classList.remove('hidden');
+  document.getElementById('ps-w-slider').value = 8.5;
+  document.getElementById('ps-h-slider').value = 11;
+  updatePsPreview();
+}
+
+function fmtIn(n) { return parseFloat(n) % 1 === 0 ? n + '"' : parseFloat(n).toFixed(2).replace(/\.?0+$/,'') + '"'; }
+
+function updatePsPreview() {
+  const w = parseFloat(_psWidth);
+  const h = parseFloat(_psHeight);
+
+  // ── Labels & presets ──────────────────────────────────────
+  document.getElementById('ps-w-label').textContent = fmtIn(w) + '  wide';
+  document.getElementById('ps-h-label').textContent = fmtIn(h) + '  long';
+  document.getElementById('ps-size-summary').textContent = fmtIn(w) + ' × ' + fmtIn(h);
+  document.getElementById('ps-size-hint').textContent =
+    (w === 8.5 && h === 11) ? 'Standard letter' :
+    (w === 8.5 && h === 14) ? 'Legal' :
+    w < 7 ? 'Panel insert strip' : 'Custom size';
+
+  document.querySelectorAll('.ps-pw').forEach(b => {
+    const on = parseFloat(b.dataset.w) === w;
+    b.style.background  = on ? '#F47920' : '';
+    b.style.color       = on ? '#fff'    : '';
+    b.style.borderColor = on ? '#F47920' : '';
+  });
+  document.querySelectorAll('.ps-ph').forEach(b => {
+    const on = parseFloat(b.dataset.h) === h;
+    b.style.background  = on ? '#F47920' : '';
+    b.style.color       = on ? '#fff'    : '';
+    b.style.borderColor = on ? '#F47920' : '';
+  });
+
+  // ── Scaling ───────────────────────────────────────────────
+  // naturalW/H: the content rendered at 96 px/in at the chosen dimensions
+  // scale: uniform factor so the content fits the available preview width
+  // visW/H: the resulting pixel dimensions of the scaled preview
+  // The preview outer is overflow:auto so tall schedules scroll rather than shrink.
+  const PX_PER_IN = 96;
+  const naturalW  = w * PX_PER_IN;
+  const naturalH  = h * PX_PER_IN;
+  const outerEl   = document.getElementById('ps-preview-outer');
+  const availW    = Math.max(200, (outerEl.clientWidth || 380) - 24);
+  const scale     = Math.min(availW / naturalW, 1); // fit width; never upscale
+  const visW      = naturalW * scale;
+  const visH      = naturalH * scale;
+
+  // Size the clip div to the visual output so the absolute-positioned inner
+  // is contained exactly — no top clip, no overflow mess.
+  const clipEl  = document.getElementById('ps-preview-clip');
+  const innerEl = document.getElementById('ps-preview-inner');
+  clipEl.style.width  = visW  + 'px';
+  clipEl.style.height = visH  + 'px';
+  innerEl.style.width          = naturalW + 'px';
+  innerEl.style.height         = naturalH + 'px'; // forces white paper rect to full paper height
+  innerEl.style.transform      = `scale(${scale})`;
+  innerEl.style.transformOrigin = 'top left';
+
+  // ── Preview content ───────────────────────────────────────
+  const s = _psData;
+  if (!s) return;
+  const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
+  const slots    = (s.num_circuits || 24) / 2;
+  let rows = '';
+  const TD = (extra='') => `padding:2px 3px;border:1px solid #e5e7eb;font-size:7px;${extra}`;
+  for (let i = 0; i < slots; i++) {
+    const d  = circuits[i] || {};
+    const ls = (i*2)+1, rs = (i*2)+2;
+    const rowBg = i%2===0 ? '#f9fafb' : '#fff';
+    rows += `
+    <tr style="background:${rowBg};border-top:1px solid #9ca3af;">
+      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.la_desc||'')}</td>
+      <td style="${TD('text-align:center;width:16px;')}">${d.la_poles||''}</td>
+      <td style="${TD('text-align:center;width:20px;')}">${d.la_amps||''}</td>
+      <td style="${TD('text-align:center;width:20px;font-weight:800;background:#e5e7eb;')}">${ls}A</td>
+      <td style="${TD('text-align:center;width:20px;font-weight:800;background:#e5e7eb;')}">${rs}A</td>
+      <td style="${TD('text-align:center;width:20px;')}">${d.ra_amps||''}</td>
+      <td style="${TD('text-align:center;width:16px;')}">${d.ra_poles||''}</td>
+      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.ra_desc||'')}</td>
+    </tr>
+    <tr style="background:${rowBg};">
+      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-style:italic;color:#888;')}">${esc(d.lb_desc||'')}</td>
+      <td style="${TD('text-align:center;width:16px;')}">${d.lb_poles||''}</td>
+      <td style="${TD('text-align:center;width:20px;')}">${d.lb_amps||''}</td>
+      <td style="${TD('text-align:center;width:20px;font-weight:800;background:#d1d5db;')}">${ls}B</td>
+      <td style="${TD('text-align:center;width:20px;font-weight:800;background:#d1d5db;')}">${rs}B</td>
+      <td style="${TD('text-align:center;width:20px;')}">${d.rb_amps||''}</td>
+      <td style="${TD('text-align:center;width:16px;')}">${d.rb_poles||''}</td>
+      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-style:italic;color:#888;')}">${esc(d.rb_desc||'')}</td>
+    </tr>`;
+  }
+
+  // Flex column so table fills all remaining height inside the paper rect
+  innerEl.innerHTML = `
+    <div style="height:100%;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="background:#111827;padding:7px 12px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <img src="logo-bolt.png" style="width:32px;height:32px;border-radius:4px;flex-shrink:0;" alt="J&D logo"/>
+        <div>
+          <div style="color:#fff;font-size:10px;font-weight:900;letter-spacing:.03em;line-height:1.2;">J&amp;D WESTERN ELECTRIC</div>
+          <div style="color:rgba(255,255,255,.6);font-size:7px;margin-top:2px;">587-343-4349 &nbsp;·&nbsp; jdwesternelectric.ca</div>
+        </div>
+      </div>
+      <div style="height:3px;background:#F47920;flex-shrink:0;"></div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;border:1px solid #ccc;margin:3px 0;flex-shrink:0;">
+        <div style="padding:2px 4px;border-right:1px solid #eee;"><div style="font-size:5px;color:#999;text-transform:uppercase;">Panel</div><div style="font-size:8px;font-weight:700;">${esc(s.panel_name||'')}</div></div>
+        <div style="padding:2px 4px;border-right:1px solid #eee;"><div style="font-size:5px;color:#999;text-transform:uppercase;">Voltage</div><div style="font-size:8px;font-weight:700;">${esc(s.voltage||'')}</div></div>
+        <div style="padding:2px 4px;border-right:1px solid #eee;"><div style="font-size:5px;color:#999;text-transform:uppercase;">Main</div><div style="font-size:8px;font-weight:700;">${s.main_breaker||'—'}A</div></div>
+        <div style="padding:2px 4px;border-right:1px solid #eee;"><div style="font-size:5px;color:#999;text-transform:uppercase;">Bus</div><div style="font-size:8px;font-weight:700;">${s.bus_rating||'—'}A</div></div>
+        <div style="padding:2px 4px;"><div style="font-size:5px;color:#999;text-transform:uppercase;">Type</div><div style="font-size:8px;font-weight:700;">${esc(s.enclosure_type||'—')}</div></div>
+      </div>
+      <div style="flex:1;overflow:hidden;">
+        <table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">
+          <colgroup><col style="width:50%;"/><col style="width:16px;"/><col style="width:20px;"/><col style="width:20px;"/><col style="width:20px;"/><col style="width:20px;"/><col style="width:16px;"/><col style="width:50%;"/></colgroup>
+          <thead>
+            <tr>
+              <th colspan="3" style="background:#1a3a5c;color:#fff;font-size:6px;padding:2px 3px;text-align:left;">LEFT SIDE</th>
+              <th colspan="2" style="background:#374151;color:#fff;font-size:6px;padding:2px;text-align:center;">CCT</th>
+              <th colspan="3" style="background:#7a2e0a;color:#fff;font-size:6px;padding:2px 3px;text-align:right;">RIGHT SIDE</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="background:#111827;padding:5px 8px;text-align:center;flex-shrink:0;">
+        <div style="color:#F47920;font-size:7px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;">Power &nbsp;&bull;&nbsp; Performance &nbsp;&bull;&nbsp; Peace of Mind</div>
+        <div style="color:rgba(255,255,255,.55);font-size:6px;margin-top:1px;">587-343-4349 &nbsp;·&nbsp; jdwesternelectric.ca</div>
+      </div>
+    </div>`;
+}
+
+// Wire up print-setup events
+document.getElementById('ps-close').addEventListener('click',  () => document.getElementById('print-setup-overlay').classList.add('hidden'));
+document.getElementById('ps-cancel').addEventListener('click', () => document.getElementById('print-setup-overlay').classList.add('hidden'));
+
+document.getElementById('ps-w-slider').addEventListener('input', e => {
+  _psWidth = parseFloat(e.target.value);
+  updatePsPreview();
+});
+document.getElementById('ps-h-slider').addEventListener('input', e => {
+  _psHeight = parseFloat(e.target.value);
+  updatePsPreview();
+});
+
+document.querySelectorAll('.ps-pw').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _psWidth = parseFloat(btn.dataset.w);
+    document.getElementById('ps-w-slider').value = _psWidth;
+    updatePsPreview();
+  });
+});
+document.querySelectorAll('.ps-ph').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _psHeight = parseFloat(btn.dataset.h);
+    document.getElementById('ps-h-slider').value = _psHeight;
+    updatePsPreview();
+  });
+});
+
+document.getElementById('ps-print-now').addEventListener('click', () => {
+  document.getElementById('print-setup-overlay').classList.add('hidden');
+  printSchedule(_psData, _psWidth, _psHeight);
+});
+
+// ── Schedule list ──
+async function loadSchedules() {
+  try {
+    const res = await fetch('/api/panel-schedules');
+    schedules = await res.json();
+    renderList();
+  } catch { document.getElementById('schedule-list-wrap').innerHTML = '<div class="empty-state"><h3>Failed to load</h3></div>'; }
+}
+
+function renderList() {
+  const wrap = document.getElementById('schedule-list-wrap');
+  if (!schedules.length) {
+    wrap.innerHTML = `<div class="empty-state"><h3>No panel schedules yet</h3><p>Click "+ New Panel Schedule" to create one.</p></div>`;
+    return;
+  }
+  const rows = schedules.map(s => `<tr style="cursor:pointer;" onclick="openView(${s.id})">
+    <td style="font-weight:600;">${esc(s.panel_name)}</td>
+    <td style="font-size:12px;color:var(--gray-500);">${esc(s.schedule_number)}</td>
+    <td>${esc(s.voltage||'')}</td>
+    <td>${s.main_breaker ? s.main_breaker+' A' : '—'}</td>
+    <td>${s.num_circuits}</td>
+    <td>${esc(s.project_name||'—')}</td>
+    <td>${esc(s.created_by)}</td>
+    <td><span class="badge badge-active">Active</span></td>
+  </tr>`).join('');
+  wrap.innerHTML = `<div style="overflow-x:auto;"><table class="sched-table">
+    <thead><tr><th>Panel Name</th><th>Schedule #</th><th>Voltage</th><th>Main Breaker</th><th>Slots</th><th>Project</th><th>Created By</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+// ── Event listeners ──
+document.getElementById('btn-new-schedule').addEventListener('click', () => openModal());
+document.getElementById('modal-close').addEventListener('click', () => document.getElementById('modal-overlay').classList.add('hidden'));
+document.getElementById('modal-cancel').addEventListener('click', () => document.getElementById('modal-overlay').classList.add('hidden'));
+document.getElementById('view-close').addEventListener('click', () => document.getElementById('view-overlay').classList.add('hidden'));
+document.getElementById('view-close-footer').addEventListener('click', () => document.getElementById('view-overlay').classList.add('hidden'));
+
+document.getElementById('view-print-btn').addEventListener('click', () => {
+  openPrintSetup(viewingData);
+});
+
+document.getElementById('view-edit-btn').addEventListener('click', async () => {
+  document.getElementById('view-overlay').classList.add('hidden');
+  try {
+    const res = await fetch('/api/panel-schedules/' + viewingId);
+    openModal(await res.json());
+  } catch { showToast('Failed to load', 'error'); }
+});
+
+document.getElementById('view-archive-btn').addEventListener('click', async () => {
+  if (!confirm('Archive this panel schedule?')) return;
+  const res = await fetch(`/api/panel-schedules/${viewingId}/archive`, { method: 'PATCH' });
+  if (res.ok) { document.getElementById('view-overlay').classList.add('hidden'); showToast('Archived', 'success'); loadSchedules(); }
+  else showToast('Failed to archive', 'error');
+});
+
+document.getElementById('modal-save').addEventListener('click', async () => {
+  const panelName = document.getElementById('f-panel-name').value.trim();
+  if (!panelName) { showToast('Panel name is required', 'error'); return; }
+  const projectSel  = document.getElementById('f-project');
+  const projectId   = projectSel.value || null;
+  const projectName = projectId ? projectSel.options[projectSel.selectedIndex].text : null;
+  const body = {
+    panel_name:     panelName,
+    voltage:        document.getElementById('f-voltage').value,
+    main_breaker:   document.getElementById('f-main-breaker').value || null,
+    bus_rating:     document.getElementById('f-bus-rating').value || null,
+    enclosure_type: document.getElementById('f-enclosure').value.trim() || null,
+    num_circuits:   parseInt(document.getElementById('f-num-circuits').value),
+    circuit_data:   collectCircuitData(),
+    project_id:     projectId,
+    project_name:   projectName,
+  };
+  const btn = document.getElementById('modal-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const url    = editingId ? `/api/panel-schedules/${editingId}` : '/api/panel-schedules';
+    const method = editingId ? 'PATCH' : 'POST';
+    const res  = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error||'Save failed');
+    document.getElementById('modal-overlay').classList.add('hidden');
+    showToast(editingId ? 'Panel schedule updated' : `Created — ${data.schedule_number}`, 'success');
+    loadSchedules();
+  } catch (err) { showToast(err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Save Panel Schedule'; }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async e => {
+  e.preventDefault();
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.href = '/login.html';
+});
+
+window.addEventListener('afterprint', () => {
+  document.getElementById('print-area').innerHTML = '';
+  document.getElementById('view-overlay').classList.remove('hidden');
+});
+
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  currentUser = await r.json();
+  if (currentUser.role !== 'admin') document.getElementById('btn-new-schedule').style.display = 'none';
+  const pr = await fetch('/api/project-folders/all?status=active');
+  projects = pr.ok ? await pr.json() : [];
+  loadSchedules();
+})();
+</script>
+</body>
+</html>

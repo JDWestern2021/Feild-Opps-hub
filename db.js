@@ -232,6 +232,179 @@ async function initSchema() {
   // Duplicate-entry tracking on daily_tickets
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS has_duplicate         INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS duplicate_ticket_ids  TEXT    DEFAULT NULL`);
+  // Vendor sign-off on daily_tickets
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS vendor_signoff TEXT DEFAULT NULL`);
+  // Safety module
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS safety_forms (
+      id               SERIAL PRIMARY KEY,
+      form_type        TEXT NOT NULL,
+      form_number      TEXT NOT NULL UNIQUE,
+      project_id       INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+      project_name     TEXT,
+      job_number       TEXT,
+      submitted_by_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      submitted_by     TEXT NOT NULL,
+      submitted_at     TEXT NOT NULL,
+      date             TEXT NOT NULL,
+      status           TEXT NOT NULL DEFAULT 'Submitted',
+      form_data        TEXT NOT NULL DEFAULT '{}',
+      archived         INTEGER NOT NULL DEFAULT 0,
+      archived_at      TEXT,
+      project_archived INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  await pool.query(`ALTER TABLE safety_forms ADD COLUMN IF NOT EXISTS project_archived INTEGER NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE safety_forms ADD COLUMN IF NOT EXISTS psi_flag INTEGER NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE safety_forms ADD COLUMN IF NOT EXISTS wcb_flag INTEGER NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE safety_forms ADD COLUMN IF NOT EXISTS reviewed_by TEXT`);
+  await pool.query(`ALTER TABLE safety_forms ADD COLUMN IF NOT EXISTS reviewed_at TEXT`);
+
+  // Vehicles fleet list
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vehicles (
+      id            SERIAL PRIMARY KEY,
+      unit_number   TEXT NOT NULL,
+      make          TEXT,
+      model         TEXT,
+      year          INTEGER,
+      vin           TEXT,
+      license_plate TEXT,
+      status        TEXT NOT NULL DEFAULT 'active',
+      notes         TEXT,
+      created_at    TEXT NOT NULL
+    )
+  `);
+
+  // Vehicle maintenance columns (added incrementally)
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_odometer INTEGER`);
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS next_oil_change_km INTEGER`);
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS last_oil_change_date TEXT`);
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS last_inspection_date TEXT`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vehicle_documents (
+      id           SERIAL PRIMARY KEY,
+      vehicle_id   INTEGER REFERENCES vehicles(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      file_type    TEXT,
+      data_url     TEXT NOT NULL,
+      uploaded_by  TEXT,
+      uploaded_at  TEXT NOT NULL,
+      notes        TEXT
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scheduled_maintenance (
+      id               SERIAL PRIMARY KEY,
+      vehicle_id       INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+      maintenance_type TEXT NOT NULL DEFAULT 'other',
+      title            TEXT NOT NULL,
+      scheduled_date   TEXT NOT NULL,
+      notes            TEXT,
+      status           TEXT NOT NULL DEFAULT 'scheduled',
+      completed_date   TEXT,
+      completed_notes  TEXT,
+      created_by       TEXT,
+      created_at       TEXT NOT NULL
+    )
+  `);
+
+  // Worker safety certifications
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS worker_certifications (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      cert_name    TEXT NOT NULL,
+      cert_type    TEXT NOT NULL DEFAULT 'other',
+      issued_date  TEXT,
+      expiry_date  TEXT,
+      photo_data   TEXT,
+      photo_type   TEXT,
+      notes        TEXT,
+      created_at   TEXT NOT NULL,
+      updated_at   TEXT
+    )
+  `);
+
+  // Safety photo / signature attachments
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS safety_attachments (
+      id              SERIAL PRIMARY KEY,
+      form_id         INTEGER REFERENCES safety_forms(id) ON DELETE CASCADE,
+      attachment_type TEXT NOT NULL,
+      field_key       TEXT,
+      file_path       TEXT NOT NULL,
+      uploaded_by_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      uploaded_at     TEXT NOT NULL,
+      meta            TEXT DEFAULT '{}'
+    )
+  `);
+
+  // Shared corrective-actions register
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS corrective_actions (
+      id                SERIAL PRIMARY KEY,
+      source_form_type  TEXT NOT NULL,
+      source_form_id    INTEGER REFERENCES safety_forms(id) ON DELETE SET NULL,
+      source_form_number TEXT,
+      project_id        INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+      action            TEXT NOT NULL,
+      assigned_to_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      assigned_to_name  TEXT,
+      due_date          TEXT,
+      completion_date   TEXT,
+      status            TEXT NOT NULL DEFAULT 'open',
+      notes             TEXT,
+      created_by_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by_name   TEXT NOT NULL,
+      created_at        TEXT NOT NULL,
+      updated_at        TEXT
+    )
+  `);
+
+  // In-app notifications
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      type        TEXT NOT NULL,
+      title       TEXT NOT NULL,
+      body        TEXT,
+      link        TEXT,
+      read        INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT NOT NULL DEFAULT to_char(now(),'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+    )
+  `);
+
+  // Panel schedules
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS panel_schedules (
+      id               SERIAL PRIMARY KEY,
+      schedule_number  TEXT NOT NULL UNIQUE,
+      panel_name       TEXT NOT NULL,
+      voltage          TEXT NOT NULL DEFAULT '120/240V 1-Ph',
+      main_breaker     TEXT,
+      bus_rating       TEXT,
+      enclosure_type   TEXT,
+      num_circuits     INTEGER NOT NULL DEFAULT 24,
+      circuit_data     TEXT NOT NULL DEFAULT '[]',
+      project_id       INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+      project_name     TEXT,
+      job_number       TEXT,
+      created_by_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by       TEXT NOT NULL,
+      created_at       TEXT NOT NULL,
+      updated_at       TEXT,
+      updated_by       TEXT,
+      status           TEXT NOT NULL DEFAULT 'Active',
+      archived         INTEGER NOT NULL DEFAULT 0,
+      archived_at      TEXT,
+      project_archived INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
   // Backfill user_id on ticket_employees rows where it was never set (case-insensitive name match)
   await pool.query(`
     UPDATE ticket_employees te

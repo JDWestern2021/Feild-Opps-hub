@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Safety Meeting Record — J&amp;D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    .fp-header { background:#111827; color:#fff; position:sticky; top:0; z-index:100; }
+    .fp-header-inner { max-width:680px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+    .fp-back { color:rgba(255,255,255,.6); text-decoration:none; font-size:.85rem; padding:6px 10px; border:1px solid rgba(255,255,255,.15); border-radius:6px; white-space:nowrap; flex-shrink:0; }
+    .fp-header h1 { font-size:1rem; font-weight:800; margin:0; flex:1; }
+    .fp-header-sub { font-size:.72rem; color:rgba(255,255,255,.4); }
+    .fp-form-num { font-size:.72rem; background:rgba(244,121,32,.25); color:#F47920; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .fp-draft-bar { background:#f9fafb; border-bottom:1px solid #e5e7eb; padding:6px 16px; font-size:.75rem; color:#9ca3af; text-align:center; }
+
+    .fp-body { max-width:680px; margin:0 auto; padding:16px 16px 100px; }
+
+    .fp-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+    .fp-card-header { background:#f3f4f6; border-bottom:1px solid #e5e7eb; padding:11px 16px; font-weight:700; font-size:.88rem; color:#111827; display:flex; align-items:center; gap:8px; }
+    .fp-card-body { padding:16px; }
+
+    .fp-field { margin-bottom:14px; }
+    .fp-field:last-child { margin-bottom:0; }
+    .fp-label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fp-req { color:#ef4444; }
+    .fp-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .fp-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+    @media(max-width:480px){ .fp-grid-2,.fp-grid-3{ grid-template-columns:1fr; } }
+
+    /* Meeting type button group */
+    .meeting-type-group { display:flex; flex-direction:column; gap:8px; }
+    .meeting-type-btn {
+      padding:12px 14px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.88rem; font-weight:600; cursor:pointer;
+      transition:all .15s; text-align:left; color:#374151;
+    }
+    .meeting-type-btn:hover { border-color:#9ca3af; background:#f9fafb; }
+    .meeting-type-btn.active { background:#111827; border-color:#111827; color:#fff; }
+
+    /* Gamma toggle */
+    .gamma-toggle-card {
+      background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;
+      padding:14px 16px; margin-top:12px;
+    }
+    .gamma-toggle-label { font-size:.85rem; font-weight:700; color:#0c4a6e; margin-bottom:10px; }
+    .gamma-btn-row { display:flex; gap:8px; }
+    .gamma-btn {
+      flex:1; padding:11px 10px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.85rem; font-weight:700; cursor:pointer;
+      transition:all .15s; text-align:center;
+    }
+    .gamma-btn.active-yes { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .gamma-btn.active-no  { background:#f3f4f6; border-color:#9ca3af; color:#374151; }
+    .gamma-link-wrap { margin-top:10px; }
+
+    /* Sign-off list */
+    .sf-signoff-list { display:flex; flex-direction:column; gap:10px; }
+    .sf-signoff-row {
+      display:flex; align-items:center; gap:12px; padding:12px;
+      background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px;
+    }
+    .sf-signoff-name { font-weight:600; font-size:.9rem; min-width:120px; flex:1; }
+    .sf-signoff-preview { flex:1; max-width:160px; }
+    .sf-signoff-preview img { max-height:48px; border-radius:4px; }
+    .sf-signoff-meta { font-size:.72rem; color:#6b7280; }
+
+    .fp-submit-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:12px 16px; display:flex; gap:10px; align-items:center; z-index:100; box-shadow:0 -2px 10px rgba(0,0,0,.08); }
+    .fp-draft-status { font-size:.75rem; color:#9ca3af; flex:1; }
+  </style>
+</head>
+<body>
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<div class="fp-header">
+  <div class="fp-header-inner">
+    <a href="safety.html" class="fp-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Safety Meeting Record</h1>
+      <div class="fp-header-sub">Toolbox Talk / Pre-Job / Formal Meeting</div>
+    </div>
+    <div class="fp-form-num" id="form-num-badge" style="display:none;"></div>
+  </div>
+</div>
+<div class="fp-draft-bar" id="draft-bar">Fill out all sections, then submit or save a draft.</div>
+
+<div class="fp-body">
+
+  <!-- 1 · Meeting Info -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Meeting Information</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-3">
+        <div class="fp-field">
+          <label class="fp-label">Date <span class="fp-req">*</span></label>
+          <input type="date" id="f-date" class="form-control"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Start Time <span class="fp-req">*</span></label>
+          <input type="time" id="f-time" class="form-control"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Duration</label>
+          <input type="text" id="f-duration" class="form-control" placeholder="e.g. 15 min, 1 hour"/>
+        </div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Conducted By <span class="fp-req">*</span></label>
+          <select id="f-conductor" class="form-control">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Project</label>
+          <select id="f-project" class="form-control">
+            <option value="">— Select project —</option>
+          </select>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Meeting Type <span class="fp-req">*</span></label>
+        <div class="meeting-type-group" id="meeting-type-group">
+          <button type="button" class="meeting-type-btn" data-val="toolbox_talk">🔧 Toolbox Talk</button>
+          <button type="button" class="meeting-type-btn" data-val="pre_job">📋 Pre-Job Meeting</button>
+          <button type="button" class="meeting-type-btn" data-val="formal">👥 Formal Safety Meeting</button>
+          <button type="button" class="meeting-type-btn" data-val="other">📝 Other</button>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Location / Site Address</label>
+        <input type="text" id="f-location" class="form-control" placeholder="Site address or location description"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Topics Covered -->
+  <div class="fp-card">
+    <div class="fp-card-header">📝 Topics Covered</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Topics / Discussion <span class="fp-req">*</span></label>
+        <textarea id="f-topics-covered" class="form-control" rows="4" placeholder="Describe the safety topics discussed, training provided, regulatory requirements reviewed…"></textarea>
+      </div>
+      <div class="gamma-toggle-card">
+        <div class="gamma-toggle-label">Was a Gamma slideshow used for this meeting?</div>
+        <div class="gamma-btn-row" id="gamma-btn-row">
+          <button type="button" class="gamma-btn" data-val="yes">✓ Yes — Gamma Used</button>
+          <button type="button" class="gamma-btn" data-val="no">✗ No — No Slideshow</button>
+        </div>
+        <div class="gamma-link-wrap" id="f-gamma-link-wrap" style="display:none;">
+          <label class="fp-label" style="margin-top:10px;">Gamma Presentation Link</label>
+          <input type="url" id="f-gamma-link" class="form-control" placeholder="Paste your Gamma share link here…"/>
+          <div style="font-size:.75rem;color:#6b7280;margin-top:4px;">The link will be included in the meeting record for reference.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · Hazards / Regulations Discussed -->
+  <div class="fp-card">
+    <div class="fp-card-header">⚠️ Hazards &amp; Regulations Discussed</div>
+    <div class="fp-card-body">
+      <div id="topics-container"></div>
+    </div>
+  </div>
+
+  <!-- 4 · Action Items -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Action Items</div>
+    <div class="fp-card-body">
+      <div id="ca-container"></div>
+    </div>
+  </div>
+
+  <!-- 5 · Attendees & Sign-Off -->
+  <div class="fp-card">
+    <div class="fp-card-header">👷 Attendees &amp; Sign-Off</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">
+        Each attendee must sign to confirm they participated in this safety meeting.
+      </p>
+      <div id="workers-container"></div>
+      <div class="sf-signoff-list" id="signoff-list" style="margin-top:14px;"></div>
+      <p style="font-size:.74rem;color:#9ca3af;margin:10px 0 0;">
+        Workers added here will receive an in-app notification to sign if they haven't already.
+      </p>
+    </div>
+  </div>
+
+  <!-- 6 · Facilitator Sign-Off -->
+  <div class="fp-card">
+    <div class="fp-card-header">✍️ Facilitator Sign-Off</div>
+    <div class="fp-card-body">
+      <div id="facilitator-name-note" style="font-size:.8rem;color:#6b7280;margin-bottom:10px;"></div>
+      <div id="sig-container"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="fp-submit-bar">
+  <span class="fp-draft-status" id="fp-draft-status">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-secondary" id="btn-print" style="display:none;">🖨 Print</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit</button>
+</div>
+
+<div id="print-area"></div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  // ── Auth ──────────────────────────────────────────────────
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href = '/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href = '/login.html'; return; }
+
+  // ── State ─────────────────────────────────────────────────
+  const params     = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _autosaveTimer = null;
+  let _meetingType = null;
+  let _gammaUsed   = null;
+  let _signatures  = {};
+  let _workerRep, _topicRep, _caRep, _sigField;
+
+  // ── Defaults ──────────────────────────────────────────────
+  document.getElementById('f-date').value = Safety.todayISO();
+  document.getElementById('f-time').value = new Date().toTimeString().slice(0, 5);
+
+  // ── Load projects ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/project-folders');
+    if (r.ok) {
+      const ps = await r.json();
+      const sel = document.getElementById('f-project');
+      ps.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + (p.job_numbers ? '  ·  ' + p.job_numbers : '');
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+
+  // ── Populate conductor dropdown ────────────────────────────
+  (async () => {
+    const team = await Safety._fetchTeam();
+    const sel  = document.getElementById('f-conductor');
+    const existing = sel.value;
+    team.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.name;
+      opt.textContent = u.name;
+      sel.appendChild(opt);
+    });
+    if (existing) sel.value = existing;
+    else {
+      const match = team.find(u => u.name === currentUser.name);
+      if (match) sel.value = currentUser.name;
+    }
+  })();
+
+  // ── Meeting type buttons ───────────────────────────────────
+  document.getElementById('meeting-type-group').addEventListener('click', e => {
+    const btn = e.target.closest('.meeting-type-btn');
+    if (!btn) return;
+    document.querySelectorAll('.meeting-type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _meetingType = btn.dataset.val;
+    triggerAutosave();
+  });
+
+  // ── Gamma toggle ──────────────────────────────────────────
+  document.getElementById('gamma-btn-row').addEventListener('click', e => {
+    const btn = e.target.closest('.gamma-btn');
+    if (!btn) return;
+    _gammaUsed = btn.dataset.val;
+    document.querySelectorAll('.gamma-btn').forEach(b => b.className = 'gamma-btn');
+    btn.classList.add(_gammaUsed === 'yes' ? 'active-yes' : 'active-no');
+    document.getElementById('f-gamma-link-wrap').style.display = _gammaUsed === 'yes' ? '' : 'none';
+    triggerAutosave();
+  });
+
+  // ── Topic repeater ────────────────────────────────────────
+  const TOPIC_COLS = [
+    { key: 'hazard',  label: 'Hazard / Topic',      type: 'text', flex: 3, placeholder: 'Hazard or regulation discussed' },
+    { key: 'control', label: 'Control / Mitigation', type: 'text', flex: 3, placeholder: 'Control or mitigation measure' },
+  ];
+  _topicRep = Safety.renderRepeater({
+    container: document.getElementById('topics-container'),
+    id: 'topics',
+    cols: TOPIC_COLS,
+    addLabel: 'Add Topic / Hazard',
+    value: [],
+    onChange: () => triggerAutosave(),
+    minRows: 1
+  });
+
+  // ── Corrective actions ────────────────────────────────────
+  _caRep = Safety.renderCorrectiveActions({
+    container: document.getElementById('ca-container'),
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Workers sign-on ───────────────────────────────────────
+  _workerRep = Safety.renderWorkerSignOn({
+    container: document.getElementById('workers-container'),
+    value: [],
+    onChange: rows => { renderSignoffList(rows); triggerAutosave(); }
+  });
+
+  // ── Facilitator sign-off ──────────────────────────────────
+  document.getElementById('facilitator-name-note').textContent = 'Signing as: ' + currentUser.name;
+  _sigField = Safety.renderSignatureField({
+    container: document.getElementById('sig-container'),
+    label: 'Facilitator Signature',
+    required: true,
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Sign-off section ──────────────────────────────────────
+  function renderSignoffList(workers) {
+    const list = document.getElementById('signoff-list');
+    const named = (workers || []).filter(w => w.name && w.name.trim());
+    if (!named.length) {
+      list.innerHTML = '';
+      return;
+    }
+    list.innerHTML = named.map(w => {
+      const sig = _signatures[w.name];
+      return `<div class="sf-signoff-row" data-worker="${Safety.esc(w.name)}">
+        <div class="sf-signoff-name">${Safety.esc(w.name)}<br><span style="font-size:.72rem;color:#9ca3af;font-weight:400;">${Safety.esc(w.role || '')}</span></div>
+        <div class="sf-signoff-preview">
+          ${sig?.data_url
+            ? `<img src="${sig.data_url}" alt="Signature"/><div class="sf-signoff-meta">${Safety.fmtDT(sig.signed_at)}</div>`
+            : '<span style="font-size:.78rem;color:#9ca3af;">Not signed</span>'}
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm sf-sign-btn">${sig?.data_url ? '✏️ Re-sign' : '✍️ Sign'}</button>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.sf-sign-btn').forEach(btn => {
+      const row = btn.closest('.sf-signoff-row');
+      const workerName = row.dataset.worker;
+      btn.addEventListener('click', async () => {
+        const result = await Safety.openSignatureModal({ prefillName: workerName, skipName: true });
+        if (result) {
+          _signatures[workerName] = result;
+          renderSignoffList(named);
+          triggerAutosave();
+        }
+      });
+    });
+  }
+  renderSignoffList([]);
+
+  // ── Collect form data ─────────────────────────────────────
+  function collectFormData() {
+    return {
+      date:                document.getElementById('f-date').value,
+      time:                document.getElementById('f-time').value,
+      duration:            document.getElementById('f-duration').value.trim(),
+      conducted_by:        document.getElementById('f-conductor').value,
+      project_id:          document.getElementById('f-project').value || null,
+      meeting_type:        _meetingType,
+      location:            document.getElementById('f-location').value.trim(),
+      topics_covered:      document.getElementById('f-topics-covered').value.trim(),
+      gamma_used:          _gammaUsed,
+      gamma_link:          document.getElementById('f-gamma-link').value.trim(),
+      topics:              _topicRep.getValues(),
+      corrective_actions:  _caRep.getValues(),
+      workers:             _workerRep.getValues(),
+      worker_signatures:   _signatures,
+      facilitator_signature: _sigField.getValue(),
+    };
+  }
+
+  // ── Fill form data ────────────────────────────────────────
+  function fillFormData(d) {
+    if (!d) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    set('f-date',           d.date);
+    set('f-time',           d.time);
+    set('f-duration',       d.duration);
+    set('f-conductor',      d.conducted_by);
+    set('f-project',        d.project_id);
+    set('f-location',       d.location);
+    set('f-topics-covered', d.topics_covered);
+    set('f-gamma-link',     d.gamma_link);
+
+    // Restore meeting type
+    if (d.meeting_type) {
+      const btn = document.querySelector(`.meeting-type-btn[data-val="${d.meeting_type}"]`);
+      if (btn) { document.querySelectorAll('.meeting-type-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); _meetingType = d.meeting_type; }
+    }
+
+    // Restore gamma toggle
+    if (d.gamma_used) {
+      _gammaUsed = d.gamma_used;
+      document.querySelectorAll('.gamma-btn').forEach(b => b.className = 'gamma-btn');
+      const gb = document.querySelector(`.gamma-btn[data-val="${d.gamma_used}"]`);
+      if (gb) gb.classList.add(d.gamma_used === 'yes' ? 'active-yes' : 'active-no');
+      document.getElementById('f-gamma-link-wrap').style.display = d.gamma_used === 'yes' ? '' : 'none';
+    }
+
+    if (d.topics?.length)   _topicRep.setValue(d.topics);
+    if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
+    if (d.workers?.length)  { _workerRep.setValue(d.workers); }
+    if (d.worker_signatures) { _signatures = d.worker_signatures; renderSignoffList(d.workers || []); }
+    if (d.facilitator_signature) {
+      _sigField = Safety.renderSignatureField({
+        container: document.getElementById('sig-container'),
+        label: 'Facilitator Signature',
+        required: true,
+        value: d.facilitator_signature,
+        onChange: () => triggerAutosave()
+      });
+    }
+  }
+
+  // ── Load existing form ────────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const form = await r.json();
+        const fd = typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data;
+        fillFormData(fd);
+        document.getElementById('form-num-badge').textContent = form.form_number;
+        document.getElementById('form-num-badge').style.display = '';
+        if (form.status === 'Submitted') {
+          document.getElementById('btn-submit').textContent = '✓ Submitted';
+          document.getElementById('btn-submit').disabled = true;
+          document.getElementById('btn-print').style.display = '';
+        }
+        setDraftStatus('Loaded from server');
+      }
+    } catch {}
+  } else {
+    const draft = Safety.DraftManager.load('safety_meeting', 'new');
+    if (draft) { fillFormData(draft); setDraftStatus('Draft restored · ' + Safety.fmtDT(draft._saved_at)); }
+  }
+
+  // ── Auto-save ─────────────────────────────────────────────
+  function triggerAutosave() { clearTimeout(_autosaveTimer); _autosaveTimer = setTimeout(autosave, 1500); }
+  function setDraftStatus(msg) {
+    document.getElementById('fp-draft-status').textContent = msg;
+    document.getElementById('draft-bar').textContent = msg;
+  }
+  async function autosave() {
+    const data = collectFormData();
+    Safety.DraftManager.save('safety_meeting', formId || 'new', data);
+    setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    if (formId && navigator.onLine) {
+      try {
+        await fetch(`/api/safety/${formId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ form_data: data, status: 'Draft' })
+        });
+      } catch {}
+    }
+  }
+
+  ['f-date','f-time','f-duration','f-conductor','f-project','f-location','f-topics-covered','f-gamma-link']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+
+  // ── Save Draft ────────────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('safety_meeting', formId || 'new', data);
+    setDraftStatus('Saving…');
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({
+        form_type: 'safety_meeting',
+        form_data: data,
+        project_id:   data.project_id,
+        project_name: ps.value ? ps.selectedOptions[0]?.text : '',
+        status: 'Draft',
+        existing_id: formId
+      });
+      if (result?.id && !formId) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved', 'success');
+    } catch {
+      setDraftStatus('Saved locally (offline)');
+      Safety.toast('Saved locally — will sync when online', 'warning');
+    }
+  });
+
+  // ── Submit ────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+
+    if (!data.date)           { Safety.toast('Date is required', 'error'); document.getElementById('f-date').focus(); return; }
+    if (!data.conducted_by)   { Safety.toast('Conducted By is required', 'error'); document.getElementById('f-conductor').focus(); return; }
+    if (!_meetingType)        { Safety.toast('Please select a meeting type', 'error'); document.getElementById('meeting-type-group').scrollIntoView({behavior:'smooth'}); return; }
+    if (!data.topics_covered) { Safety.toast('Topics covered is required', 'error'); document.getElementById('f-topics-covered').focus(); return; }
+    if (!data.workers?.length || !data.workers.some(w => w.name)) {
+      Safety.toast('At least one attendee must be added', 'error'); return;
+    }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent = 'Submitting…'; btn.disabled = true;
+
+    try {
+      const ps = document.getElementById('f-project');
+      const projectName = ps.value ? ps.selectedOptions[0]?.text : '';
+      const result = await Safety.submitForm({
+        form_type:    'safety_meeting',
+        form_data:    data,
+        project_id:   data.project_id,
+        project_name: projectName,
+        status:       'Submitted',
+        existing_id:  formId
+      });
+
+      if (result?.queued) {
+        Safety.toast('Saved offline — will submit when connected', 'warning');
+        btn.textContent = 'Queued'; btn.disabled = false;
+        return;
+      }
+
+      if (result?.id) {
+        formId = result.id;
+        history.replaceState({}, '', '?id=' + formId);
+        if (result.form_number) {
+          document.getElementById('form-num-badge').textContent = result.form_number;
+          document.getElementById('form-num-badge').style.display = '';
+        }
+      }
+
+      // Save corrective actions to register
+      for (const ca of (data.corrective_actions || []).filter(a => a.action)) {
+        try {
+          await fetch('/api/corrective-actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              source_form_type:   'safety_meeting',
+              source_form_id:     formId,
+              source_form_number: result?.form_number,
+              project_id:         data.project_id,
+              action:             ca.action,
+              assigned_to_name:   ca.assigned_to || null,
+              due_date:           ca.due_date || null
+            })
+          });
+        } catch {}
+      }
+
+      // Notify unsigned team workers
+      try {
+        await fetch('/api/safety/notify-workers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ form_id: formId, form_number: result?.form_number, form_type: 'safety_meeting' })
+        });
+      } catch {}
+
+      Safety.DraftManager.remove('safety_meeting', 'new');
+      Safety.DraftManager.remove('safety_meeting', formId);
+
+      btn.textContent = '✓ Submitted'; btn.disabled = false;
+      document.getElementById('btn-print').style.display = '';
+      setDraftStatus('Submitted · ' + Safety.fmtDT(new Date().toISOString()));
+      Safety.toast('Safety Meeting Record submitted!', 'success');
+    } catch (e) {
+      btn.textContent = 'Submit'; btn.disabled = false;
+      Safety.toast('Submission failed: ' + e.message, 'error');
+    }
+  });
+
+  // ── Print ─────────────────────────────────────────────────
+  document.getElementById('btn-print').addEventListener('click', () => {
+    const data = collectFormData();
+    const projectName = document.getElementById('f-project').selectedOptions[0]?.text || '';
+    const meetingTypeLabels = {
+      toolbox_talk: 'Toolbox Talk',
+      pre_job:      'Pre-Job Meeting',
+      formal:       'Formal Safety Meeting',
+      other:        'Other'
+    };
+
+    Safety.printForm({
+      title:    'Safety Meeting Record',
+      subtitle: 'Toolbox Talk / Pre-Job / Formal Meeting',
+      meta: {
+        form_number:  document.getElementById('form-num-badge').textContent,
+        project_name: projectName,
+        date:         data.date
+      },
+      sections: [
+        {
+          title: 'Meeting Information',
+          fields: [
+            { label: 'Date',         value: Safety.fmtDate(data.date) },
+            { label: 'Start Time',   value: data.time || '—' },
+            { label: 'Duration',     value: data.duration || '—' },
+            { label: 'Conducted By', value: data.conducted_by || '—' },
+            { label: 'Project',      value: projectName || '—' },
+            { label: 'Meeting Type', value: meetingTypeLabels[data.meeting_type] || '—' },
+            { label: 'Location',     value: data.location || '—', wide: true },
+          ]
+        },
+        {
+          title: 'Topics Covered',
+          fields: [
+            { label: 'Topics / Discussion', value: data.topics_covered || '—', wide: true },
+            { label: 'Gamma Slideshow', value: data.gamma_used === 'yes' ? 'Yes — Gamma Used' : data.gamma_used === 'no' ? 'No — No Slideshow' : '—' },
+            ...(data.gamma_used === 'yes' && data.gamma_link ? [{ label: 'Gamma Link', value: data.gamma_link, wide: true }] : []),
+          ]
+        },
+        {
+          title: 'Hazards & Regulations Discussed',
+          html: (data.topics || []).some(t => t.hazard || t.control)
+            ? `<table style="width:100%;border-collapse:collapse;font-size:8pt;">
+                <tr style="background:#f0f0f0;">
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:50%;">Hazard / Topic</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:50%;">Control / Mitigation</th>
+                </tr>
+                ${(data.topics || []).filter(t => t.hazard || t.control).map(t =>
+                  `<tr>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(t.hazard || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(t.control || '')}</td>
+                  </tr>`
+                ).join('')}
+              </table>`
+            : '<div style="color:#9ca3af;font-size:8pt;">None recorded.</div>'
+        },
+        {
+          title: 'Action Items',
+          html: (data.corrective_actions || []).some(c => c.action)
+            ? `<table style="width:100%;border-collapse:collapse;font-size:8pt;">
+                <tr style="background:#f0f0f0;">
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Action</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Assigned To</th>
+                  <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Due Date</th>
+                </tr>
+                ${(data.corrective_actions || []).filter(c => c.action).map(c =>
+                  `<tr>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(c.action || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(c.assigned_to || '')}</td>
+                    <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(c.due_date || '')}</td>
+                  </tr>`
+                ).join('')}
+              </table>`
+            : '<div style="color:#9ca3af;font-size:8pt;">None recorded.</div>'
+        },
+        {
+          title: 'Attendees & Sign-Off',
+          html: `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            ${(data.workers || []).filter(w => w.name).map(w => {
+              const sig = _signatures[w.name];
+              return `<div style="border:1px solid #ccc;padding:6px;border-radius:4px;">
+                <div style="font-size:8pt;font-weight:700;">${Safety.esc(w.name)}</div>
+                <div style="font-size:7pt;color:#666;">${Safety.esc(w.role || '')}</div>
+                ${sig?.data_url
+                  ? `<img src="${sig.data_url}" style="max-height:40px;margin-top:4px;"/><div style="font-size:7pt;color:#666;">${Safety.fmtDT(sig.signed_at)}</div>`
+                  : '<div style="height:30px;border-bottom:1px solid #999;margin-top:8px;"></div><div style="font-size:7pt;color:#999;">Signature</div>'}
+              </div>`;
+            }).join('')}
+          </div>`
+        },
+        {
+          title: 'Facilitator Sign-Off',
+          html: data.facilitator_signature?.data_url
+            ? `<div><img src="${data.facilitator_signature.data_url}" style="max-height:55px;border-bottom:1px solid #ccc;padding-bottom:4px;"/>
+               <div style="font-size:7pt;color:#666;margin-top:3px;">${Safety.esc(data.facilitator_signature.signer_name)} — ${Safety.fmtDT(data.facilitator_signature.signed_at)}</div></div>`
+            : '<div style="height:44px;border-bottom:1px solid #999;width:200px;margin-bottom:4px;"></div><div style="font-size:7pt;color:#999;">Facilitator Signature</div>'
+        }
+      ]
+    });
+  });
+
+  Safety.OfflineQueue._syncBanner();
+
+})();
+</script>
+</body>
+</html>

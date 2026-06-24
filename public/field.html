@@ -313,6 +313,36 @@
         </div>
       </div>
 
+      <!-- SECTION: Vendor Sign-Off (optional) -->
+      <div class="form-section" id="vendor-signoff-section">
+        <div class="section-label">Vendor Sign-Off</div>
+        <button type="button" id="btn-vendor-signoff" style="width:100%;padding:13px 16px;background:#f9fafb;border:2px dashed #d1d5db;border-radius:10px;font-size:14px;font-weight:700;color:#374151;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;transition:border-color .15s;">
+          <span style="font-size:18px;">✍️</span>
+          <span>Vendor Time Ticket Sign-Off <span style="font-size:12px;font-weight:400;color:var(--gray-500);">(optional)</span></span>
+          <span id="vendor-signoff-chevron" style="margin-left:auto;font-size:11px;color:var(--gray-400);">▼ Add</span>
+        </button>
+        <div id="vendor-signoff-panel" style="display:none;margin-top:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+          <p style="font-size:13px;color:#6b7280;margin:0 0 14px;">Have the vendor representative sign below to confirm the hours recorded on this time ticket.</p>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Vendor Representative Name</label>
+            <input type="text" id="vendor-rep-name" class="form-control" placeholder="Full name of vendor rep" autocomplete="off"/>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Company</label>
+            <input type="text" id="vendor-company" class="form-control" placeholder="Vendor company name" autocomplete="off"/>
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Signature</label>
+            <div style="position:relative;border:2px solid #d1d5db;border-radius:8px;background:#fff;touch-action:none;">
+              <canvas id="vendor-sig-canvas" style="display:block;width:100%;height:160px;border-radius:6px;cursor:crosshair;touch-action:none;"></canvas>
+              <button type="button" id="vendor-sig-clear" style="position:absolute;top:6px;right:6px;background:#fff;border:1px solid #d1d5db;border-radius:4px;font-size:11px;padding:2px 8px;cursor:pointer;color:#6b7280;">Clear</button>
+            </div>
+            <p style="font-size:11px;color:#9ca3af;margin:4px 0 0;">Sign above with your finger or stylus</p>
+          </div>
+          <div id="vendor-sig-badge" style="display:none;margin-top:10px;background:#dcfce7;border:1px solid #16a34a;border-radius:6px;padding:8px 12px;font-size:12px;color:#166534;font-weight:600;">✓ Vendor signature captured</div>
+        </div>
+      </div>
+
       <!-- SUBMIT -->
       <!-- ── OT Approval (shown inline when OT > 0) ── -->
       <div id="ot-approval-section" style="display:none;background:#fff7ed;border:2px solid #fed7aa;border-radius:10px;padding:16px 18px;margin:0 0 16px;">
@@ -428,6 +458,79 @@
     t.className = `show ${type}`;
     setTimeout(() => t.className = '', 3200);
   }
+
+  // ── Vendor sign-off canvas ──
+  (function() {
+    const btn    = $('btn-vendor-signoff');
+    const panel  = $('vendor-signoff-panel');
+    const chev   = $('vendor-signoff-chevron');
+    const canvas = $('vendor-sig-canvas');
+    const clearBtn = $('vendor-sig-clear');
+    const badge  = $('vendor-sig-badge');
+    let isOpen = false;
+
+    btn.addEventListener('click', () => {
+      isOpen = !isOpen;
+      panel.style.display = isOpen ? '' : 'none';
+      chev.textContent = isOpen ? '▲ Remove' : '▼ Add';
+      btn.style.borderColor = isOpen ? 'var(--orange)' : '#d1d5db';
+      if (isOpen) { setTimeout(initCanvas, 50); }
+    });
+
+    let ctx, drawing = false, lastX, lastY, hasMark = false;
+
+    function initCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width  = rect.width  * (window.devicePixelRatio || 1);
+      canvas.height = rect.height * (window.devicePixelRatio || 1);
+      ctx = canvas.getContext('2d');
+      ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+      ctx.strokeStyle = '#111827';
+      ctx.lineWidth   = 2.5;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+    }
+
+    function pos(e) {
+      const r = canvas.getBoundingClientRect();
+      const src = e.touches ? e.touches[0] : e;
+      return { x: src.clientX - r.left, y: src.clientY - r.top };
+    }
+
+    canvas.addEventListener('mousedown',  e => { drawing=true; const p=pos(e); lastX=p.x; lastY=p.y; });
+    canvas.addEventListener('mousemove',  e => { if(!drawing) return; draw(pos(e)); });
+    canvas.addEventListener('mouseup',    () => { drawing=false; });
+    canvas.addEventListener('mouseleave', () => { drawing=false; });
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing=true; const p=pos(e); lastX=p.x; lastY=p.y; }, {passive:false});
+    canvas.addEventListener('touchmove',  e => { e.preventDefault(); if(!drawing) return; draw(pos(e)); }, {passive:false});
+    canvas.addEventListener('touchend',   e => { e.preventDefault(); drawing=false; if(hasMark) badge.style.display=''; }, {passive:false});
+
+    function draw(p) {
+      if (!ctx) return;
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      lastX=p.x; lastY=p.y;
+      hasMark = true;
+      badge.style.display = '';
+    }
+
+    clearBtn.addEventListener('click', () => {
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      hasMark = false;
+      badge.style.display = 'none';
+    });
+
+    window._getVendorSignature = function() {
+      if (!isOpen) return null;
+      return {
+        rep_name:    $('vendor-rep-name').value.trim(),
+        company:     $('vendor-company').value.trim(),
+        signature:   hasMark ? canvas.toDataURL('image/png') : null
+      };
+    };
+  })();
 
   // ── Set today's date ──
   $('date').value = new Date().toISOString().slice(0, 10);
@@ -618,7 +721,8 @@
       equipment_used: $('equipment_used').value.trim(),
       notes: $('notes').value.trim(),
       project_id: ($('assign-project').checked && $('project_id').value) ? $('project_id').value : null,
-      employees
+      employees,
+      vendor_signoff: window._getVendorSignature ? window._getVendorSignature() : null
     };
   }
 

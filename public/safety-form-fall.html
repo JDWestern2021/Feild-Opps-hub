@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Fall Protection Inspection — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    .fp-header { background:#111827; color:#fff; position:sticky; top:0; z-index:100; }
+    .fp-header-inner { max-width:680px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+    .fp-back { color:rgba(255,255,255,.6); text-decoration:none; font-size:.85rem; padding:6px 10px; border:1px solid rgba(255,255,255,.15); border-radius:6px; white-space:nowrap; flex-shrink:0; }
+    .fp-header h1 { font-size:1rem; font-weight:800; margin:0; flex:1; }
+    .fp-header-sub { font-size:.72rem; color:rgba(255,255,255,.4); }
+    .fp-form-num { font-size:.72rem; background:rgba(244,121,32,.25); color:#F47920; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .fp-draft-bar { background:#f9fafb; border-bottom:1px solid #e5e7eb; padding:6px 16px; font-size:.75rem; color:#9ca3af; text-align:center; }
+
+    .fp-body { max-width:680px; margin:0 auto; padding:16px 16px 100px; }
+
+    .fp-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+    .fp-card-header { background:#f3f4f6; border-bottom:1px solid #e5e7eb; padding:11px 16px; font-weight:700; font-size:.88rem; color:#111827; display:flex; align-items:center; gap:8px; }
+    .fp-card-body { padding:16px; }
+
+    .fp-field { margin-bottom:14px; }
+    .fp-field:last-child { margin-bottom:0; }
+    .fp-label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fp-req { color:#ef4444; }
+    .fp-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media(max-width:480px){ .fp-grid-2{ grid-template-columns:1fr; } }
+
+    /* Defective flag toggle */
+    .defect-flag-row { display:flex; gap:10px; }
+    .defect-flag-btn {
+      flex:1; padding:14px 10px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.9rem; font-weight:700; cursor:pointer;
+      transition:all .15s; min-height:50px; text-align:center;
+    }
+    .defect-flag-btn.active-yes { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+    .defect-flag-btn.active-no  { background:#dcfce7; border-color:#16a34a; color:#166534; }
+
+    /* Overall result */
+    .fp-result-row { display:flex; flex-direction:column; gap:10px; }
+    .fp-result-btn {
+      padding:14px 16px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.9rem; font-weight:700; cursor:pointer;
+      transition:all .15s; text-align:left;
+    }
+    .fp-result-btn:hover { border-color:#9ca3af; }
+    .fp-result-btn.active-pass    { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .fp-result-btn.active-repair  { background:#fff7ed; border-color:#d97706; color:#92400e; }
+    .fp-result-btn.active-replace { background:#fef9c3; border-color:#ca8a04; color:#713f12; }
+    .fp-result-btn.active-oos     { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+
+    .fp-oos-warning { display:none; background:#fef2f2; border:2px solid #dc2626; border-radius:8px; padding:14px 16px; margin-top:12px; color:#991b1b; font-weight:600; font-size:.9rem; }
+    .fp-oos-warning.visible { display:block; }
+
+    .fp-submit-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:12px 16px; display:flex; gap:10px; align-items:center; z-index:100; box-shadow:0 -2px 10px rgba(0,0,0,.08); }
+    .fp-draft-status { font-size:.75rem; color:#9ca3af; flex:1; }
+  </style>
+</head>
+<body>
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<div class="fp-header">
+  <div class="fp-header-inner">
+    <a href="safety.html" class="fp-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Fall Protection Inspection</h1>
+      <div class="fp-header-sub">Equipment Pre-Use Inspection</div>
+    </div>
+    <div class="fp-form-num" id="form-num-badge" style="display:none;"></div>
+  </div>
+</div>
+<div class="fp-draft-bar" id="draft-bar">Fill out all sections, then submit or save a draft.</div>
+
+<div class="fp-body">
+
+  <!-- 1 · Inspector Info -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Inspector Information</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Date <span class="fp-req">*</span></label>
+          <input type="date" id="f-date" class="form-control"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Inspector Name</label>
+          <input type="text" id="f-inspector" class="form-control" readonly style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;"/>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Project</label>
+        <select id="f-project" class="form-control">
+          <option value="">— Select project —</option>
+        </select>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Job Description / Task Using Fall Protection</label>
+        <textarea id="f-task" class="form-control" rows="2" placeholder="Briefly describe what work is being done requiring fall protection…"></textarea>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Site Location</label>
+        <div id="geo-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Defective Flag Check -->
+  <div class="fp-card">
+    <div class="fp-card-header">🚩 Defective Equipment Flag</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Is there a defective / out-of-service tag on any of this equipment? <span class="fp-req">*</span></label>
+        <div class="defect-flag-row" id="defect-flag-row">
+          <button type="button" class="defect-flag-btn" data-val="yes">⛔ Yes — Tagged Defective</button>
+          <button type="button" class="defect-flag-btn" data-val="no">✓ No — No Tags Present</button>
+        </div>
+      </div>
+      <div id="defect-flag-warning" style="display:none;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:12px;color:#991b1b;font-size:.88rem;font-weight:600;margin-top:8px;">
+        ⛔ This equipment is tagged defective. Do NOT use it. Remove it from the work area and notify your supervisor.
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · Full Body Harness -->
+  <div class="fp-card">
+    <div class="fp-card-header">🦺 Full Body Harness</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Serial Number</label>
+          <input type="text" id="f-harness-serial" class="form-control" placeholder="Serial #"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Model Number</label>
+          <input type="text" id="f-harness-model" class="form-control" placeholder="Make / Model"/>
+        </div>
+      </div>
+      <div id="pfna-harness"></div>
+    </div>
+  </div>
+
+  <!-- 4 · Lanyard -->
+  <div class="fp-card">
+    <div class="fp-card-header">🔗 Lanyard</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Lanyard Type</label>
+          <select id="f-lanyard-type" class="form-control">
+            <option value="">— Select —</option>
+            <option>Shock-absorbing lanyard</option>
+            <option>Self-retracting lifeline (SRL)</option>
+            <option>Twin-leg lanyard</option>
+            <option>Rope grab + lifeline</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Serial Number</label>
+          <input type="text" id="f-lanyard-serial" class="form-control" placeholder="Serial #"/>
+        </div>
+      </div>
+      <div id="pfna-lanyard"></div>
+    </div>
+  </div>
+
+  <!-- 5 · Carabiner -->
+  <div class="fp-card">
+    <div class="fp-card-header">🔒 Carabiner / Connector</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Serial Number</label>
+          <input type="text" id="f-carabiner-serial" class="form-control" placeholder="Serial #"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Model</label>
+          <input type="text" id="f-carabiner-model" class="form-control" placeholder="Make / Model"/>
+        </div>
+      </div>
+      <div id="pfna-carabiner"></div>
+    </div>
+  </div>
+
+  <!-- 6 · Overall Result -->
+  <div class="fp-card">
+    <div class="fp-card-header">✅ Overall Inspection Result <span class="fp-req">*</span></div>
+    <div class="fp-card-body">
+      <div class="fp-result-row" id="result-row">
+        <button type="button" class="fp-result-btn" data-val="pass" data-cls="active-pass">✓ No Defects — Equipment Passes Inspection</button>
+        <button type="button" class="fp-result-btn" data-val="repair" data-cls="active-repair">⚠ Defects Corrected — Equipment Passes After Correction</button>
+        <button type="button" class="fp-result-btn" data-val="replace" data-cls="active-replace">🔄 Fall Protection Replaced — Old Equipment Removed from Service</button>
+        <button type="button" class="fp-result-btn" data-val="oos" data-cls="active-oos">⛔ Out of Service — Do Not Use</button>
+      </div>
+      <div class="fp-oos-warning" id="oos-warning">
+        ⛔ Remove this equipment from service immediately. Tag it, set it aside, and notify your supervisor. Do not use until repaired or replaced.
+      </div>
+      <div class="fp-field" style="margin-top:14px;">
+        <label class="fp-label">Comments</label>
+        <textarea id="f-comments" class="form-control" rows="3" placeholder="Describe any defects found, actions taken, or notes…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 · Corrective Actions -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Corrective Actions</div>
+    <div class="fp-card-body">
+      <div id="ca-container"></div>
+    </div>
+  </div>
+
+  <!-- 8 · Signature -->
+  <div class="fp-card">
+    <div class="fp-card-header">✍️ Inspector Sign-Off</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">
+        I certify that this equipment was inspected and the result above accurately reflects its condition.
+      </p>
+      <div id="sig-container"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="fp-submit-bar">
+  <span class="fp-draft-status" id="fp-draft-status">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-secondary" id="btn-print" style="display:none;">🖨 Print</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit</button>
+</div>
+
+<div id="print-area"></div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href='/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href='/login.html'; return; }
+
+  const params     = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _autosaveTimer = null;
+  let _resultVal   = null;
+  let _defectFlag  = null;
+  let _sigField, _geoVal, _pfnaHarness, _pfnaLanyard, _pfnaCarabiner, _caRep;
+
+  // ── Inspection items ──────────────────────────────────────
+  const HARNESS_ITEMS = [
+    { id: 'webbing',  label: 'Webbing — no cuts, fraying, abrasion, burns, or chemical damage' },
+    { id: 'stitching',label: 'Stitching — intact at all load-bearing connections, no broken threads' },
+    { id: 'dring',    label: 'D-ring(s) — no cracks, sharp edges, deformation, or corrosion' },
+    { id: 'buckles',  label: 'Buckles — open/close freely, tongue secure, pass-through correctly threaded' },
+    { id: 'labels',   label: 'Labels & Markings — legible, not removed, painted over, or obscured' },
+  ];
+  const LANYARD_ITEMS = [
+    { id: 'webbing',    label: 'Webbing / rope / cable — no cuts, kinks, fraying, or broken strands' },
+    { id: 'connectors', label: 'Connectors (snap hooks, carabiners) — no cracks, proper locking function' },
+    { id: 'dring',      label: 'D-ring / anchor end — no deformation, corrosion, or sharp edges' },
+    { id: 'labels',     label: 'Labels & Markings — legible, load rating visible, not obscured or removed' },
+  ];
+  const CARABINER_ITEMS = [
+    { id: 'body',     label: 'Body — no cracks, gouges, sharp edges, deformation, or excessive corrosion' },
+    { id: 'gate',     label: 'Gate — opens/closes freely, auto-lock engages, locking sleeve works correctly' },
+    { id: 'labels',   label: 'Labels & Markings — load rating visible, manufacturer label legible' },
+  ];
+
+  function initSections(values = {}) {
+    _pfnaHarness  = Safety.renderPassFailSection({ container: document.getElementById('pfna-harness'),   sectionId: 'h',   items: HARNESS_ITEMS,   values: values.harness   || {}, onChange: () => triggerAutosave() });
+    _pfnaLanyard  = Safety.renderPassFailSection({ container: document.getElementById('pfna-lanyard'),   sectionId: 'lan', items: LANYARD_ITEMS,   values: values.lanyard   || {}, onChange: () => triggerAutosave() });
+    _pfnaCarabiner= Safety.renderPassFailSection({ container: document.getElementById('pfna-carabiner'), sectionId: 'car', items: CARABINER_ITEMS, values: values.carabiner || {}, onChange: () => triggerAutosave() });
+  }
+  initSections();
+
+  // ── Geo ───────────────────────────────────────────────────
+  _geoVal = Safety.renderGeoField({ container: document.getElementById('geo-container'), label: '📍 Pin Location', onChange: () => triggerAutosave() });
+
+  // ── Defect flag buttons ───────────────────────────────────
+  document.getElementById('defect-flag-row').addEventListener('click', e => {
+    const btn = e.target.closest('.defect-flag-btn');
+    if (!btn) return;
+    _defectFlag = btn.dataset.val;
+    document.querySelectorAll('.defect-flag-btn').forEach(b => b.className = 'defect-flag-btn');
+    btn.classList.add(_defectFlag === 'yes' ? 'active-yes' : 'active-no');
+    document.getElementById('defect-flag-warning').style.display = _defectFlag === 'yes' ? '' : 'none';
+    triggerAutosave();
+  });
+
+  // ── Result buttons ────────────────────────────────────────
+  document.getElementById('result-row').addEventListener('click', e => {
+    const btn = e.target.closest('.fp-result-btn');
+    if (!btn) return;
+    document.querySelectorAll('.fp-result-btn').forEach(b => b.className = 'fp-result-btn');
+    btn.classList.add(btn.dataset.cls);
+    _resultVal = btn.dataset.val;
+    document.getElementById('oos-warning').classList.toggle('visible', _resultVal === 'oos');
+    triggerAutosave();
+  });
+
+  // ── Corrective actions & signature ────────────────────────
+  _caRep = Safety.renderCorrectiveActions({ container: document.getElementById('ca-container'), onChange: () => triggerAutosave() });
+  _sigField = Safety.renderSignatureField({ container: document.getElementById('sig-container'), label: 'Inspector Signature', required: true, onChange: () => triggerAutosave() });
+
+  // ── Load projects ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/project-folders');
+    if (r.ok) {
+      const ps = await r.json();
+      const sel = document.getElementById('f-project');
+      ps.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + (p.job_numbers ? '  ·  ' + p.job_numbers : '');
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+
+  // ── Defaults ──────────────────────────────────────────────
+  document.getElementById('f-date').value = Safety.todayISO();
+
+  document.getElementById('f-inspector').value = currentUser.name;
+
+  // ── Collect / fill ────────────────────────────────────────
+  function collectFormData() {
+    return {
+      date:             document.getElementById('f-date').value,
+      inspector:        document.getElementById('f-inspector').value.trim(),
+      project_id:       document.getElementById('f-project').value || null,
+      task:             document.getElementById('f-task').value.trim(),
+      geo:              _geoVal.getValue ? _geoVal.getValue() : null,
+      defect_flag:      _defectFlag,
+      harness_serial:   document.getElementById('f-harness-serial').value.trim(),
+      harness_model:    document.getElementById('f-harness-model').value.trim(),
+      harness:          _pfnaHarness.getValues(),
+      lanyard_type:     document.getElementById('f-lanyard-type').value,
+      lanyard_serial:   document.getElementById('f-lanyard-serial').value.trim(),
+      lanyard:          _pfnaLanyard.getValues(),
+      carabiner_serial: document.getElementById('f-carabiner-serial').value.trim(),
+      carabiner_model:  document.getElementById('f-carabiner-model').value.trim(),
+      carabiner:        _pfnaCarabiner.getValues(),
+      overall_result:   _resultVal,
+      comments:         document.getElementById('f-comments').value.trim(),
+      corrective_actions: _caRep.getValues(),
+      inspector_signature: _sigField.getValue(),
+    };
+  }
+
+  function setResultBtn(val) {
+    _resultVal = val;
+    document.querySelectorAll('.fp-result-btn').forEach(b => {
+      b.className = 'fp-result-btn';
+      if (b.dataset.val === val) b.classList.add(b.dataset.cls);
+    });
+    document.getElementById('oos-warning').classList.toggle('visible', val === 'oos');
+  }
+
+  function setDefectFlag(val) {
+    _defectFlag = val;
+    document.querySelectorAll('.defect-flag-btn').forEach(b => {
+      b.className = 'defect-flag-btn';
+      if (b.dataset.val === val) b.classList.add(val === 'yes' ? 'active-yes' : 'active-no');
+    });
+    document.getElementById('defect-flag-warning').style.display = val === 'yes' ? '' : 'none';
+  }
+
+  function fillFormData(d) {
+    if (!d) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    set('f-date',            d.date);
+    set('f-inspector',       d.inspector);
+    set('f-project',         d.project_id);
+    set('f-task',            d.task);
+    set('f-harness-serial',  d.harness_serial);
+    set('f-harness-model',   d.harness_model);
+    set('f-lanyard-type',    d.lanyard_type);
+    set('f-lanyard-serial',  d.lanyard_serial);
+    set('f-carabiner-serial',d.carabiner_serial);
+    set('f-carabiner-model', d.carabiner_model);
+    set('f-comments',        d.comments);
+    if (d.defect_flag)   setDefectFlag(d.defect_flag);
+    if (d.overall_result) setResultBtn(d.overall_result);
+    initSections({ harness: d.harness, lanyard: d.lanyard, carabiner: d.carabiner });
+    if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
+    if (d.inspector_signature) {
+      _sigField = Safety.renderSignatureField({ container: document.getElementById('sig-container'), label: 'Inspector Signature', required: true, value: d.inspector_signature, onChange: () => triggerAutosave() });
+    }
+  }
+
+  // ── Load existing ─────────────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const form = await r.json();
+        fillFormData(typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data);
+        document.getElementById('form-num-badge').textContent = form.form_number;
+        document.getElementById('form-num-badge').style.display = '';
+        if (form.status === 'Submitted') {
+          document.getElementById('btn-submit').textContent = '✓ Submitted';
+          document.getElementById('btn-submit').disabled = true;
+          document.getElementById('btn-print').style.display = '';
+        }
+        setDraftStatus('Loaded from server');
+      }
+    } catch {}
+  } else {
+    const draft = Safety.DraftManager.load('fall_protection', 'new');
+    if (draft) { fillFormData(draft); setDraftStatus('Draft restored · ' + Safety.fmtDT(draft._saved_at)); }
+  }
+
+  // ── Auto-save ─────────────────────────────────────────────
+  function triggerAutosave() { clearTimeout(_autosaveTimer); _autosaveTimer = setTimeout(autosave, 1500); }
+  function setDraftStatus(msg) { document.getElementById('fp-draft-status').textContent = msg; document.getElementById('draft-bar').textContent = msg; }
+  async function autosave() {
+    Safety.DraftManager.save('fall_protection', formId || 'new', collectFormData());
+    setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    if (formId && navigator.onLine) {
+      try { await fetch(`/api/safety/${formId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ form_data: collectFormData(), status:'Draft' }) }); } catch {}
+    }
+  }
+  ['f-date','f-inspector','f-project','f-task','f-harness-serial','f-harness-model',
+   'f-lanyard-type','f-lanyard-serial','f-carabiner-serial','f-carabiner-model','f-comments']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+
+  // ── Save Draft ────────────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('fall_protection', formId || 'new', data);
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({ form_type:'fall_protection', form_data:data, project_id:data.project_id, project_name:ps.value?ps.selectedOptions[0]?.text:'', status:'Draft', existing_id:formId });
+      if (result?.id && !formId) { formId=result.id; history.replaceState({},'','?id='+formId); }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved','success');
+    } catch { setDraftStatus('Saved locally'); Safety.toast('Saved locally — will sync when online','warning'); }
+  });
+
+  // ── Submit ────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+    if (!data.date)       { Safety.toast('Date is required','error'); return; }
+    if (!data.inspector)  { Safety.toast('Inspector name is required','error'); document.getElementById('f-inspector').focus(); return; }
+    if (_defectFlag === null) { Safety.toast('Please indicate if there is a defective flag on the equipment','error'); document.getElementById('defect-flag-row').scrollIntoView({behavior:'smooth'}); return; }
+    if (!_resultVal)      { Safety.toast('Overall inspection result is required','error'); document.getElementById('result-row').scrollIntoView({behavior:'smooth'}); return; }
+    if (!_sigField.getValue()) { Safety.toast('Inspector signature is required','error'); document.getElementById('sig-container').scrollIntoView({behavior:'smooth'}); return; }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent='Submitting…'; btn.disabled=true;
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({ form_type:'fall_protection', form_data:data, project_id:data.project_id, project_name:ps.value?ps.selectedOptions[0]?.text:'', status:'Submitted', existing_id:formId });
+      if (result?.queued) { Safety.toast('Saved offline — will submit when connected','warning'); btn.textContent='Queued'; return; }
+      if (result?.id) { formId=result.id; history.replaceState({},'','?id='+formId); document.getElementById('form-num-badge').textContent=result.form_number||''; document.getElementById('form-num-badge').style.display=''; }
+      for (const ca of (data.corrective_actions||[]).filter(a=>a.action)) {
+        try { await fetch('/api/corrective-actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_form_type:'fall_protection',source_form_id:formId,source_form_number:result?.form_number,project_id:data.project_id,action:ca.action,assigned_to_name:ca.assigned_to||null,due_date:ca.due_date||null})}); } catch {}
+      }
+      Safety.DraftManager.remove('fall_protection','new');
+      btn.textContent='✓ Submitted'; btn.disabled=false;
+      document.getElementById('btn-print').style.display='';
+      setDraftStatus('Submitted · ' + Safety.fmtDT(new Date().toISOString()));
+      Safety.toast('Fall Protection Inspection submitted!','success');
+    } catch(e) { btn.textContent='Submit'; btn.disabled=false; Safety.toast('Submission failed: '+e.message,'error'); }
+  });
+
+  // ── Print ─────────────────────────────────────────────────
+  document.getElementById('btn-print').addEventListener('click', () => {
+    const data = collectFormData();
+    const projectName = document.getElementById('f-project').selectedOptions[0]?.text || '';
+    const resultLabels = { pass:'No Defects — Equipment Passes', repair:'Defects Corrected', replace:'Fall Protection Replaced', oos:'Out of Service — Do Not Use' };
+
+    function pfnaTable(values, items) {
+      return `<table style="width:100%;border-collapse:collapse;font-size:8pt;margin-top:4px;">
+        <tr style="background:#f0f0f0;">
+          <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;width:64%;">Item</th>
+          <th style="padding:4px 6px;text-align:center;border:1px solid #ddd;width:12%;">Pass</th>
+          <th style="padding:4px 6px;text-align:center;border:1px solid #ddd;width:12%;">Fail</th>
+          <th style="padding:4px 6px;text-align:center;border:1px solid #ddd;width:12%;">N/A</th>
+        </tr>
+        ${items.map(item => {
+          const v = (values||{})[item.id] || {};
+          return `<tr>
+            <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(item.label)}${v.state==='fail'&&v.detail?`<br><em style="color:#dc2626;font-size:7pt;">${Safety.esc(v.detail)}</em>`:''}</td>
+            <td style="text-align:center;border:1px solid #ddd;">${v.state==='pass'?'✓':''}</td>
+            <td style="text-align:center;border:1px solid #ddd;">${v.state==='fail'?'✗':''}</td>
+            <td style="text-align:center;border:1px solid #ddd;">${v.state==='na'?'—':''}</td>
+          </tr>`;
+        }).join('')}
+      </table>`;
+    }
+
+    Safety.printForm({
+      title: 'Fall Protection Equipment Inspection',
+      subtitle: 'Pre-Use Inspection',
+      meta: { form_number: document.getElementById('form-num-badge').textContent, project_name: projectName, date: data.date },
+      sections: [
+        { title: 'Inspector Information', fields: [
+          { label: 'Date',        value: Safety.fmtDate(data.date) },
+          { label: 'Inspector',   value: data.inspector || '—' },
+          { label: 'Project',     value: projectName || '—' },
+          { label: 'Task / Job',  value: data.task || '—', wide: true },
+          { label: 'Location',    value: data.geo?.address || '—', wide: true },
+        ]},
+        { title: 'Defective Flag Check', fields: [
+          { label: 'Defective tag present?', value: data.defect_flag === 'yes' ? '⛔ YES — Tagged Defective' : data.defect_flag === 'no' ? '✓ No tags present' : '—' }
+        ]},
+        { title: 'Full Body Harness', fields: [
+          { label: 'Serial #', value: data.harness_serial || '—' },
+          { label: 'Model',    value: data.harness_model  || '—' },
+        ], html: pfnaTable(data.harness, HARNESS_ITEMS) },
+        { title: 'Lanyard', fields: [
+          { label: 'Type',     value: data.lanyard_type   || '—' },
+          { label: 'Serial #', value: data.lanyard_serial || '—' },
+        ], html: pfnaTable(data.lanyard, LANYARD_ITEMS) },
+        { title: 'Carabiner / Connector', fields: [
+          { label: 'Serial #', value: data.carabiner_serial || '—' },
+          { label: 'Model',    value: data.carabiner_model  || '—' },
+        ], html: pfnaTable(data.carabiner, CARABINER_ITEMS) },
+        { title: 'Overall Result', fields: [
+          { label: 'Result',   value: resultLabels[data.overall_result] || '—', wide: true },
+          { label: 'Comments', value: data.comments || '—', wide: true },
+        ]},
+        { title: 'Inspector Signature', html: data.inspector_signature?.data_url
+          ? `<div><img src="${data.inspector_signature.data_url}" style="max-height:55px;border-bottom:1px solid #ccc;padding-bottom:4px;"/><div style="font-size:7pt;color:#666;margin-top:3px;">${Safety.esc(data.inspector_signature.signer_name)} — ${Safety.fmtDT(data.inspector_signature.signed_at)}</div></div>`
+          : '<div style="height:44px;border-bottom:1px solid #999;width:200px;margin-bottom:4px;"></div><div style="font-size:7pt;color:#999;">Signature</div>'
+        },
+      ]
+    });
+  });
+
+  Safety.OfflineQueue._syncBanner();
+})();
+</script>
+</body>
+</html>

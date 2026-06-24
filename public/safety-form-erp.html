@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#111111"/>
+  <title>Emergency Response Plan — J&amp;D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <link rel="stylesheet" href="safety-forms.css"/>
+  <style>
+    .fp-header { background:#111827; color:#fff; position:sticky; top:0; z-index:100; }
+    .fp-header-inner { max-width:720px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+    .fp-back { color:rgba(255,255,255,.6); text-decoration:none; font-size:.85rem; padding:6px 10px; border:1px solid rgba(255,255,255,.15); border-radius:6px; white-space:nowrap; flex-shrink:0; }
+    .fp-header h1 { font-size:1rem; font-weight:800; margin:0; flex:1; }
+    .fp-header-sub { font-size:.72rem; color:rgba(255,255,255,.4); }
+    .fp-form-num { font-size:.72rem; background:rgba(244,121,32,.25); color:#F47920; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .fp-draft-bar { background:#f9fafb; border-bottom:1px solid #e5e7eb; padding:6px 16px; font-size:.75rem; color:#9ca3af; text-align:center; }
+
+    .fp-body { max-width:720px; margin:0 auto; padding:16px 16px 100px; }
+
+    .fp-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+    .fp-card-header { background:#f3f4f6; border-bottom:1px solid #e5e7eb; padding:11px 16px; font-weight:700; font-size:.88rem; color:#111827; display:flex; align-items:center; gap:8px; }
+    .fp-card-body { padding:16px; }
+
+    .fp-field { margin-bottom:14px; }
+    .fp-field:last-child { margin-bottom:0; }
+    .fp-label { display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fp-req { color:#ef4444; }
+    .fp-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .fp-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    @media(max-width:500px){ .fp-grid-2,.fp-grid-3{ grid-template-columns:1fr; } }
+
+    /* Emergency contacts table */
+    .erp-contacts { width:100%; border-collapse:collapse; font-size:.85rem; }
+    .erp-contacts th { background:#f3f4f6; padding:8px 10px; text-align:left; font-size:.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; border:1px solid #e5e7eb; }
+    .erp-contacts td { padding:6px 8px; border:1px solid #e5e7eb; vertical-align:middle; }
+    .erp-contacts td:first-child { font-weight:600; color:#374151; width:38%; }
+    .erp-contacts input { border:none; background:transparent; width:100%; font-size:.85rem; padding:2px 0; color:#111827; outline:none; }
+    .erp-contacts input:focus { background:#f0f9ff; border-radius:3px; padding:2px 4px; }
+    .erp-contacts .fixed { color:#6b7280; font-weight:700; }
+
+    /* Scenario cards */
+    .erp-scenario { border:1px solid #e5e7eb; border-radius:8px; margin-bottom:10px; overflow:hidden; }
+    .erp-scenario-hdr { display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; background:#fafafa; user-select:none; }
+    .erp-scenario-hdr:hover { background:#f3f4f6; }
+    .erp-scenario-icon { font-size:1.2rem; flex-shrink:0; }
+    .erp-scenario-title { font-weight:700; font-size:.88rem; color:#111827; flex:1; }
+    .erp-scenario-badge { font-size:.72rem; padding:3px 8px; border-radius:10px; font-weight:700; flex-shrink:0; }
+    .erp-badge-reviewed  { background:#dcfce7; color:#166534; }
+    .erp-badge-na        { background:#f3f4f6; color:#9ca3af; }
+    .erp-badge-pending   { background:#fef9c3; color:#854d0e; }
+    .erp-scenario-arrow { font-size:.75rem; color:#9ca3af; flex-shrink:0; transition:transform .2s; }
+    .erp-scenario-body { display:none; padding:14px 16px; border-top:1px solid #e5e7eb; background:#fff; }
+    .erp-scenario.open .erp-scenario-body { display:block; }
+    .erp-scenario.open .erp-scenario-arrow { transform:rotate(90deg); }
+
+    .erp-steps { margin:0 0 14px; padding-left:18px; }
+    .erp-steps li { margin-bottom:6px; font-size:.85rem; color:#374151; line-height:1.45; }
+
+    .erp-status-row { display:flex; gap:10px; margin-top:14px; }
+    .erp-status-btn {
+      flex:1; padding:11px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.82rem; font-weight:700; cursor:pointer;
+      transition:all .15s; text-align:center;
+    }
+    .erp-status-btn:hover { border-color:#9ca3af; }
+    .erp-status-btn.active-reviewed { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .erp-status-btn.active-na       { background:#f3f4f6; border-color:#9ca3af; color:#6b7280; }
+
+    /* First aid yes/no */
+    .erp-yn { display:flex; gap:10px; }
+    .erp-yn-btn {
+      flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px;
+      background:#fff; font-size:.85rem; font-weight:700; cursor:pointer; text-align:center;
+    }
+    .erp-yn-btn.active-yes { background:#dcfce7; border-color:#16a34a; color:#166534; }
+    .erp-yn-btn.active-no  { background:#fef2f2; border-color:#dc2626; color:#991b1b; }
+
+    .fp-submit-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:12px 16px; display:flex; gap:10px; align-items:center; z-index:100; box-shadow:0 -2px 10px rgba(0,0,0,.08); }
+    .fp-draft-status { font-size:.75rem; color:#9ca3af; flex:1; }
+  </style>
+</head>
+<body style="visibility:hidden;">
+
+<div id="sf-offline-banner" style="display:none;background:#92400e;color:#fef3c7;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center;">
+  <span class="sf-offline-count"></span>
+</div>
+
+<div class="fp-header">
+  <div class="fp-header-inner">
+    <a href="safety.html" class="fp-back">← Safety</a>
+    <div style="flex:1;">
+      <h1>Emergency Response Plan</h1>
+      <div class="fp-header-sub">Complete before starting work on a new site</div>
+    </div>
+    <span id="form-num-badge" class="fp-form-num" style="display:none;"></span>
+  </div>
+</div>
+
+<div class="fp-draft-bar" id="draft-status-bar">Not saved</div>
+
+<div class="fp-body">
+
+  <!-- 1 · Site Information -->
+  <div class="fp-card">
+    <div class="fp-card-header">📋 Site Information</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Project / Job Site <span class="fp-req">*</span></label>
+        <select id="f-project" class="form-control">
+          <option value="">— Select project —</option>
+        </select>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Site Address / Location <span class="fp-req">*</span></label>
+        <div id="site-geo-container"></div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Date <span class="fp-req">*</span></label>
+          <input type="date" id="f-date" class="form-control"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Prepared By</label>
+          <input type="text" id="f-prepared-by" class="form-control" readonly style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;"/>
+        </div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Site Foreman / Supervisor</label>
+          <select id="f-foreman" class="form-control"></select>
+        </div>
+        <div class="fp-field" style="margin-bottom:0;">
+          <label class="fp-label">Foreman Cell / Radio</label>
+          <input type="tel" id="f-foreman-phone" class="form-control" placeholder="Phone number"/>
+        </div>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Client / General Contractor</label>
+        <input type="text" id="f-client" class="form-control" placeholder="Client or GC company name"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Emergency Contacts -->
+  <div class="fp-card">
+    <div class="fp-card-header">📞 Emergency Contacts</div>
+    <div class="fp-card-body">
+      <table class="erp-contacts">
+        <thead>
+          <tr><th>Contact</th><th>Name / Details</th><th>Phone</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Emergency Services</td>
+            <td class="fixed">Police · Fire · Ambulance</td>
+            <td class="fixed">📞 911</td>
+          </tr>
+          <tr>
+            <td>Alberta OHS</td>
+            <td class="fixed">Report serious incidents</td>
+            <td class="fixed">📞 1-800-661-1600</td>
+          </tr>
+          <tr>
+            <td>J&amp;D Management</td>
+            <td><input type="text" id="ec-mgmt-name" placeholder="Manager name" value="Jeremy Williams"/></td>
+            <td><input type="tel" id="ec-mgmt-phone" placeholder="Phone number"/></td>
+          </tr>
+          <tr>
+            <td>Client / GC Contact</td>
+            <td><input type="text" id="ec-client-name" placeholder="Contact name"/></td>
+            <td><input type="tel" id="ec-client-phone" placeholder="Phone number"/></td>
+          </tr>
+          <tr>
+            <td>Site Safety Rep</td>
+            <td><input type="text" id="ec-safety-name" placeholder="Name (if applicable)"/></td>
+            <td><input type="tel" id="ec-safety-phone" placeholder="Phone number"/></td>
+          </tr>
+          <tr>
+            <td>Electrical Utility</td>
+            <td><input type="text" id="ec-utility-name" placeholder="e.g. EPCOR, ENMAX, FortisAlberta"/></td>
+            <td><input type="tel" id="ec-utility-phone" placeholder="Emergency / outage line"/></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3 · Nearest Medical Facility -->
+  <div class="fp-card">
+    <div class="fp-card-header">🏥 Nearest Medical Facility</div>
+    <div class="fp-card-body">
+      <div style="margin-bottom:14px;">
+        <button type="button" id="btn-find-hospital" class="btn btn-secondary" style="width:100%;padding:12px;">
+          📍 Find Nearest Hospital / Clinic from Current Location
+        </button>
+        <div id="hospital-find-status" style="font-size:.78rem;color:#6b7280;text-align:center;margin-top:6px;display:none;"></div>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Hospital / Clinic Name <span class="fp-req">*</span></label>
+          <input type="text" id="f-hospital-name" class="form-control" placeholder="e.g. Royal Alexandra Hospital"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Phone</label>
+          <input type="tel" id="f-hospital-phone" class="form-control" placeholder="Main number"/>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Address</label>
+        <input type="text" id="f-hospital-address" class="form-control" placeholder="Street address"/>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field" style="margin-bottom:0;">
+          <label class="fp-label">Estimated Drive Time</label>
+          <input type="text" id="f-hospital-drive" class="form-control" placeholder="e.g. 12 min"/>
+        </div>
+        <div class="fp-field" style="margin-bottom:0;">
+          <label class="fp-label">Route / Directions</label>
+          <input type="text" id="f-hospital-route" class="form-control" placeholder="e.g. North on 97 St, left on 111 Ave"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 · Muster Point -->
+  <div class="fp-card">
+    <div class="fp-card-header">🟢 Emergency Assembly / Muster Point</div>
+    <div class="fp-card-body">
+      <div class="fp-field">
+        <label class="fp-label">Muster Point Location <span class="fp-req">*</span></label>
+        <input type="text" id="f-muster" class="form-control" placeholder="e.g. Parking lot southwest corner, gate 2 entrance, across from site trailer"/>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Secondary Muster Point (if applicable)</label>
+        <input type="text" id="f-muster-2" class="form-control" placeholder="Alternate location if primary is inaccessible"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 · Site Utilities & Shut-Offs -->
+  <div class="fp-card">
+    <div class="fp-card-header">⚡ Site Utilities &amp; Shut-Offs</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">Know where to shut things off before an emergency happens.</p>
+      <div class="fp-field">
+        <label class="fp-label">Main Electrical Disconnect Location</label>
+        <input type="text" id="f-elec-shutoff" class="form-control" placeholder="e.g. Main panel room, northwest corner of basement, panel labelled MDP"/>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">Electrical Service Details</label>
+        <input type="text" id="f-elec-service" class="form-control" placeholder="e.g. 600A, 347/600V, 3-phase; utility transformer on east side"/>
+      </div>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">Natural Gas Shut-Off Location</label>
+          <input type="text" id="f-gas-shutoff" class="form-control" placeholder="Location or N/A"/>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">Water Shut-Off Location</label>
+          <input type="text" id="f-water-shutoff" class="form-control" placeholder="Location or N/A"/>
+        </div>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Other Site-Specific Hazards / Utility Notes</label>
+        <textarea id="f-utility-notes" class="form-control" rows="2" placeholder="e.g. Energized 25kV line on east side of building; gas line marked near trench area"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 · Emergency Procedures -->
+  <div class="fp-card">
+    <div class="fp-card-header">🚨 Emergency Procedures</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">Review each scenario, edit procedures for this site, then mark as reviewed or not applicable.</p>
+      <div id="scenarios-container"></div>
+    </div>
+  </div>
+
+  <!-- 7 · First Aid Resources -->
+  <div class="fp-card">
+    <div class="fp-card-header">🩺 First Aid Resources</div>
+    <div class="fp-card-body">
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label">First Aider on Site</label>
+          <select id="f-first-aider" class="form-control"></select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label">First Aid Certificate Level</label>
+          <input type="text" id="f-fa-cert" class="form-control" placeholder="e.g. Standard, Emergency, OFA Level 2"/>
+        </div>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">First Aid Kit Location</label>
+        <input type="text" id="f-fa-kit" class="form-control" placeholder="e.g. Site trailer, service truck passenger side, tool crib"/>
+      </div>
+      <div class="fp-field">
+        <label class="fp-label">AED (Defibrillator) Available on Site?</label>
+        <div class="erp-yn" id="aed-yn-row">
+          <button type="button" class="erp-yn-btn" data-val="yes">✓ Yes</button>
+          <button type="button" class="erp-yn-btn" data-val="no">✗ No</button>
+        </div>
+      </div>
+      <div class="fp-field" id="aed-location-wrap" style="display:none;margin-bottom:0;">
+        <label class="fp-label">AED Location</label>
+        <input type="text" id="f-aed-location" class="form-control" placeholder="Where is the AED located?"/>
+      </div>
+      <div class="fp-field" style="margin-bottom:0;">
+        <label class="fp-label">Additional First Aid Notes</label>
+        <textarea id="f-fa-notes" class="form-control" rows="2" placeholder="Allergies, medical conditions on crew, special equipment…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8 · Worker Acknowledgment -->
+  <div class="fp-card">
+    <div class="fp-card-header">✍️ Worker Acknowledgment</div>
+    <div class="fp-card-body">
+      <p style="font-size:.82rem;color:#6b7280;margin:0 0 14px;">By signing below, each worker confirms they have reviewed this Emergency Response Plan, know the muster point, emergency contacts, and their responsibilities in an emergency.</p>
+      <div id="workers-container"></div>
+    </div>
+  </div>
+
+</div><!-- /fp-body -->
+
+<div class="fp-submit-bar">
+  <span class="fp-draft-status" id="draft-status-inline">Not saved</span>
+  <button type="button" class="btn btn-secondary" id="btn-save-draft">Save Draft</button>
+  <button type="button" class="btn btn-primary" id="btn-submit">Submit ERP</button>
+</div>
+
+<script src="safety-shared.js"></script>
+<script>
+(async () => {
+
+  // ── Auth ──────────────────────────────────────────────────
+  let currentUser;
+  try {
+    const r = await fetch('/api/auth/me');
+    if (!r.ok) { location.href = '/login.html'; return; }
+    currentUser = await r.json();
+  } catch { location.href = '/login.html'; return; }
+
+  document.body.style.visibility = '';
+
+  const isAdmin = currentUser.role === 'admin';
+
+  // ── State ─────────────────────────────────────────────────
+  const params     = new URLSearchParams(location.search);
+  const existingId = params.get('id') ? parseInt(params.get('id')) : null;
+  let formId       = existingId;
+  let _autosaveTimer = null;
+  let _aedOnSite     = null;
+
+  // ── Scenario data ─────────────────────────────────────────
+  const SCENARIOS = [
+    {
+      key: 'elec_shock',
+      icon: '⚡',
+      title: 'Electrical Shock / Arc Flash',
+      steps: [
+        'Do NOT touch the victim if they are still in contact with the electrical source.',
+        'Call 911 immediately. State there is an electrical injury.',
+        'De-energize the circuit at the main disconnect — use LOTO. Do not approach until confirmed de-energized.',
+        'Once safe, check victim for responsiveness. Begin CPR if no pulse and you are trained.',
+        'Apply first aid for burns — do not remove clothing stuck to skin.',
+        'Keep victim warm and still until EMS arrives.',
+        'Notify J&D management and foreman immediately.',
+        'Secure the area — no work to resume until incident investigation is complete.',
+      ]
+    },
+    {
+      key: 'fire',
+      icon: '🔥',
+      title: 'Fire / Explosion',
+      steps: [
+        'Activate the site fire alarm or verbally alert all workers — "FIRE!"',
+        'Call 911. Give the site address and nature of fire.',
+        'Evacuate all personnel to the designated muster point.',
+        'Do NOT attempt to fight a large fire. Small/contained fires only — use fire extinguisher if trained.',
+        'Shut off electrical power at main disconnect if safe to do so without entering danger zone.',
+        'Account for all workers at the muster point. Report missing personnel to fire department.',
+        'Do not re-enter the building until Fire Service gives all-clear.',
+        'Notify J&D management and client/GC contact.',
+      ]
+    },
+    {
+      key: 'fall',
+      icon: '🪜',
+      title: 'Fall from Height / Struck By',
+      steps: [
+        'Call 911 immediately for any fall from height or serious struck-by injury.',
+        'Do not move the victim unless there is an immediate life-threatening hazard.',
+        'Control bleeding with direct pressure if safe to do so.',
+        'Keep victim warm and calm. Do not remove harness if victim is suspended.',
+        'For suspended victim: arrange rescue lift or lower to ground — call 911 for guidance.',
+        'Secure the area — prevent others from entering fall zone.',
+        'Notify J&D management and foreman.',
+        'Preserve the scene for investigation.',
+      ]
+    },
+    {
+      key: 'medical',
+      icon: '🏥',
+      title: 'Medical Emergency (General)',
+      steps: [
+        'Assess the situation — call 911 for any serious medical event (chest pain, difficulty breathing, loss of consciousness, severe bleeding).',
+        'Send someone to meet and direct EMS at the site entrance.',
+        'Begin CPR/AED if trained and victim is unresponsive with no pulse.',
+        'Administer first aid within your level of training.',
+        'Stay with the victim and provide reassurance until EMS arrives.',
+        'Notify J&D management and foreman.',
+        'Complete an incident report — even for near-miss medical events.',
+      ]
+    },
+    {
+      key: 'vehicle',
+      icon: '🚛',
+      title: 'Vehicle / Equipment Accident',
+      steps: [
+        'Turn off vehicle ignition if safe. Set parking brake.',
+        'Call 911 if any injury, fuel spill, or downed lines are involved.',
+        'Do not move injured persons unless in immediate danger.',
+        'Secure the area and warn others of the hazard.',
+        'If power lines are down: stay in the vehicle until utility confirms de-energized, or jump clear if fire risk.',
+        'Notify J&D management and foreman immediately.',
+        'Contact insurance if required. Preserve the scene for investigation.',
+      ]
+    },
+    {
+      key: 'weather',
+      icon: '🌩',
+      title: 'Severe Weather / Lightning',
+      steps: [
+        'Monitor weather alerts through Environment Canada or site weather system.',
+        'Suspend all outdoor work and work on elevated structures at first sign of lightning.',
+        'Move personnel to substantial shelter — avoid open structures, tall trees, and metal equipment.',
+        'Do not resume elevated or outdoor work until 30 minutes after the last lightning strike.',
+        'For high winds: secure loose materials and equipment. Remove personnel from elevated platforms.',
+        'For extreme cold: monitor workers for signs of frostbite/hypothermia. Rotate warm-up breaks.',
+      ]
+    },
+    {
+      key: 'gas_leak',
+      icon: '💨',
+      title: 'Gas Leak / Hazmat',
+      steps: [
+        'If you smell gas or suspect a leak: do not operate any electrical switches — sparks can ignite gas.',
+        'Evacuate all personnel upwind to the muster point.',
+        'Call 911 and the gas utility emergency line.',
+        'Do not re-enter the area until the utility and/or fire department confirms safe.',
+        'Notify J&D management and site owner/GC immediately.',
+        'Do not attempt to shut off gas valves unless trained to do so.',
+      ]
+    },
+  ];
+
+  // Scenario state: { [key]: { status: 'pending'|'reviewed'|'na', notes: string, steps_override: string[] } }
+  let _scenarioState = {};
+  SCENARIOS.forEach(s => { _scenarioState[s.key] = { status: 'pending', notes: '', steps: [...s.steps] }; });
+
+  function renderScenarios() {
+    const container = document.getElementById('scenarios-container');
+    container.innerHTML = '';
+    SCENARIOS.forEach(sc => {
+      const st = _scenarioState[sc.key];
+      const badgeClass = st.status === 'reviewed' ? 'erp-badge-reviewed' : st.status === 'na' ? 'erp-badge-na' : 'erp-badge-pending';
+      const badgeText  = st.status === 'reviewed' ? '✓ Reviewed' : st.status === 'na' ? 'N/A' : '● Pending';
+
+      const div = document.createElement('div');
+      div.className = 'erp-scenario';
+      div.innerHTML = `
+        <div class="erp-scenario-hdr">
+          <span class="erp-scenario-icon">${sc.icon}</span>
+          <span class="erp-scenario-title">${sc.title}</span>
+          <span class="erp-scenario-badge ${badgeClass}">${badgeText}</span>
+          <span class="erp-scenario-arrow">▶</span>
+        </div>
+        <div class="erp-scenario-body">
+          <div style="font-size:.78rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Procedure Steps</div>
+          ${st.steps.map((step, i) => `
+            <div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;">
+              <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:#F47920;color:#fff;font-size:.72rem;font-weight:800;display:flex;align-items:center;justify-content:center;">${i+1}</span>
+              <textarea class="form-control erp-step-input" data-key="${sc.key}" data-idx="${i}" rows="2" style="font-size:.83rem;">${_esc(step)}</textarea>
+            </div>`).join('')}
+          <button type="button" class="btn btn-secondary btn-sm erp-add-step" data-key="${sc.key}" style="margin-bottom:14px;">＋ Add Step</button>
+          <div class="fp-field" style="margin-bottom:10px;">
+            <label class="fp-label">Site-Specific Notes for This Scenario</label>
+            <textarea class="form-control erp-sc-notes" data-key="${sc.key}" rows="2" placeholder="Any site-specific details or additional steps…">${_esc(st.notes)}</textarea>
+          </div>
+          <div class="erp-status-row">
+            <button type="button" class="erp-status-btn${st.status === 'reviewed' ? ' active-reviewed' : ''}" data-key="${sc.key}" data-val="reviewed">✓ Mark as Reviewed</button>
+            <button type="button" class="erp-status-btn${st.status === 'na' ? ' active-na' : ''}" data-key="${sc.key}" data-val="na">Not Applicable to This Site</button>
+          </div>
+        </div>`;
+
+      // Toggle open/close
+      div.querySelector('.erp-scenario-hdr').addEventListener('click', () => {
+        div.classList.toggle('open');
+      });
+
+      // Step edits
+      div.querySelectorAll('.erp-step-input').forEach(ta => {
+        ta.addEventListener('input', () => {
+          _scenarioState[ta.dataset.key].steps[+ta.dataset.idx] = ta.value;
+          triggerAutosave();
+        });
+      });
+
+      // Add step
+      div.querySelector('.erp-add-step').addEventListener('click', () => {
+        _scenarioState[sc.key].steps.push('');
+        renderScenarios();
+        // Re-open the same scenario
+        const allDivs = document.querySelectorAll('.erp-scenario');
+        const idx = SCENARIOS.findIndex(s => s.key === sc.key);
+        if (allDivs[idx]) allDivs[idx].classList.add('open');
+        triggerAutosave();
+      });
+
+      // Notes
+      div.querySelector('.erp-sc-notes').addEventListener('input', e => {
+        _scenarioState[e.target.dataset.key].notes = e.target.value;
+        triggerAutosave();
+      });
+
+      // Status buttons
+      div.querySelectorAll('.erp-status-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.dataset.key;
+          const val = btn.dataset.val;
+          _scenarioState[key].status = _scenarioState[key].status === val ? 'pending' : val;
+          renderScenarios();
+          // Keep this scenario open
+          const allDivs = document.querySelectorAll('.erp-scenario');
+          const idx = SCENARIOS.findIndex(s => s.key === key);
+          if (allDivs[idx]) allDivs[idx].classList.add('open');
+          triggerAutosave();
+        });
+      });
+
+      container.appendChild(div);
+    });
+  }
+
+  function _esc(v) { return (v||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  renderScenarios();
+
+  // ── Site address geo field ────────────────────────────────
+  let _siteGeo = Safety.renderGeoField({
+    container: document.getElementById('site-geo-container'),
+    label: '',
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Find nearest hospital ─────────────────────────────────
+  document.getElementById('btn-find-hospital').addEventListener('click', async () => {
+    const btn    = document.getElementById('btn-find-hospital');
+    const status = document.getElementById('hospital-find-status');
+    btn.textContent = '⏳ Getting your location…'; btn.disabled = true;
+    status.style.display = ''; status.textContent = '';
+
+    try {
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 12000, enableHighAccuracy: true })
+      );
+      const { latitude: lat, longitude: lng } = pos.coords;
+
+      status.textContent = '🔍 Searching for nearest hospital…';
+
+      // Search only amenity=hospital — 75km radius covers rural Alberta
+      const query = `[out:json][timeout:15];(node["amenity"="hospital"](around:75000,${lat},${lng});way["amenity"="hospital"](around:75000,${lat},${lng});relation["amenity"="hospital"](around:75000,${lat},${lng}););out center tags 20;`;
+      const ovRes = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+      });
+      const ovData = await ovRes.json();
+
+      if (!ovData.elements?.length) {
+        status.textContent = '⚠ No hospitals found within 75 km — please fill in manually.';
+        btn.textContent = '📍 Find Nearest Hospital / Clinic from Current Location'; btn.disabled = false;
+        return;
+      }
+
+      function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      }
+
+      const withDist = ovData.elements.map(el => {
+        const elLat = el.lat ?? el.center?.lat;
+        const elLng = el.lon ?? el.center?.lon;
+        return { ...el, elLat, elLng, km: haversineKm(lat, lng, elLat, elLng) };
+      }).filter(el => el.elLat).sort((a, b) => a.km - b.km);
+
+      const nearest = withDist[0];
+      const tags = nearest.tags || {};
+      const name = tags.name || tags['name:en'] || 'Hospital';
+      const phone = tags.phone || tags['contact:phone'] || tags.telephone || '';
+      const driveMin = Math.round(nearest.km * 1.5 + 3);
+
+      // Reverse geocode for street address
+      status.textContent = '📬 Looking up address…';
+      let address = '';
+      try {
+        const nmRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${nearest.elLat}&lon=${nearest.elLng}&format=json`,
+          { headers: { 'User-Agent': 'JDFieldHub/1.0' } }
+        );
+        const nmData = await nmRes.json();
+        const a = nmData.address || {};
+        const parts = [a.house_number, a.road, a.city || a.town || a.village, a.state, a.postcode].filter(Boolean);
+        address = parts.join(', ') || nmData.display_name || '';
+      } catch {}
+
+      document.getElementById('f-hospital-name').value    = name;
+      document.getElementById('f-hospital-address').value = address;
+      document.getElementById('f-hospital-drive').value   = `~${driveMin} min`;
+      if (phone) document.getElementById('f-hospital-phone').value = phone;
+      triggerAutosave();
+
+      const phoneNote = phone ? '' : ' — phone not in map data, please add manually';
+      status.textContent = `✓ Found: ${name} — ${nearest.km.toFixed(1)} km away (~${driveMin} min)${phoneNote}.`;
+    } catch (err) {
+      status.textContent = '⚠ Could not get location — please fill in manually.';
+    }
+
+    btn.textContent = '📍 Find Nearest Hospital / Clinic from Current Location'; btn.disabled = false;
+  });
+
+  // ── Defaults ─────────────────────────────────────────────
+  document.getElementById('f-date').value = Safety.todayISO();
+  document.getElementById('f-prepared-by').value = currentUser.name;
+
+  // ── Load projects ─────────────────────────────────────────
+  try {
+    const r = await fetch('/api/projects');
+    if (r.ok) {
+      const ps = await r.json();
+      const sel = document.getElementById('f-project');
+      ps.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + (p.job_numbers ? '  ·  ' + p.job_numbers : '');
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+
+  // ── Load team for foreman / first aider dropdowns ─────────
+  try {
+    const team = await Safety._fetchTeam();
+    const makeOpts = (selId, placeholder) => {
+      const sel = document.getElementById(selId);
+      sel.innerHTML = `<option value="">— ${placeholder} —</option>` +
+        team.map(m => `<option value="${m.id}">${_esc(m.name)}${m.role ? ' — ' + _esc(m.role) : ''}</option>`).join('');
+    };
+    makeOpts('f-foreman', 'Select team member');
+    makeOpts('f-first-aider', 'Select team member');
+    // Pre-select current user as foreman
+    const selfOpt = document.querySelector(`#f-foreman option[value="${currentUser.id}"]`);
+    if (selfOpt) selfOpt.selected = true;
+  } catch {}
+
+  // ── AED toggle ────────────────────────────────────────────
+  document.getElementById('aed-yn-row').addEventListener('click', e => {
+    const btn = e.target.closest('.erp-yn-btn');
+    if (!btn) return;
+    document.querySelectorAll('#aed-yn-row .erp-yn-btn').forEach(b => b.className = 'erp-yn-btn');
+    btn.classList.add(btn.dataset.val === 'yes' ? 'active-yes' : 'active-no');
+    _aedOnSite = btn.dataset.val;
+    document.getElementById('aed-location-wrap').style.display = _aedOnSite === 'yes' ? '' : 'none';
+    triggerAutosave();
+  });
+
+  // ── Autosave ──────────────────────────────────────────────
+  function setDraftStatus(msg) {
+    document.getElementById('draft-status-bar').textContent    = msg;
+    document.getElementById('draft-status-inline').textContent = msg;
+  }
+  function triggerAutosave() {
+    clearTimeout(_autosaveTimer);
+    _autosaveTimer = setTimeout(() => {
+      Safety.DraftManager.save('erp', formId || 'new', collectFormData());
+      setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
+    }, 800);
+  }
+
+  ['f-date','f-foreman-phone','f-client','f-hospital-name','f-hospital-phone',
+   'f-hospital-address','f-hospital-drive','f-hospital-route','f-muster','f-muster-2',
+   'f-elec-shutoff','f-elec-service','f-gas-shutoff','f-water-shutoff','f-utility-notes',
+   'f-fa-cert','f-fa-kit','f-aed-location','f-fa-notes',
+   'ec-mgmt-name','ec-mgmt-phone','ec-client-name','ec-client-phone',
+   'ec-safety-name','ec-safety-phone','ec-utility-name','ec-utility-phone']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', triggerAutosave));
+  ['f-project','f-foreman','f-first-aider'].forEach(id =>
+    document.getElementById(id)?.addEventListener('change', triggerAutosave));
+
+  // ── Worker sign-on ────────────────────────────────────────
+  let _workerRep;
+  _workerRep = Safety.renderWorkerSignOn({
+    container: document.getElementById('workers-container'),
+    onChange: () => triggerAutosave()
+  });
+
+  // ── Collect form data ─────────────────────────────────────
+  function get(id) { return document.getElementById(id)?.value?.trim() || ''; }
+
+  function collectFormData() {
+    return {
+      date:             get('f-date'),
+      prepared_by:      currentUser.name,
+      project_id:       get('f-project'),
+      site_address:     _siteGeo.getValue(),
+      foreman_id:       get('f-foreman'),
+      foreman_phone:    get('f-foreman-phone'),
+      client:           get('f-client'),
+      contacts: {
+        mgmt_name:     get('ec-mgmt-name'),
+        mgmt_phone:    get('ec-mgmt-phone'),
+        client_name:   get('ec-client-name'),
+        client_phone:  get('ec-client-phone'),
+        safety_name:   get('ec-safety-name'),
+        safety_phone:  get('ec-safety-phone'),
+        utility_name:  get('ec-utility-name'),
+        utility_phone: get('ec-utility-phone'),
+      },
+      hospital_name:    get('f-hospital-name'),
+      hospital_phone:   get('f-hospital-phone'),
+      hospital_address: get('f-hospital-address'),
+      hospital_drive:   get('f-hospital-drive'),
+      hospital_route:   get('f-hospital-route'),
+      muster:           get('f-muster'),
+      muster_2:         get('f-muster-2'),
+      elec_shutoff:     get('f-elec-shutoff'),
+      elec_service:     get('f-elec-service'),
+      gas_shutoff:      get('f-gas-shutoff'),
+      water_shutoff:    get('f-water-shutoff'),
+      utility_notes:    get('f-utility-notes'),
+      scenario_state:   JSON.parse(JSON.stringify(_scenarioState)),
+      first_aider_id:   get('f-first-aider'),
+      fa_cert:          get('f-fa-cert'),
+      fa_kit:           get('f-fa-kit'),
+      aed_on_site:      _aedOnSite,
+      aed_location:     get('f-aed-location'),
+      fa_notes:         get('f-fa-notes'),
+      workers:          _workerRep.getValues(),
+    };
+  }
+
+  // ── Fill form data ────────────────────────────────────────
+  function fillFormData(d) {
+    if (!d) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    set('f-date',             d.date);
+    set('f-project',          d.project_id);
+    if (d.site_address) { _siteGeo = Safety.renderGeoField({ container: document.getElementById('site-geo-container'), label: '', value: d.site_address, onChange: () => triggerAutosave() }); }
+    set('f-foreman',          d.foreman_id);
+    set('f-foreman-phone',    d.foreman_phone);
+    set('f-client',           d.client);
+    set('f-hospital-name',    d.hospital_name);
+    set('f-hospital-phone',   d.hospital_phone);
+    set('f-hospital-address', d.hospital_address);
+    set('f-hospital-drive',   d.hospital_drive);
+    set('f-hospital-route',   d.hospital_route);
+    set('f-muster',           d.muster);
+    set('f-muster-2',         d.muster_2);
+    set('f-elec-shutoff',     d.elec_shutoff);
+    set('f-elec-service',     d.elec_service);
+    set('f-gas-shutoff',      d.gas_shutoff);
+    set('f-water-shutoff',    d.water_shutoff);
+    set('f-utility-notes',    d.utility_notes);
+    set('f-fa-cert',          d.fa_cert);
+    set('f-fa-kit',           d.fa_kit);
+    set('f-aed-location',     d.aed_location);
+    set('f-fa-notes',         d.fa_notes);
+    set('f-first-aider',      d.first_aider_id);
+
+    if (d.contacts) {
+      set('ec-mgmt-name',    d.contacts.mgmt_name);
+      set('ec-mgmt-phone',   d.contacts.mgmt_phone);
+      set('ec-client-name',  d.contacts.client_name);
+      set('ec-client-phone', d.contacts.client_phone);
+      set('ec-safety-name',  d.contacts.safety_name);
+      set('ec-safety-phone', d.contacts.safety_phone);
+      set('ec-utility-name', d.contacts.utility_name);
+      set('ec-utility-phone',d.contacts.utility_phone);
+    }
+
+    if (d.aed_on_site) {
+      _aedOnSite = d.aed_on_site;
+      const btn = document.querySelector(`#aed-yn-row .erp-yn-btn[data-val="${d.aed_on_site}"]`);
+      if (btn) { document.querySelectorAll('#aed-yn-row .erp-yn-btn').forEach(b => b.className = 'erp-yn-btn'); btn.classList.add(d.aed_on_site === 'yes' ? 'active-yes' : 'active-no'); }
+      document.getElementById('aed-location-wrap').style.display = d.aed_on_site === 'yes' ? '' : 'none';
+    }
+
+    if (d.scenario_state) {
+      Object.keys(d.scenario_state).forEach(k => {
+        if (_scenarioState[k]) _scenarioState[k] = { ..._scenarioState[k], ...d.scenario_state[k] };
+      });
+      renderScenarios();
+    }
+
+    if (d.workers?.length) _workerRep.setValue(d.workers);
+  }
+
+  // ── Load existing / draft ─────────────────────────────────
+  if (existingId) {
+    try {
+      const r = await fetch(`/api/safety/${existingId}`);
+      if (r.ok) {
+        const row = await r.json();
+        const fd = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : (row.form_data || {});
+        fillFormData(fd);
+        if (row.form_number) {
+          document.getElementById('form-num-badge').textContent = row.form_number;
+          document.getElementById('form-num-badge').style.display = '';
+        }
+        setDraftStatus(row.status === 'Submitted' ? 'Submitted' : 'Loaded');
+      }
+    } catch {}
+  } else {
+    const draft = Safety.DraftManager.load('erp', 'new');
+    if (draft) { fillFormData(draft); setDraftStatus('Draft restored'); }
+  }
+
+  // ── Save Draft ────────────────────────────────────────────
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    const data = collectFormData();
+    Safety.DraftManager.save('erp', formId || 'new', data);
+    setDraftStatus('Saving…');
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({
+        form_type:    'erp',
+        form_data:    data,
+        project_id:   data.project_id,
+        project_name: ps.value ? ps.selectedOptions[0]?.text : '',
+        status:       'Draft',
+        existing_id:  formId
+      });
+      if (result?.id && !formId) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      setDraftStatus('Draft saved · ' + new Date().toLocaleTimeString());
+      Safety.toast('Draft saved', 'success');
+    } catch {
+      setDraftStatus('Saved locally (offline)');
+    }
+  });
+
+  // ── Submit ────────────────────────────────────────────────
+  document.getElementById('btn-submit').addEventListener('click', async () => {
+    const data = collectFormData();
+
+    if (!data.site_address?.address) { Safety.toast('Site address is required — use the pin or type an address', 'error'); document.getElementById('site-geo-container').scrollIntoView({behavior:'smooth'}); return; }
+    if (!data.hospital_name) { Safety.toast('Nearest medical facility is required', 'error'); document.getElementById('f-hospital-name').focus(); return; }
+    if (!data.muster) { Safety.toast('Muster point location is required', 'error'); document.getElementById('f-muster').focus(); return; }
+
+    const pendingScenarios = SCENARIOS.filter(s => _scenarioState[s.key].status === 'pending').map(s => s.title);
+    if (pendingScenarios.length) {
+      const proceed = confirm(`${pendingScenarios.length} emergency scenario(s) not yet reviewed:\n\n${pendingScenarios.join('\n')}\n\nSubmit anyway?`);
+      if (!proceed) return;
+    }
+
+    const btn = document.getElementById('btn-submit');
+    btn.textContent = 'Submitting…'; btn.disabled = true;
+
+    try {
+      const ps = document.getElementById('f-project');
+      const result = await Safety.submitForm({
+        form_type:    'erp',
+        form_data:    data,
+        project_id:   data.project_id,
+        project_name: ps.value ? ps.selectedOptions[0]?.text : '',
+        status:       'Submitted',
+        existing_id:  formId
+      });
+      if (result?.id) {
+        formId = result.id;
+        document.getElementById('form-num-badge').textContent = result.form_number || '';
+        document.getElementById('form-num-badge').style.display = '';
+        history.replaceState({}, '', '?id=' + formId);
+      }
+      Safety.DraftManager.remove('erp', 'new');
+      Safety.DraftManager.remove('erp', formId);
+      setDraftStatus('Submitted');
+      Safety.toast('Emergency Response Plan submitted', 'success');
+      btn.textContent = 'Submitted ✓'; btn.disabled = false;
+    } catch {
+      Safety.toast('Submit failed — saved as draft', 'error');
+      btn.textContent = 'Submit ERP'; btn.disabled = false;
+    }
+  });
+
+  // ── Offline banner ────────────────────────────────────────
+  function updateOfflineBanner() {
+    const banner = document.getElementById('sf-offline-banner');
+    if (!navigator.onLine) {
+      banner.style.display = '';
+      banner.querySelector('.sf-offline-count').textContent = 'You are offline — changes saved locally';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+  window.addEventListener('online',  updateOfflineBanner);
+  window.addEventListener('offline', updateOfflineBanner);
+  updateOfflineBanner();
+
+})();
+</script>
+</body>
+</html>

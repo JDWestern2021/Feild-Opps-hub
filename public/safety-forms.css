@@ -1,0 +1,464 @@
+/* ================================================================
+   J&D FieldHub — Safety Module Shared Styles
+   ================================================================ */
+
+/* ── Offline banner ─────────────────────────────────────────── */
+#sf-offline-banner {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: #92400e;
+  color: #fef3c7;
+  padding: 10px 16px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+#sf-offline-banner::before { content: '⚠'; font-size: 1rem; }
+
+/* ── Form page layout ───────────────────────────────────────── */
+.sf-form-page {
+  max-width: 740px;
+  margin: 0 auto;
+  padding: 16px 16px 80px;
+}
+.sf-form-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.sf-form-header img.sf-logo { width: 44px; height: 44px; }
+.sf-form-title-block h1 { margin: 0; font-size: 1.25rem; color: var(--orange, #F47920); }
+.sf-form-title-block p  { margin: 2px 0 0; font-size: 0.82rem; color: #6b7280; }
+
+.sf-section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.sf-section-header {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #111827;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sf-section-header .sf-toggle { transition: transform .2s; }
+.sf-section-header.collapsed .sf-toggle { transform: rotate(-90deg); }
+.sf-section-body { padding: 16px; }
+.sf-section.collapsed .sf-section-body { display: none; }
+
+.sf-field { margin-bottom: 14px; }
+.sf-field-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 5px;
+}
+.sf-req { color: #ef4444; }
+
+.sf-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sf-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+@media (max-width: 540px) {
+  .sf-row-2, .sf-row-3 { grid-template-columns: 1fr; }
+}
+
+/* ── Sticky submit bar ──────────────────────────────────────── */
+.sf-submit-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  padding: 12px 16px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+.sf-draft-indicator {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  align-self: center;
+  margin-right: auto;
+}
+
+/* ── Signature Modal ────────────────────────────────────────── */
+.sf-sig-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.sf-sig-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+.sf-sig-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.sf-sig-header h3 { margin: 0; font-size: 1rem; }
+.sf-sig-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #6b7280; padding: 4px 8px; }
+.sf-sig-name {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 1rem;
+  outline: none;
+}
+.sf-sig-canvas-wrap {
+  position: relative;
+  background: #f9fafb;
+  margin: 0;
+}
+.sf-sig-canvas {
+  display: block;
+  width: 100%;
+  height: 180px;
+  touch-action: none;
+  cursor: crosshair;
+}
+.sf-sig-line {
+  position: absolute;
+  bottom: 36px;
+  left: 16px; right: 16px;
+  height: 1px;
+  background: #d1d5db;
+  pointer-events: none;
+}
+.sf-sig-hint {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  padding: 4px 0 8px;
+  margin: 0;
+}
+.sf-sig-actions {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  justify-content: flex-end;
+}
+
+/* Signature display in form */
+.sf-sig-field { }
+.sf-sig-display {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f9fafb;
+}
+.sf-sig-preview {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.sf-sig-preview img { max-height: 80px; max-width: 100%; }
+.sf-sig-empty { color: #9ca3af; font-size: 0.85rem; }
+.sf-sig-meta { font-size: 0.78rem; color: #6b7280; margin-bottom: 8px; }
+
+/* ── Pass / Fail / NA ───────────────────────────────────────── */
+.pfna-section { }
+.pfna-row {
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.pfna-row:last-child { border-bottom: none; }
+.pfna-label-text {
+  font-size: 0.88rem;
+  color: #111827;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.pfna-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pfna-btn {
+  padding: 10px 18px;
+  border-radius: 6px;
+  border: 2px solid #d1d5db;
+  background: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  min-height: 44px;
+  flex: 1;
+  min-width: 80px;
+}
+.pfna-btn:hover { border-color: #9ca3af; }
+
+.pfna-pass.active  { background: #dcfce7; border-color: #16a34a; color: #166534; }
+.pfna-fail.active  { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
+.pfna-na.active    { background: #f3f4f6; border-color: #6b7280; color: #374151; }
+
+/* Good / Requires Repair / NA */
+.grna-good.active   { background: #dcfce7; border-color: #16a34a; color: #166534; }
+.grna-repair.active { background: #fff7ed; border-color: #ea580c; color: #9a3412; }
+
+.pfna-detail {
+  margin-top: 10px;
+  padding: 10px;
+  background: #fff7ed;
+  border-radius: 6px;
+  border: 1px solid #fed7aa;
+}
+.pfna-detail.hidden { display: none; }
+.pfna-detail-text { margin-bottom: 8px; }
+.pfna-sub-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+@media (max-width: 480px) { .pfna-sub-row { grid-template-columns: 1fr; } }
+.pfna-photo-btn { margin-top: 8px; }
+.pfna-photo-thumb {
+  margin-top: 8px;
+  position: relative;
+  display: inline-block;
+}
+.pfna-photo-thumb img { max-height: 80px; border-radius: 4px; }
+.pfna-photo-remove {
+  position: absolute;
+  top: -6px; right: -6px;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 20px; height: 20px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  line-height: 20px;
+  padding: 0;
+}
+
+/* ── Repeater ────────────────────────────────────────────────── */
+.sf-repeater { }
+.sf-rep-rows { }
+.sf-rep-row {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  position: relative;
+}
+.sf-rep-cell { display: flex; flex-direction: column; gap: 4px; }
+.sf-rep-cell-label { font-size: 0.75rem; font-weight: 600; color: #6b7280; }
+.sf-rep-remove {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+.sf-rep-add { margin-top: 4px; }
+
+/* ── Geo Field ───────────────────────────────────────────────── */
+.sf-geo { }
+.sf-geo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.sf-geo-status { font-size: 0.82rem; color: #6b7280; flex: 1; }
+.sf-geo-addr { margin-top: 4px; }
+
+/* ── Photo Field ─────────────────────────────────────────────── */
+.sf-photo-field { }
+.sf-photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sf-photo-thumb {
+  position: relative;
+  display: inline-block;
+}
+.sf-photo-thumb img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid #e5e7eb;
+}
+.sf-photo-remove {
+  position: absolute;
+  top: -6px; right: -6px;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 20px; height: 20px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  line-height: 20px;
+  padding: 0;
+  text-align: center;
+}
+.sf-photo-add-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sf-photo-progress { font-size: 0.82rem; color: #6b7280; margin-top: 4px; }
+
+/* ── Result Banner ───────────────────────────────────────────── */
+.sf-result-banner {
+  padding: 16px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+}
+.sf-banner-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.sf-banner-opt {
+  flex: 1;
+  min-width: 140px;
+  padding: 14px 10px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all .15s;
+  min-height: 50px;
+}
+.sf-banner-opt:hover { border-color: #9ca3af; }
+.sf-banner-active.sf-banner-green  { background: #dcfce7; border-color: #16a34a; color: #166534; }
+.sf-banner-active.sf-banner-yellow { background: #fff7ed; border-color: #d97706; color: #92400e; }
+.sf-banner-active.sf-banner-red    { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
+.sf-banner-active.sf-banner-gray   { background: #f3f4f6; border-color: #6b7280; color: #374151; }
+
+/* ── Status chips ────────────────────────────────────────────── */
+.sf-chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.sf-chip-draft      { background: #fef3c7; color: #92400e; }
+.sf-chip-submitted  { background: #dbeafe; color: #1e40af; }
+.sf-chip-reviewed   { background: #dcfce7; color: #166534; }
+.sf-chip-open       { background: #fee2e2; color: #991b1b; }
+.sf-chip-completed  { background: #dcfce7; color: #166534; }
+.sf-chip-overdue    { background: #fef2f2; color: #7f1d1d; border: 1px solid #fca5a5; }
+
+/* ── Print template ──────────────────────────────────────────── */
+#print-area { display: none; }
+
+@media print {
+  body > *:not(#print-area) { display: none !important; }
+  #print-area { display: block !important; }
+
+  @page { margin: 12mm 18mm; size: letter portrait; }
+
+  .sfp-page { font-family: Arial, sans-serif; font-size: 9pt; color: #0C0C0C; }
+
+  .sfp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 4mm;
+  }
+  .sfp-header-left { display: flex; align-items: center; gap: 10px; }
+  .sfp-logo { width: 44px; height: 44px; }
+  .sfp-company { font-size: 11pt; font-weight: 700; color: #0C0C0C; }
+  .sfp-tagline { font-size: 7.5pt; color: #555; }
+  .sfp-phone   { font-size: 7.5pt; color: #555; }
+
+  .sfp-header-right { text-align: right; }
+  .sfp-form-title { font-size: 14pt; font-weight: 700; color: #FF6100; }
+  .sfp-form-subtitle { font-size: 9pt; color: #444; }
+  .sfp-form-num { font-size: 8pt; color: #777; }
+
+  .sfp-accent { height: 4px; background: #FF6100; margin-bottom: 3mm; }
+
+  .sfp-project-bar {
+    background: #0C0C0C;
+    color: #fff;
+    padding: 4px 10px;
+    font-size: 8pt;
+    font-weight: 600;
+    margin-bottom: 3mm;
+    border-radius: 2px;
+  }
+
+  .sfp-section { margin-bottom: 5mm; page-break-inside: avoid; }
+  .sfp-section-title {
+    background: #f0f0f0;
+    border-left: 4px solid #FF6100;
+    padding: 3px 8px;
+    font-size: 9pt;
+    font-weight: 700;
+    margin-bottom: 2mm;
+  }
+  .sfp-fields { display: flex; flex-wrap: wrap; gap: 3mm; }
+  .sfp-field { flex: 0 0 calc(50% - 1.5mm); }
+  .sfp-wide  { flex: 0 0 100%; }
+  .sfp-label { font-size: 7.5pt; color: #666; font-weight: 600; margin-bottom: 1mm; }
+  .sfp-value { font-size: 8.5pt; border-bottom: 1px solid #ccc; min-height: 14px; padding-bottom: 1mm; }
+
+  .sfp-footer {
+    border-top: 1px solid #ccc;
+    padding-top: 2mm;
+    margin-top: 6mm;
+    font-size: 7pt;
+    color: #999;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Suppress buttons in print */
+  button, .sf-submit-bar, .sf-sig-overlay, #sf-offline-banner { display: none !important; }
+  /* Show signature images */
+  .sf-sig-preview img { max-height: 60px; }
+}

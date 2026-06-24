@@ -378,6 +378,26 @@
       .filter-bar { flex-direction: column; }
       .detail-grid { grid-template-columns: 1fr; }
     }
+    /* ── Mobile responsiveness ─────────────────────────────── */
+    @media (max-width: 480px) {
+      /* Fleet reg modal grid — collapse to 1 column */
+      #fleet-reg-modal div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+      /* Worker profile modal — header buttons row may get cramped */
+      #worker-profile-modal > div {
+        max-width: calc(100vw - 24px) !important;
+      }
+      #worker-profile-modal > div > div:first-child {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      /* All other inline 1fr 1fr grids inside modals */
+      .modal div[style*="grid-template-columns:1fr 1fr"],
+      .edit-ticket-date-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -390,6 +410,21 @@
       <span class="module">Office Dashboard</span>
     </div>
   </div>
+  <!-- Notification bell -->
+  <button id="notif-bell" aria-label="Notifications" style="position:relative;background:none;border:none;cursor:pointer;padding:6px 8px;margin-left:auto;display:flex;align-items:center;color:#fff;font-size:1.25rem;">
+    🔔
+    <span id="notif-count" style="display:none;position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;font-size:.6rem;font-weight:800;border-radius:99px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;"></span>
+  </button>
+
+  <!-- Notification panel -->
+  <div id="notif-panel" style="display:none;position:fixed;top:56px;right:8px;width:min(380px,95vw);max-height:70vh;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);z-index:9999;overflow:hidden;flex-direction:column;">
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #e5e7eb;gap:10px;">
+      <span style="font-weight:800;font-size:.95rem;flex:1;">Notifications</span>
+      <button id="notif-mark-all" style="font-size:.75rem;background:none;border:none;color:#F47920;cursor:pointer;font-weight:600;">Mark all read</button>
+    </div>
+    <div id="notif-list" style="overflow-y:auto;flex:1;max-height:calc(70vh - 52px);"></div>
+  </div>
+
   <button class="nav-hamburger" id="nav-hamburger" aria-label="Menu">
     <span></span><span></span><span></span>
   </button>
@@ -399,6 +434,9 @@
     <a href="#" id="nav-timeoff" style="position:relative;">Time Off<span class="nav-badge" id="badge-timeoff" style="display:none;"></span></a>
     <a href="#" id="nav-projects" style="position:relative;">Projects<span class="nav-badge" id="badge-projects" style="display:none;"></span></a>
     <a href="#" id="nav-pos" style="position:relative;">Purchase Orders<span class="nav-badge" id="badge-pos" style="display:none;"></span></a>
+    <a href="#" id="nav-safety">Safety</a>
+    <a href="#" class="nav-link" id="nav-fleet">🚛 Fleet</a>
+    <a href="#" id="nav-panel-schedules">Panel Schedules</a>
     <a href="#" id="nav-timesheets">Timesheets</a>
     <a href="field.html" style="font-size:12px;opacity:.7;">+ New Ticket</a>
     <a href="team.html">Team</a>
@@ -734,9 +772,11 @@
           </div>
           <button class="cal-nav-btn" id="admin-cal-next" style="font-size:13px;padding:5px 12px;">Next →</button>
         </div>
-        <div id="admin-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);">
-          <div class="to-cal-dow">Sun</div><div class="to-cal-dow">Mon</div><div class="to-cal-dow">Tue</div>
-          <div class="to-cal-dow">Wed</div><div class="to-cal-dow">Thu</div><div class="to-cal-dow">Fri</div><div class="to-cal-dow">Sat</div>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+          <div id="admin-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);min-width:490px;">
+            <div class="to-cal-dow">Sun</div><div class="to-cal-dow">Mon</div><div class="to-cal-dow">Tue</div>
+            <div class="to-cal-dow">Wed</div><div class="to-cal-dow">Thu</div><div class="to-cal-dow">Fri</div><div class="to-cal-dow">Sat</div>
+          </div>
         </div>
       </div><!-- /#admin-cal-wrap -->
     </div>
@@ -956,11 +996,192 @@
           <div style="display:flex;gap:6px;margin-bottom:14px;">
             <button class="proj-subtab active" id="psub-tickets" data-tab="tickets">Time Tickets <span class="proj-subcount" id="psub-tickets-count">0</span></button>
             <button class="proj-subtab" id="psub-pos" data-tab="pos">Purchase Orders <span class="proj-subcount" id="psub-pos-count">0</span></button>
+            <button class="proj-subtab" id="psub-safety" data-tab="safety">Safety <span class="proj-subcount" id="psub-safety-count">0</span></button>
+            <button class="proj-subtab" id="psub-panels" data-tab="panels">Panel Schedules <span class="proj-subcount" id="psub-panels-count">0</span></button>
             <button class="proj-subtab" id="psub-proj-archived" data-tab="proj-archived">Archived <span class="proj-subcount" id="psub-archived-count">0</span></button>
           </div>
           <div id="ptab-panel-tickets"></div>
           <div id="ptab-panel-pos" style="display:none;"></div>
+          <div id="ptab-panel-safety" style="display:none;"></div>
+          <div id="ptab-panel-panels" style="display:none;"></div>
           <div id="ptab-panel-proj-archived" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL SCHEDULES VIEW -->
+  <div id="panel-schedules-view" style="display:none;">
+    <div class="card" style="max-width:1000px;margin:0 auto;">
+      <div class="card-header flex-between" style="flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:#1a3a5c;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:#fff;"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:700;">Panel Schedules</div>
+            <div style="font-size:12px;color:var(--gray-500);">All active panel schedules</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="panel-schedule.html" class="btn btn-sm btn-primary" target="_blank">+ New Panel Schedule</a>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--gray-100);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="ps-search" placeholder="Search panels…" style="font-size:13px;padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;width:200px;"/>
+          <select id="ps-filter-project" style="font-size:13px;padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;">
+            <option value="">All Projects</option>
+          </select>
+        </div>
+        <div id="ps-list-wrap"><div style="padding:32px;text-align:center;color:var(--gray-400);">Loading…</div></div>
+      </div>
+    </div>
+    <!-- Archived panel schedules -->
+    <div class="card" style="max-width:1000px;margin:20px auto 0;">
+      <div class="card-header flex-between">
+        <div style="font-size:14px;font-weight:600;color:var(--gray-600);">Archived Panel Schedules</div>
+        <button class="btn btn-sm btn-secondary" id="ps-archive-toggle">Show ▾</button>
+      </div>
+      <div id="ps-archive-panel" style="display:none;padding:0;">
+        <div id="ps-archive-wrap"><div style="padding:24px;text-align:center;color:var(--gray-400);">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAFETY VIEW -->
+  <div id="safety-view" style="display:none;">
+    <div class="card" style="max-width:900px;margin:0 auto;">
+      <div class="card-header flex-between" style="flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:#F47920;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:#fff;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4l5 2.18V11c0 3.47-2.34 6.72-5 7.93-2.66-1.21-5-4.46-5-7.93V7.18L12 5zm-1 5v2h2v-2h-2zm0 4v2h2v-2h-2z"/></svg>
+          </div>
+          <h2 style="font-size:18px;font-weight:800;">Safety</h2>
+        </div>
+      </div>
+      <div class="card-body" style="padding:20px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px;text-align:center;">
+            <div style="font-size:26px;font-weight:900;color:#c2410c;" id="office-safety-signoff-count">—</div>
+            <div style="font-size:12px;color:#9a3412;font-weight:600;margin-top:4px;">Pending Sign-offs</div>
+          </div>
+          <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:14px;text-align:center;">
+            <div style="font-size:26px;font-weight:900;color:#991b1b;" id="office-safety-expired-count">—</div>
+            <div style="font-size:12px;color:#991b1b;font-weight:600;margin-top:4px;">Expired Certs</div>
+          </div>
+          <div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:14px;text-align:center;">
+            <div style="font-size:26px;font-weight:900;color:#854d0e;" id="office-safety-soon-count">—</div>
+            <div style="font-size:12px;color:#854d0e;font-weight:600;margin-top:4px;">Certs Expiring Soon</div>
+          </div>
+        </div>
+        <a href="safety.html" class="btn btn-primary" style="background:var(--orange);display:inline-block;text-decoration:none;">Open Safety Admin →</a>
+      </div>
+
+      <!-- hidden elements kept for JS compatibility -->
+      <div style="display:none;">
+        <select id="safety-filter-type"></select>
+        <select id="safety-filter-status"></select>
+        <tbody id="safety-tbody"></tbody>
+        <button id="btn-fleet-refresh"></button>
+        <tbody id="fleet-maintenance-tbody"></tbody>
+        <select id="certs-filter-worker"></select>
+        <select id="certs-filter-status"></select>
+        <button id="btn-certs-refresh"></button>
+        <div id="certs-worker-grid"></div>
+        <div id="certs-table-wrap"><table><tbody id="certs-tbody"></tbody></table></div>
+        <div id="safety-archive-panel"></div>
+        <button id="safety-archive-toggle"></button>
+        <tbody id="safety-archive-tbody"></tbody>
+      </div>
+
+      <!-- Upload mechanic record modal -->
+      <div id="fleet-upload-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+          <h3 style="font-size:16px;font-weight:800;margin-bottom:16px;">Upload Mechanic Record</h3>
+          <input type="hidden" id="fleet-upload-vehicle-id"/>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;display:block;margin-bottom:4px;">Document Name *</label>
+            <input type="text" id="fleet-upload-name" class="form-control" placeholder="e.g. Oil Change Receipt — Jun 2025"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;display:block;margin-bottom:4px;">File (PDF, JPG, PNG) *</label>
+            <input type="file" id="fleet-upload-file" class="form-control" accept=".pdf,.jpg,.jpeg,.png"/>
+          </div>
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;display:block;margin-bottom:4px;">Notes</label>
+            <input type="text" id="fleet-upload-notes" class="form-control" placeholder="Optional notes"/>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="document.getElementById('fleet-upload-modal').style.display='none'">Cancel</button>
+            <button class="btn btn-primary" id="btn-fleet-upload-submit">Upload</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- View records modal -->
+      <div id="fleet-docs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="font-size:16px;font-weight:800;" id="fleet-docs-title">Mechanic Records</h3>
+            <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-500);" onclick="document.getElementById('fleet-docs-modal').style.display='none'">✕</button>
+          </div>
+          <div id="fleet-docs-list" style="min-height:60px;">Loading…</div>
+          <div style="margin-top:16px;text-align:right;">
+            <button class="btn btn-primary btn-sm" id="btn-fleet-add-record">+ Add Record</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Worker Profile Modal -->
+      <div id="worker-profile-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9100;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;">
+        <div style="background:#fff;border-radius:14px;width:100%;max-width:640px;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:auto;">
+          <div style="padding:18px 20px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div>
+              <div style="font-size:16px;font-weight:800;color:var(--gray-900);" id="wpm-worker-name">Worker Profile</div>
+              <div style="font-size:12px;color:var(--gray-500);margin-top:2px;" id="wpm-summary"></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+              <button id="wpm-export-btn" class="btn btn-primary btn-sm" style="background:var(--orange);">⬇ Export PDF</button>
+              <button onclick="document.getElementById('worker-profile-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400);line-height:1;">✕</button>
+            </div>
+          </div>
+          <!-- select all -->
+          <div style="padding:10px 20px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
+              <input type="checkbox" id="wpm-select-all" style="width:15px;height:15px;accent-color:var(--orange);"/> Select All
+            </label>
+            <span style="font-size:12px;color:var(--gray-500);" id="wpm-sel-count">0 selected</span>
+          </div>
+          <div id="wpm-cert-list" style="padding:12px 20px;max-height:60vh;overflow-y:auto;"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FLEET REGISTRATION VIEW -->
+  <div id="fleet-reg-view" style="display:none;margin-top:20px;">
+    <div class="card" style="max-width:900px;margin:0 auto;">
+      <div class="card-header flex-between" style="flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:#F47920;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:#fff;"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zm-.5 1.5 1.96 2.5H17V9.5h2.5zM6 18c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm2.22-3c-.55-.61-1.33-1-2.22-1s-1.67.39-2.22 1H3V6h12v9H8.22zM18 18c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg>
+          </div>
+          <h2 style="font-size:18px;font-weight:800;">Fleet Registration</h2>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-fleet-reg-add" style="background:var(--orange);">+ Add Vehicle</button>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+          <table class="data-table" style="width:100%;min-width:600px;">
+            <thead><tr>
+              <th>Unit #</th><th>Year</th><th>Make / Model</th><th>License</th><th>VIN</th><th>Status</th><th></th>
+            </tr></thead>
+            <tbody id="fleet-reg-tbody">
+              <tr><td colspan="7" style="padding:24px;text-align:center;color:var(--gray-400);">Loading…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1029,6 +1250,31 @@
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="confirm-yes">Yes, Delete Permanently</button>
       <button class="btn btn-secondary btn-sm" id="confirm-no">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fleet Registration: Add/Edit Vehicle Modal -->
+<div id="fleet-reg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9200;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <h3 style="font-size:15px;font-weight:800;" id="fleet-reg-modal-title">Add Vehicle</h3>
+      <button onclick="document.getElementById('fleet-reg-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-400);">✕</button>
+    </div>
+    <input type="hidden" id="fleet-reg-edit-id"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div><label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;display:block;margin-bottom:4px;">Unit # *</label><input type="text" id="fr-unit" class="form-control" placeholder="e.g. T-01"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;display:block;margin-bottom:4px;">Year</label><input type="text" id="fr-year" class="form-control" placeholder="2020"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;display:block;margin-bottom:4px;">Make</label><input type="text" id="fr-make" class="form-control" placeholder="Ford"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;display:block;margin-bottom:4px;">Model</label><input type="text" id="fr-model" class="form-control" placeholder="F-350"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;display:block;margin-bottom:4px;">License Plate</label><input type="text" id="fr-plate" class="form-control"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;display:block;margin-bottom:4px;">VIN</label><input type="text" id="fr-vin" class="form-control"/></div>
+    </div>
+    <div style="margin-bottom:16px;"><label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;display:block;margin-bottom:4px;">Notes</label><textarea id="fr-notes" class="form-control" rows="2" style="resize:vertical;"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button id="fleet-reg-delete-btn" class="btn btn-danger btn-sm" style="display:none;margin-right:auto;" onclick="fleetRegDelete()">Delete</button>
+      <button onclick="document.getElementById('fleet-reg-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
+      <button id="fleet-reg-save-btn" class="btn btn-primary" style="background:var(--orange);">Save Vehicle</button>
     </div>
   </div>
 </div>
@@ -1154,6 +1400,99 @@ function officeGoBack() {
   setInterval(loadStats, 60000);
   setInterval(loadHomeOverview, 30000);
   setInterval(loadNavBadges, 30000); // refresh badges every 30s
+})();
+
+// ── Notification bell ────────────────────────────────────────────────────────
+(function () {
+  const bell      = document.getElementById('notif-bell');
+  const panel     = document.getElementById('notif-panel');
+  const countBadge= document.getElementById('notif-count');
+  const listEl    = document.getElementById('notif-list');
+  const markAllBtn= document.getElementById('notif-mark-all');
+  if (!bell) return;
+
+  let notifications = [];
+
+  async function loadNotifications() {
+    try {
+      const r = await fetch('/api/notifications');
+      if (!r.ok) return;
+      notifications = await r.json();
+      const unread = notifications.filter(n => !n.read).length;
+      countBadge.textContent = unread > 9 ? '9+' : unread;
+      countBadge.style.display = unread ? '' : 'none';
+      renderList();
+    } catch {}
+  }
+
+  function renderList() {
+    if (!notifications.length) {
+      listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:#9ca3af;font-size:.88rem;">No notifications</div>';
+      return;
+    }
+    listEl.innerHTML = notifications.map(n => `
+      <div class="notif-item${n.read ? ' notif-read' : ''}" data-id="${n.id}" data-link="${n.link||''}"
+           style="padding:12px 16px;border-bottom:1px solid #f3f4f6;cursor:${n.link?'pointer':'default'};background:${n.read?'#fff':'#fff7ed'};">
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <span style="font-size:1rem;flex-shrink:0;">${n.type==='safety_alert'?'⚠':'🔔'}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:${n.read?'600':'800'};font-size:.88rem;color:#111827;margin-bottom:2px;">${esc(n.title)}</div>
+            ${n.body ? `<div style="font-size:.78rem;color:#6b7280;white-space:pre-wrap;">${esc(n.body)}</div>` : ''}
+            <div style="font-size:.72rem;color:#9ca3af;margin-top:4px;">${fmtAgo(n.created_at)}</div>
+          </div>
+          ${!n.read ? `<span style="width:8px;height:8px;border-radius:50%;background:#F47920;flex-shrink:0;margin-top:4px;"></span>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtAgo(iso) {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso)) / 1000;
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return Math.floor(diff/86400) + 'd ago';
+  }
+
+  bell.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = panel.style.display === 'flex';
+    panel.style.display = open ? 'none' : 'flex';
+    if (!open) loadNotifications();
+  });
+
+  listEl.addEventListener('click', async e => {
+    const item = e.target.closest('.notif-item');
+    if (!item) return;
+    const id   = item.dataset.id;
+    const link = item.dataset.link;
+    if (id) {
+      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      const n = notifications.find(n => String(n.id) === String(id));
+      if (n) n.read = true;
+      const unread = notifications.filter(n => !n.read).length;
+      countBadge.textContent = unread > 9 ? '9+' : unread;
+      countBadge.style.display = unread ? '' : 'none';
+      renderList();
+    }
+    if (link) { panel.style.display = 'none'; location.href = link; }
+  });
+
+  markAllBtn.addEventListener('click', async () => {
+    await fetch('/api/notifications/read-all', { method: 'PATCH' });
+    notifications.forEach(n => n.read = true);
+    countBadge.style.display = 'none';
+    renderList();
+  });
+
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && e.target !== bell) panel.style.display = 'none';
+  });
+
+  // Load on start and poll every 60s
+  loadNotifications();
+  setInterval(loadNotifications, 60000);
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1736,6 +2075,18 @@ async function openDetail(id, isArchived = false) {
         <label>Site Conditions / Notes</label>
         <div class="val" style="white-space:pre-wrap;line-height:1.6;">${esc(t.notes)}</div>
       </div>` : ''}
+      ${(()=>{
+        let vs = null;
+        try { vs = t.vendor_signoff ? (typeof t.vendor_signoff==='string' ? JSON.parse(t.vendor_signoff) : t.vendor_signoff) : null; } catch{}
+        if (!vs || (!vs.rep_name && !vs.signature)) return '';
+        return `<div class="divider"></div>
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--orange);margin-bottom:10px;">✍️ Vendor Sign-Off</div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;">
+            ${vs.rep_name ? `<div style="font-size:13px;font-weight:600;margin-bottom:2px;">${esc(vs.rep_name)}</div>` : ''}
+            ${vs.company ? `<div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;">${esc(vs.company)}</div>` : ''}
+            ${vs.signature ? `<img src="${vs.signature}" style="max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:6px;background:#fff;" alt="Vendor signature"/>` : '<p style="font-size:12px;color:var(--gray-400);">No signature captured</p>'}
+          </div>`;
+      })()}
       ${t.updated_at ? `<p class="text-xs text-muted" style="margin-top:16px;">Last updated: ${fmtDateTime(t.updated_at)}</p>` : ''}
       ${t.archived_at ? `<p class="text-xs text-muted" style="margin-top:8px;">Archived: ${fmtDateTime(t.archived_at)}</p>` : ''}
       <div class="audit-log" id="audit-log-section"><div class="audit-title">Activity Log</div><div id="audit-entries"><span class="text-xs text-muted">Loading…</span></div></div>
@@ -2291,14 +2642,20 @@ async function openProject(id) {
     else { cbtn.textContent = 'Mark Complete'; cbtn.style.background = '#6e6e6e'; }
     currentProjectData = {
       tickets: data.tickets, purchase_orders: data.purchase_orders,
+      safety_forms: data.safety_forms||[], archived_safety: data.archived_safety||[],
+      panel_schedules: data.panel_schedules||[], archived_panels: data.archived_panels||[],
       archived_tickets: data.archived_tickets||[], archived_pos: data.archived_pos||[]
     };
     renderProjectTickets(data.tickets);
     renderProjectPOs(data.purchase_orders);
-    renderProjectArchived(data.archived_tickets||[], data.archived_pos||[]);
+    renderProjectSafety(data.safety_forms||[]);
+    renderProjectPanels(data.panel_schedules||[]);
+    renderProjectArchived(data.archived_tickets||[], data.archived_pos||[], data.archived_safety||[], data.archived_panels||[]);
     $('psub-tickets-count').textContent = data.tickets.length;
     $('psub-pos-count').textContent = data.purchase_orders.length;
-    $('psub-archived-count').textContent = (data.archived_tickets||[]).length + (data.archived_pos||[]).length;
+    $('psub-safety-count').textContent = (data.safety_forms||[]).length;
+    $('psub-panels-count').textContent = (data.panel_schedules||[]).length;
+    $('psub-archived-count').textContent = (data.archived_tickets||[]).length + (data.archived_pos||[]).length + (data.archived_safety||[]).length + (data.archived_panels||[]).length;
     updateProjectOutstandingSummary();
   } catch {
     $('ptab-panel-tickets').innerHTML = `<div class="empty-state"><h3>Error loading project</h3></div>`;
@@ -2489,9 +2846,85 @@ function renderProjectPOs(pos) {
   wireProjBulkBar(panel, 'po');
 }
 
-function renderProjectArchived(archivedTickets, archivedPOs) {
+function safetyTypeLabel(type) {
+  return { flha: 'FLHA', jsa: 'JSA', incident: 'Incident', inspection: 'Inspection' }[type] || type.toUpperCase();
+}
+
+function safetyRetainUntil(submittedAt) {
+  const d = new Date(submittedAt);
+  d.setFullYear(d.getFullYear() + 2);
+  return d.toISOString().slice(0, 10);
+}
+
+function renderProjectSafety(forms) {
+  const panel = $('ptab-panel-safety');
+  if (!forms.length) {
+    panel.innerHTML = `<div class="empty-state" style="padding:32px 24px;"><h3>No safety forms</h3><p>Safety forms linked to this project will appear here.</p></div>`;
+    return;
+  }
+  const rows = forms.map(f => `<tr>
+    <td>${f.date}</td>
+    <td><span style="font-size:10px;font-weight:700;background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:4px;">${safetyTypeLabel(f.form_type)}</span></td>
+    <td style="font-size:12px;color:var(--gray-500);">${esc(f.form_number)}</td>
+    <td>${esc(f.submitted_by)}</td>
+    <td><span style="font-size:11px;background:#d4edda;color:#155724;padding:2px 7px;border-radius:4px;">${f.status}</span></td>
+    <td style="text-align:right;">
+      <button onclick="archiveSafetyInProject(${f.id})" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);">Archive</button>
+    </td>
+  </tr>`).join('');
+  panel.innerHTML = `<div class="po-table-wrap"><table class="po-table">
+    <thead><tr><th>Date</th><th>Type</th><th>Form #</th><th>Submitted By</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+async function archiveSafetyInProject(id) {
+  if (!confirm('Archive this safety form within the project? It will move to the Archived tab. The document is retained for 2 years per safety regulations.')) return;
+  const res = await fetch(`/api/safety/${id}/project-archive`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive: true }) });
+  if (res.ok) { openProject(currentProjectId); showToast('Safety form archived', 'success'); }
+  else showToast('Failed to archive', 'error');
+}
+
+function renderProjectPanels(schedules) {
+  const panel = $('ptab-panel-panels');
+  if (!schedules.length) {
+    panel.innerHTML = `<div class="empty-state" style="padding:32px 24px;"><h3>No panel schedules</h3><p>Panel schedules linked to this project will appear here.</p></div>`;
+    return;
+  }
+  const rows = schedules.map(s => `<tr>
+    <td style="font-weight:600;">${esc(s.panel_name)}</td>
+    <td style="font-size:12px;color:var(--gray-500);">${esc(s.schedule_number)}</td>
+    <td>${esc(s.voltage||'')}</td>
+    <td>${s.main_breaker ? s.main_breaker+' A' : '—'}</td>
+    <td>${s.num_circuits}</td>
+    <td>${esc(s.created_by)}</td>
+    <td style="text-align:right;white-space:nowrap;">
+      <a href="panel-schedule.html" target="_blank" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);text-decoration:none;margin-right:4px;">Edit →</a>
+      <button onclick="archivePanelInProject(${s.id})" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);">Archive</button>
+    </td>
+  </tr>`).join('');
+  panel.innerHTML = `<div class="po-table-wrap"><table class="po-table">
+    <thead><tr><th>Panel Name</th><th>Schedule #</th><th>Voltage</th><th>Main Breaker</th><th>Circuits</th><th>Created By</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+async function archivePanelInProject(id) {
+  if (!confirm('Archive this panel schedule within the project? It will move to the Archived tab.')) return;
+  const res = await fetch(`/api/panel-schedules/${id}/project-archive`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ archive: true }) });
+  if (res.ok) { openProject(currentProjectId); showToast('Panel schedule archived', 'success'); }
+  else showToast('Failed to archive', 'error');
+}
+
+async function restorePanelInProject(id) {
+  const res = await fetch(`/api/panel-schedules/${id}/project-archive`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ archive: false }) });
+  if (res.ok) { openProject(currentProjectId); showToast('Panel schedule restored', 'success'); }
+  else showToast('Failed to restore', 'error');
+}
+
+function renderProjectArchived(archivedTickets, archivedPOs, archivedSafety = [], archivedPanels = []) {
   const panel = $('ptab-panel-proj-archived');
-  if (!archivedTickets.length && !archivedPOs.length) {
+  if (!archivedTickets.length && !archivedPOs.length && !archivedSafety.length && !archivedPanels.length) {
     panel.innerHTML = `<div class="empty-state" style="padding:32px 24px;"><h3>No archived records</h3><p>Records you archive within this project will appear here.</p></div>`;
     return;
   }
@@ -2503,11 +2936,58 @@ function renderProjectArchived(archivedTickets, archivedPOs) {
   }
   if (archivedPOs.length) {
     const rows = archivedPOs.map(po => projPORow(po, false)).join('');
-    html += `<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Purchase Orders (${archivedPOs.length})</div>
+    html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Purchase Orders (${archivedPOs.length})</div>
     <div class="po-table-wrap"><table class="po-table"><thead><tr>${PROJ_PO_HEAD}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }
+  if (archivedSafety.length) {
+    const rows = archivedSafety.map(f => {
+      const retain = safetyRetainUntil(f.submitted_at);
+      const isExpired = retain < new Date().toISOString().slice(0,10);
+      const retainColor = isExpired ? 'color:#dc2626;font-weight:700;' : 'color:#15803d;';
+      return `<tr>
+        <td>${f.date}</td>
+        <td><span style="font-size:10px;font-weight:700;background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:4px;">${safetyTypeLabel(f.form_type)}</span></td>
+        <td style="font-size:12px;color:var(--gray-500);">${esc(f.form_number)}</td>
+        <td>${esc(f.submitted_by)}</td>
+        <td style="${retainColor}font-size:12px;">${isExpired ? '⚠ Expired' : retain}</td>
+        <td style="text-align:right;">
+          <button onclick="restoreSafetyInProject(${f.id})" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);">Restore</button>
+        </td>
+      </tr>`;
+    }).join('');
+    html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Safety Documents (${archivedSafety.length})</div>
+      <div style="font-size:12px;color:var(--gray-500);background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:8px 12px;margin-bottom:8px;">⚠ Safety documents must be retained for a minimum of <strong>2 years</strong>. Retain Until date shown below.</div>
+      <div class="po-table-wrap"><table class="po-table">
+        <thead><tr><th>Date</th><th>Type</th><th>Form #</th><th>Submitted By</th><th>Retain Until</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div></div>`;
+  }
+  if (archivedPanels.length) {
+    const rows = archivedPanels.map(s => `<tr>
+      <td style="font-weight:600;">${esc(s.panel_name)}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${esc(s.schedule_number)}</td>
+      <td>${esc(s.voltage||'')}</td>
+      <td>${s.main_breaker ? s.main_breaker+' A' : '—'}</td>
+      <td>${s.num_circuits}</td>
+      <td>${esc(s.created_by)}</td>
+      <td style="text-align:right;">
+        <button onclick="restorePanelInProject(${s.id})" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);">Restore</button>
+      </td>
+    </tr>`).join('');
+    html += `<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Panel Schedules (${archivedPanels.length})</div>
+      <div class="po-table-wrap"><table class="po-table">
+        <thead><tr><th>Panel Name</th><th>Schedule #</th><th>Voltage</th><th>Main Breaker</th><th>Circuits</th><th>Created By</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div></div>`;
   }
   panel.innerHTML = html;
   attachProjTableEvents(panel);
+}
+
+async function restoreSafetyInProject(id) {
+  const res = await fetch(`/api/safety/${id}/project-archive`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive: false }) });
+  if (res.ok) { openProject(currentProjectId); showToast('Safety form restored', 'success'); }
+  else showToast('Failed to restore', 'error');
 }
 
 function updateProjBulk() {
@@ -2683,15 +3163,21 @@ function exportTicketsToXlsx(tickets, filename) {
 }
 
 function setProjectSubTab(tab) {
+  $('psub-panels').classList.toggle('active', tab === 'panels');
   $('psub-tickets').classList.toggle('active', tab === 'tickets');
   $('psub-pos').classList.toggle('active', tab === 'pos');
+  $('psub-safety').classList.toggle('active', tab === 'safety');
   $('psub-proj-archived').classList.toggle('active', tab === 'proj-archived');
   $('ptab-panel-tickets').style.display = tab === 'tickets' ? 'block' : 'none';
   $('ptab-panel-pos').style.display = tab === 'pos' ? 'block' : 'none';
+  $('ptab-panel-safety').style.display = tab === 'safety' ? 'block' : 'none';
+  $('ptab-panel-panels').style.display = tab === 'panels' ? 'block' : 'none';
   $('ptab-panel-proj-archived').style.display = tab === 'proj-archived' ? 'block' : 'none';
 }
 $('psub-tickets').addEventListener('click', () => setProjectSubTab('tickets'));
 $('psub-pos').addEventListener('click', () => setProjectSubTab('pos'));
+$('psub-safety').addEventListener('click', () => setProjectSubTab('safety'));
+$('psub-panels').addEventListener('click', () => setProjectSubTab('panels'));
 $('psub-proj-archived').addEventListener('click', () => setProjectSubTab('proj-archived'));
 
 // Refresh the open project after a record changes (keeps archived labels current)
@@ -2913,9 +3399,658 @@ $('hm-link-to').addEventListener('click',   e => { e.preventDefault(); showTimeO
 $('hm-card-timeoff').addEventListener('click', () => showTimeOffView());
 
 function hideAllSpecialViews() {
-  ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view','timeoff-view'].forEach(id => {
+  ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view','timeoff-view','safety-view','panel-schedules-view','fleet-reg-view'].forEach(id => {
     const el = $(id); if (el) el.style.display = 'none';
   });
+}
+
+function showSafetyView() {
+  hideAllSpecialViews();
+  $('safety-view').style.display = 'block';
+  setNavActive('nav-safety');
+  loadSafetyForms();
+  loadFleetMaintenance();
+  loadWorkerCerts();
+}
+
+let _allSafetyForms = [], _allSafetyArchived = [];
+
+async function loadSafetyForms() {
+  $('safety-tbody').innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--gray-400);">Loading…</td></tr>`;
+  try {
+    const [active, archived] = await Promise.all([
+      fetch('/api/safety').then(r => r.json()),
+      fetch('/api/safety/archived').then(r => r.json()).catch(() => [])
+    ]);
+    _allSafetyForms    = active;
+    _allSafetyArchived = archived;
+    renderSafetyTable();
+    renderSafetyArchiveTable();
+    const sigEl = document.getElementById('office-safety-signoff-count');
+    if (sigEl) sigEl.textContent = _allSafetyForms.filter(f => f.requires_signature && f.status !== 'Reviewed').length;
+  } catch {
+    $('safety-tbody').innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:#dc2626;">Failed to load safety forms.</td></tr>`;
+  }
+}
+
+function renderSafetyTable() {
+  const typeFilter   = $('safety-filter-type').value;
+  const statusFilter = $('safety-filter-status').value;
+  const forms = _allSafetyForms.filter(f =>
+    (!typeFilter   || f.form_type === typeFilter) &&
+    (!statusFilter || f.status    === statusFilter)
+  );
+  if (!forms.length) {
+    $('safety-tbody').innerHTML = `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--gray-400);">No safety forms found.</td></tr>`;
+    return;
+  }
+  $('safety-tbody').innerHTML = forms.map(f => `<tr>
+    <td>${f.date}</td>
+    <td style="font-size:12px;color:var(--gray-500);">${esc(f.form_number)}</td>
+    <td><span style="font-size:10px;font-weight:700;background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:4px;">${safetyTypeLabel(f.form_type)}</span></td>
+    <td>${esc(f.submitted_by)}</td>
+    <td style="font-size:12px;">${f.project_name ? esc(f.project_name) : '<span style="color:var(--gray-400);">—</span>'}</td>
+    <td style="font-size:12px;">${f.job_number ? esc(f.job_number) : '<span style="color:var(--gray-400);">—</span>'}</td>
+    <td><span style="font-size:11px;background:#d4edda;color:#155724;padding:2px 7px;border-radius:4px;">${f.status}</span></td>
+    <td style="text-align:right;">
+      <button onclick="archiveSafetyGlobal(${f.id})" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);">Archive</button>
+    </td>
+  </tr>`).join('');
+}
+
+function renderSafetyArchiveTable() {
+  if (!_allSafetyArchived.length) return;
+  $('safety-archive-tbody').innerHTML = _allSafetyArchived.map(f => {
+    const retain = safetyRetainUntil(f.submitted_at);
+    const isExpired = retain < new Date().toISOString().slice(0,10);
+    const retainStyle = isExpired ? 'color:#dc2626;font-weight:700;' : 'color:#15803d;';
+    return `<tr>
+      <td>${f.date}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${esc(f.form_number)}</td>
+      <td><span style="font-size:10px;font-weight:700;background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:4px;">${safetyTypeLabel(f.form_type)}</span></td>
+      <td>${esc(f.submitted_by)}</td>
+      <td style="font-size:12px;">${f.project_name ? esc(f.project_name) : '—'}</td>
+      <td style="${retainStyle}font-size:12px;">${isExpired ? '⚠ Expired — Review' : retain}</td>
+      <td style="text-align:right;"><span style="font-size:11px;color:var(--gray-400);">Archived</span></td>
+    </tr>`;
+  }).join('');
+}
+
+async function archiveSafetyGlobal(id) {
+  if (!confirm('Archive this safety form? It will move to the archived section below. Documents are retained for 2 years per safety regulations.')) return;
+  const res = await fetch(`/api/safety/${id}/archive`, { method: 'PATCH' });
+  if (res.ok) { loadSafetyForms(); showToast('Safety form archived', 'success'); }
+  else showToast('Failed to archive', 'error');
+}
+
+$('safety-filter-type').addEventListener('change',   renderSafetyTable);
+$('safety-filter-status').addEventListener('change', renderSafetyTable);
+$('safety-archive-toggle').addEventListener('click', () => {
+  const panel = $('safety-archive-panel');
+  const btn   = $('safety-archive-toggle');
+  const open  = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  btn.textContent = open ? 'Hide ▴' : 'Show ▾';
+  if (open) renderSafetyArchiveTable();
+});
+$('nav-safety').addEventListener('click', e => { e.preventDefault(); showSafetyView(); });
+
+// ── Fleet Registration ────────────────────────────────────────
+let _fleetRegVehicles = [];
+
+async function loadFleetReg() {
+  $('fleet-reg-tbody').innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--gray-400);">Loading…</td></tr>`;
+  try {
+    const r = await fetch('/api/vehicles');
+    if (!r.ok) throw new Error(r.status);
+    _fleetRegVehicles = await r.json();
+    renderFleetReg();
+  } catch(e) {
+    $('fleet-reg-tbody').innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:#dc2626;">Failed to load: ${e.message}</td></tr>`;
+  }
+}
+
+function renderFleetReg() {
+  if (!_fleetRegVehicles.length) {
+    $('fleet-reg-tbody').innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--gray-400);">No vehicles registered. Add one above.</td></tr>`;
+    return;
+  }
+  $('fleet-reg-tbody').innerHTML = _fleetRegVehicles.map(v => `<tr>
+    <td style="font-weight:700;">${esc(v.unit_number||'—')}</td>
+    <td style="font-size:12px;">${v.year||'—'}</td>
+    <td>${esc([v.make,v.model].filter(Boolean).join(' ')||'—')}</td>
+    <td style="font-size:12px;">${esc(v.license_plate||'—')}</td>
+    <td style="font-size:12px;color:var(--gray-500);">${esc(v.vin||'—')}</td>
+    <td><span style="font-size:11px;padding:2px 8px;border-radius:20px;${v.status==='active'||!v.status?'background:#dcfce7;color:#166534;':'background:#fee2e2;color:#991b1b;'}">${v.status||'Active'}</span></td>
+    <td><button class="btn btn-secondary btn-sm" onclick="fleetRegEdit(${v.id})">✏️ Edit</button></td>
+  </tr>`).join('');
+}
+
+function fleetRegEdit(vehicleId) {
+  const isEdit = !!vehicleId;
+  $('fleet-reg-modal-title').textContent = isEdit ? 'Edit Vehicle' : 'Add Vehicle';
+  $('fleet-reg-edit-id').value = vehicleId || '';
+  $('fleet-reg-delete-btn').style.display = isEdit ? '' : 'none';
+  if (isEdit) {
+    const v = _fleetRegVehicles.find(x => x.id === vehicleId);
+    if (!v) return;
+    $('fr-unit').value  = v.unit_number || '';
+    $('fr-year').value  = v.year || '';
+    $('fr-make').value  = v.make || '';
+    $('fr-model').value = v.model || '';
+    $('fr-plate').value = v.license_plate || '';
+    $('fr-vin').value   = v.vin || '';
+    $('fr-notes').value = v.notes || '';
+  } else {
+    ['fr-unit','fr-year','fr-make','fr-model','fr-plate','fr-vin','fr-notes'].forEach(id => $(id).value = '');
+  }
+  $('fleet-reg-modal').style.display = 'flex';
+}
+
+async function fleetRegDelete() {
+  const editId = $('fleet-reg-edit-id').value;
+  if (!editId || !confirm('Delete this vehicle? All associated records will also be removed.')) return;
+  await fetch(`/api/vehicles/${editId}`, {method:'DELETE'});
+  $('fleet-reg-modal').style.display = 'none';
+  loadFleetReg();
+}
+
+$('btn-fleet-reg-add').addEventListener('click', () => fleetRegEdit(null));
+
+$('fleet-reg-save-btn').addEventListener('click', async () => {
+  const unit = $('fr-unit').value.trim();
+  if (!unit) { alert('Unit number is required.'); return; }
+  const editId = $('fleet-reg-edit-id').value;
+  const payload = { unit_number:unit, year:$('fr-year').value.trim()||null, make:$('fr-make').value.trim()||null, model:$('fr-model').value.trim()||null, license_plate:$('fr-plate').value.trim()||null, vin:$('fr-vin').value.trim()||null, notes:$('fr-notes').value.trim()||null };
+  const btn = $('fleet-reg-save-btn'); btn.disabled=true; btn.textContent='Saving…';
+  try {
+    const res = await fetch(editId ? `/api/vehicles/${editId}` : '/api/vehicles', { method:editId?'PATCH':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    if (!res.ok) throw new Error();
+    $('fleet-reg-modal').style.display='none';
+    loadFleetReg();
+  } catch { alert('Save failed.'); }
+  finally { btn.disabled=false; btn.textContent='Save Vehicle'; }
+});
+
+function showFleetRegView() {
+  hideAllSpecialViews();
+  $('fleet-reg-view').style.display = 'block';
+  setNavActive('nav-fleet');
+  loadFleetReg();
+}
+
+$('nav-fleet').addEventListener('click', e => { e.preventDefault(); showFleetRegView(); });
+
+$('btn-fleet-refresh').addEventListener('click', loadFleetMaintenance);
+$('btn-certs-refresh').addEventListener('click', loadWorkerCerts);
+$('certs-filter-worker').addEventListener('change', renderCertsTable);
+$('certs-filter-status').addEventListener('change', renderCertsTable);
+
+let _allCerts = [];
+
+function certExpiryStatus(expiry) {
+  if (!expiry) return { cls:'', label:'No expiry', key:'ok' };
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(expiry + 'T00:00:00');
+  const days = Math.round((exp - today) / 86400000);
+  if (days < 0)   return { cls:'background:#fee2e2;color:#991b1b;', label:'⚠ EXPIRED',             key:'expired' };
+  if (days <= 30)  return { cls:'background:#ffedd5;color:#9a3412;', label:`Expires in ${days}d`,   key:'soon_1' };
+  if (days <= 90)  return { cls:'background:#fef9c3;color:#854d0e;', label:`${Math.round(days/7)}w left`, key:'soon_3' };
+  return { cls:'background:#dcfce7;color:#166534;', label:'Valid', key:'ok' };
+}
+
+function fmtDateShort(d) {
+  if (!d) return '—';
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { year:'numeric', month:'short', day:'numeric' });
+}
+
+const CERT_TYPE_LABELS = { h2s:'H2S Alive', first_aid:'First Aid', whmis:'WHMIS', fall_protection:'Fall Protection', ground_disturbance:'Ground Disturbance', confined_space:'Confined Space', elevated_work:'Elevated Work Platform', flagging:'Flagging', ppe:'PPE / Orientation', electrical:'Electrical Safety', forklift:'Forklift / Skid Steer', driver:"Driver's Abstract", other:'Other' };
+
+async function loadWorkerCerts() {
+  $('certs-tbody').innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--gray-400);">Loading…</td></tr>`;
+  try {
+    _allCerts = await fetch('/api/certifications/all').then(r => r.json());
+    // Populate worker filter
+    const workers = [...new Map(_allCerts.map(c => [c.user_id, c.user_name])).entries()];
+    const workerSel = $('certs-filter-worker');
+    workerSel.innerHTML = '<option value="">All Workers</option>' + workers.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
+    renderCertsTable();
+    // Update office summary counts
+    const today = new Date(); today.setHours(0,0,0,0);
+    const expEl = document.getElementById('office-safety-expired-count');
+    const soonEl = document.getElementById('office-safety-soon-count');
+    if (expEl) expEl.textContent = _allCerts.filter(c => { if(!c.expiry_date) return false; return new Date(c.expiry_date+'T00:00:00') < today; }).length;
+    if (soonEl) { const n = _allCerts.filter(c => { if(!c.expiry_date) return false; const d=Math.round((new Date(c.expiry_date+'T00:00:00')-today)/86400000); return d>=0&&d<=90; }).length; soonEl.textContent = n; }
+  } catch {
+    $('certs-tbody').innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:#dc2626;">Failed to load certifications.</td></tr>`;
+  }
+}
+
+function renderCertsTable() {
+  const workerF = $('certs-filter-worker').value;
+  const statusF = $('certs-filter-status').value;
+  let rows = _allCerts;
+  if (workerF) rows = rows.filter(c => String(c.user_id) === workerF);
+  if (statusF) rows = rows.filter(c => certExpiryStatus(c.expiry_date).key === statusF);
+
+  // Worker profile grid (shown when no specific worker filtered)
+  const grid = $('certs-worker-grid');
+  const tableWrap = $('certs-table-wrap');
+  if (!workerF) {
+    // Group all certs by worker
+    const byWorker = new Map();
+    _allCerts.forEach(c => {
+      if (!byWorker.has(c.user_id)) byWorker.set(c.user_id, { name: c.user_name, certs: [] });
+      byWorker.get(c.user_id).certs.push(c);
+    });
+    grid.innerHTML = [...byWorker.entries()].map(([uid, w]) => {
+      const expiredN  = w.certs.filter(c => certExpiryStatus(c.expiry_date).key === 'expired').length;
+      const soonN     = w.certs.filter(c => ['soon_1','soon_3'].includes(certExpiryStatus(c.expiry_date).key)).length;
+      const alertColor = expiredN ? '#fee2e2' : soonN ? '#fef9c3' : '#f0fdf4';
+      const alertBorder = expiredN ? '#fca5a5' : soonN ? '#fde047' : '#86efac';
+      const alertText  = expiredN ? `<span style="color:#991b1b;font-weight:700;">⚠ ${expiredN} expired</span>` :
+                         soonN    ? `<span style="color:#854d0e;font-weight:700;">⏰ ${soonN} expiring soon</span>` :
+                                    `<span style="color:#166534;font-weight:700;">✅ All valid</span>`;
+      return `<div style="background:${alertColor};border:1.5px solid ${alertBorder};border-radius:10px;padding:14px;cursor:pointer;transition:box-shadow .15s;" onclick="openWorkerProfile(${uid})" onmouseover="this.style.boxShadow='0 2px 12px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+        <div style="font-size:15px;font-weight:800;color:var(--gray-900);margin-bottom:4px;">${esc(w.name)}</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;">${w.certs.length} ticket${w.certs.length!==1?'s':''}</div>
+        ${alertText}
+        <div style="margin-top:10px;"><button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openWorkerProfile(${uid})">View &amp; Export →</button></div>
+      </div>`;
+    }).join('') || `<div style="color:var(--gray-400);font-size:14px;padding:20px 0;">No certifications uploaded yet.</div>`;
+    grid.style.display = 'grid';
+    tableWrap.style.display = 'none';
+  } else {
+    grid.style.display = 'none';
+    tableWrap.style.display = '';
+    if (!rows.length) {
+      $('certs-tbody').innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--gray-400);">No certifications found.</td></tr>`;
+      return;
+    }
+    $('certs-tbody').innerHTML = rows.map(c => {
+      const st = certExpiryStatus(c.expiry_date);
+      const badge = `<span style="font-size:11px;font-weight:700;border-radius:20px;padding:3px 9px;${st.cls}">${st.label}</span>`;
+      const photoLink = `<a href="/api/certifications/${c.id}/photo" target="_blank" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);text-decoration:none;">View 🖼</a>`;
+      return `<tr>
+        <td style="font-weight:600;">${esc(c.user_name)}</td>
+        <td>${esc(c.cert_name)}</td>
+        <td style="font-size:12px;color:var(--gray-500);">${CERT_TYPE_LABELS[c.cert_type] || c.cert_type}</td>
+        <td style="font-size:12px;">${fmtDateShort(c.issued_date)}</td>
+        <td style="font-size:12px;font-weight:${c.expiry_date ? '600' : '400'};">${fmtDateShort(c.expiry_date)}</td>
+        <td>${badge}</td>
+        <td>${photoLink}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ── Worker Profile Modal ──────────────────────────────────────
+function openWorkerProfile(userId) {
+  const workerCerts = _allCerts.filter(c => c.user_id === userId);
+  if (!workerCerts.length) return;
+  const workerName = workerCerts[0].user_name;
+
+  $('wpm-worker-name').textContent = workerName;
+  updateWpmSummary(workerCerts);
+
+  $('wpm-cert-list').innerHTML = workerCerts.map(c => {
+    const st = certExpiryStatus(c.expiry_date);
+    const CERT_ICONS = { h2s:'💨', first_aid:'🩺', whmis:'⚗️', fall_protection:'🪝', ground_disturbance:'🏗️', confined_space:'🔲', elevated_work:'🏗️', flagging:'🚧', ppe:'🦺', electrical:'⚡', forklift:'🚜', driver:'🪪', other:'📋' };
+    return `<label style="display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:8px;cursor:pointer;background:#fff;" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--gray-200)'">
+      <input type="checkbox" class="wpm-cert-cb" data-id="${c.id}" checked style="width:16px;height:16px;margin-top:3px;accent-color:var(--orange);flex-shrink:0;" onchange="updateWpmCount()"/>
+      <div style="font-size:22px;flex-shrink:0;">${CERT_ICONS[c.cert_type]||'📋'}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:var(--gray-900);">${esc(c.cert_name)}</div>
+        <div style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-top:1px;">${CERT_TYPE_LABELS[c.cert_type]||c.cert_type}</div>
+        <div style="font-size:12px;color:var(--gray-600);margin-top:4px;">
+          ${c.issued_date?'Issued: <strong>'+fmtDateShort(c.issued_date)+'</strong>':''}
+          ${c.issued_date&&c.expiry_date?' · ':''}
+          ${c.expiry_date?'Expires: <strong>'+fmtDateShort(c.expiry_date)+'</strong>':''}
+        </div>
+        <span style="display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:2px 8px;margin-top:4px;${st.cls}">${st.label}</span>
+        <button onclick="event.preventDefault();event.stopPropagation();deleteWorkerCert(${c.id}, ${c.user_id})" style="margin-top:8px;background:none;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">🗑 Delete</button>
+      </div>
+    </label>`;
+  }).join('');
+
+  updateWpmCount();
+
+  $('wpm-select-all').checked = true;
+  $('wpm-select-all').onchange = function() {
+    document.querySelectorAll('.wpm-cert-cb').forEach(cb => cb.checked = this.checked);
+    updateWpmCount();
+  };
+
+  $('wpm-export-btn').onclick = () => exportWorkerCertsPDF(userId, workerName);
+  $('worker-profile-modal').style.display = 'flex';
+}
+
+function updateWpmCount() {
+  const all = document.querySelectorAll('.wpm-cert-cb');
+  const sel = document.querySelectorAll('.wpm-cert-cb:checked');
+  $('wpm-sel-count').textContent = `${sel.length} of ${all.length} selected`;
+  $('wpm-select-all').checked = sel.length === all.length;
+  $('wpm-select-all').indeterminate = sel.length > 0 && sel.length < all.length;
+}
+
+function updateWpmSummary(certs) {
+  const exp = certs.filter(c => certExpiryStatus(c.expiry_date).key === 'expired').length;
+  const soon = certs.filter(c => ['soon_1','soon_3'].includes(certExpiryStatus(c.expiry_date).key)).length;
+  const parts = [`${certs.length} ticket${certs.length!==1?'s':''}`];
+  if (exp)  parts.push(`${exp} expired`);
+  if (soon) parts.push(`${soon} expiring soon`);
+  $('wpm-summary').textContent = parts.join(' · ');
+}
+
+async function exportWorkerCertsPDF(userId, workerName) {
+  const selectedIds = new Set([...document.querySelectorAll('.wpm-cert-cb:checked')].map(cb => Number(cb.dataset.id)));
+  if (!selectedIds.size) { alert('Select at least one ticket to export.'); return; }
+  const certs = _allCerts.filter(c => c.user_id === userId && selectedIds.has(c.id));
+
+  const btn = $('wpm-export-btn');
+  btn.disabled = true; btn.textContent = 'Loading photos…';
+
+  // Fetch photos as data URLs
+  const photoMap = {};
+  await Promise.all(certs.map(async c => {
+    try {
+      const res = await fetch(`/api/certifications/${c.id}/photo`);
+      if (res.ok) {
+        const blob = await res.blob();
+        photoMap[c.id] = await new Promise(resolve => {
+          const r = new FileReader(); r.onload = e => resolve(e.target.result); r.readAsDataURL(blob);
+        });
+      }
+    } catch {}
+  }));
+
+  btn.disabled = false; btn.textContent = '⬇ Export PDF';
+
+  const CERT_ICONS = { h2s:'💨', first_aid:'🩺', whmis:'⚗️', fall_protection:'🪝', ground_disturbance:'🏗️', confined_space:'🔲', elevated_work:'🏗️', flagging:'🚧', ppe:'🦺', electrical:'⚡', forklift:'🚜', driver:'🪪', other:'📋' };
+  const today = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+
+  const certPages = certs.map(c => {
+    const st = certExpiryStatus(c.expiry_date);
+    const statusColor = st.key==='expired'?'#991b1b':st.key==='soon_1'?'#9a3412':st.key==='soon_3'?'#854d0e':'#166534';
+    const statusBg    = st.key==='expired'?'#fee2e2':st.key==='soon_1'?'#ffedd5':st.key==='soon_3'?'#fef9c3':'#dcfce7';
+    const photo = photoMap[c.id] ? `<div style="text-align:center;margin:20px 0;"><img src="${photoMap[c.id]}" style="max-width:100%;max-height:320px;border-radius:8px;border:1px solid #e5e7eb;object-fit:contain;" alt="Cert photo"/></div>` : '<div style="text-align:center;padding:40px;color:#9ca3af;border:2px dashed #e5e7eb;border-radius:8px;margin:20px 0;font-size:14px;">No photo on file</div>';
+    return `<div class="cert-page">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <div style="font-size:40px;">${CERT_ICONS[c.cert_type]||'📋'}</div>
+        <div>
+          <div style="font-size:20px;font-weight:800;color:#111827;">${esc(c.cert_name)}</div>
+          <div style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">${CERT_TYPE_LABELS[c.cert_type]||c.cert_type}</div>
+        </div>
+        <div style="margin-left:auto;background:${statusBg};color:${statusColor};font-size:13px;font-weight:800;padding:6px 14px;border-radius:20px;">${st.label}</div>
+      </div>
+      ${photo}
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px;">
+        <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;width:140px;">Holder</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${esc(workerName)}</td></tr>
+        ${c.issued_date?`<tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Issued</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${fmtDateShort(c.issued_date)}</td></tr>`:''}
+        ${c.expiry_date?`<tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Expires</td><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:700;color:${statusColor};">${fmtDateShort(c.expiry_date)}</td></tr>`:''}
+        ${c.notes?`<tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Notes</td><td style="padding:8px 12px;border:1px solid #e5e7eb;">${esc(c.notes)}</td></tr>`:''}
+      </table>
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<title>${workerName} — Safety Tickets</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,sans-serif; background:#fff; color:#111827; }
+  .cover { padding:48px 40px 32px; border-bottom:3px solid #F47920; margin-bottom:0; }
+  .cover-title { font-size:28px; font-weight:900; color:#111827; margin-bottom:6px; }
+  .cover-sub { font-size:14px; color:#6b7280; }
+  .cert-page { padding:32px 40px; border-bottom:2px dashed #e5e7eb; page-break-inside:avoid; }
+  .cert-page:last-child { border-bottom:none; }
+  @media print {
+    .cert-page { page-break-after:always; }
+    .cert-page:last-child { page-break-after:avoid; }
+    .no-print { display:none !important; }
+  }
+  .print-btn { position:fixed; bottom:24px; right:24px; background:#F47920; color:#fff; border:none; border-radius:8px; padding:12px 24px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.2); }
+</style>
+</head><body>
+<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
+<div class="cover">
+  <div style="font-size:13px;color:#F47920;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">J&amp;D Western Electric — Safety Certifications</div>
+  <div class="cover-title">${esc(workerName)}</div>
+  <div class="cover-sub">${certs.length} ticket${certs.length!==1?'s':''} exported · Generated ${today}</div>
+</div>
+${certPages}
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+}
+
+async function deleteWorkerCert(certId, userId) {
+  if (!confirm('Delete this certification? This cannot be undone.')) return;
+  try {
+    const res = await fetch(`/api/certifications/${certId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    _allCerts = _allCerts.filter(c => c.id !== certId);
+    // Refresh the profile modal with remaining certs for this worker
+    const remaining = _allCerts.filter(c => c.user_id === userId);
+    if (!remaining.length) {
+      document.getElementById('worker-profile-modal').style.display = 'none';
+    } else {
+      openWorkerProfile(userId);
+    }
+    renderCertsTable();
+  } catch { alert('Delete failed — please try again.'); }
+}
+
+let _fleetDocsVehicleId = null;
+
+async function loadFleetMaintenance() {
+  const tbody = $('fleet-maintenance-tbody');
+  tbody.innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--gray-400);">Loading…</td></tr>`;
+  try {
+    const vehicles = await fetch('/api/vehicles/maintenance-status').then(r => r.json());
+    if (!vehicles.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--gray-400);">No vehicles in fleet. Add vehicles in the Fleet admin section.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = vehicles.map(v => {
+      const statusBadge = v.oil_change_status === 'overdue'
+        ? `<span style="background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;">⚠ OVERDUE</span>`
+        : v.oil_change_status === 'due_soon'
+        ? `<span style="background:#fef9c3;color:#854d0e;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;">Due Soon (${v.km_until_oil_change} km)</span>`
+        : v.oil_change_status === 'ok'
+        ? `<span style="background:#dcfce7;color:#166534;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;">OK (${v.km_until_oil_change} km)</span>`
+        : `<span style="font-size:11px;color:var(--gray-400);">—</span>`;
+      const odo = v.current_odometer ? v.current_odometer.toLocaleString() + ' km' : '—';
+      const nextOil = v.next_oil_change_km ? v.next_oil_change_km.toLocaleString() + ' km' : '—';
+      const lastInsp = v.last_inspection_date || '—';
+      return `<tr>
+        <td style="font-weight:700;">${v.unit_number || '—'}</td>
+        <td>${[v.year, v.make, v.model].filter(Boolean).join(' ') || '—'}</td>
+        <td>${v.license_plate || '—'}</td>
+        <td>${odo}</td>
+        <td>${nextOil}</td>
+        <td>${statusBadge}</td>
+        <td style="font-size:12px;color:var(--gray-500);">${lastInsp}</td>
+        <td><button class="btn btn-secondary btn-sm" onclick="openFleetDocs(${v.id},'${(v.unit_number||'Vehicle').replace(/'/g,"\\'")}')">📁 Records</button></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:#dc2626;">Failed to load fleet data.</td></tr>`;
+  }
+}
+
+async function openFleetDocs(vehicleId, unitLabel) {
+  _fleetDocsVehicleId = vehicleId;
+  $('fleet-docs-title').textContent = `Records — ${unitLabel}`;
+  $('fleet-docs-modal').style.display = 'flex';
+  $('btn-fleet-add-record').onclick = () => {
+    $('fleet-docs-modal').style.display = 'none';
+    $('fleet-upload-vehicle-id').value = vehicleId;
+    $('fleet-upload-name').value = '';
+    $('fleet-upload-file').value = '';
+    $('fleet-upload-notes').value = '';
+    $('fleet-upload-modal').style.display = 'flex';
+  };
+  await renderFleetDocs(vehicleId);
+}
+
+async function renderFleetDocs(vehicleId) {
+  $('fleet-docs-list').innerHTML = 'Loading…';
+  try {
+    const docs = await fetch(`/api/vehicles/${vehicleId}/documents`).then(r => r.json());
+    if (!docs.length) { $('fleet-docs-list').innerHTML = '<p style="color:var(--gray-400);font-size:13px;">No records uploaded yet.</p>'; return; }
+    $('fleet-docs-list').innerHTML = docs.map(d => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);">
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;">${d.name}</div>
+          <div style="font-size:11px;color:var(--gray-400);">${d.uploaded_by} · ${(d.uploaded_at||'').slice(0,10)}</div>
+          ${d.notes ? `<div style="font-size:11px;color:var(--gray-500);">${d.notes}</div>` : ''}
+        </div>
+        <a href="/api/vehicles/${vehicleId}/documents/${d.id}/file" target="_blank" class="btn btn-secondary btn-sm">View</a>
+        <button class="btn btn-danger btn-sm" onclick="deleteFleetDoc(${vehicleId},${d.id})">🗑</button>
+      </div>`).join('');
+  } catch(e) {
+    $('fleet-docs-list').innerHTML = '<p style="color:#dc2626;font-size:13px;">Failed to load records.</p>';
+  }
+}
+
+async function deleteFleetDoc(vehicleId, docId) {
+  if (!confirm('Delete this record?')) return;
+  await fetch(`/api/vehicles/${vehicleId}/documents/${docId}`, { method: 'DELETE' });
+  renderFleetDocs(vehicleId);
+}
+
+$('btn-fleet-upload-submit').addEventListener('click', async () => {
+  const vehicleId = $('fleet-upload-vehicle-id').value;
+  const name = $('fleet-upload-name').value.trim();
+  const file = $('fleet-upload-file').files[0];
+  if (!name || !file) { showToast('Document name and file are required', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const btn = $('btn-fleet-upload-submit');
+    btn.disabled = true; btn.textContent = 'Uploading…';
+    try {
+      const res = await fetch(`/api/vehicles/${vehicleId}/documents`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, file_type: file.type, data_url: reader.result, notes: $('fleet-upload-notes').value.trim() })
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      $('fleet-upload-modal').style.display = 'none';
+      showToast('Record uploaded', 'success');
+      loadFleetMaintenance();
+    } catch(e) { showToast('Upload failed', 'error'); }
+    finally { btn.disabled = false; btn.textContent = 'Upload'; }
+  };
+  reader.readAsDataURL(file);
+});
+
+$('nav-panel-schedules').addEventListener('click', e => { e.preventDefault(); showPanelSchedulesView(); });
+
+// ── Panel Schedules View ──
+let _allPanelSchedules = [], _allPanelArchived = [];
+
+function showPanelSchedulesView() {
+  hideAllSpecialViews();
+  $('panel-schedules-view').style.display = 'block';
+  setNavActive('nav-panel-schedules');
+  loadPanelSchedules();
+}
+
+async function loadPanelSchedules() {
+  $('ps-list-wrap').innerHTML = `<div style="padding:32px;text-align:center;color:var(--gray-400);">Loading…</div>`;
+  try {
+    const [activeRes, projRes] = await Promise.all([
+      fetch('/api/panel-schedules'),
+      fetch('/api/project-folders/all?status=active')
+    ]);
+    _allPanelSchedules = activeRes.ok ? await activeRes.json() : [];
+    const projects = projRes.ok ? await projRes.json() : [];
+    const psel = $('ps-filter-project');
+    psel.innerHTML = '<option value="">All Projects</option>' +
+      projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    renderPanelScheduleTable();
+  } catch { $('ps-list-wrap').innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-400);">Failed to load</div>`; }
+}
+
+function renderPanelScheduleTable() {
+  const search = ($('ps-search').value || '').toLowerCase();
+  const projFilter = $('ps-filter-project').value;
+  let list = _allPanelSchedules;
+  if (search) list = list.filter(s => (s.panel_name+s.schedule_number+(s.project_name||'')).toLowerCase().includes(search));
+  if (projFilter) list = list.filter(s => String(s.project_id) === projFilter);
+  const wrap = $('ps-list-wrap');
+  if (!list.length) {
+    wrap.innerHTML = `<div style="padding:40px;text-align:center;color:var(--gray-400);"><h3 style="font-size:15px;margin-bottom:6px;color:var(--gray-500);">No panel schedules found</h3></div>`;
+    return;
+  }
+  const rows = list.map(s => `<tr style="cursor:pointer;" onclick="openPanelScheduleDetail(${s.id})">
+    <td style="font-weight:600;">${esc(s.panel_name)}</td>
+    <td style="font-size:12px;color:var(--gray-500);">${esc(s.schedule_number)}</td>
+    <td>${esc(s.voltage||'')}</td>
+    <td>${s.main_breaker ? s.main_breaker+' A' : '—'}</td>
+    <td>${s.num_circuits}</td>
+    <td>${esc(s.project_name||'—')}</td>
+    <td>${esc(s.created_by)}</td>
+    <td>${s.updated_at ? s.updated_at.slice(0,10) : s.created_at.slice(0,10)}</td>
+  </tr>`).join('');
+  wrap.innerHTML = `<div style="overflow-x:auto;"><table class="po-table">
+    <thead><tr><th>Panel Name</th><th>Schedule #</th><th>Voltage</th><th>Main Breaker</th><th>Circuits</th><th>Project</th><th>Created By</th><th>Last Updated</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+$('ps-search').addEventListener('input', renderPanelScheduleTable);
+$('ps-filter-project').addEventListener('change', renderPanelScheduleTable);
+
+$('ps-archive-toggle').addEventListener('click', () => {
+  const panel = $('ps-archive-panel');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  $('ps-archive-toggle').textContent = open ? 'Hide ▴' : 'Show ▾';
+  if (open) loadPanelArchived();
+});
+
+async function loadPanelArchived() {
+  $('ps-archive-wrap').innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-400);">Loading…</div>`;
+  try {
+    const res = await fetch('/api/panel-schedules/archived');
+    _allPanelArchived = res.ok ? await res.json() : [];
+    renderPanelArchiveTable();
+  } catch { $('ps-archive-wrap').innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-400);">Failed to load</div>`; }
+}
+
+function renderPanelArchiveTable() {
+  if (!_allPanelArchived.length) {
+    $('ps-archive-wrap').innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-400);">No archived panel schedules.</div>`;
+    return;
+  }
+  const rows = _allPanelArchived.map(s => `<tr>
+    <td style="font-weight:600;">${esc(s.panel_name)}</td>
+    <td style="font-size:12px;color:var(--gray-500);">${esc(s.schedule_number)}</td>
+    <td>${esc(s.voltage||'')}</td>
+    <td>${esc(s.project_name||'—')}</td>
+    <td>${esc(s.created_by)}</td>
+    <td>${s.archived_at ? s.archived_at.slice(0,10) : ''}</td>
+    <td style="text-align:right;">
+      <button onclick="unarchivePanelSchedule(${s.id})" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);">Restore</button>
+    </td>
+  </tr>`).join('');
+  $('ps-archive-wrap').innerHTML = `<div style="overflow-x:auto;"><table class="po-table">
+    <thead><tr><th>Panel Name</th><th>Schedule #</th><th>Voltage</th><th>Project</th><th>Created By</th><th>Archived</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+async function openPanelScheduleDetail(id) {
+  window.open('panel-schedule.html', '_blank');
+}
+
+async function unarchivePanelSchedule(id) {
+  const res = await fetch(`/api/panel-schedules/${id}/unarchive`, { method: 'PATCH' });
+  if (res.ok) { showToast('Panel schedule restored', 'success'); loadPanelArchived(); loadPanelSchedules(); }
+  else showToast('Failed to restore', 'error');
 }
 
 function setNavActive(navId) {
