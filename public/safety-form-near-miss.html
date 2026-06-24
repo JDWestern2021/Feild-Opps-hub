@@ -637,8 +637,8 @@
       setDraftStatus('Submitted');
       Safety.toast('Near Miss Report submitted', 'success');
       btn.textContent = 'Submitted ✓'; btn.disabled = false;
-    } catch (err) {
-      Safety.toast('Submit failed — saved as draft', 'error');
+    } catch(e) {
+      Safety.toast('Submission failed: ' + e.message, 'error');
       btn.textContent = 'Submit Report'; btn.disabled = false;
     }
   });

@@ -755,8 +755,8 @@
       setDraftStatus('Submitted');
       Safety.toast('Truck Inspection submitted', 'success');
       btn.textContent = 'Submitted ✓'; btn.disabled = false;
-    } catch {
-      Safety.toast('Submit failed — saved as draft', 'error');
+    } catch(e) {
+      Safety.toast('Submission failed: ' + e.message, 'error');
       btn.textContent = 'Submit Inspection'; btn.disabled = false;
     }
   });

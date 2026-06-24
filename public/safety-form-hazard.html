@@ -843,16 +843,26 @@
   document.getElementById('btn-submit').addEventListener('click', async () => {
     const data = collectFormData();
 
-    // Validate required fields
-    if (!data.date)        { Safety.toast('Date is required', 'error'); document.getElementById('f-date').focus(); return; }
-    if (!data.supervisor)  { Safety.toast('Supervisor name is required', 'error'); document.getElementById('f-supervisor').focus(); return; }
-    if (!data.site_address && !data.geo?.address){ Safety.toast('Site address or GPS location is required', 'error'); document.getElementById('f-site-address').focus(); return; }
-    if (!data.scope)       { Safety.toast('Scope of work is required', 'error'); document.getElementById('f-scope').focus(); return; }
+    // Validate required fields — highlight in red and scroll to first problem
+    const _err = (msg, elId) => {
+      Safety.toast(msg, 'error');
+      const el = elId ? document.getElementById(elId) : null;
+      if (el) {
+        el.style.border = '2px solid #ef4444';
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+        el.addEventListener('input', () => el.style.border = '', { once: true });
+      }
+    };
+    if (!data.date)       { _err('⚠ Date is required — please fill in the date at the top.', 'f-date'); return; }
+    if (!data.supervisor) { _err('⚠ Supervisor name is required.', 'f-supervisor'); return; }
+    if (!data.site_address && !data.geo?.address) { _err('⚠ Site address is required — type it in or use GPS.', 'f-site-address'); return; }
+    if (!data.scope)      { _err('⚠ Scope of work is required — describe what work is being done.', 'f-scope'); return; }
     if (!data.workers?.length || !data.workers.some(w => w.name)) {
-      Safety.toast('At least one worker must be listed', 'error'); return;
+      Safety.toast('⚠ At least one worker must be listed in the Workers on Site section.', 'error'); return;
     }
     if (!data.hazards?.length || !data.hazards.some(h => h.hazard)) {
-      Safety.toast('At least one hazard must be identified', 'error'); return;
+      Safety.toast('⚠ At least one hazard must be identified — fill in the Hazard field.', 'error'); return;
     }
 
     const btn = document.getElementById('btn-submit');
@@ -972,13 +982,11 @@
               <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Hazard</th>
               <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Risk</th>
               <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Control Measure</th>
-              <th style="padding:4px 6px;text-align:left;border:1px solid #ddd;">Responsible</th>
             </tr>
             ${(data.hazards||[]).map(h=>`<tr>
               <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.hazard||'')}</td>
               <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.risk||'')}</td>
               <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.control||'')}</td>
-              <td style="padding:4px 6px;border:1px solid #ddd;">${Safety.esc(h.person||'')}</td>
             </tr>`).join('')}
           </table>`
         },
