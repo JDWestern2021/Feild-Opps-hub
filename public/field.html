@@ -481,12 +481,12 @@
 
     function initCanvas() {
       const rect = canvas.getBoundingClientRect();
-      canvas.width  = rect.width  * (window.devicePixelRatio || 1);
-      canvas.height = rect.height * (window.devicePixelRatio || 1);
+      // No DPR scaling — canvas pixels match CSS pixels 1:1, eliminates mobile offset bugs
+      canvas.width  = Math.round(rect.width)  || 320;
+      canvas.height = Math.round(rect.height) || 160;
       ctx = canvas.getContext('2d');
-      ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
       ctx.strokeStyle = '#111827';
-      ctx.lineWidth   = 2.5;
+      ctx.lineWidth   = 2;
       ctx.lineCap     = 'round';
       ctx.lineJoin    = 'round';
     }
@@ -494,7 +494,9 @@
     function pos(e) {
       const r = canvas.getBoundingClientRect();
       const src = e.touches ? e.touches[0] : e;
-      return { x: src.clientX - r.left, y: src.clientY - r.top };
+      const scaleX = canvas.width  / r.width;
+      const scaleY = canvas.height / r.height;
+      return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
     }
 
     canvas.addEventListener('mousedown',  e => { drawing=true; const p=pos(e); lastX=p.x; lastY=p.y; });
