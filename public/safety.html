@@ -1487,7 +1487,7 @@
     finally { btn.disabled=false; btn.textContent='Save Settings'; }
   });
 
-  async function sfOpenFleetSettings() {
+  window.sfOpenFleetSettings = async function sfOpenFleetSettings() {
     const r = await fetch('/api/fleet-settings');
     if (r.ok) {
       const s = await r.json();

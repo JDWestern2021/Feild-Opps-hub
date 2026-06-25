@@ -2487,6 +2487,39 @@ function _expiryStatus(dateStr, warn1Days, warn2Days) {
   return 'ok';
 }
 
+// Fleet expiry notifications — fires at most once per day per vehicle/doc type
+const _fleetNotifyCache = new Map(); // key: `${vehicleId}-${type}` → date string
+async function _checkFleetExpiryNotifications(vehicles, notify_days_1, notify_days_2) {
+  try {
+    const { rows: admins } = await pool.query(`SELECT id FROM users WHERE role='admin' AND status='active'`);
+    if (!admins.length) return;
+    const today = new Date().toISOString().slice(0, 10);
+    for (const v of vehicles) {
+      for (const [field, label] of [['insurance_expiry','Insurance'],['registration_expiry','Registration']]) {
+        const dateStr = v[field];
+        if (!dateStr) continue;
+        const status = _expiryStatus(dateStr, notify_days_1, notify_days_2);
+        if (status === 'ok' || status === 'unknown') continue;
+        const cacheKey = `${v.id}-${field}`;
+        if (_fleetNotifyCache.get(cacheKey) === today) continue; // already notified today
+        _fleetNotifyCache.set(cacheKey, today);
+        const exp = new Date(dateStr + 'T00:00:00');
+        const daysLeft = Math.ceil((exp - new Date().setHours(0,0,0,0)) / 86400000);
+        const unit = v.unit_number || `Vehicle #${v.id}`;
+        const title = status === 'expired'
+          ? `⚠ ${label} EXPIRED — ${unit}`
+          : `⚠ ${label} expiring soon — ${unit}`;
+        const body = status === 'expired'
+          ? `${label} for ${unit} expired on ${dateStr}. Update the paperwork immediately.`
+          : `${label} for ${unit} expires on ${dateStr} (${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining).`;
+        for (const a of admins) {
+          await createNotification(a.id, 'fleet_expiry', title, body, '/safety.html#fleet');
+        }
+      }
+    }
+  } catch (e) { console.error('Fleet expiry notify error:', e.message); }
+}
+
 // Vehicle maintenance status (for office dashboard)
 app.get('/api/vehicles/maintenance-status', requireAdmin, async (req, res) => {
   try {
@@ -2509,6 +2542,8 @@ app.get('/api/vehicles/maintenance-status', requireAdmin, async (req, res) => {
         registration_expiry_status: _expiryStatus(v.registration_expiry, notify_days_1, notify_days_2),
       };
     });
+    // Fire expiry notifications in background (non-blocking)
+    _checkFleetExpiryNotifications(rows, notify_days_1, notify_days_2).catch(() => {});
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
