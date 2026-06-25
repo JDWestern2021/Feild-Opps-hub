@@ -281,6 +281,8 @@ async function initSchema() {
   await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS next_oil_change_km INTEGER`);
   await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS last_oil_change_date TEXT`);
   await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS last_inspection_date TEXT`);
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_expiry TEXT`);
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS registration_expiry TEXT`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS vehicle_documents (

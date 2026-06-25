@@ -458,6 +458,7 @@
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
       <button class="btn btn-secondary btn-sm" id="sf-vehicle-add-btn">+ Add Vehicle</button>
       <button class="btn btn-secondary btn-sm" id="sf-fleet-profile-refresh">↻ Refresh</button>
+      <button class="btn btn-secondary btn-sm" onclick="sfOpenFleetSettings()">⚙ Settings</button>
     </div>
     <div id="sf-vehicle-profile-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;"></div>
 
@@ -546,6 +547,31 @@
   </div>
 </div>
 
+<!-- Fleet Notification Settings Modal -->
+<div id="sf-fleet-settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:380px;margin:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="font-size:15px;font-weight:800;margin:0;">Fleet Notification Settings</h3>
+      <button onclick="document.getElementById('sf-fleet-settings-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <p style="font-size:13px;color:#6b7280;margin:0 0 16px;">Set how many days before insurance or registration expiry to show warnings on the fleet dashboard.</p>
+    <div style="display:grid;gap:12px;">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">First Warning (days before expiry)</label>
+        <input type="number" id="sf-fleet-notify-1" class="form-control" min="1" max="365" value="30"/>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Second Warning (days before expiry)</label>
+        <input type="number" id="sf-fleet-notify-2" class="form-control" min="1" max="365" value="7"/>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">
+      <button onclick="document.getElementById('sf-fleet-settings-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
+      <button id="sf-fleet-settings-save" class="btn btn-primary" style="background:#F47920;">Save Settings</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add/Edit Vehicle Modal -->
 <div id="sf-vehicle-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:560;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:12px;padding:24px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;">
@@ -563,7 +589,17 @@
       <div><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">VIN</label><input type="text" id="sf-v-vin" class="form-control"/></div>
     </div>
     <div style="margin-bottom:16px;"><label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px;">Notes</label><textarea id="sf-v-notes" class="form-control" rows="2" style="resize:vertical;"></textarea></div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Insurance Expiry</label>
+            <input type="date" id="sf-v-ins-expiry" class="form-control"/>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Registration Expiry</label>
+            <input type="date" id="sf-v-reg-expiry" class="form-control"/>
+          </div>
+        </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
       <button id="sf-vehicle-modal-delete" class="btn btn-danger btn-sm" style="display:none;margin-right:auto;">Delete Vehicle</button>
       <button onclick="document.getElementById('sf-vehicle-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
       <button id="sf-vehicle-modal-save" class="btn btn-primary" style="background:var(--orange,#F47920);">Save Vehicle</button>
@@ -1257,6 +1293,19 @@
         : v.current_odometer
         ? `<span style="color:#166534;font-size:11px;font-weight:700;">✅ Oil change OK</span>`
         : `<span style="color:#9ca3af;font-size:11px;">No odometer data</span>`;
+      function _expiryBadge(status, dateStr, label) {
+        const styles = {
+          expired:  { bg:'#fee2e2', color:'#991b1b', text:`⚠ EXPIRED` },
+          critical: { bg:'#ffedd5', color:'#9a3412', text:`⚠ Expires soon` },
+          warning:  { bg:'#fef9c3', color:'#854d0e', text:`Expires ${dateStr||''}` },
+          ok:       { bg:'#dcfce7', color:'#166534', text:`✓ Valid` },
+          unknown:  { bg:'#f3f4f6', color:'#6b7280', text:`—` },
+        };
+        const s = styles[status] || styles.unknown;
+        return `<span style="background:${s.bg};color:${s.color};font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;display:inline-block;">${label}: ${s.text}</span>`;
+      }
+      const insBadge = _expiryBadge(v.insurance_expiry_status, v.insurance_expiry, 'Ins');
+      const regBadge = _expiryBadge(v.registration_expiry_status, v.registration_expiry, 'Reg');
       const vehicleName = [v.year, v.make, v.model].filter(Boolean).join(' ') || 'Unknown Vehicle';
       const lastInsp = v.last_inspection_date ? `Last insp: ${v.last_inspection_date}` : 'No inspections';
       return `<div style="background:${bg};border:1.5px solid ${border};border-radius:10px;padding:14px;cursor:pointer;" onclick="sfOpenVehicleProfile(${v.id})" onmouseover="this.style.boxShadow='0 2px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
@@ -1264,6 +1313,7 @@
         <div style="font-size:12px;color:#374151;margin-bottom:8px;">${_sfEsc(vehicleName)}</div>
         <div style="font-size:11px;color:#6b7280;margin-bottom:6px;">${_sfEsc(v.license_plate||'No plate')}</div>
         ${oilBadge}
+        <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">${insBadge}${regBadge}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${lastInsp}</div>
         <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="event.stopPropagation();sfOpenVehicleProfile(${v.id})">View Profile →</button>
@@ -1413,8 +1463,10 @@
       document.getElementById('sf-v-plate').value = v.license_plate || '';
       document.getElementById('sf-v-vin').value   = v.vin || '';
       document.getElementById('sf-v-notes').value = v.notes || '';
+      document.getElementById('sf-v-ins-expiry').value  = v.insurance_expiry || '';
+      document.getElementById('sf-v-reg-expiry').value  = v.registration_expiry || '';
     } else {
-      ['sf-v-unit','sf-v-year','sf-v-make','sf-v-model','sf-v-plate','sf-v-vin','sf-v-notes'].forEach(id => document.getElementById(id).value = '');
+      ['sf-v-unit','sf-v-year','sf-v-make','sf-v-model','sf-v-plate','sf-v-vin','sf-v-notes','sf-v-ins-expiry','sf-v-reg-expiry'].forEach(id => document.getElementById(id).value = '');
     }
     document.getElementById('sf-vehicle-modal').style.display = 'flex';
   }
@@ -1422,11 +1474,34 @@
   document.getElementById('sf-vehicle-add-btn').addEventListener('click', () => sfOpenVehicleEdit(null));
   document.getElementById('sf-fleet-profile-refresh').addEventListener('click', () => { loadVehicleProfiles(); sfLoadSchedMaint(); });
 
+  document.getElementById('sf-fleet-settings-save').addEventListener('click', async () => {
+    const d1 = parseInt(document.getElementById('sf-fleet-notify-1').value);
+    const d2 = parseInt(document.getElementById('sf-fleet-notify-2').value);
+    if (!d1 || !d2 || d2 >= d1) { alert('First warning must be greater than second warning, and both must be positive numbers.'); return; }
+    const btn = document.getElementById('sf-fleet-settings-save'); btn.disabled=true; btn.textContent='Saving…';
+    try {
+      await fetch('/api/fleet-settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ notify_days_1:d1, notify_days_2:d2 }) });
+      document.getElementById('sf-fleet-settings-modal').style.display='none';
+      loadVehicleProfiles();
+    } catch { alert('Failed to save settings.'); }
+    finally { btn.disabled=false; btn.textContent='Save Settings'; }
+  });
+
+  async function sfOpenFleetSettings() {
+    const r = await fetch('/api/fleet-settings');
+    if (r.ok) {
+      const s = await r.json();
+      document.getElementById('sf-fleet-notify-1').value = s.notify_days_1;
+      document.getElementById('sf-fleet-notify-2').value = s.notify_days_2;
+    }
+    document.getElementById('sf-fleet-settings-modal').style.display='flex';
+  }
+
   document.getElementById('sf-vehicle-modal-save').addEventListener('click', async () => {
     const unit = document.getElementById('sf-v-unit').value.trim();
     if (!unit) { alert('Unit number is required.'); return; }
     const editId = document.getElementById('sf-vehicle-edit-id').value;
-    const payload = { unit_number:unit, year:document.getElementById('sf-v-year').value.trim()||null, make:document.getElementById('sf-v-make').value.trim()||null, model:document.getElementById('sf-v-model').value.trim()||null, license_plate:document.getElementById('sf-v-plate').value.trim()||null, vin:document.getElementById('sf-v-vin').value.trim()||null, notes:document.getElementById('sf-v-notes').value.trim()||null };
+    const payload = { unit_number:unit, year:document.getElementById('sf-v-year').value.trim()||null, make:document.getElementById('sf-v-make').value.trim()||null, model:document.getElementById('sf-v-model').value.trim()||null, license_plate:document.getElementById('sf-v-plate').value.trim()||null, vin:document.getElementById('sf-v-vin').value.trim()||null, notes:document.getElementById('sf-v-notes').value.trim()||null, insurance_expiry:document.getElementById('sf-v-ins-expiry').value||null, registration_expiry:document.getElementById('sf-v-reg-expiry').value||null };
     const btn = document.getElementById('sf-vehicle-modal-save'); btn.disabled=true; btn.textContent='Saving…';
     try {
       const res = await fetch(editId ? `/api/vehicles/${editId}` : '/api/vehicles', { method:editId?'PATCH':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });

@@ -2066,6 +2066,8 @@ app.post('/api/safety', requireAuth, async (req, res) => {
         if (form_data.odometer) { updates.push(`current_odometer=$${idx++}`); vals.push(parseInt(form_data.odometer)); }
         if (form_data.oil_change_km) { updates.push(`next_oil_change_km=$${idx++}`); vals.push(parseInt(form_data.oil_change_km)); }
         updates.push(`last_inspection_date=$${idx++}`); vals.push(form_data.date || new Date().toISOString().slice(0,10));
+        if (form_data.ins_expiry)  { updates.push(`insurance_expiry=$${idx++}`);     vals.push(form_data.ins_expiry); }
+        if (form_data.reg_expiry)  { updates.push(`registration_expiry=$${idx++}`);  vals.push(form_data.reg_expiry); }
         if (updates.length) {
           vals.push(vid);
           await pool.query(`UPDATE vehicles SET ${updates.join(',')} WHERE id=$${idx}`, vals);
@@ -2413,6 +2415,24 @@ app.post('/api/uploads/safety-photo', requireAuth, safetyPhotoUpload.single('pho
 // VEHICLES
 // ─────────────────────────────────────────────
 
+// Fleet notification settings
+app.get('/api/fleet-settings', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT key, value FROM app_settings WHERE key IN ('fleet_notify_days_1','fleet_notify_days_2')`);
+    const s = Object.fromEntries(rows.map(r => [r.key, parseInt(r.value)]));
+    res.json({ notify_days_1: s.fleet_notify_days_1 ?? 30, notify_days_2: s.fleet_notify_days_2 ?? 7 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/fleet-settings', requireAdmin, async (req, res) => {
+  try {
+    const { notify_days_1, notify_days_2 } = req.body;
+    if (notify_days_1 != null) await pool.query(`INSERT INTO app_settings(key,value) VALUES('fleet_notify_days_1',$1) ON CONFLICT(key) DO UPDATE SET value=$1`, [String(parseInt(notify_days_1))]);
+    if (notify_days_2 != null) await pool.query(`INSERT INTO app_settings(key,value) VALUES('fleet_notify_days_2',$1) ON CONFLICT(key) DO UPDATE SET value=$1`, [String(parseInt(notify_days_2))]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/vehicles', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM vehicles WHERE status != 'deleted' ORDER BY unit_number`);
@@ -2436,26 +2456,45 @@ app.post('/api/vehicles', requireAdmin, async (req, res) => {
 app.patch('/api/vehicles/:id', requireAdmin, async (req, res) => {
   try {
     const { unit_number, make, model, year, vin, license_plate, status, notes,
-            current_odometer, next_oil_change_km, last_oil_change_date } = req.body;
+            current_odometer, next_oil_change_km, last_oil_change_date,
+            insurance_expiry, registration_expiry } = req.body;
     await pool.query(
       `UPDATE vehicles SET unit_number=COALESCE($1,unit_number), make=COALESCE($2,make), model=COALESCE($3,model),
        year=COALESCE($4,year), vin=COALESCE($5,vin), license_plate=COALESCE($6,license_plate),
        status=COALESCE($7,status), notes=COALESCE($8,notes),
        current_odometer=COALESCE($10,current_odometer),
        next_oil_change_km=COALESCE($11,next_oil_change_km),
-       last_oil_change_date=COALESCE($12,last_oil_change_date)
+       last_oil_change_date=COALESCE($12,last_oil_change_date),
+       insurance_expiry=COALESCE($13,insurance_expiry),
+       registration_expiry=COALESCE($14,registration_expiry)
        WHERE id=$9`,
       [unit_number, make, model, year, vin, license_plate, status, notes, parseInt(req.params.id),
-       current_odometer || null, next_oil_change_km || null, last_oil_change_date || null]
+       current_odometer || null, next_oil_change_km || null, last_oil_change_date || null,
+       insurance_expiry || null, registration_expiry || null]
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+function _expiryStatus(dateStr, warn1Days, warn2Days) {
+  if (!dateStr) return 'unknown';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(dateStr + 'T00:00:00');
+  const daysLeft = Math.ceil((exp - today) / 86400000);
+  if (daysLeft < 0)          return 'expired';
+  if (daysLeft <= warn2Days) return 'critical';
+  if (daysLeft <= warn1Days) return 'warning';
+  return 'ok';
+}
+
 // Vehicle maintenance status (for office dashboard)
 app.get('/api/vehicles/maintenance-status', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM vehicles WHERE status != 'deleted' ORDER BY unit_number`);
+    const { rows: settingRows } = await pool.query(`SELECT key, value FROM app_settings WHERE key IN ('fleet_notify_days_1','fleet_notify_days_2')`);
+    const settings = Object.fromEntries(settingRows.map(r => [r.key, parseInt(r.value)]));
+    const notify_days_1 = settings.fleet_notify_days_1 ?? 30;
+    const notify_days_2 = settings.fleet_notify_days_2 ?? 7;
     const result = rows.map(v => {
       const kmUntil = (v.next_oil_change_km && v.current_odometer)
         ? v.next_oil_change_km - v.current_odometer : null;
@@ -2465,7 +2504,9 @@ app.get('/api/vehicles/maintenance-status', requireAdmin, async (req, res) => {
         oil_change_status: kmUntil === null ? 'unknown'
           : kmUntil <= 0 ? 'overdue'
           : kmUntil <= 500 ? 'due_soon'
-          : 'ok'
+          : 'ok',
+        insurance_expiry_status: _expiryStatus(v.insurance_expiry, notify_days_1, notify_days_2),
+        registration_expiry_status: _expiryStatus(v.registration_expiry, notify_days_1, notify_days_2),
       };
     });
     res.json(result);
@@ -2578,7 +2619,7 @@ app.get('/api/vehicles/:id/inspections', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, form_number, form_type, submitted_at, submitted_by, status, form_data
        FROM safety_forms
-       WHERE vehicle_id=$1 AND archived=0
+       WHERE (form_data->>'vehicle_id')::text = $1::text AND archived=0
        ORDER BY submitted_at DESC LIMIT 100`,
       [parseInt(req.params.id)]
     );
