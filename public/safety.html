@@ -1448,7 +1448,7 @@
   });
 
   // ── Add/Edit Vehicle Modal ───────────────────────────────────
-  function sfOpenVehicleEdit(vehicleId) {
+  window.sfOpenVehicleEdit = function sfOpenVehicleEdit(vehicleId) {
     const isEdit = !!vehicleId;
     document.getElementById('sf-vehicle-modal-title').textContent = isEdit ? 'Edit Vehicle' : 'Add Vehicle';
     document.getElementById('sf-vehicle-edit-id').value = vehicleId || '';

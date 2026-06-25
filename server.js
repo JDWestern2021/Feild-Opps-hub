@@ -2619,7 +2619,7 @@ app.get('/api/vehicles/:id/inspections', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, form_number, form_type, submitted_at, submitted_by, status, form_data
        FROM safety_forms
-       WHERE (form_data->>'vehicle_id')::text = $1::text AND archived=0
+       WHERE (form_data::jsonb->>'vehicle_id')::text = $1::text AND archived=0
        ORDER BY submitted_at DESC LIMIT 100`,
       [parseInt(req.params.id)]
     );
