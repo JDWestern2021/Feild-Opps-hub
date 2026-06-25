@@ -312,7 +312,7 @@ app.patch('/api/users/:id/permissions', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.params.id]);
   const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const valid = ['time_ticket','get_po','office_dashboard'];
+  const valid = ['time_ticket','get_po','office_dashboard','timesheet_edit','time_off_approve','receive_emails'];
   if (user.role==='admin' && !permissions.includes('office_dashboard')) {
     const { rows: ac } = await pool.query("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND status='active'");
     if (parseInt(ac[0].c) <= 1) return res.status(400).json({ error: 'Cannot revoke Office Dashboard access — at least one Office Admin must keep this permission.' });
