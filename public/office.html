@@ -2061,7 +2061,7 @@ async function openDetail(id, isArchived = false) {
       <div class="detail-field full" style="margin-bottom:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
           <label style="margin-bottom:0;">Work Description</label>
-          ${t.work_description ? `<button onclick="copyTicketWorkDesc(this,${JSON.stringify(t.work_description)})" style="padding:2px 10px;font-size:11px;background:transparent;border:1px solid var(--gray-300);border-radius:5px;cursor:pointer;color:var(--gray-600);">Copy</button>` : ''}
+          ${t.work_description ? `<button id="modal-copy-btn" style="padding:2px 10px;font-size:11px;background:transparent;border:1px solid var(--gray-300);border-radius:5px;cursor:pointer;color:var(--gray-600);">Copy</button>` : ''}
         </div>
         <div class="val" style="white-space:pre-wrap;line-height:1.6;">${esc(t.work_description)}</div>
       </div>
@@ -2155,7 +2155,16 @@ function openDetailFromTS(ticketId) {
 $('modal-back-ts').addEventListener('click', closeDetail);
 $('modal-close').addEventListener('click', closeDetail);
 $('modal-close-2').addEventListener('click', closeDetail);
-$('detail-modal').addEventListener('click', e => { if (e.target === $('detail-modal')) closeDetail(); });
+// Use mousedown to track where drag started — prevents closing when user drags text selection onto backdrop
+let _detailMousedownOnBackdrop = false;
+$('detail-modal').addEventListener('mousedown', e => { _detailMousedownOnBackdrop = e.target === $('detail-modal'); });
+$('detail-modal').addEventListener('click', e => { if (e.target === $('detail-modal') && _detailMousedownOnBackdrop) closeDetail(); });
+
+$('modal-body').addEventListener('click', e => {
+  const btn = e.target.closest('#modal-copy-btn');
+  if (!btn || !currentTicketData?.work_description) return;
+  copyTicketWorkDesc(btn, currentTicketData.work_description);
+});
 
 // ── Archive / Unarchive ──
 $('modal-archive').addEventListener('click', async () => {
