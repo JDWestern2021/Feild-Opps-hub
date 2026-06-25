@@ -525,6 +525,8 @@
       </div>
       <button onclick="document.getElementById('sf-vehicle-profile-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1;flex-shrink:0;">✕</button>
     </div>
+    <!-- Vehicle overview strip -->
+    <div id="vpm-overview" style="padding:12px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;"></div>
     <!-- Tab bar -->
     <div style="display:flex;border-bottom:2px solid #e5e7eb;">
       <button class="vpm-tab active" data-vtab="inspections" style="flex:1;padding:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:none;background:none;cursor:pointer;border-bottom:2px solid #F47920;color:#F47920;">Inspections</button>
@@ -1308,10 +1310,17 @@
       const regBadge = _expiryBadge(v.registration_expiry_status, v.registration_expiry, 'Reg');
       const vehicleName = [v.year, v.make, v.model].filter(Boolean).join(' ') || 'Unknown Vehicle';
       const lastInsp = v.last_inspection_date ? `Last insp: ${v.last_inspection_date}` : 'No inspections';
+      const odoText = v.current_odometer ? v.current_odometer.toLocaleString() + ' km' : '—';
       return `<div style="background:${bg};border:1.5px solid ${border};border-radius:10px;padding:14px;cursor:pointer;" onclick="sfOpenVehicleProfile(${v.id})" onmouseover="this.style.boxShadow='0 2px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
-        <div style="font-size:16px;font-weight:900;color:#111827;margin-bottom:2px;">${_sfEsc(v.unit_number||'—')}</div>
-        <div style="font-size:12px;color:#374151;margin-bottom:8px;">${_sfEsc(vehicleName)}</div>
-        <div style="font-size:11px;color:#6b7280;margin-bottom:6px;">${_sfEsc(v.license_plate||'No plate')}</div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:2px;">
+          <div style="font-size:16px;font-weight:900;color:#111827;">${_sfEsc(v.unit_number||'—')}</div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:13px;font-weight:800;color:#111827;">${odoText}</div>
+            <div style="font-size:10px;color:#9ca3af;">odometer</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#374151;margin-bottom:4px;">${_sfEsc(vehicleName)}</div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">${_sfEsc(v.license_plate||'No plate')}</div>
         ${oilBadge}
         <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">${insBadge}${regBadge}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${lastInsp}</div>
@@ -1337,6 +1346,23 @@
     document.querySelector('.vpm-tab[data-vtab="inspections"]').style.color='#F47920';
     document.querySelector('.vpm-tab[data-vtab="inspections"]').style.borderBottomColor='#F47920';
     document.getElementById('vpm-panel-inspections').style.display='block';
+    // Overview strip
+    const _stat = (status) => ({ expired:'#fee2e2|#991b1b', critical:'#ffedd5|#9a3412', warning:'#fef9c3|#854d0e', ok:'#dcfce7|#166534' }[status] || '#f3f4f6|#6b7280');
+    const _statLabel = (status, date) => ({ expired:`⚠ EXPIRED`, critical:`⚠ Expires ${date}`, warning:`Expires ${date}`, ok:`✓ Valid to ${date}` }[status] || '—');
+    const _tile = (label, value, sub) => `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;">
+      <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">${label}</div>
+      <div style="font-size:14px;font-weight:800;color:#111827;">${value}</div>
+      ${sub ? `<div style="font-size:10px;color:#6b7280;margin-top:1px;">${sub}</div>` : ''}
+    </div>`;
+    const _exTile = (label, status, date) => { const [bg,col] = _stat(status).split('|'); return `<div style="background:${bg};border:1px solid ${bg};border-radius:8px;padding:8px 10px;"><div style="font-size:10px;color:${col};font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">${label}</div><div style="font-size:12px;font-weight:800;color:${col};">${_statLabel(status,date)}</div></div>`; };
+    document.getElementById('vpm-overview').innerHTML = [
+      _tile('Odometer', v.current_odometer ? v.current_odometer.toLocaleString()+' km' : '—', v.last_inspection_date ? 'as of '+v.last_inspection_date : null),
+      _tile('License Plate', v.license_plate || '—'),
+      _tile('VIN', v.vin ? v.vin.slice(-8) : '—', v.vin ? '…'+v.vin.slice(-8) : null),
+      _exTile('Insurance', v.insurance_expiry_status || 'unknown', v.insurance_expiry || ''),
+      _exTile('Registration', v.registration_expiry_status || 'unknown', v.registration_expiry || ''),
+      _tile('Last Inspection', v.last_inspection_date || '—'),
+    ].join('');
     document.getElementById('sf-vehicle-profile-modal').style.display = 'flex';
     // Pre-populate schedule vehicle select
     document.getElementById('vpm-add-sched-btn').onclick = () => sfOpenSchedModal(null, vehicleId);
