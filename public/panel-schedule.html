@@ -1043,7 +1043,7 @@ window.addEventListener('afterprint', () => {
   const r = await fetch('/api/auth/me');
   if (!r.ok) { location.href = '/login.html'; return; }
   currentUser = await r.json();
-  if (currentUser.role !== 'admin') document.getElementById('btn-new-schedule').style.display = 'none';
+  // All authenticated users can create panel schedules
   const pr = await fetch('/api/project-folders/all?status=active');
   projects = pr.ok ? await pr.json() : [];
   loadSchedules();
