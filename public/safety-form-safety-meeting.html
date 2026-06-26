@@ -237,6 +237,9 @@
   let formId       = existingId;
   let _autosaveTimer = null;
   let _formStatus = 'Draft';
+  let _isOwner = !existingId;
+  let _loadedConductor = null;
+  let _originalConductedBy = null;
   let _meetingType = null;
   let _gammaUsed   = null;
   let _signatures  = {};
@@ -265,15 +268,14 @@
   (async () => {
     const team = await Safety._fetchTeam();
     const sel  = document.getElementById('f-conductor');
-    const existing = sel.value;
     team.forEach(u => {
       const opt = document.createElement('option');
       opt.value = u.name;
       opt.textContent = u.name;
       sel.appendChild(opt);
     });
-    if (existing) sel.value = existing;
-    else {
+    if (_loadedConductor) sel.value = _loadedConductor;
+    else if (!existingId) {
       const match = team.find(u => u.name === currentUser.name);
       if (match) sel.value = currentUser.name;
     }
@@ -378,7 +380,7 @@
       date:                document.getElementById('f-date').value,
       time:                document.getElementById('f-time').value,
       duration:            document.getElementById('f-duration').value.trim(),
-      conducted_by:        document.getElementById('f-conductor').value,
+      conducted_by:        _originalConductedBy || document.getElementById('f-conductor').value,
       project_id:          document.getElementById('f-project').value || null,
       meeting_type:        _meetingType,
       location:            document.getElementById('f-location').value.trim(),
@@ -445,6 +447,9 @@
         const fd = typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data;
         fillFormData(fd);
         _formStatus = form.status || 'Draft';
+        _isOwner = String(form.submitted_by_id) === String(currentUser.id) || currentUser.role === 'admin';
+        _loadedConductor    = fd?.conducted_by || null;
+        _originalConductedBy = fd?.conducted_by || null;
         document.getElementById('form-num-badge').textContent = form.form_number;
         document.getElementById('form-num-badge').style.display = '';
         if (form.status === 'Submitted') {
@@ -470,7 +475,7 @@
     const data = collectFormData();
     Safety.DraftManager.save('safety_meeting', formId || 'new', data);
     setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
-    if (formId && navigator.onLine && _formStatus !== 'Submitted') {
+    if (formId && navigator.onLine && _formStatus !== 'Submitted' && _isOwner) {
       try {
         await fetch(`/api/safety/${formId}`, {
           method: 'PATCH',

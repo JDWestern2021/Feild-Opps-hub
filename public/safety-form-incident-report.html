@@ -369,6 +369,9 @@
   const existingId = params.get('id') ? parseInt(params.get('id')) : null;
   let formId       = existingId;
   let _autosaveTimer = null;
+  let _formStatus    = 'Draft';
+  let _isOwner       = !existingId;
+  let _originalReportedBy = null;
 
   let _incidentType    = null;
   let _isSerious       = null;
@@ -738,7 +741,7 @@
     return {
       date:              document.getElementById('f-date').value,
       time:              document.getElementById('f-time').value,
-      reported_by:       document.getElementById('f-reported-by').value.trim() || currentUser.name,
+      reported_by:       _originalReportedBy || document.getElementById('f-reported-by').value.trim() || currentUser.name,
       incident_type:     _incidentType,
       is_serious:        _isSerious,
       wcb_required:      _wcbRequired,
@@ -906,6 +909,9 @@
         const form = await r.json();
         const fd = typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data;
         fillFormData(fd);
+        _formStatus = form.status || 'Draft';
+        _isOwner = String(form.submitted_by_id) === String(currentUser.id) || currentUser.role === 'admin';
+        _originalReportedBy = fd?.reported_by || null;
         document.getElementById('form-num-badge').textContent = form.form_number;
         document.getElementById('form-num-badge').style.display = '';
         if (form.status === 'Submitted') {
@@ -931,7 +937,7 @@
     const data = collectFormData();
     Safety.DraftManager.save('incident_report', formId || 'new', data);
     setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
-    if (formId && navigator.onLine) {
+    if (formId && navigator.onLine && _formStatus !== 'Submitted' && _isOwner) {
       try {
         await fetch(`/api/safety/${formId}`, {
           method: 'PATCH',

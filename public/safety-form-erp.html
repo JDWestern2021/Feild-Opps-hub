@@ -359,6 +359,9 @@
   let _autosaveTimer = null;
   let _formStatus    = 'Draft';
   let _aedOnSite     = null;
+  let _isOwner       = !existingId;
+  let _loadedForemanId    = null;
+  let _originalPreparedBy = null;
 
   // ── Scenario data ─────────────────────────────────────────
   const SCENARIOS = [
@@ -667,9 +670,11 @@
     };
     makeOpts('f-foreman', 'Select team member');
     makeOpts('f-first-aider', 'Select team member');
-    // Pre-select current user as foreman
-    const selfOpt = document.querySelector(`#f-foreman option[value="${currentUser.id}"]`);
-    if (selfOpt) selfOpt.selected = true;
+    if (_loadedForemanId) document.getElementById('f-foreman').value = _loadedForemanId;
+    else if (!existingId) {
+      const selfOpt = document.querySelector(`#f-foreman option[value="${currentUser.id}"]`);
+      if (selfOpt) selfOpt.selected = true;
+    }
   } catch {}
 
   // ── AED toggle ────────────────────────────────────────────
@@ -691,6 +696,7 @@
   function triggerAutosave() {
     clearTimeout(_autosaveTimer);
     _autosaveTimer = setTimeout(() => {
+      if (!_isOwner) return;
       Safety.DraftManager.save('erp', formId || 'new', collectFormData());
       setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
     }, 800);
@@ -719,7 +725,7 @@
   function collectFormData() {
     return {
       date:             get('f-date'),
-      prepared_by:      currentUser.name,
+      prepared_by:      _originalPreparedBy || currentUser.name,
       project_id:       get('f-project'),
       site_address:     _siteGeo.getValue(),
       foreman_id:       get('f-foreman'),
@@ -823,6 +829,9 @@
         const fd = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : (row.form_data || {});
         fillFormData(fd);
         _formStatus = row.status || 'Draft';
+        _isOwner = String(row.submitted_by_id) === String(currentUser.id) || currentUser.role === 'admin';
+        _loadedForemanId    = fd?.foreman_id    || null;
+        _originalPreparedBy = fd?.prepared_by   || null;
         if (row.form_number) {
           document.getElementById('form-num-badge').textContent = row.form_number;
           document.getElementById('form-num-badge').style.display = '';
