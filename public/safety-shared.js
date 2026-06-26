@@ -559,21 +559,6 @@
         const badge = w.user_id
           ? `<span class="wsign-team-badge">Team</span>`
           : `<span class="wsign-guest-badge">Guest</span>`;
-        let sigHtml = '';
-        if (w.signed_at && w.signature_data_url) {
-          sigHtml = `<div class="wsign-sig-area"><div class="wsign-sig-done">
-            <img src="${S.esc(w.signature_data_url)}" class="wsign-sig-img" alt="sig"/>
-            <div class="wsign-sig-meta">Signed ${S.fmtDT(w.signed_at)}</div>
-          </div></div>`;
-        } else {
-          const notifyBtn = w.user_id
-            ? `<button type="button" class="wsign-notify-btn" data-idx="${i}" data-action="notify">🔔 Notify</button>`
-            : '';
-          sigHtml = `<div class="wsign-sig-area"><div class="wsign-btn-row">
-            <button type="button" class="wsign-sign-btn" data-idx="${i}" data-action="sign">✍️ Sign Now</button>
-            ${notifyBtn}
-          </div></div>`;
-        }
         row.innerHTML = `
           <div class="wsign-row-info">
             <div class="wsign-avatar">${initials(w.name)}</div>
@@ -583,34 +568,17 @@
             </div>
             ${badge}
             <button type="button" class="wsign-remove-btn" data-idx="${i}" data-action="remove" title="Remove">✕</button>
-          </div>
-          ${sigHtml}`;
+          </div>`;
         listEl.appendChild(row);
       });
     }
 
-    listEl.addEventListener('click', async e => {
+    listEl.addEventListener('click', e => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const i = parseInt(btn.dataset.idx);
-      const action = btn.dataset.action;
-      if (action === 'remove') {
-        workers.splice(i, 1); renderWorkers(); if (onChange) onChange([...workers]); return;
-      }
-      if (action === 'sign') {
-        const result = await S.openSignatureModal({ prefillName: workers[i].name, skipName: true });
-        if (result) {
-          workers[i].signed_at = result.signed_at;
-          workers[i].signature_data_url = result.data_url;
-          renderWorkers(); if (onChange) onChange([...workers]);
-        }
-        return;
-      }
-      if (action === 'notify') {
-        // Mark as notification pending — the server pending-signatures panel picks it up
-        btn.textContent = '✓ Will be notified';
-        btn.disabled = true;
-        return;
+      if (btn.dataset.action === 'remove') {
+        workers.splice(i, 1); renderWorkers(); if (onChange) onChange([...workers]);
       }
     });
 

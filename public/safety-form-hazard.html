@@ -400,6 +400,8 @@
   let _autosaveTimer = null;
   let _formStatus = 'Draft';
   let _originalSubmittedBy = null;
+  let _isOwner = !existingId; // true for new forms; set properly after load
+  let _loadedSupervisor = null; // stored separately so dropdown race can't lose it
 
   // ── PPE setup ─────────────────────────────────────────────
   const PPE_ITEMS = [
@@ -658,7 +660,7 @@
       time:         document.getElementById('f-time').value,
       project_id:   document.getElementById('f-project').value || null,
       job_number:   document.getElementById('f-job-num').value.trim(),
-      supervisor:   document.getElementById('f-supervisor').value.trim(),
+      supervisor:   document.getElementById('f-supervisor').value.trim() || _loadedSupervisor || '',
       weather:      document.getElementById('f-weather').value,
       site_address: document.getElementById('f-site-address').value.trim(),
       geo:          _geoVal.getValue ? _geoVal.getValue() : null,
@@ -698,7 +700,14 @@
     if (d.workers?.length)  _workerRep.setValue(d.workers);
     if (d.hazards?.length)  _hazardRep.setValue(d.hazards);
     if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
-    if (d.worker_signatures) { _signatures = d.worker_signatures; renderSignoffList(d.workers || []); }
+    // Merge worker_signatures with any old per-worker signatures stored on worker objects
+    const sigs = { ...(d.worker_signatures || {}) };
+    (d.workers || []).forEach(w => {
+      if (w.signed_at && w.signature_data_url && !sigs[w.name])
+        sigs[w.name] = { signer_name: w.name, signed_at: w.signed_at, data_url: w.signature_data_url };
+    });
+    _signatures = sigs;
+    renderSignoffList(d.workers || []);
   }
 
   // ── Set default date ──────────────────────────────────────
@@ -718,6 +727,8 @@
         fillFormData(fd);
         _formStatus = form.status || 'Draft';
         _originalSubmittedBy = fd?.submitted_by || null;
+        _loadedSupervisor = fd?.supervisor || null;
+        _isOwner = String(form.submitted_by_id) === String(currentUser.id) || currentUser.role === 'admin';
         document.getElementById('form-num-badge').textContent = form.form_number;
         document.getElementById('form-num-badge').style.display = '';
         if (form.status === 'Submitted') {
@@ -766,20 +777,26 @@
     }
   }
 
-  // Populate supervisor dropdown with team members, pre-select current user
+  // Populate supervisor dropdown with team members
   (async () => {
     const team = await Safety._fetchTeam();
     const sel = document.getElementById('f-supervisor');
-    const existing = sel.value;
     team.forEach(u => {
       const opt = document.createElement('option');
       opt.value = u.name;
       opt.textContent = u.name;
       sel.appendChild(opt);
     });
-    // Restore saved value or default to current user
-    if (existing) sel.value = existing;
-    else if (!sel.value) sel.value = currentUser.name;
+    // If the loaded supervisor isn't in the team list (e.g. former employee),
+    // insert them as an option so the dropdown still shows their name correctly.
+    if (_loadedSupervisor && !team.find(u => u.name === _loadedSupervisor)) {
+      const ghost = document.createElement('option');
+      ghost.value = _loadedSupervisor;
+      ghost.textContent = _loadedSupervisor;
+      sel.insertBefore(ghost, sel.options[1]);
+    }
+    if (_loadedSupervisor) sel.value = _loadedSupervisor;
+    else if (!existingId)  sel.value = currentUser.name;
   })();
 
   // ── Auto-save ─────────────────────────────────────────────
@@ -798,7 +815,7 @@
     Safety.DraftManager.save('hazard_assessment', formId || 'new', data);
     setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
     // Also save to server if we already have an ID
-    if (formId && navigator.onLine && _formStatus !== 'Submitted') {
+    if (formId && navigator.onLine && _formStatus !== 'Submitted' && _isOwner) {
       try {
         await fetch(`/api/safety/${formId}`, {
           method: 'PATCH',
