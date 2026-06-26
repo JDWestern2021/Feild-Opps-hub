@@ -186,10 +186,62 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
 }
 
 #print-area { display: none; }
-@media(max-width:600px){.form-grid{grid-template-columns:1fr;}}
+@media(max-width:600px){
+  .form-grid{grid-template-columns:1fr;}
+  /* Make the circuit table horizontally scrollable and description inputs legible */
+  .panel-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .panel-grid { font-size: 11px; min-width: 540px; }
+  .panel-grid td input { font-size: 11px; min-width: 80px; }
+}
+
+/* Description input popover for mobile — shows a full-width edit bar when focused */
+#desc-popover {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 9999;
+  background: #fff;
+  padding: 10px 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.22);
+  border-bottom: 2px solid var(--orange);
+  gap: 8px;
+  align-items: center;
+}
+#desc-popover.active { display: flex; }
+#desc-popover-label {
+  font-size: 11px; font-weight: 700; color: #6b7280;
+  white-space: nowrap; flex-shrink: 0;
+}
+#desc-popover-input {
+  flex: 1;
+  font-size: 16px; /* 16px prevents iOS auto-zoom */
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+  padding: 8px 10px;
+  outline: none;
+}
+#desc-popover-input:focus { border-color: var(--orange); }
+#desc-popover-done {
+  flex-shrink: 0;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 14px;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
+
+<!-- Mobile description popover -->
+<div id="desc-popover">
+  <span id="desc-popover-label">Circuit</span>
+  <input type="text" id="desc-popover-input" autocomplete="off" autocorrect="on" spellcheck="true"/>
+  <button id="desc-popover-done" type="button">Done</button>
+</div>
 
 <header>
   <a class="brand" href="index.html">
@@ -1047,6 +1099,59 @@ window.addEventListener('afterprint', () => {
   const pr = await fetch('/api/project-folders/all?status=active');
   projects = pr.ok ? await pr.json() : [];
   loadSchedules();
+})();
+
+// ── Mobile description popover ────────────────────────────────
+// On touch devices, tapping a description input opens a full-width
+// bar at the top of the screen so the text is fully visible while typing.
+(function() {
+  const isMobile = () => window.matchMedia('(max-width: 600px)').matches || ('ontouchstart' in window);
+  const popover  = document.getElementById('desc-popover');
+  const popInput = document.getElementById('desc-popover-input');
+  const popLabel = document.getElementById('desc-popover-label');
+  const popDone  = document.getElementById('desc-popover-done');
+  let _activeInput = null;
+
+  function openPopover(input) {
+    if (!isMobile()) return;
+    _activeInput = input;
+    // Work out a circuit label from the input's name attribute e.g. la_desc_3 → Circuit 7 Left
+    const name = input.name || '';
+    const m = name.match(/^([lr][ab])_desc_(\d+)$/);
+    let label = 'Description';
+    if (m) {
+      const side  = m[1][0] === 'l' ? 'Left' : 'Right';
+      const tier  = m[1][1] === 'a' ? '' : ' (Tandem B)';
+      const slot  = parseInt(m[2]);
+      const cct   = m[1][0] === 'l' ? slot * 2 + 1 : slot * 2 + 2;
+      label = `Circuit ${cct} ${side}${tier}`;
+    }
+    popLabel.textContent = label;
+    popInput.value = input.value;
+    popover.classList.add('active');
+    // Small delay so the popover renders before we focus (avoids double keyboard)
+    setTimeout(() => { popInput.focus(); popInput.select(); }, 60);
+  }
+
+  function closePopover() {
+    if (_activeInput) {
+      _activeInput.value = popInput.value;
+      // Trigger change event so any save hooks fire
+      _activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    popover.classList.remove('active');
+    _activeInput = null;
+    popInput.blur();
+  }
+
+  popDone.addEventListener('click', closePopover);
+  popInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); closePopover(); } });
+
+  // Delegate focus on description inputs inside the circuit grid
+  document.getElementById('circuit-tbody').addEventListener('focusin', e => {
+    const input = e.target.closest('input[type="text"]');
+    if (input && isMobile()) openPopover(input);
+  });
 })();
 </script>
 </body>
