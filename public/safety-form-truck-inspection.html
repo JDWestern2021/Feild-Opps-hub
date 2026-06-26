@@ -492,7 +492,7 @@
 
   // ── Defaults ─────────────────────────────────────────────
   document.getElementById('f-date').value = Safety.todayISO();
-  document.getElementById('f-inspector').value = currentUser.name;
+  if (!existingId) document.getElementById('f-inspector').value = currentUser.name;
 
   // ── Load vehicles ─────────────────────────────────────────
   try {
@@ -591,7 +591,7 @@
   function collectFormData() {
     return {
       date:           get('f-date'),
-      inspector:      currentUser.name,
+      inspector:      document.getElementById('f-inspector').value.trim() || currentUser.name,
       vehicle_id:     get('f-vehicle'),
       vehicle_manual: get('f-vehicle-manual'),
       make:           get('f-make'),
@@ -677,6 +677,15 @@
     }
 
     if (d.photos?.length) { _photos = d.photos; renderPhotos(); }
+    if (d.inspector_signature && _inspSig) {
+      _inspSig = Safety.renderSignatureField({
+        container: document.getElementById('inspector-sig-container'),
+        label: 'Inspector Signature',
+        required: true,
+        value: d.inspector_signature,
+        onChange: () => triggerAutosave()
+      });
+    }
   }
 
   // ── Load existing / draft ─────────────────────────────────

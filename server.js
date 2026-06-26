@@ -2169,7 +2169,7 @@ app.post('/api/safety/notify-workers', requireAuth, async (req, res) => {
         urows[0].id,
         'signature_request',
         `Please sign Safety Form ${form_number || form_id}`,
-        `You have been added to a hazard assessment that requires your signature.`,
+        `You have been added to a safety form that requires your signature.`,
         link
       );
       count++;
@@ -2208,7 +2208,7 @@ app.patch('/api/notifications/read-all', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-async function sendSignatureRequestEmails(form_data, formId, formNumber, submitterName) {
+async function sendSignatureRequestEmails(form_data, formId, formNumber, submitterName, form_type) {
   const workers = form_data?.workers || [];
   const sigs    = form_data?.worker_signatures || {};
   const unsigned = workers.filter(w => w.name && !Object.keys(sigs).some(k => k.toLowerCase() === w.name.toLowerCase()));
@@ -2225,13 +2225,25 @@ async function sendSignatureRequestEmails(form_data, formId, formNumber, submitt
   const fromAddr = await getSetting('smtp_from', 'noreply@jdwesternelectric.ca');
   const appUrl   = await getSetting('app_url', 'http://localhost:3000');
 
+  const FORM_URLS = {
+    hazard_assessment: 'safety-form-hazard.html',
+    fall_protection:   'safety-form-fall.html',
+    aerial_lift:       'safety-form-aerial-lift.html',
+    erp:               'safety-form-erp.html',
+    near_miss:         'safety-form-near-miss.html',
+    incident_report:   'safety-form-incident-report.html',
+    safety_meeting:    'safety-form-safety-meeting.html',
+    maint_vehicle:     'safety-form-truck-inspection.html',
+  };
+  const formPage = FORM_URLS[form_type] || 'safety-form-hazard.html';
+
   for (const w of unsigned) {
     const { rows } = await pool.query(
       `SELECT email FROM users WHERE LOWER(TRIM(name))=LOWER(TRIM($1)) AND status='active' LIMIT 1`,
       [w.name]
     );
     if (!rows[0]?.email) continue;
-    const link = `${appUrl}/safety-form-hazard.html?id=${formId}`;
+    const link = `${appUrl}/${formPage}?id=${formId}`;
     await transport.sendMail({
       from: fromAddr,
       to: rows[0].email,

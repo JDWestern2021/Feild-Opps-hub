@@ -330,7 +330,7 @@
   // ── Defaults ─────────────────────────────────────────────
   document.getElementById('f-date').value = Safety.todayISO();
   document.getElementById('f-time').value = new Date().toTimeString().slice(0, 5);
-  document.getElementById('f-reported-by').value = currentUser.name;
+  if (!existingId) document.getElementById('f-reported-by').value = currentUser.name;
 
   // ── Load projects ─────────────────────────────────────────
   try {
@@ -494,7 +494,7 @@
     return {
       date:              document.getElementById('f-date').value,
       time:              document.getElementById('f-time').value,
-      reported_by:       currentUser.name,
+      reported_by:       document.getElementById('f-reported-by').value.trim() || currentUser.name,
       nm_type:           _nmType,
       project_id:        document.getElementById('f-project').value || null,
       location:          document.getElementById('f-location').value.trim(),
@@ -552,6 +552,15 @@
     if (d.people_involved?.length) { _people = d.people_involved; renderPeople(); }
     if (d.photos?.length) { _photos = d.photos; renderPhotos(); }
     if (d.corrective_actions?.length) _caRep.setValue(d.corrective_actions);
+    if (d.supervisor_signature && _supSig) {
+      _supSig = Safety.renderSignatureField({
+        container: document.getElementById('sup-sig-container'),
+        label: 'Supervisor Signature',
+        required: true,
+        value: d.supervisor_signature,
+        onChange: () => triggerAutosave()
+      });
+    }
   }
 
   // ── Load existing / draft ─────────────────────────────────

@@ -384,7 +384,7 @@
   // ── Defaults ──────────────────────────────────────────────
   document.getElementById('f-date').value = Safety.todayISO();
   document.getElementById('f-time').value = new Date().toTimeString().slice(0, 5);
-  document.getElementById('f-reported-by').value = currentUser.name;
+  if (!existingId) document.getElementById('f-reported-by').value = currentUser.name;
   document.getElementById('sup-name-note').textContent = 'Reporting supervisor: ' + currentUser.name;
 
   // ── Load projects ─────────────────────────────────────────
@@ -738,7 +738,7 @@
     return {
       date:              document.getElementById('f-date').value,
       time:              document.getElementById('f-time').value,
-      reported_by:       currentUser.name,
+      reported_by:       document.getElementById('f-reported-by').value.trim() || currentUser.name,
       incident_type:     _incidentType,
       is_serious:        _isSerious,
       wcb_required:      _wcbRequired,

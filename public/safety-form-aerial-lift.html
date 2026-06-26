@@ -396,7 +396,7 @@
 
   // ── Defaults ──────────────────────────────────────────────────
   document.getElementById('f-date').value     = Safety.todayISO();
-  document.getElementById('f-operator').value = currentUser.name;
+  if (!existingId) document.getElementById('f-operator').value = currentUser.name;
 
   // ── Collect / fill ────────────────────────────────────────────
   function collectFormData() {
