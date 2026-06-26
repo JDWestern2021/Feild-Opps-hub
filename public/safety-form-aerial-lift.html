@@ -286,6 +286,8 @@
   const existingId = params.get('id') ? parseInt(params.get('id')) : null;
   let formId       = existingId;
   let _autosaveTimer = null;
+  let _formStatus = 'Draft';
+  let _originalSubmittedBy = null;
   let _resultVal   = null;
   let _sigField, _geoVal, _pfnaControls, _pfnaStructure, _pfnaSafety, _caRep;
 
@@ -460,6 +462,9 @@
       if (r.ok) {
         const form = await r.json();
         fillFormData(typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data);
+        _formStatus = form.status || 'Draft';
+        const _loadedFd2 = typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data;
+        _originalSubmittedBy = _loadedFd2?.operator || null;
         document.getElementById('form-num-badge').textContent = form.form_number;
         document.getElementById('form-num-badge').style.display = '';
         if (form.status === 'Submitted') {
@@ -482,7 +487,7 @@
     Safety.DraftManager.save('aerial_lift', formId || 'new', collectFormData());
     setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
     if (formId && navigator.onLine) {
-      try { await fetch(`/api/safety/${formId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ form_data: collectFormData(), status:'Draft' }) }); } catch {}
+      try { if (_formStatus !== 'Submitted') await fetch(`/api/safety/${formId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ form_data: collectFormData(), status:'Draft' }) }); } catch {}
     }
   }
   ['f-date','f-operator','f-project','f-equip-type','f-make-model','f-serial','f-max-height','f-weather','f-comments']

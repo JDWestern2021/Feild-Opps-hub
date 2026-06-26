@@ -259,6 +259,8 @@
   const existingId = params.get('id') ? parseInt(params.get('id')) : null;
   let formId       = existingId;
   let _autosaveTimer = null;
+  let _formStatus = 'Draft';
+  let _originalSubmittedBy = null;
   let _resultVal   = null;
   let _defectFlag  = null;
   let _sigField, _geoVal, _pfnaHarness, _pfnaLanyard, _pfnaCarabiner, _caRep;
@@ -412,6 +414,9 @@
       if (r.ok) {
         const form = await r.json();
         fillFormData(typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data);
+        _formStatus = form.status || 'Draft';
+        const _loadedFd = typeof form.form_data === 'string' ? JSON.parse(form.form_data) : form.form_data;
+        _originalSubmittedBy = _loadedFd?.inspector || null;
         document.getElementById('form-num-badge').textContent = form.form_number;
         document.getElementById('form-num-badge').style.display = '';
         if (form.status === 'Submitted') {
@@ -434,7 +439,7 @@
     Safety.DraftManager.save('fall_protection', formId || 'new', collectFormData());
     setDraftStatus('Draft saved locally · ' + new Date().toLocaleTimeString());
     if (formId && navigator.onLine) {
-      try { await fetch(`/api/safety/${formId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ form_data: collectFormData(), status:'Draft' }) }); } catch {}
+      try { if (_formStatus !== 'Submitted') await fetch(`/api/safety/${formId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ form_data: collectFormData(), status:'Draft' }) }); } catch {}
     }
   }
   ['f-date','f-inspector','f-project','f-task','f-harness-serial','f-harness-model',

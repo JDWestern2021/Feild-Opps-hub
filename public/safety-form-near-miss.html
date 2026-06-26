@@ -324,6 +324,7 @@
   const existingId = params.get('id') ? parseInt(params.get('id')) : null;
   let formId       = existingId;
   let _autosaveTimer = null;
+  let _formStatus    = 'Draft';
   let _nmType        = null;
   let _potentialSev  = null;
 
@@ -571,6 +572,7 @@
         const row = await r.json();
         const fd = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : (row.form_data || {});
         fillFormData(fd);
+        _formStatus = row.status || 'Draft';
         if (row.form_number) {
           document.getElementById('form-num-badge').textContent = row.form_number;
           document.getElementById('form-num-badge').style.display = '';
