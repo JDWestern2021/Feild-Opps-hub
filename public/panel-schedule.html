@@ -55,7 +55,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
 .panel-grid td.pole-col{width:50px;}
 /* Alternate slot shading */
 .slot-a-row td{background:#fafafa;}
-.slot-b-row td{background:#fff;}
+.slot-b-row td{background:#fafafa;}
 .slot-b-row td.cct-num{background:#f3f4f6;}
 .slot-separator{border-top:2px solid var(--gray-200)!important;}
 .mp-merged-l{vertical-align:middle !important;text-align:center !important;background:#eff6ff !important;border-left:3px solid var(--navy) !important;white-space:normal !important;}
@@ -624,15 +624,16 @@ function computePoleGroups(circuits, slots) {
     while (j < poleFlat.length) {
       const p = poleFlat[j];
       if (p >= 2) {
-        let span = 1;
-        while (j + span < poleFlat.length && poleFlat[j + span] === p) span++;
-        if (span >= 2) {
-          r[j] = { span, isLeader: true };
-          for (let k = 1; k < span; k++) r[j+k] = { span, isLeader: false };
-          j += span; continue;
-        }
+        // A positions (even index): span = p*2 (full slots — 2-pole = 4 half-rows)
+        // B positions (odd index):  span = p   (boundary-straddle — 2-pole = 2 half-rows)
+        const isA = (j % 2 === 0);
+        const span = Math.min(isA ? p * 2 : p, poleFlat.length - j);
+        r[j] = { span, isLeader: true };
+        for (let k = 1; k < span; k++) r[j+k] = { span, isLeader: false };
+        j += span;
+      } else {
+        j++;
       }
-      j++;
     }
     return r;
   }
