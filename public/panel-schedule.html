@@ -58,6 +58,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
 .slot-b-row td{background:#fff;}
 .slot-b-row td.cct-num{background:#f3f4f6;}
 .slot-separator{border-top:2px solid var(--gray-200)!important;}
+.mp-merged-l{vertical-align:middle !important;text-align:center !important;background:#eff6ff !important;border-left:3px solid var(--navy) !important;white-space:normal !important;}
+.mp-merged-r{vertical-align:middle !important;text-align:center !important;background:#fff7ed !important;border-right:3px solid var(--orange-dark) !important;white-space:normal !important;}
+.mp-merged-l input,.mp-merged-l select,.mp-merged-r input,.mp-merged-r select{background:transparent !important;text-align:center;}
 
 /* Schedule list */
 .sched-table{width:100%;border-collapse:collapse;font-size:13px;}
@@ -535,39 +538,82 @@ function poleSel(name, val='') {
 // left slot = odd circuit number, right slot = even circuit number
 // Row A: left (1A), right (2A). Row B: left (1B), right (2B). Then left (3A), right (4A) etc.
 function rebuildCircuitGrid(circuitData = []) {
-  const n    = parseInt(document.getElementById('f-num-circuits').value) || 24;
-  const slots = n / 2; // number of slot-pairs
+  const n     = parseInt(document.getElementById('f-num-circuits').value) || 24;
+  const slots = n / 2;
   const tbody = document.getElementById('circuit-tbody');
+  const grp   = computePoleGroups(circuitData, slots);
   let html = '';
   for (let i = 0; i < slots; i++) {
-    const leftSlot  = (i * 2) + 1;  // 1, 3, 5 ...
-    const rightSlot = (i * 2) + 2;  // 2, 4, 6 ...
-    const d = circuitData[i] || {};
-    const sep = i > 0 ? 'slot-separator' : '';
-    // Row A
-    html += `<tr class="slot-a-row">
-      <td><input type="text" name="la_desc_${i}" value="${esc(d.la_desc||d.left_desc||'')}" placeholder="Description"/></td>
-      <td class="pole-col">${poleSel('la_poles_'+i, d.la_poles||d.left_poles||'')}</td>
-      <td class="amp-col">${ampSel('la_amps_'+i, d.la_amps||d.left_amps||'')}</td>
-      <td class="cct-num row-a ${sep}">${leftSlot}A</td>
-      <td class="cct-num row-a ${sep}">${rightSlot}A</td>
-      <td class="amp-col">${ampSel('ra_amps_'+i, d.ra_amps||d.right_amps||'')}</td>
-      <td class="pole-col">${poleSel('ra_poles_'+i, d.ra_poles||d.right_poles||'')}</td>
-      <td><input type="text" name="ra_desc_${i}" value="${esc(d.ra_desc||d.right_desc||'')}" placeholder="Description"/></td>
-    </tr>`;
-    // Row B
-    html += `<tr class="slot-b-row">
-      <td><input type="text" name="lb_desc_${i}" value="${esc(d.lb_desc||'')}" placeholder="Tandem B (optional)"/></td>
-      <td class="pole-col">${poleSel('lb_poles_'+i, d.lb_poles||'')}</td>
-      <td class="amp-col">${ampSel('lb_amps_'+i, d.lb_amps||'')}</td>
-      <td class="cct-num">${leftSlot}B</td>
-      <td class="cct-num">${rightSlot}B</td>
-      <td class="amp-col">${ampSel('rb_amps_'+i, d.rb_amps||'')}</td>
-      <td class="pole-col">${poleSel('rb_poles_'+i, d.rb_poles||'')}</td>
-      <td><input type="text" name="rb_desc_${i}" value="${esc(d.rb_desc||'')}" placeholder="Tandem B (optional)"/></td>
-    </tr>`;
+    const d  = circuitData[i] || {};
+    const ls = (i * 2) + 1;
+    const rs = (i * 2) + 2;
+    const lG = grp.left[i];
+    const rG = grp.right[i];
+    const sep = (i > 0 && lG !== -1) ? 'slot-separator' : '';
+
+    let lA = '', lB = '', rA = '', rB = '';
+    if (lG === null) {
+      lA = `<td><input type="text" name="la_desc_${i}" value="${esc(d.la_desc||d.left_desc||'')}" placeholder="Description"/></td>
+            <td class="pole-col">${poleSel('la_poles_'+i, d.la_poles||d.left_poles||'')}</td>
+            <td class="amp-col">${ampSel('la_amps_'+i, d.la_amps||d.left_amps||'')}</td>`;
+      lB = `<td><input type="text" name="lb_desc_${i}" value="${esc(d.lb_desc||'')}" placeholder="Tandem B (optional)"/></td>
+            <td class="pole-col">${poleSel('lb_poles_'+i, d.lb_poles||'')}</td>
+            <td class="amp-col">${ampSel('lb_amps_'+i, d.lb_amps||'')}</td>`;
+    } else if (lG > 0) {
+      const span = lG * 2;
+      lA = `<td class="mp-merged-l" rowspan="${span}"><input type="text" name="la_desc_${i}" value="${esc(d.la_desc||d.left_desc||'')}" placeholder="Description"/></td>
+            <td class="mp-merged-l" rowspan="${span}">${poleSel('la_poles_'+i, d.la_poles||d.left_poles||'')}</td>
+            <td class="mp-merged-l" rowspan="${span}">${ampSel('la_amps_'+i, d.la_amps||d.left_amps||'')}</td>`;
+      lB = '';
+    } // else -1: consumed, lA/lB stay ''
+
+    if (rG === null) {
+      rA = `<td class="amp-col">${ampSel('ra_amps_'+i, d.ra_amps||d.right_amps||'')}</td>
+            <td class="pole-col">${poleSel('ra_poles_'+i, d.ra_poles||d.right_poles||'')}</td>
+            <td><input type="text" name="ra_desc_${i}" value="${esc(d.ra_desc||d.right_desc||'')}" placeholder="Description"/></td>`;
+      rB = `<td class="amp-col">${ampSel('rb_amps_'+i, d.rb_amps||'')}</td>
+            <td class="pole-col">${poleSel('rb_poles_'+i, d.rb_poles||'')}</td>
+            <td><input type="text" name="rb_desc_${i}" value="${esc(d.rb_desc||'')}" placeholder="Tandem B (optional)"/></td>`;
+    } else if (rG > 0) {
+      const span = rG * 2;
+      rA = `<td class="mp-merged-r" rowspan="${span}">${ampSel('ra_amps_'+i, d.ra_amps||d.right_amps||'')}</td>
+            <td class="mp-merged-r" rowspan="${span}">${poleSel('ra_poles_'+i, d.ra_poles||d.right_poles||'')}</td>
+            <td class="mp-merged-r" rowspan="${span}"><input type="text" name="ra_desc_${i}" value="${esc(d.ra_desc||d.right_desc||'')}" placeholder="Description"/></td>`;
+      rB = '';
+    } // else -1: consumed
+
+    html += `<tr class="slot-a-row">${lA}
+      <td class="cct-num row-a ${sep}">${ls}A</td>
+      <td class="cct-num row-a ${sep}">${rs}A</td>
+      ${rA}</tr>
+    <tr class="slot-b-row">${lB}
+      <td class="cct-num">${ls}B</td>
+      <td class="cct-num">${rs}B</td>
+      ${rB}</tr>`;
   }
   tbody.innerHTML = html;
+}
+
+function computePoleGroups(circuits, slots) {
+  const left  = new Array(slots).fill(null);
+  const right = new Array(slots).fill(null);
+  for (const [arr, key] of [[left,'la_poles'],[right,'ra_poles']]) {
+    let i = 0;
+    while (i < slots) {
+      const p = parseInt((circuits[i]||{})[key]) || 1;
+      if (p >= 2 && p <= 3) {
+        let span = 1;
+        while (span < p && i + span < slots && parseInt((circuits[i+span]||{})[key]) === p) span++;
+        if (span >= 2) {
+          arr[i] = span;
+          for (let j = 1; j < span; j++) arr[i+j] = -1;
+          i += span; continue;
+        }
+      }
+      i++;
+    }
+  }
+  return { left, right };
 }
 
 function collectCircuitData() {
@@ -607,32 +653,55 @@ function openModal(schedule = null) {
 function buildViewRows(s) {
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
   const slots = s.num_circuits / 2;
+  const grp   = computePoleGroups(circuits, slots);
   let html = '';
   for (let i = 0; i < slots; i++) {
     const d = circuits[i] || {};
-    const leftSlot  = (i*2)+1;
-    const rightSlot = (i*2)+2;
-    const sep = i > 0 ? 'slot-separator' : '';
-    html += `<tr class="slot-a-row">
-      <td>${esc(d.la_desc||d.left_desc||'')}</td>
-      <td class="cct-num" style="background:transparent;">${d.la_poles||d.left_poles||''}</td>
-      <td class="cct-num" style="background:transparent;">${d.la_amps||d.left_amps||''}</td>
-      <td class="cct-num row-a ${sep}">${leftSlot}A</td>
-      <td class="cct-num row-a ${sep}">${rightSlot}A</td>
-      <td class="cct-num" style="background:transparent;">${d.ra_amps||d.right_amps||''}</td>
-      <td class="cct-num" style="background:transparent;">${d.ra_poles||d.right_poles||''}</td>
-      <td>${esc(d.ra_desc||d.right_desc||'')}</td>
-    </tr>
-    <tr class="slot-b-row">
-      <td style="color:var(--gray-400);font-style:italic;">${esc(d.lb_desc||'')}</td>
-      <td class="cct-num" style="background:transparent;">${d.lb_poles||''}</td>
-      <td class="cct-num" style="background:transparent;">${d.lb_amps||''}</td>
-      <td class="cct-num">${leftSlot}B</td>
-      <td class="cct-num">${rightSlot}B</td>
-      <td class="cct-num" style="background:transparent;">${d.rb_amps||''}</td>
-      <td class="cct-num" style="background:transparent;">${d.rb_poles||''}</td>
-      <td style="color:var(--gray-400);font-style:italic;">${esc(d.rb_desc||'')}</td>
-    </tr>`;
+    const ls = (i*2)+1;
+    const rs = (i*2)+2;
+    const lG = grp.left[i];
+    const rG = grp.right[i];
+    const sep = (i > 0 && lG !== -1) ? 'slot-separator' : '';
+
+    let lA = '', lB = '', rA = '', rB = '';
+    if (lG === null) {
+      lA = `<td>${esc(d.la_desc||d.left_desc||'')}</td>
+            <td class="cct-num" style="background:transparent;">${d.la_poles||d.left_poles||''}</td>
+            <td class="cct-num" style="background:transparent;">${d.la_amps||d.left_amps||''}</td>`;
+      lB = `<td>${esc(d.lb_desc||'')}</td>
+            <td class="cct-num" style="background:transparent;">${d.lb_poles||''}</td>
+            <td class="cct-num" style="background:transparent;">${d.lb_amps||''}</td>`;
+    } else if (lG > 0) {
+      const span = lG * 2;
+      lA = `<td class="mp-merged-l" rowspan="${span}">${esc(d.la_desc||d.left_desc||'')}</td>
+            <td class="cct-num mp-merged-l" rowspan="${span}" style="background:transparent;">${d.la_poles||d.left_poles||''}</td>
+            <td class="cct-num mp-merged-l" rowspan="${span}" style="background:transparent;">${d.la_amps||d.left_amps||''}</td>`;
+      lB = '';
+    }
+
+    if (rG === null) {
+      rA = `<td class="cct-num" style="background:transparent;">${d.ra_amps||d.right_amps||''}</td>
+            <td class="cct-num" style="background:transparent;">${d.ra_poles||d.right_poles||''}</td>
+            <td>${esc(d.ra_desc||d.right_desc||'')}</td>`;
+      rB = `<td class="cct-num" style="background:transparent;">${d.rb_amps||''}</td>
+            <td class="cct-num" style="background:transparent;">${d.rb_poles||''}</td>
+            <td>${esc(d.rb_desc||'')}</td>`;
+    } else if (rG > 0) {
+      const span = rG * 2;
+      rA = `<td class="cct-num mp-merged-r" rowspan="${span}" style="background:transparent;">${d.ra_amps||d.right_amps||''}</td>
+            <td class="cct-num mp-merged-r" rowspan="${span}" style="background:transparent;">${d.ra_poles||d.right_poles||''}</td>
+            <td class="mp-merged-r" rowspan="${span}">${esc(d.ra_desc||d.right_desc||'')}</td>`;
+      rB = '';
+    }
+
+    html += `<tr class="slot-a-row">${lA}
+      <td class="cct-num row-a ${sep}">${ls}A</td>
+      <td class="cct-num row-a ${sep}">${rs}A</td>
+      ${rA}</tr>
+    <tr class="slot-b-row">${lB}
+      <td class="cct-num">${ls}B</td>
+      <td class="cct-num">${rs}B</td>
+      ${rB}</tr>`;
   }
   return html;
 }
@@ -664,31 +733,54 @@ function printSchedule(s, widthIn, heightIn) {
   if (!s) return;
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
   const slots = s.num_circuits / 2;
+  const grp   = computePoleGroups(circuits, slots);
+  const ML = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-left:3px solid #1a3a5c;background:#eff6ff;padding:3px 4px;overflow:hidden;';
+  const MR = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-right:3px solid #7a2e0a;background:#fff7ed;padding:3px 4px;overflow:hidden;';
   let rows = '';
   for (let i = 0; i < slots; i++) {
-    const d = circuits[i] || {};
+    const d  = circuits[i] || {};
     const ls = (i*2)+1, rs = (i*2)+2;
-    rows += `
-      <tr class="row-a slot-top">
-        <td class="desc-td">${esc(d.la_desc||d.left_desc||'')}</td>
-        <td class="pole-td">${d.la_poles||d.left_poles||''}</td>
-        <td class="amp-td">${d.la_amps||d.left_amps||''}</td>
-        <td class="cct-td">${ls}A</td>
-        <td class="cct-td">${rs}A</td>
-        <td class="amp-td">${d.ra_amps||d.right_amps||''}</td>
-        <td class="pole-td">${d.ra_poles||d.right_poles||''}</td>
-        <td class="desc-td">${esc(d.ra_desc||d.right_desc||'')}</td>
-      </tr>
-      <tr class="row-b">
-        <td class="desc-td" style="font-style:italic;color:#888;">${esc(d.lb_desc||'')}</td>
-        <td class="pole-td">${d.lb_poles||''}</td>
-        <td class="amp-td">${d.lb_amps||''}</td>
-        <td class="cct-td">${ls}B</td>
-        <td class="cct-td">${rs}B</td>
-        <td class="amp-td">${d.rb_amps||''}</td>
-        <td class="pole-td">${d.rb_poles||''}</td>
-        <td class="desc-td" style="font-style:italic;color:#888;">${esc(d.rb_desc||'')}</td>
-      </tr>`;
+    const lG = grp.left[i];
+    const rG = grp.right[i];
+    const slotTop = lG !== -1 ? 'slot-top' : '';
+
+    let lA = '', lB = '', rA = '', rB = '';
+    if (lG === null) {
+      lA = `<td class="desc-td">${esc(d.la_desc||d.left_desc||'')}</td>
+            <td class="pole-td">${d.la_poles||d.left_poles||''}</td>
+            <td class="amp-td">${d.la_amps||d.left_amps||''}</td>`;
+      lB = `<td class="desc-td">${esc(d.lb_desc||'')}</td>
+            <td class="pole-td">${d.lb_poles||''}</td>
+            <td class="amp-td">${d.lb_amps||''}</td>`;
+    } else if (lG > 0) {
+      const span = lG * 2;
+      lA = `<td style="${ML}" rowspan="${span}">${esc(d.la_desc||d.left_desc||'')}</td>
+            <td class="pole-td" style="vertical-align:middle;text-align:center;background:#eff6ff;" rowspan="${span}">${d.la_poles||d.left_poles||''}</td>
+            <td class="amp-td" style="vertical-align:middle;text-align:center;background:#eff6ff;" rowspan="${span}">${d.la_amps||d.left_amps||''}</td>`;
+      lB = '';
+    }
+
+    if (rG === null) {
+      rA = `<td class="amp-td">${d.ra_amps||d.right_amps||''}</td>
+            <td class="pole-td">${d.ra_poles||d.right_poles||''}</td>
+            <td class="desc-td">${esc(d.ra_desc||d.right_desc||'')}</td>`;
+      rB = `<td class="amp-td">${d.rb_amps||''}</td>
+            <td class="pole-td">${d.rb_poles||''}</td>
+            <td class="desc-td">${esc(d.rb_desc||'')}</td>`;
+    } else if (rG > 0) {
+      const span = rG * 2;
+      rA = `<td class="amp-td" style="vertical-align:middle;text-align:center;background:#fff7ed;" rowspan="${span}">${d.ra_amps||d.right_amps||''}</td>
+            <td class="pole-td" style="vertical-align:middle;text-align:center;background:#fff7ed;" rowspan="${span}">${d.ra_poles||d.right_poles||''}</td>
+            <td style="${MR}" rowspan="${span}">${esc(d.ra_desc||d.right_desc||'')}</td>`;
+      rB = '';
+    }
+
+    rows += `<tr class="row-a ${slotTop}">${lA}
+        <td class="cct-td">${ls}A</td><td class="cct-td">${rs}A</td>
+        ${rA}</tr>
+      <tr class="row-b">${lB}
+        <td class="cct-td">${ls}B</td><td class="cct-td">${rs}B</td>
+        ${rB}</tr>`;
   }
 
   const logoSrc = window.location.origin + '/logo-bolt.png';
@@ -707,23 +799,27 @@ function printSchedule(s, widthIn, heightIn) {
   body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
 
   /* The schedule occupies exactly w×h on the letter page — no zoom, no scaling */
+  @page { size:letter portrait; margin:0; }
   .print-page {
     width:${w}in;
     height:${h}in;
     overflow:hidden;
     display:flex;
     flex-direction:column;
+    margin-left:0.22in;
   }
 
   /* Header */
-  .ph-outer { background:#111827; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; gap:8px; }
-  .ph-logo-block { display:flex; align-items:center; gap:10px; min-width:0; overflow:hidden; }
-  .ph-logo { width:54px; height:54px; border-radius:6px; flex-shrink:0; }
-  .ph-company-name { font-size:20px; font-weight:900; color:#fff; letter-spacing:.02em; line-height:1.1; white-space:nowrap; }
-  .ph-phone { font-size:11px; color:rgba(255,255,255,.75); margin-top:3px; white-space:nowrap; }
+  .ph-outer { background:#111827; padding:10px 14px; display:flex; align-items:center; gap:14px; flex-shrink:0; }
+  .ph-logo { width:68px; height:68px; border-radius:6px; flex-shrink:0; }
+  .ph-center { flex:1; text-align:center; }
+  .ph-company-name { font-size:20px; font-weight:900; color:#fff; letter-spacing:.03em; line-height:1.1; }
+  .ph-phone { font-size:20px; font-weight:900; color:#F47920; margin-top:4px; letter-spacing:.04em; }
   .ph-title-block { text-align:right; flex-shrink:0; }
-  .ph-title { font-size:18px; font-weight:900; color:#F47920; letter-spacing:.08em; text-transform:uppercase; line-height:1; }
-  .ph-sub  { font-size:8px; color:rgba(255,255,255,.5); margin-top:3px; }
+  .ph-title { font-size:16px; font-weight:900; color:#F47920; letter-spacing:.08em; text-transform:uppercase; line-height:1; }
+  .ph-sub  { font-size:7px; color:rgba(255,255,255,.5); margin-top:3px; }
+  .mp-l { vertical-align:middle !important; text-align:center !important; border-left:3px solid #1a3a5c !important; background:#eff6ff !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
+  .mp-r { vertical-align:middle !important; text-align:center !important; border-right:3px solid #7a2e0a !important; background:#fff7ed !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
   .ph-accent { height:4px; background:#F47920; flex-shrink:0; }
 
   /* Info strip */
@@ -765,12 +861,13 @@ function printSchedule(s, widthIn, heightIn) {
 </head><body>
 <div class="print-page">
   <div class="ph-outer">
-    <div class="ph-logo-block">
-      <img class="ph-logo" src="${logoSrc}" alt="J&D Logo"/>
-      <div style="min-width:0;overflow:hidden;">
-        <div class="ph-company-name">J&amp;D WESTERN ELECTRIC</div>
-        <div class="ph-phone">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca</div>
-      </div>
+    <img class="ph-logo" src="${logoSrc}" alt="J&D Logo"/>
+    <div class="ph-center">
+      <div class="ph-company-name">J&amp;D WESTERN ELECTRIC</div>
+      <div class="ph-phone">587-343-4349</div>
+    </div>
+    <div class="ph-title-block">
+      <div class="ph-title">PANEL SCHEDULE</div>
     </div>
   </div>
   <div class="ph-accent"></div>
@@ -891,43 +988,70 @@ function updatePsPreview() {
   if (!s) return;
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
   const slots    = (s.num_circuits || 24) / 2;
+  const grpP     = computePoleGroups(circuits, slots);
   let rows = '';
-  const TD = (extra='') => `padding:2px 3px;border:1px solid #e5e7eb;font-size:7px;${extra}`;
+  const TD  = (extra='') => `padding:2px 3px;border:1px solid #e5e7eb;font-size:7px;${extra}`;
+  const MLp = `padding:2px 3px;border:1px solid #e5e7eb;font-size:7px;vertical-align:middle;text-align:center;border-left:3px solid #1a3a5c;background:#eff6ff;word-break:break-word;white-space:normal;overflow:hidden;`;
+  const MRp = `padding:2px 3px;border:1px solid #e5e7eb;font-size:7px;vertical-align:middle;text-align:center;border-right:3px solid #7a2e0a;background:#fff7ed;word-break:break-word;white-space:normal;overflow:hidden;`;
   for (let i = 0; i < slots; i++) {
     const d  = circuits[i] || {};
     const ls = (i*2)+1, rs = (i*2)+2;
-    const rowBg = i%2===0 ? '#f9fafb' : '#fff';
-    rows += `
-    <tr style="background:${rowBg};border-top:1px solid #9ca3af;">
-      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.la_desc||'')}</td>
-      <td style="${TD('text-align:center;width:16px;')}">${d.la_poles||''}</td>
-      <td style="${TD('text-align:center;width:20px;')}">${d.la_amps||''}</td>
+    const lG = grpP.left[i];
+    const rG = grpP.right[i];
+    const topBorder = lG !== -1 ? 'border-top:1px solid #9ca3af;' : '';
+
+    let lA = '', lB = '', rA = '', rB = '';
+    if (lG === null) {
+      lA = `<td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.la_desc||'')}</td>
+            <td style="${TD('text-align:center;width:16px;')}">${d.la_poles||''}</td>
+            <td style="${TD('text-align:center;width:20px;')}">${d.la_amps||''}</td>`;
+      lB = `<td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.lb_desc||'')}</td>
+            <td style="${TD('text-align:center;width:16px;')}">${d.lb_poles||''}</td>
+            <td style="${TD('text-align:center;width:20px;')}">${d.lb_amps||''}</td>`;
+    } else if (lG > 0) {
+      const span = lG * 2;
+      lA = `<td style="${MLp}" rowspan="${span}">${esc(d.la_desc||'')}</td>
+            <td style="${MLp}width:16px;" rowspan="${span}">${d.la_poles||''}</td>
+            <td style="${MLp}width:20px;" rowspan="${span}">${d.la_amps||''}</td>`;
+      lB = '';
+    }
+
+    if (rG === null) {
+      rA = `<td style="${TD('text-align:center;width:20px;')}">${d.ra_amps||''}</td>
+            <td style="${TD('text-align:center;width:16px;')}">${d.ra_poles||''}</td>
+            <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.ra_desc||'')}</td>`;
+      rB = `<td style="${TD('text-align:center;width:20px;')}">${d.rb_amps||''}</td>
+            <td style="${TD('text-align:center;width:16px;')}">${d.rb_poles||''}</td>
+            <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.rb_desc||'')}</td>`;
+    } else if (rG > 0) {
+      const span = rG * 2;
+      rA = `<td style="${MRp}width:20px;" rowspan="${span}">${d.ra_amps||''}</td>
+            <td style="${MRp}width:16px;" rowspan="${span}">${d.ra_poles||''}</td>
+            <td style="${MRp}" rowspan="${span}">${esc(d.ra_desc||'')}</td>`;
+      rB = '';
+    }
+
+    rows += `<tr style="${topBorder}">${lA}
       <td style="${TD('text-align:center;width:20px;font-weight:800;background:#e5e7eb;')}">${ls}A</td>
       <td style="${TD('text-align:center;width:20px;font-weight:800;background:#e5e7eb;')}">${rs}A</td>
-      <td style="${TD('text-align:center;width:20px;')}">${d.ra_amps||''}</td>
-      <td style="${TD('text-align:center;width:16px;')}">${d.ra_poles||''}</td>
-      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;')}">${esc(d.ra_desc||'')}</td>
-    </tr>
-    <tr style="background:${rowBg};">
-      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-style:italic;color:#888;')}">${esc(d.lb_desc||'')}</td>
-      <td style="${TD('text-align:center;width:16px;')}">${d.lb_poles||''}</td>
-      <td style="${TD('text-align:center;width:20px;')}">${d.lb_amps||''}</td>
+      ${rA}</tr>
+    <tr>${lB}
       <td style="${TD('text-align:center;width:20px;font-weight:800;background:#d1d5db;')}">${ls}B</td>
       <td style="${TD('text-align:center;width:20px;font-weight:800;background:#d1d5db;')}">${rs}B</td>
-      <td style="${TD('text-align:center;width:20px;')}">${d.rb_amps||''}</td>
-      <td style="${TD('text-align:center;width:16px;')}">${d.rb_poles||''}</td>
-      <td style="${TD('overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-style:italic;color:#888;')}">${esc(d.rb_desc||'')}</td>
-    </tr>`;
+      ${rB}</tr>`;
   }
 
   // Flex column so table fills all remaining height inside the paper rect
   innerEl.innerHTML = `
     <div style="height:100%;display:flex;flex-direction:column;overflow:hidden;">
-      <div style="background:#111827;padding:7px 12px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-        <img src="logo-bolt.png" style="width:32px;height:32px;border-radius:4px;flex-shrink:0;" alt="J&D logo"/>
-        <div>
-          <div style="color:#fff;font-size:10px;font-weight:900;letter-spacing:.03em;line-height:1.2;">J&amp;D WESTERN ELECTRIC</div>
-          <div style="color:rgba(255,255,255,.6);font-size:7px;margin-top:2px;">587-343-4349 &nbsp;·&nbsp; jdwesternelectric.ca</div>
+      <div style="background:#111827;padding:5px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <img src="logo-bolt.png" style="width:40px;height:40px;border-radius:4px;flex-shrink:0;" alt="J&D logo"/>
+        <div style="flex:1;text-align:center;">
+          <div style="color:#fff;font-size:11px;font-weight:900;letter-spacing:.03em;line-height:1.2;">J&amp;D WESTERN ELECTRIC</div>
+          <div style="color:#F47920;font-size:11px;font-weight:900;margin-top:2px;letter-spacing:.04em;">587-343-4349</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="color:#F47920;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;">PANEL SCHEDULE</div>
         </div>
       </div>
       <div style="height:3px;background:#F47920;flex-shrink:0;"></div>
@@ -1100,6 +1224,13 @@ window.addEventListener('afterprint', () => {
   projects = pr.ok ? await pr.json() : [];
   loadSchedules();
 })();
+
+// Re-render grid when a pole selector changes so multi-pole merging updates live
+document.getElementById('circuit-tbody').addEventListener('change', e => {
+  const sel = e.target.closest('select[name^="la_poles"],select[name^="ra_poles"]');
+  if (!sel) return;
+  rebuildCircuitGrid(collectCircuitData());
+});
 
 // ── Mobile description popover ────────────────────────────────
 // On touch devices, tapping a description input opens a full-width
