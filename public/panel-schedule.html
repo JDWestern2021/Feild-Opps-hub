@@ -195,6 +195,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
   .panel-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .panel-grid { font-size: 11px; min-width: 540px; }
   .panel-grid td input { font-size: 11px; min-width: 80px; }
+  /* iOS Safari breaks rowspan inside overflow-x:auto with table-layout:fixed —
+     switch to auto layout on mobile so merged multi-pole cells render correctly */
+  .panel-grid { table-layout: auto !important; }
 }
 
 /* Description input popover for mobile — shows a full-width edit bar when focused */
@@ -1232,9 +1235,11 @@ window.addEventListener('afterprint', () => {
 
 // Re-render grid when any pole selector changes so multi-pole merging updates live.
 // Listen for both 'change' (desktop) and 'input' (iOS Safari fallback).
+// setTimeout(0) lets iOS finish its wheel-picker animation before we replace the DOM.
 function _onPoleChange(e) {
   if (!e.target.name?.includes('_poles_')) return;
-  rebuildCircuitGrid(collectCircuitData());
+  const data = collectCircuitData();
+  setTimeout(() => rebuildCircuitGrid(data), 0);
 }
 document.getElementById('circuit-tbody').addEventListener('change', _onPoleChange);
 document.getElementById('circuit-tbody').addEventListener('input',  _onPoleChange);
