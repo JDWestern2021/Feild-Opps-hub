@@ -1230,11 +1230,14 @@ window.addEventListener('afterprint', () => {
   loadSchedules();
 })();
 
-// Re-render grid when any pole selector changes so multi-pole merging updates live
-document.getElementById('circuit-tbody').addEventListener('change', e => {
+// Re-render grid when any pole selector changes so multi-pole merging updates live.
+// Listen for both 'change' (desktop) and 'input' (iOS Safari fallback).
+function _onPoleChange(e) {
   if (!e.target.name?.includes('_poles_')) return;
   rebuildCircuitGrid(collectCircuitData());
-});
+}
+document.getElementById('circuit-tbody').addEventListener('change', _onPoleChange);
+document.getElementById('circuit-tbody').addEventListener('input',  _onPoleChange);
 
 // ── Mobile description popover ────────────────────────────────
 // On touch devices, tapping a description input opens a full-width
