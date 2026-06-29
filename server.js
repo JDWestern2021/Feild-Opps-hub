@@ -585,9 +585,9 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name,ot_approved,ot_approved_by,ot_approval_ts,vendor_signoff)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
-      [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid,req.user?.name||null,otApprovedVal,otApprovedBy,otApprovalTs,
+      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name,submitted_by_id,ot_approved,ot_approved_by,ot_approval_ts,vendor_signoff)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+      [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid,req.user?.name||null,req.user?.id||null,otApprovedVal,otApprovedBy,otApprovalTs,
        vendor_signoff ? JSON.stringify(vendor_signoff) : null]
     );
     const tid = rows[0].id;
@@ -743,6 +743,55 @@ app.put('/api/tickets/:id', requireAdmin, async (req, res) => {
     logAction(req,'ticket_updated',t.id,t.ticket_number,`Edited by ${req.user?.name}`);
     res.json({ message: 'Updated' });
   } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: 'Failed to update' }); }
+  finally { client.release(); }
+});
+
+// Self-edit: original submitter can edit their own ticket on the same calendar day,
+// as long as the office hasn't reviewed or entered it yet.
+app.patch('/api/tickets/:id/self-edit', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [parseInt(req.params.id)]);
+  const t = rows[0];
+  if (!t) return res.status(404).json({ error: 'Ticket not found' });
+
+  // Must be the original submitter
+  if (String(t.submitted_by_id) !== String(req.user.id))
+    return res.status(403).json({ error: 'You can only edit tickets you submitted.' });
+
+  // Must still be the same calendar day (server local time)
+  const submittedDay = new Date(t.submitted_at).toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const todayDay     = new Date().toLocaleDateString('en-CA');
+  if (submittedDay !== todayDay)
+    return res.status(403).json({ error: 'The edit window has closed — tickets can only be edited on the day they were submitted.' });
+
+  // Office must not have reviewed or entered it yet
+  if (t.ticket_status === 'Reviewed' || t.ticket_status === 'Entered')
+    return res.status(403).json({ error: 'This ticket has already been reviewed by the office and can no longer be edited.' });
+
+  const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id, vendor_signoff } = req.body;
+  if (!date||!job_name||!supervisor||!work_description) return res.status(400).json({ error: 'Missing required fields' });
+  if (!employees?.length) return res.status(400).json({ error: 'At least one employee required' });
+
+  const resolvedPid = await resolveProjectId(project_id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE daily_tickets SET date=$1,job_name=$2,job_number=$3,supervisor=$4,work_description=$5,
+       equipment_used=$6,notes=$7,updated_at=$8,project_id=$9,vendor_signoff=$10 WHERE id=$11`,
+      [date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,
+       new Date().toISOString(),resolvedPid,vendor_signoff?JSON.stringify(vendor_signoff):null,t.id]
+    );
+    await client.query('DELETE FROM ticket_employees WHERE ticket_id=$1', [t.id]);
+    for (const e of employees) {
+      if (e.name?.trim()) await client.query(
+        'INSERT INTO ticket_employees (ticket_id,employee_name,regular_hours,overtime_hours,level,user_id,travel_hours) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [t.id,e.name.trim(),parseFloat(e.regular_hours)||0,parseFloat(e.overtime_hours)||0,e.level||'Journeyman',e.user_id||null,parseFloat(e.travel_hours)||0]
+      );
+    }
+    await client.query('COMMIT');
+    logAction(req,'ticket_self_edited',t.id,t.ticket_number,`Self-edited by ${req.user?.name}`);
+    res.json({ ok: true, ticket_number: t.ticket_number });
+  } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: 'Failed to update ticket' }); }
   finally { client.release(); }
 });
 

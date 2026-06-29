@@ -382,11 +382,12 @@
     <div class="success-icon">
       <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
     </div>
-    <h2>Ticket Submitted!</h2>
+    <h2 id="success-title">Ticket Submitted!</h2>
     <div class="ticket-ref" id="success-ref">JDW-XXXXXXXX-XXXX</div>
     <p class="text-muted text-sm" style="margin-bottom:28px;">The office has been notified. Your ticket is saved.</p>
     <div class="flex gap-12" style="justify-content:center;flex-wrap:wrap;">
       <button class="btn btn-primary" id="new-ticket-btn">Submit Another Ticket</button>
+      <button class="btn btn-secondary" id="edit-ticket-btn" style="display:none;">✏️ Edit This Ticket</button>
       <a href="office.html" class="btn btn-secondary">View in Office</a>
     </div>
   </div>
@@ -695,6 +696,8 @@
   // ── Multi-step submit state ──
   let _pendingPayload = null;
   let _pendingOTData  = null;
+  let _lastTicketId   = null;
+  let _editMode       = false;
 
   // ── Collect form data ──
   function collectPayload() {
@@ -728,28 +731,46 @@
     };
   }
 
-  // ── Step 4: final POST ──
+  // ── Step 4: final POST (or PATCH for self-edit) ──
   async function doSubmit(submittedWithDuplicate) {
     $('submit-btn').disabled = true;
-    $('submit-label').textContent = 'Submitting…';
+    $('submit-label').textContent = _editMode ? 'Saving…' : 'Submitting…';
     $('submit-spinner').style.display = 'block';
     const payload = Object.assign({}, _pendingPayload, _pendingOTData || {}, { submitted_with_duplicate: submittedWithDuplicate });
     try {
-      const res = await fetch('/api/tickets', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json().catch(function(){ return {}; });
-      if (!res.ok) throw new Error(data.error || 'Server error');
-      $('success-ref').textContent = data.ticket_number;
+      let res, data;
+      if (_editMode && _lastTicketId) {
+        res  = await fetch('/api/tickets/' + _lastTicketId + '/self-edit', {
+          method: 'PATCH', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        data = await res.json().catch(function(){ return {}; });
+        if (!res.ok) throw new Error(data.error || 'Server error');
+        $('success-ref').textContent = data.ticket_number || $('success-ref').textContent;
+        $('success-title').textContent = 'Ticket Updated!';
+      } else {
+        res  = await fetch('/api/tickets', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        data = await res.json().catch(function(){ return {}; });
+        if (!res.ok) throw new Error(data.error || 'Server error');
+        _lastTicketId = data.id;
+        $('success-ref').textContent = data.ticket_number;
+        $('success-title').textContent = 'Ticket Submitted!';
+      }
+      _editMode = false;
+      $('edit-ticket-btn').style.display = '';
+      $('submit-label').textContent = 'Submit Time Ticket';
       $('form-card').style.display = 'none';
       $('success-screen').style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
       $('submit-btn').disabled = false;
-      $('submit-label').textContent = 'Submit Time Ticket';
+      $('submit-label').textContent = _editMode ? 'Update Ticket' : 'Submit Time Ticket';
       $('submit-spinner').style.display = 'none';
     }
   }
@@ -836,7 +857,50 @@
     await checkDupsThenSubmit();
   });
 
+  $('edit-ticket-btn').addEventListener('click', async () => {
+    if (!_lastTicketId) return;
+    try {
+      const res = await fetch('/api/tickets/' + _lastTicketId, { credentials: 'include' });
+      if (!res.ok) { showToast('Could not load ticket for editing.', 'error'); return; }
+      const t = await res.json();
+      // Repopulate form fields
+      $('date').value             = t.date             || '';
+      $('job_name').value         = t.job_name         || '';
+      $('job_number').value       = t.job_number       || '';
+      $('supervisor').value       = t.supervisor       || '';
+      $('work_description').value = t.work_description || '';
+      $('equipment_used').value   = t.equipment_used   || '';
+      $('notes').value            = t.notes            || '';
+      // Employees
+      document.getElementById('employee-rows').innerHTML = '';
+      empCount = 0;
+      (t.employees || []).forEach(e => {
+        addEmployeeRow();
+        const rows = document.querySelectorAll('.employee-row');
+        const row = rows[rows.length - 1];
+        const sel = row.querySelector('.emp-name');
+        sel.value = e.employee_name || '';
+        row.querySelector('.emp-level').value  = e.level  || 'Journeyman';
+        row.querySelector('.emp-reg').value    = e.regular_hours  || 0;
+        row.querySelector('.emp-ot').value     = e.overtime_hours || 0;
+        const travel = row.querySelector('.emp-travel');
+        if (travel) travel.value = e.travel_hours || 0;
+      });
+      if ((t.employees || []).length === 0) { addEmployeeRow(); addEmployeeRow(); }
+      // Switch to edit mode
+      _editMode = true;
+      $('submit-label').textContent = 'Update Ticket';
+      $('success-screen').style.display = 'none';
+      $('form-card').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      showToast('Error loading ticket: ' + err.message, 'error');
+    }
+  });
+
   $('new-ticket-btn').addEventListener('click', () => {
+    _editMode = false;
+    _lastTicketId = null;
     $('ticket-form').reset();
     $('date').value = new Date().toISOString().slice(0, 10);
     $('project-section').style.display = 'none';

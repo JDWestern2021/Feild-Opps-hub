@@ -234,6 +234,7 @@ async function initSchema() {
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS duplicate_ticket_ids  TEXT    DEFAULT NULL`);
   // Vendor sign-off on daily_tickets
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS vendor_signoff TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS submitted_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
   // Safety module
   await pool.query(`
     CREATE TABLE IF NOT EXISTS safety_forms (
