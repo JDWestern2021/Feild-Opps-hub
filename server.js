@@ -714,6 +714,24 @@ app.patch('/api/tickets/:id/ot-approval', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/tickets/my-today', requireAuth, async (req, res) => {
+  const today = new Date().toLocaleDateString('en-CA');
+  const { rows } = await pool.query(`
+    SELECT t.id, t.ticket_number, t.job_name, t.job_number, t.date, t.ticket_status, t.submitted_at,
+           COALESCE(SUM(te.regular_hours),0)  AS total_reg,
+           COALESCE(SUM(te.overtime_hours),0) AS total_ot
+    FROM daily_tickets t
+    LEFT JOIN ticket_employees te ON te.ticket_id = t.id
+    WHERE t.submitted_by_id = $1
+      AND COALESCE(t.archived,0) = 0
+      AND t.ticket_status NOT IN ('Reviewed','Entered')
+    GROUP BY t.id
+    ORDER BY t.submitted_at DESC
+  `, [req.user.id]);
+  const editable = rows.filter(r => new Date(r.submitted_at).toLocaleDateString('en-CA') === today);
+  res.json(editable);
+});
+
 app.get('/api/tickets/:id', requireAuth, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Ticket not found' });
