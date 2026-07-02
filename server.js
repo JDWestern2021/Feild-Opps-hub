@@ -13,6 +13,11 @@ const { sessionMiddleware, requireAuth, requireAdmin, requirePermission, logActi
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// Hostinger (and most hosts) run Node behind a reverse proxy that terminates SSL.
+// Without this, Express doesn't know the original request was HTTPS and won't set
+// the Secure session cookie — causing login to silently fail (bounced back to login page).
+app.set('trust proxy', 1);
+
 // ── Uploads storage ──
 const upload = multer({
   storage: multer.diskStorage({
