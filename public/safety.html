@@ -814,6 +814,7 @@
   try {
 
   const isAdmin = currentUser.role === 'admin';
+  const hasSafetyForms = isAdmin || (currentUser.permissions||'').split(',').includes('safety_forms');
 
   if (isAdmin) {
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
@@ -842,7 +843,7 @@
     let html = '';
     GROUPS.forEach(group => {
       let forms = Object.entries(Safety.FORM_TYPES).filter(([, v]) => v.group === group);
-      if (!isAdmin) forms = forms.filter(([key]) => !ADMIN_ONLY_FORM_TYPES.includes(key));
+      if (!hasSafetyForms) forms = forms.filter(([key]) => !ADMIN_ONLY_FORM_TYPES.includes(key));
       if (!forms.length) return;
       html += `<div class="sf-picker-group-label">${group}</div>`;
       forms.forEach(([key, info]) => {

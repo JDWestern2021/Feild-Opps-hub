@@ -422,9 +422,11 @@
   const hasTT = u.role === 'admin' || perms.includes('time_ticket');
   const hasPO = u.role === 'admin' || perms.includes('get_po');
   const hasOD = u.role === 'admin';
+  const hasSF = u.role === 'admin' || perms.includes('safety_forms');
   if (!hasTT) document.getElementById('card-tt').style.display = 'none';
   if (!hasPO) document.getElementById('card-po').style.display = 'none';
   if (!hasOD) document.getElementById('card-od').style.display = 'none';
+  if (!hasSF) { const c = document.getElementById('card-safety'); if (c) c.style.display = 'none'; }
   // My Timesheet always visible to authenticated users
   if (document.getElementById('card-ts')) document.getElementById('card-ts').style.display = '';
 
