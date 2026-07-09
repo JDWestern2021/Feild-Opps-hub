@@ -1227,8 +1227,8 @@ window.addEventListener('afterprint', () => {
   const r = await fetch('/api/auth/me');
   if (!r.ok) { location.href = '/login.html'; return; }
   currentUser = await r.json();
-  // All authenticated users can create panel schedules
-  const pr = await fetch('/api/project-folders/all?status=active');
+  // All authenticated users can create panel schedules — use requireAuth endpoint, not requireAdmin
+  const pr = await fetch('/api/project-folders');
   projects = pr.ok ? await pr.json() : [];
   loadSchedules();
 })();

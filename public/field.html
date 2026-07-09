@@ -643,6 +643,8 @@
   // ── Project assignment dropdown (real project folders) ──
   $('assign-project').addEventListener('change', e => {
     $('project-section').style.display = e.target.checked ? 'block' : 'none';
+    // Reload if dropdown wasn't populated yet (e.g. initial fetch was still in flight)
+    if (e.target.checked && $('project_id').options.length <= 1) loadProjectFolders();
   });
 
   async function loadProjectFolders() {
