@@ -927,6 +927,15 @@
         <button class="archived-toggle" id="btn-toggle-archived-pos">Show ▼</button>
       </div>
       <div id="po-archived-wrap" style="display:none;">
+        <!-- Archive date filter -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <span style="font-size:12px;font-weight:600;color:var(--gray-500);">Archived:</span>
+          <input type="date" id="po-arch-date-from" class="form-control" style="width:auto;padding:5px 8px;font-size:12px;" title="Archived from"/>
+          <span style="font-size:12px;color:var(--gray-400);">to</span>
+          <input type="date" id="po-arch-date-to" class="form-control" style="width:auto;padding:5px 8px;font-size:12px;" title="Archived to"/>
+          <button class="btn btn-secondary btn-sm" id="btn-po-arch-filter" style="font-size:12px;">Filter</button>
+          <button class="btn btn-ghost btn-sm" id="btn-po-arch-filter-clear" style="font-size:12px;">Clear</button>
+        </div>
         <div class="po-table-wrap card" style="box-shadow:var(--shadow);">
           <table class="po-table">
             <thead>
@@ -1189,12 +1198,21 @@
 
   <!-- ARCHIVED JOBS SECTION -->
   <div id="archive-section" style="margin-top:40px;display:none;">
-    <div class="flex-between" style="margin-bottom:12px;">
+    <div class="flex-between" style="margin-bottom:10px;">
       <div style="display:flex;align-items:center;gap:10px;">
         <h2 style="font-size:16px;font-weight:700;">Archived Tickets</h2>
         <span class="badge badge-gray" id="archived-count-badge">0</span>
       </div>
       <button class="btn btn-secondary btn-sm" id="btn-hide-archive">Hide Archived</button>
+    </div>
+    <!-- Archive date filter -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <span style="font-size:12px;font-weight:600;color:var(--gray-500);">Archived:</span>
+      <input type="date" id="arch-date-from" class="form-control" style="width:auto;padding:5px 8px;font-size:12px;" title="Archived from"/>
+      <span style="font-size:12px;color:var(--gray-400);">to</span>
+      <input type="date" id="arch-date-to" class="form-control" style="width:auto;padding:5px 8px;font-size:12px;" title="Archived to"/>
+      <button class="btn btn-secondary btn-sm" id="btn-arch-filter" style="font-size:12px;">Filter</button>
+      <button class="btn btn-ghost btn-sm" id="btn-arch-filter-clear" style="font-size:12px;">Clear</button>
     </div>
     <!-- Bulk actions for archived tickets -->
     <div class="po-bulk-bar" id="arch-ticket-bulk-bar" style="margin-bottom:10px;">
@@ -1625,7 +1643,13 @@ function buildQuery(page = 1, archived = false) {
     }
     if (sup) params.set('supervisor', sup);
   }
-  if (archived) params.set('archived', '1');
+  if (archived) {
+    params.set('archived', '1');
+    const af = $('arch-date-from')?.value;
+    const at = $('arch-date-to')?.value;
+    if (af) params.set('archived_from', af);
+    if (at) params.set('archived_to', at);
+  }
   params.set('limit', PAGE_SIZE);
   params.set('offset', (page - 1) * PAGE_SIZE);
   return params.toString();
@@ -4631,6 +4655,28 @@ $('stat-archive-card').addEventListener('click', () => {
   loadArchived(1);
   setTimeout(() => $('archive-section').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
 });
+// ── Archived ticket date filter ──
+$('btn-arch-filter').addEventListener('click', () => loadArchived(1));
+$('btn-arch-filter-clear').addEventListener('click', () => {
+  $('arch-date-from').value = '';
+  $('arch-date-to').value = '';
+  loadArchived(1);
+});
+['arch-date-from','arch-date-to'].forEach(id => {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadArchived(1); });
+});
+
+// ── Archived PO date filter ──
+$('btn-po-arch-filter').addEventListener('click', () => loadArchivedPOs());
+$('btn-po-arch-filter-clear').addEventListener('click', () => {
+  $('po-arch-date-from').value = '';
+  $('po-arch-date-to').value = '';
+  loadArchivedPOs();
+});
+['po-arch-date-from','po-arch-date-to'].forEach(id => {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadArchivedPOs(); });
+});
+
 $('btn-hide-archive').addEventListener('click', () => {
   archiveVisible = false;
   $('archive-section').style.display = 'none';
@@ -4807,7 +4853,12 @@ async function loadArchivedPOs() {
     fetch('/api/po?' + p + '&status=Entered').then(r=>r.json()),
     fetch('/api/po?' + p + '&status=Archived').then(r=>r.json()),
   ]);
-  const combined = [...(r1.purchase_orders||[]), ...(r2.purchase_orders||[])].sort((a,b)=>b.created_at.localeCompare(a.created_at));
+  let combined = [...(r1.purchase_orders||[]), ...(r2.purchase_orders||[])].sort((a,b)=>b.updated_at?.localeCompare(a.updated_at||'')||0);
+  // Client-side filter by archived (updated_at) date
+  const archFrom = $('po-arch-date-from')?.value;
+  const archTo   = $('po-arch-date-to')?.value;
+  if (archFrom) combined = combined.filter(po => po.updated_at && po.updated_at.slice(0,10) >= archFrom);
+  if (archTo)   combined = combined.filter(po => po.updated_at && po.updated_at.slice(0,10) <= archTo);
   allArchivedPOs = combined;
   renderPORows(combined, 'po-archived-tbody', true);
   setTimeout(updatePoArchBulkBar, 50);
@@ -4826,7 +4877,8 @@ async function openPODetail(id) {
   $('po-status-select').value = po.status;
 
   // Delete only available once PO is Archived
-  $('po-delete-btn').style.display = po.status === 'Archived' ? '' : 'none';
+  // Show delete for any PO that appears in the archive section (Entered OR Archived status)
+  $('po-delete-btn').style.display = (po.status === 'Archived' || po.status === 'Entered') ? '' : 'none';
 
   const actionLabel = { po_created:'Created', po_viewed:'Viewed', status_changed:'Status Changed', note_updated:'Note Updated', po_deleted:'Deleted' };
   const auditHtml = po.audit?.length

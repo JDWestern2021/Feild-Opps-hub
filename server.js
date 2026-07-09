@@ -631,13 +631,15 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
 });
 
 app.get('/api/tickets', requireAuth, async (req, res) => {
-  const { job, date_from, date_to, supervisor, search, limit=50, offset=0, archived='0' } = req.query;
+  const { job, date_from, date_to, supervisor, search, archived_from, archived_to, limit=50, offset=0, archived='0' } = req.query;
   const params = [archived==='1'?1:0];
   let where = ['t.archived=$1']; let p=1;
-  if (job)        { p++; where.push(`(LOWER(t.job_name) LIKE $${p} OR LOWER(t.job_number) LIKE $${p})`); params.push(`%${job.toLowerCase()}%`); }
-  if (date_from)  { p++; where.push(`t.date>=$${p}`); params.push(date_from); }
-  if (date_to)    { p++; where.push(`t.date<=$${p}`); params.push(date_to); }
-  if (supervisor) { p++; where.push(`LOWER(t.supervisor) LIKE $${p}`); params.push(`%${supervisor.toLowerCase()}%`); }
+  if (job)           { p++; where.push(`(LOWER(t.job_name) LIKE $${p} OR LOWER(t.job_number) LIKE $${p})`); params.push(`%${job.toLowerCase()}%`); }
+  if (date_from)     { p++; where.push(`t.date>=$${p}`); params.push(date_from); }
+  if (date_to)       { p++; where.push(`t.date<=$${p}`); params.push(date_to); }
+  if (archived_from) { p++; where.push(`t.archived_at>=$${p}`); params.push(archived_from); }
+  if (archived_to)   { p++; where.push(`t.archived_at<=$${p}`); params.push(archived_to + 'T23:59:59Z'); }
+  if (supervisor)    { p++; where.push(`LOWER(t.supervisor) LIKE $${p}`); params.push(`%${supervisor.toLowerCase()}%`); }
   if (search) {
     p++;
     where.push(`(LOWER(t.job_name) LIKE $${p} OR LOWER(t.supervisor) LIKE $${p} OR LOWER(t.ticket_number) LIKE $${p} OR LOWER(t.work_description) LIKE $${p})`);
