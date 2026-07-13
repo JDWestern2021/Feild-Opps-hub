@@ -1205,14 +1205,34 @@
       </div>
       <button class="btn btn-secondary btn-sm" id="btn-hide-archive">Hide Archived</button>
     </div>
-    <!-- Archive date filter -->
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-      <span style="font-size:12px;font-weight:600;color:var(--gray-500);">Archived:</span>
-      <input type="date" id="arch-date-from" class="form-control" style="width:auto;padding:5px 8px;font-size:12px;" title="Archived from"/>
-      <span style="font-size:12px;color:var(--gray-400);">to</span>
-      <input type="date" id="arch-date-to" class="form-control" style="width:auto;padding:5px 8px;font-size:12px;" title="Archived to"/>
-      <button class="btn btn-secondary btn-sm" id="btn-arch-filter" style="font-size:12px;">Filter</button>
-      <button class="btn btn-ghost btn-sm" id="btn-arch-filter-clear" style="font-size:12px;">Clear</button>
+    <!-- Archive search + date filter -->
+    <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:12px 14px;background:var(--gray-50);border-radius:var(--radius-sm);border:1px solid var(--gray-200);">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;">Job Name / Number</label>
+        <input type="text" id="arch-job" class="form-control" placeholder="e.g. 12345 or site name" style="padding:6px 10px;font-size:13px;width:200px;"/>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;">Supervisor</label>
+        <input type="text" id="arch-supervisor" class="form-control" placeholder="Name" style="padding:6px 10px;font-size:13px;width:140px;"/>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;">Ticket Date From</label>
+        <input type="date" id="arch-ticket-date-from" class="form-control" style="padding:6px 8px;font-size:13px;"/>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;">To</label>
+        <input type="date" id="arch-ticket-date-to" class="form-control" style="padding:6px 8px;font-size:13px;"/>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;">Archived From</label>
+        <input type="date" id="arch-date-from" class="form-control" style="padding:6px 8px;font-size:13px;"/>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;">To</label>
+        <input type="date" id="arch-date-to" class="form-control" style="padding:6px 8px;font-size:13px;"/>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-arch-filter" style="padding:7px 16px;">Search</button>
+      <button class="btn btn-ghost btn-sm" id="btn-arch-filter-clear" style="padding:7px 12px;">Clear</button>
     </div>
     <!-- Bulk actions for archived tickets -->
     <div class="po-bulk-bar" id="arch-ticket-bulk-bar" style="margin-bottom:10px;">
@@ -1645,10 +1665,18 @@ function buildQuery(page = 1, archived = false) {
   }
   if (archived) {
     params.set('archived', '1');
-    const af = $('arch-date-from')?.value;
-    const at = $('arch-date-to')?.value;
-    if (af) params.set('archived_from', af);
-    if (at) params.set('archived_to', at);
+    const archJob  = $('arch-job')?.value.trim();
+    const archSup  = $('arch-supervisor')?.value.trim();
+    const archTdf  = $('arch-ticket-date-from')?.value;
+    const archTdt  = $('arch-ticket-date-to')?.value;
+    const af       = $('arch-date-from')?.value;
+    const at       = $('arch-date-to')?.value;
+    if (archJob)  params.set('job', archJob);
+    if (archSup)  params.set('supervisor', archSup);
+    if (archTdf)  params.set('date_from', archTdf);
+    if (archTdt)  params.set('date_to', archTdt);
+    if (af)       params.set('archived_from', af);
+    if (at)       params.set('archived_to', at);
   }
   params.set('limit', PAGE_SIZE);
   params.set('offset', (page - 1) * PAGE_SIZE);
@@ -4658,12 +4686,11 @@ $('stat-archive-card').addEventListener('click', () => {
 // ── Archived ticket date filter ──
 $('btn-arch-filter').addEventListener('click', () => loadArchived(1));
 $('btn-arch-filter-clear').addEventListener('click', () => {
-  $('arch-date-from').value = '';
-  $('arch-date-to').value = '';
+  ['arch-job','arch-supervisor','arch-ticket-date-from','arch-ticket-date-to','arch-date-from','arch-date-to'].forEach(id => { const el = $(id); if (el) el.value = ''; });
   loadArchived(1);
 });
-['arch-date-from','arch-date-to'].forEach(id => {
-  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadArchived(1); });
+['arch-job','arch-supervisor','arch-ticket-date-from','arch-ticket-date-to','arch-date-from','arch-date-to'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') loadArchived(1); });
 });
 
 // ── Archived PO date filter ──
