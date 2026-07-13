@@ -812,18 +812,17 @@ function printSchedule(s, widthIn, heightIn) {
   pw.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   * { -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; margin:0; padding:0; }
-  @page { size:letter portrait; margin:0; }
+  @page { size:letter portrait; margin:0.3in 0.22in 0.2in 0.22in; }
   body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
 
-  /* The schedule occupies exactly w×h on the letter page — no zoom, no scaling */
-  @page { size:letter portrait; margin:0; }
+  /* The schedule fits within the printable area defined by @page margins */
   .print-page {
     width:${w}in;
-    height:${h}in;
+    height:${h <= 11 ? (h - 0.5).toFixed(3) : (h - 0.5).toFixed(3)}in;
     overflow:hidden;
     display:flex;
     flex-direction:column;
-    margin-left:0.22in;
+    margin-left:0;
   }
 
   /* Header */
