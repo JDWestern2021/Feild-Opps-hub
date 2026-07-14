@@ -677,25 +677,42 @@
 
         <!-- Team Tickets view -->
         <div id="sf-asub-team" style="display:none;">
-          <div id="sf-team-summary" style="font-size:12px;color:#6b7280;margin-bottom:14px;"></div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-            <button class="sf-cert-pill active" data-status="" onclick="sfTeamFilter('',this)">All Workers</button>
-            <button class="sf-cert-pill" data-status="expired" onclick="sfTeamFilter('expired',this)" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">⚠ Expired</button>
-            <button class="sf-cert-pill" data-status="soon" onclick="sfTeamFilter('soon',this)" style="background:#fef9c3;color:#854d0e;border-color:#fde047;">⏰ Expiring Soon</button>
-            <button class="sf-cert-pill" data-status="ok" onclick="sfTeamFilter('ok',this)" style="background:#f0fdf4;color:#166534;border-color:#86efac;">✅ All Valid</button>
+
+          <!-- Team sub-tabs: Safety Forms / Certifications -->
+          <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:16px;">
+            <button id="sf-team-subtab-forms" onclick="sfTeamSubTab('forms')" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid #F47920;color:#F47920;margin-bottom:-2px;">Safety Forms</button>
+            <button id="sf-team-subtab-certs" onclick="sfTeamSubTab('certs')" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#6b7280;margin-bottom:-2px;">Certifications</button>
           </div>
-          <input type="text" id="sf-team-search" placeholder="Search worker name…" oninput="sfRenderCertsAdmin()" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:14px;"/>
-          <div id="sf-certs-worker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
-          <div id="sf-certs-table-wrap" style="display:none;">
-            <div class="sf-table-wrap">
-              <table class="sf-table">
-                <thead><tr><th>Worker</th><th>Certification</th><th>Type</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr></thead>
-                <tbody id="sf-certs-tbody"><tr><td colspan="7" class="sf-empty">Loading…</td></tr></tbody>
-              </table>
+
+          <!-- Safety Forms sub-panel -->
+          <div id="sf-team-panel-forms">
+            <input type="text" id="sf-team-forms-search" placeholder="Search worker name…" oninput="sfRenderTeamForms()" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:14px;"/>
+            <div id="sf-team-forms-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;"></div>
+          </div>
+
+          <!-- Certifications sub-panel (existing) -->
+          <div id="sf-team-panel-certs" style="display:none;">
+            <div id="sf-team-summary" style="font-size:12px;color:#6b7280;margin-bottom:14px;"></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+              <button class="sf-cert-pill active" data-status="" onclick="sfTeamFilter('',this)">All Workers</button>
+              <button class="sf-cert-pill" data-status="expired" onclick="sfTeamFilter('expired',this)" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">⚠ Expired</button>
+              <button class="sf-cert-pill" data-status="soon" onclick="sfTeamFilter('soon',this)" style="background:#fef9c3;color:#854d0e;border-color:#fde047;">⏰ Expiring Soon</button>
+              <button class="sf-cert-pill" data-status="ok" onclick="sfTeamFilter('ok',this)" style="background:#f0fdf4;color:#166534;border-color:#86efac;">✅ All Valid</button>
             </div>
+            <input type="text" id="sf-team-search" placeholder="Search worker name…" oninput="sfRenderCertsAdmin()" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:14px;"/>
+            <div id="sf-certs-worker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
+            <div id="sf-certs-table-wrap" style="display:none;">
+              <div class="sf-table-wrap">
+                <table class="sf-table">
+                  <thead><tr><th>Worker</th><th>Certification</th><th>Type</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+                  <tbody id="sf-certs-tbody"><tr><td colspan="7" class="sf-empty">Loading…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+            <select id="sf-certs-filter-worker" style="display:none;"><option value="">All Workers</option></select>
+            <select id="sf-certs-filter-status" style="display:none;"><option value="">All Statuses</option><option value="expired">Expired</option><option value="soon">Expiring ≤ 90 days</option><option value="ok">Valid</option></select>
           </div>
-          <select id="sf-certs-filter-worker" style="display:none;"><option value="">All Workers</option></select>
-          <select id="sf-certs-filter-status" style="display:none;"><option value="">All Statuses</option><option value="expired">Expired</option><option value="soon">Expiring ≤ 90 days</option><option value="ok">Valid</option></select>
+
         </div>
 
       </div><!-- /sf-admin-content -->
@@ -1114,6 +1131,8 @@
       if (refreshBtn) refreshBtn.style.display = '';
       if (titleEl) titleEl.textContent = 'Team Safety Tickets';
       if (!_sfAdminCertsLoaded) { _sfAdminCertsLoaded = true; sfLoadAllCerts(); }
+      // Default to Safety Forms sub-tab
+      sfTeamSubTab('forms');
     } else {
       if (subsEl) subsEl.style.display = 'block';
       if (teamEl) teamEl.style.display = 'none';
@@ -2586,6 +2605,200 @@ ${certPages}
     win.document.write(html);
     win.document.close();
   }
+
+  // ── Team Tickets: sub-tab switcher ────────────────────────────
+  window.sfTeamSubTab = function(tab) {
+    const formsPanel = document.getElementById('sf-team-panel-forms');
+    const certsPanel = document.getElementById('sf-team-panel-certs');
+    const formsBtn   = document.getElementById('sf-team-subtab-forms');
+    const certsBtn   = document.getElementById('sf-team-subtab-certs');
+    if (!formsPanel) return;
+    if (tab === 'forms') {
+      formsPanel.style.display = '';
+      certsPanel.style.display = 'none';
+      formsBtn.style.borderBottomColor = '#F47920';
+      formsBtn.style.color = '#F47920';
+      certsBtn.style.borderBottomColor = 'transparent';
+      certsBtn.style.color = '#6b7280';
+      sfRenderTeamForms();
+    } else {
+      formsPanel.style.display = 'none';
+      certsPanel.style.display = '';
+      certsBtn.style.borderBottomColor = '#F47920';
+      certsBtn.style.color = '#F47920';
+      formsBtn.style.borderBottomColor = 'transparent';
+      formsBtn.style.color = '#6b7280';
+      sfRenderCertsAdmin();
+    }
+  };
+
+  // ── Team Tickets: safety forms by worker ──────────────────────
+  function sfRenderTeamForms() {
+    const grid = document.getElementById('sf-team-forms-grid');
+    if (!grid) return;
+    const q = (document.getElementById('sf-team-forms-search')?.value || '').toLowerCase();
+
+    // Group _adminForms by submitted_by name
+    const byWorker = {};
+    (_adminForms || []).forEach(f => {
+      const name = f.submitted_by || 'Unknown';
+      if (!byWorker[name]) byWorker[name] = [];
+      byWorker[name].push(f);
+    });
+
+    let workers = Object.entries(byWorker);
+    if (q) workers = workers.filter(([name]) => name.toLowerCase().includes(q));
+    workers.sort((a, b) => a[0].localeCompare(b[0]));
+
+    if (!workers.length) {
+      grid.innerHTML = '<p style="color:#6b7280;font-size:13px;">No safety form submissions found.</p>';
+      return;
+    }
+
+    grid.innerHTML = workers.map(([name, forms]) => {
+      const psi  = forms.filter(f => f.psi_flag).length;
+      const wcb  = forms.filter(f => f.wcb_flag).length;
+      const badge = psi  ? `<span style="background:#fee2e2;color:#991b1b;border-radius:10px;padding:2px 7px;font-size:10px;font-weight:700;">⚠ PSI×${psi}</span>` :
+                    wcb  ? `<span style="background:#fef9c3;color:#854d0e;border-radius:10px;padding:2px 7px;font-size:10px;font-weight:700;">WCB×${wcb}</span>` : '';
+      const initials = name.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
+      return `<div class="sf-worker-card" style="cursor:pointer;" onclick="sfOpenWorkerForms(${JSON.stringify(name)})">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div style="width:40px;height:40px;border-radius:50%;background:#F47920;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;">${initials}</div>
+          <div style="min-width:0;">
+            <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_sfEsc(name)}</div>
+            <div style="font-size:12px;color:#6b7280;">${forms.length} form${forms.length!==1?'s':''} submitted</div>
+          </div>
+        </div>
+        ${badge ? `<div style="margin-bottom:6px;">${badge}</div>` : ''}
+        <button class="btn btn-secondary btn-sm" style="font-size:11px;width:100%;" onclick="event.stopPropagation();sfOpenWorkerForms(${JSON.stringify(name)})">View Forms →</button>
+      </div>`;
+    }).join('');
+  }
+
+  window.sfOpenWorkerForms = function(workerName) {
+    const forms = (_adminForms || []).filter(f => (f.submitted_by || 'Unknown') === workerName);
+    const FORM_LABELS = {
+      hazard_assessment:'Hazard Assessment (FLHA)', fall_protection:'Fall Protection', aerial_lift:'Aerial / EWP',
+      maint_vehicle:'Truck Inspection', safety_meeting:'Safety Meeting', erp:'Emergency Response Plan',
+      near_miss:'Near Miss', incident_report:'Incident Report', corrective_action:'Corrective Action',
+      ojt_record:'OJT Record', emergency_review:'Emergency Review'
+    };
+
+    const initials = workerName.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
+    const rows = forms.map((f,i) => {
+      const label = FORM_LABELS[f.form_type] || f.form_type;
+      const date  = f.date ? new Date(f.date).toLocaleDateString('en-CA') : '—';
+      const psiWcb = [f.psi_flag?'<span style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">PSI</span>':'',
+                      f.wcb_flag?'<span style="background:#fef9c3;color:#854d0e;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">WCB</span>':''].filter(Boolean).join(' ');
+      return `<tr>
+        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;"><input type="checkbox" class="sf-wf-cb" data-idx="${i}" checked></td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:13px;">${_sfEsc(label)}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;">${f.form_number||'—'}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;">${date}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;">${_sfEsc(f.project_name||'—')}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;">${psiWcb}</td>
+      </tr>`;
+    }).join('');
+
+    const existing = document.getElementById('sf-worker-forms-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'sf-worker-forms-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+    modal.innerHTML = `<div style="background:#fff;border-radius:16px;width:100%;max-width:760px;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto;">
+      <div style="padding:22px 24px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:14px;">
+        <div style="width:46px;height:46px;border-radius:50%;background:#F47920;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex-shrink:0;">${initials}</div>
+        <div>
+          <div style="font-size:18px;font-weight:800;color:#111827;">${_sfEsc(workerName)}</div>
+          <div style="font-size:12px;color:#6b7280;">${forms.length} form${forms.length!==1?'s':''} on file</div>
+        </div>
+        <button onclick="document.getElementById('sf-worker-forms-modal').remove()" style="margin-left:auto;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1;">×</button>
+      </div>
+      <div style="padding:18px 24px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="sf-wf-select-all" checked onchange="document.querySelectorAll('.sf-wf-cb').forEach(cb=>cb.checked=this.checked)"> Select All
+          </label>
+          <span style="flex:1;"></span>
+          <button id="sf-wf-export-btn" onclick="sfExportWorkerFormsPDF(${JSON.stringify(workerName)})" style="background:#F47920;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Export PDF</button>
+        </div>
+        ${forms.length ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#f9fafb;">
+            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;"></th>
+            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">FORM TYPE</th>
+            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">#</th>
+            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">DATE</th>
+            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">PROJECT</th>
+            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">FLAGS</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>` : '<p style="color:#6b7280;font-size:13px;padding:20px 0;">No forms submitted yet.</p>'}
+      </div>
+    </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+
+    // Keep Select All in sync
+    modal.querySelectorAll('.sf-wf-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const all = [...modal.querySelectorAll('.sf-wf-cb')];
+        document.getElementById('sf-wf-select-all').checked = all.every(c=>c.checked);
+      });
+    });
+  };
+
+  window.sfExportWorkerFormsPDF = function(workerName) {
+    const modal = document.getElementById('sf-worker-forms-modal');
+    const checked = modal ? [...modal.querySelectorAll('.sf-wf-cb:checked')].map(cb => Number(cb.dataset.idx)) : [];
+    if (!checked.length) { alert('Select at least one form to export.'); return; }
+
+    const forms = (_adminForms || []).filter(f => (f.submitted_by || 'Unknown') === workerName);
+    const selected = checked.map(i => forms[i]).filter(Boolean);
+
+    const FORM_LABELS = {
+      hazard_assessment:'Hazard Assessment (FLHA)', fall_protection:'Fall Protection', aerial_lift:'Aerial / EWP',
+      maint_vehicle:'Truck Inspection', safety_meeting:'Safety Meeting', erp:'Emergency Response Plan',
+      near_miss:'Near Miss', incident_report:'Incident Report', corrective_action:'Corrective Action',
+      ojt_record:'OJT Record', emergency_review:'Emergency Review'
+    };
+
+    const today = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+    const pages = selected.map(f => {
+      const label = FORM_LABELS[f.form_type] || f.form_type;
+      const date  = f.date ? new Date(f.date).toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}) : '—';
+      const flags = [f.psi_flag?'⚠ PSI Reportable':'', f.wcb_flag?'⚠ WCB Reportable':''].filter(Boolean).join(' · ') || 'None';
+      const formUrl = Safety.formUrl ? Safety.formUrl(f.form_type) : null;
+      const viewLink = formUrl ? `<div style="margin-top:10px;"><a href="${formUrl}?id=${f.id}" style="color:#F47920;font-size:12px;font-weight:600;">View full form online ↗</a></div>` : '';
+      const statusStyle = f.status==='approved'?'background:#dcfce7;color:#166534':f.status==='rejected'?'background:#fee2e2;color:#991b1b':'background:#f3f4f6;color:#374151';
+      return `<div class="form-page">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:18px;font-weight:800;color:#111827;">${_sfEsc(label)}</div>
+          <span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;${statusStyle}">${f.status||'pending'}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;width:140px;">Worker</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(workerName)}</td></tr>
+          ${f.form_number?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Form #</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(f.form_number)}</td></tr>`:''}
+          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Date</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${date}</td></tr>
+          ${f.project_name?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Project</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(f.project_name)}</td></tr>`:''}
+          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Flags</td><td style="padding:7px 10px;border:1px solid #e5e7eb;color:${flags==='None'?'#6b7280':'#991b1b'};font-weight:${flags==='None'?'400':'700'};">${flags}</td></tr>
+        </table>
+        ${viewLink}
+      </div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${_sfEsc(workerName)} — Safety Forms</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;background:#fff;color:#111827;}.cover{padding:40px 36px 28px;border-bottom:3px solid #F47920;}.form-page{padding:28px 36px;border-bottom:2px dashed #e5e7eb;page-break-inside:avoid;}.form-page:last-child{border-bottom:none;}@media print{.form-page{page-break-after:always;}.form-page:last-child{page-break-after:avoid;}.no-print{display:none!important;}}.print-btn{position:fixed;bottom:20px;right:20px;background:#F47920;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);}</style>
+</head><body>
+<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
+<div class="cover"><div style="font-size:12px;color:#F47920;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">J&amp;D Western Electric — Safety Forms</div><div style="font-size:24px;font-weight:900;color:#111827;margin-bottom:4px;">${_sfEsc(workerName)}</div><div style="font-size:13px;color:#6b7280;">${selected.length} form${selected.length!==1?'s':''} · Generated ${today}</div></div>
+${pages}
+</body></html>`;
+
+    const win = window.open('','_blank');
+    win.document.write(html);
+    win.document.close();
+  };
 
   // ── Wire up new admin filter/refresh controls ─────────────────
   const sfCertsFilterWorker = document.getElementById('sf-certs-filter-worker');
