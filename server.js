@@ -1,12 +1,13 @@
 require('dotenv').config(); // load .env in development
-const express    = require('express');
-const path       = require('path');
-const crypto     = require('crypto');
-const XLSX       = require('xlsx');
-const multer     = require('multer');
-const nodemailer = require('nodemailer');
-const helmet     = require('helmet');
-const rateLimit  = require('express-rate-limit');
+const express      = require('express');
+const path         = require('path');
+const crypto       = require('crypto');
+const XLSX         = require('xlsx');
+const multer       = require('multer');
+const nodemailer   = require('nodemailer');
+const helmet       = require('helmet');
+const rateLimit    = require('express-rate-limit');
+const compression  = require('compression');
 const { pool, connectWithRetry, initSchema } = require('./db');
 const { sessionMiddleware, requireAuth, requireAdmin, requirePermission, logAction, hashPassword, checkPassword, ensureDefaultAdmin } = require('./auth');
 
@@ -49,14 +50,21 @@ const receiptUpload = multer({
   }
 });
 
+app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(sessionMiddleware());
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
+      // HTML always re-validates so users get fresh content
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else if (/\.(css|js)$/.test(filePath)) {
+      // CSS/JS cached for 1 hour
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    } else if (/\.(png|jpg|jpeg|gif|webp|svg|ico)$/.test(filePath)) {
+      // Images cached for 7 days
+      res.setHeader('Cache-Control', 'public, max-age=604800');
     }
   }
 }));
