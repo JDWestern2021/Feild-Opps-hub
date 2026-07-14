@@ -4,6 +4,7 @@
   --orange-dark: #d4680f;
   --orange-light: #fde8d4;
   --black: #111111;
+  --graphite: #2e3138;
   --dark: #1c1c1e;
   --gray-900: #1f1f1f;
   --gray-700: #3a3a3a;
@@ -34,7 +35,7 @@ body {
 
 /* ── Header ── */
 .app-header {
-  background: var(--black);
+  background: var(--graphite);
   color: var(--white);
   padding: 0 20px;
   display: flex;
@@ -371,6 +372,14 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   /* ── Toast: full-width ── */
   #toast { left: 12px; right: 12px; transform: translateX(0) translateY(80px); max-width: none; }
   #toast.show { transform: translateX(0) translateY(0); }
+
+  /* ── Crew / data tables: horizontal scroll ── */
+  .crew-table-wrap, .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* ── Sidebar layouts: hide sidebar, show tab strip ── */
+  .sidebar-layout-sidebar { display: none !important; }
+  .sidebar-layout-tabstrip { display: flex !important; }
+  .sidebar-layout-main { padding: 16px 14px 48px !important; }
 }
 
 /* ═══════════════════════════════════════════

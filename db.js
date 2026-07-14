@@ -418,6 +418,74 @@ async function initSchema() {
   `);
   // Seed each user's color from the same deterministic palette currently used in the UI
   await pool.query(`UPDATE users SET time_off_color = (ARRAY['#93c5fd','#c4b5fd','#f9a8d4','#6ee7b7','#fcd34d','#fca5a5','#67e8f9','#bef264','#d8b4fe','#fdba74','#5eead4','#fde047'])[((id % 12) + 1)::int] WHERE time_off_color IS NULL`);
+
+  // Tool inventory
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tools (
+      id            SERIAL PRIMARY KEY,
+      tool_number   TEXT UNIQUE NOT NULL,
+      name          TEXT NOT NULL,
+      category      TEXT NOT NULL DEFAULT 'General',
+      description   TEXT,
+      serial_number TEXT,
+      status        TEXT NOT NULL DEFAULT 'available',
+      notes         TEXT,
+      added_by_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      added_by_name TEXT,
+      created_at    TEXT NOT NULL
+    )
+  `);
+
+  // Tool sign-out/return log
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tool_assignments (
+      id                   SERIAL PRIMARY KEY,
+      tool_id              INTEGER NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+      tool_number          TEXT NOT NULL,
+      tool_name            TEXT NOT NULL,
+      project_id           INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+      project_name         TEXT,
+      vehicle_id           INTEGER REFERENCES vehicles(id) ON DELETE SET NULL,
+      vehicle_unit         TEXT,
+      assigned_to_name     TEXT,
+      checked_out_by_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      checked_out_by_name  TEXT NOT NULL,
+      checked_out_at       TEXT NOT NULL,
+      checked_in_by_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      checked_in_by_name   TEXT,
+      checked_in_at        TEXT,
+      condition_on_return  TEXT,
+      return_notes         TEXT,
+      status               TEXT NOT NULL DEFAULT 'active'
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tool_number_seq (
+      last_seq INTEGER DEFAULT 0
+    )
+  `);
+  await pool.query(`INSERT INTO tool_number_seq (last_seq) SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM tool_number_seq)`);
+  await pool.query(`ALTER TABLE tools ADD COLUMN IF NOT EXISTS photo_data TEXT`);
+  await pool.query(`ALTER TABLE tool_assignments ADD COLUMN IF NOT EXISTS return_photo_data TEXT`);
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS nickname TEXT`);
+  await pool.query(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS photo_data TEXT`);
+  await pool.query(`ALTER TABLE tools ADD COLUMN IF NOT EXISTS archived_at TEXT`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS vehicle_service_records (
+    id SERIAL PRIMARY KEY,
+    vehicle_id INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+    service_type TEXT NOT NULL DEFAULT 'other',
+    description TEXT NOT NULL,
+    service_date TEXT NOT NULL,
+    odometer INTEGER,
+    performed_by TEXT,
+    cost NUMERIC(10,2),
+    notes TEXT,
+    created_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_by_name TEXT,
+    created_at TEXT NOT NULL
+  )`);
+
   console.log('  ✓ Database schema ready');
 }
 

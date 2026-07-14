@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#1c1e22"/>
+  <title>Tools — J&amp;D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body {
+      visibility: hidden;
+      background: #374151;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .app-header {
+      background: var(--graphite, #1c1e22);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-logo {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+      background: white;
+      border-radius: 8px;
+      padding: 3px;
+      flex-shrink: 0;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: #fff;
+      flex: 1;
+    }
+    .header-title span { color: #F47920; }
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: rgba(255,255,255,0.55);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.13); color: #fff; }
+    .back-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+    /* ── Page body ── */
+    .page-wrap {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      background: rgba(0,0,0,0.3);
+      border-radius: 10px;
+      padding: 4px;
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      background: transparent;
+      color: rgba(255,255,255,0.45);
+    }
+    .tab-btn.active {
+      background: #F47920;
+      color: #fff;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .card-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #F47920;
+    }
+    .card-body { padding: 16px; }
+
+    /* ── Lookup section ── */
+    .lookup-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .lookup-input-wrap { flex: 1; }
+    .field-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 6px;
+    }
+    .tool-number-input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: rgba(0,0,0,0.35);
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      color: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .tool-number-input::placeholder { color: rgba(255,255,255,0.2); font-weight: 400; font-size: 16px; letter-spacing: 0; }
+    .tool-number-input:focus { border-color: #F47920; }
+    .lookup-btn {
+      padding: 14px 18px;
+      background: #F47920;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .lookup-btn:hover { background: #c1380a; }
+    .lookup-btn:disabled { opacity: 0.5; cursor: default; }
+
+    /* ── Tool result card ── */
+    .tool-result {
+      display: none;
+      margin-top: 14px;
+      border-radius: 8px;
+      padding: 14px 16px;
+      border-left: 4px solid;
+    }
+    .tool-result.available {
+      background: rgba(22,101,52,0.25);
+      border-color: #16a34a;
+    }
+    .tool-result.checked-out {
+      background: rgba(185,28,28,0.22);
+      border-color: #ef4444;
+    }
+    .tool-result-number {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      opacity: 0.6;
+      margin-bottom: 2px;
+    }
+    .tool-result-name {
+      font-size: 17px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .tool-result-meta {
+      font-size: 12px;
+      opacity: 0.65;
+      margin-bottom: 6px;
+    }
+    .tool-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 99px;
+    }
+    .tool-status-badge.available { background: rgba(22,163,74,0.25); color: #4ade80; }
+    .tool-status-badge.checked-out { background: rgba(239,68,68,0.25); color: #fca5a5; }
+    .checkout-info {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.75);
+    }
+    .checkout-info strong { color: #fff; }
+
+    /* ── Form fields ── */
+    .form-group { margin-bottom: 14px; }
+    .form-select, .form-input, .form-textarea {
+      width: 100%;
+      padding: 11px 14px;
+      background: rgba(0,0,0,0.3);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    .form-select { appearance: none; }
+    .form-select option { background: #374151; color: #fff; }
+    .form-select:focus, .form-input:focus, .form-textarea:focus {
+      border-color: #F47920;
+    }
+    .form-textarea { resize: vertical; min-height: 80px; }
+
+    /* ── Expandable notes ── */
+    .notes-toggle {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.4);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+      margin-bottom: 8px;
+    }
+    .notes-toggle:hover { color: rgba(255,255,255,0.7); }
+    .notes-field { display: none; }
+    .notes-field.open { display: block; }
+
+    /* ── Condition cards (radio) ── */
+    .condition-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .condition-card {
+      position: relative;
+      cursor: pointer;
+    }
+    .condition-card input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .condition-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 12px 8px;
+      background: rgba(0,0,0,0.3);
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .condition-label .cond-icon { font-size: 20px; }
+    .condition-card input:checked + .condition-label {
+      border-color: #F47920;
+      background: rgba(244,121,32,0.18);
+      color: #fff;
+    }
+    .condition-card input:checked + .condition-label.good { border-color: #16a34a; background: rgba(22,163,74,0.2); }
+    .condition-card input:checked + .condition-label.attention { border-color: #d97706; background: rgba(217,119,6,0.2); }
+    .condition-card input:checked + .condition-label.damaged { border-color: #ef4444; background: rgba(239,68,68,0.2); }
+
+    /* ── Action buttons ── */
+    .btn-action {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-action:active { transform: scale(0.98); }
+    .btn-action:disabled { opacity: 0.4; cursor: default; }
+    .btn-signout { background: #F47920; color: #fff; }
+    .btn-signout:hover:not(:disabled) { background: #c1380a; }
+    .btn-return { background: #16a34a; color: #fff; }
+    .btn-return:hover:not(:disabled) { background: #15803d; }
+
+    /* ── Recent list ── */
+    .recent-section { margin-top: 20px; }
+    .recent-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 10px;
+    }
+    .recent-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .recent-item-left .tool-num { font-weight: 700; color: #F47920; font-size: 12px; }
+    .recent-item-left .tool-nm { font-weight: 600; }
+    .recent-item-right { font-size: 11px; color: rgba(255,255,255,0.4); text-align: right; }
+    .recent-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 99px;
+      margin-top: 2px;
+      display: inline-block;
+    }
+    .recent-badge.active { background: rgba(239,68,68,0.25); color: #fca5a5; }
+    .recent-badge.returned { background: rgba(22,163,74,0.2); color: #4ade80; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1f2937;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      transition: transform 0.3s ease;
+      z-index: 9999;
+      white-space: nowrap;
+      border-left: 4px solid #F47920;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.success { border-color: #16a34a; }
+    #toast.error { border-color: #ef4444; }
+
+    /* ── Tab panels ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    @media (max-width: 480px) {
+      .condition-grid { grid-template-columns: 1fr 1fr 1fr; }
+      .condition-label { padding: 10px 4px; font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <a href="index.html" style="display:flex;align-items:center;flex-shrink:0;text-decoration:none;" title="Home">
+    <img src="logo-bolt.png" alt="Logo" class="header-logo" id="header-logo"/>
+  </a>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+    <div class="header-title">J<span>&amp;</span>D&nbsp;Tools</div>
+  </div>
+  <a href="index.html" class="back-btn" title="Back to Hub">
+    <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+  </a>
+</header>
+
+<div class="page-wrap">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="signout">Sign Out</button>
+    <button class="tab-btn" data-tab="return">Return</button>
+  </div>
+
+  <!-- ══ SIGN OUT TAB ══ -->
+  <div class="tab-panel active" id="tab-signout">
+
+    <!-- Search -->
+    <div class="card">
+      <div class="card-header">Search Tools</div>
+      <div class="card-body">
+        <input type="text" id="so-search" class="form-input" placeholder="Search by name, number, or category…" autocomplete="off" style="margin-bottom:10px;"/>
+        <div id="so-search-results" style="display:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;max-height:320px;overflow-y:auto;"></div>
+        <div id="so-no-results" style="display:none;font-size:13px;color:rgba(255,255,255,0.35);padding:8px 0;">No matching available tools found.</div>
+      </div>
+    </div>
+
+    <!-- Cart -->
+    <div class="card" id="so-cart-card" style="display:none;">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Selected Tools</span>
+        <span id="so-cart-badge" style="background:#F47920;color:#fff;font-size:12px;font-weight:800;border-radius:20px;padding:1px 10px;">0</span>
+      </div>
+      <div id="so-cart-list" style="padding:0 16px 8px;"></div>
+    </div>
+
+    <!-- Details -->
+    <div class="card" id="so-form-card" style="display:none;">
+      <div class="card-header">Sign Out Details</div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:14px;">
+          <label class="field-label">Signed Out By</label>
+          <div id="so-user-display" style="font-size:14px;font-weight:700;color:#fff;padding:8px 0;opacity:.7;"></div>
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="field-label">Destination</label>
+          <div style="display:flex;gap:16px;margin-bottom:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:rgba(255,255,255,.7);cursor:pointer;">
+              <input type="radio" name="so-dest" value="project" checked onchange="soToggleDest()" style="accent-color:#F47920;"/> Project
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:rgba(255,255,255,.7);cursor:pointer;">
+              <input type="radio" name="so-dest" value="vehicle" onchange="soToggleDest()" style="accent-color:#F47920;"/> Vehicle / Truck
+            </label>
+          </div>
+          <div id="so-dest-project">
+            <select class="form-select" id="so-project">
+              <option value="">— Select project —</option>
+            </select>
+          </div>
+          <div id="so-dest-vehicle" style="display:none;">
+            <input type="hidden" id="so-vehicle-id"/>
+            <div id="so-vehicle-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;"></div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label class="field-label" for="so-assigned">Assign To (optional)</label>
+          <input type="text" class="form-input" id="so-assigned" placeholder="Technician or crew name"/>
+        </div>
+        <button class="btn-action btn-signout" id="so-submit-btn">Sign Out <span id="so-submit-count">0</span> Tool(s)</button>
+      </div>
+    </div>
+
+    <!-- Recent -->
+    <div class="recent-section">
+      <div class="recent-title">Recently signed out by you</div>
+      <div id="so-recent-list">
+        <div style="font-size:13px;color:rgba(255,255,255,0.3);padding:10px 0;">Loading…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ RETURN TAB ══ -->
+  <div class="tab-panel" id="tab-return">
+
+    <div class="card">
+      <div class="card-header">Look Up Tool to Return</div>
+      <div class="card-body">
+        <div class="lookup-row">
+          <div class="lookup-input-wrap">
+            <label class="field-label" for="rt-tool-number">Tool Number</label>
+            <input type="text" id="rt-tool-number" class="tool-number-input" placeholder="e.g. T-0012" autocomplete="off" autocorrect="off" spellcheck="false"/>
+          </div>
+          <button class="lookup-btn" id="rt-lookup-btn">Look Up</button>
+        </div>
+        <div class="tool-result" id="rt-tool-result">
+          <div class="tool-result-number" id="rt-result-number"></div>
+          <div class="tool-result-name" id="rt-result-name"></div>
+          <div class="tool-result-meta" id="rt-result-meta"></div>
+          <div class="tool-status-badge" id="rt-result-status"></div>
+          <div class="checkout-info" id="rt-checkout-info" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="rt-form-card" style="display:none;">
+      <div class="card-header">Return Condition</div>
+      <div class="card-body">
+        <label class="field-label">Condition on Return</label>
+        <div class="condition-grid">
+          <label class="condition-card">
+            <input type="radio" name="condition" value="Good" checked/>
+            <div class="condition-label good">
+              <span class="cond-icon">✅</span>
+              Good
+            </div>
+          </label>
+          <label class="condition-card">
+            <input type="radio" name="condition" value="Needs Attention"/>
+            <div class="condition-label attention">
+              <span class="cond-icon">⚠️</span>
+              Needs Attention
+            </div>
+          </label>
+          <label class="condition-card">
+            <input type="radio" name="condition" value="Damaged"/>
+            <div class="condition-label damaged">
+              <span class="cond-icon">🔴</span>
+              Damaged
+            </div>
+          </label>
+        </div>
+        <div class="form-group" style="margin-top:14px;">
+          <label class="field-label" for="rt-notes">Notes (optional)</label>
+          <textarea class="form-textarea" id="rt-notes" placeholder="Describe any issues, damage, or notes…"></textarea>
+        </div>
+        <div class="form-group" style="margin-top:14px;">
+          <label class="field-label" for="rt-photo-input">Photo of tool condition (required)</label>
+          <input type="file" accept="image/*" capture="environment" id="rt-photo-input" style="width:100%;padding:10px;background:rgba(0,0,0,0.3);border:1.5px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;font-size:13px;"/>
+          <img id="rt-photo-preview" src="" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-top:10px;border:2px solid rgba(255,255,255,0.15);">
+          <div id="rt-photo-error" style="display:none;color:#f87171;font-size:12px;margin-top:6px;">A photo is required before returning the tool.</div>
+        </div>
+        <button class="btn-action btn-return" id="rt-submit-btn">Return Tool</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(async () => {
+  // Auth check
+  const meRes = await fetch('/api/auth/me');
+  if (!meRes.ok) { location.href = '/login.html'; return; }
+  const me = await meRes.json();
+
+  // Apply saved logo
+  try {
+    const s = await fetch('/api/settings/public').then(r => r.json()).catch(() => ({}));
+    if (s.logo_path) document.getElementById('header-logo').src = s.logo_path + '?t=' + Date.now();
+  } catch {}
+
+  document.body.style.visibility = 'visible';
+
+  // ── Toast helper ──
+  function toast(msg, type = 'info') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show ' + type;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = ''; }, 3200);
+  }
+
+  // ── Tabs ──
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+
+  // ── Display logged-in user ──
+  document.getElementById('so-user-display').textContent = me.name || me.email || 'You';
+
+  // ── Load projects ──
+  let projects = [];
+  try { projects = await fetch('/api/projects?status=active').then(r => r.json()); } catch {}
+  const soProject = document.getElementById('so-project');
+  projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    soProject.appendChild(opt);
+  });
+
+  // ── Load vehicles ──
+  let soVehicles = [];
+  async function loadSOVehicles() {
+    try { soVehicles = await fetch('/api/vehicles').then(r => r.json()); } catch {}
+    renderSOVehicleCards();
+  }
+  function renderSOVehicleCards() {
+    const container = document.getElementById('so-vehicle-cards');
+    document.getElementById('so-vehicle-id').value = '';
+    if (!soVehicles.length) { container.innerHTML = '<div style="font-size:12px;color:rgba(255,255,255,.4);">No vehicles found</div>'; return; }
+    container.innerHTML = soVehicles.map(v => {
+      const label = v.notes || v.unit_number || '—';
+      const sub   = v.notes ? v.unit_number : '';
+      const img   = v.photo_data
+        ? `<img src="${v.photo_data}" style="width:100%;height:56px;object-fit:cover;border-radius:6px;margin-bottom:4px;"/>`
+        : `<div style="width:100%;height:56px;border-radius:6px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;margin-bottom:4px;"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:rgba(255,255,255,.25);"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg></div>`;
+      return `<div class="so-veh-card" data-id="${v.id}" onclick="soSelectVehicle(${v.id},this)"
+        style="border:2px solid rgba(255,255,255,.15);border-radius:8px;padding:8px;cursor:pointer;text-align:center;font-size:11px;font-weight:700;color:rgba(255,255,255,.75);transition:border-color .15s;">
+        ${img}
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(label)}</div>
+        ${sub ? `<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:1px;">${esc(sub)}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  window.soSelectVehicle = function(id, el) {
+    document.getElementById('so-vehicle-id').value = id;
+    document.querySelectorAll('.so-veh-card').forEach(c => { c.style.borderColor='rgba(255,255,255,.15)'; c.style.background=''; });
+    el.style.borderColor = '#F47920';
+    el.style.background  = 'rgba(244,121,32,0.18)';
+  };
+  window.soToggleDest = function() {
+    const val = document.querySelector('input[name="so-dest"]:checked').value;
+    document.getElementById('so-dest-project').style.display = val === 'project' ? '' : 'none';
+    document.getElementById('so-dest-vehicle').style.display = val === 'vehicle' ? '' : 'none';
+  };
+  loadSOVehicles();
+
+  // ── Auto-uppercase return input ──
+  const rtNumEl = document.getElementById('rt-tool-number');
+  rtNumEl.addEventListener('input', () => { rtNumEl.value = rtNumEl.value.toUpperCase(); });
+  rtNumEl.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('rt-lookup-btn').click(); });
+
+  // ── Tool lookup helper ──
+  async function lookupTool(number) {
+    const res = await fetch('/api/tools/lookup/' + encodeURIComponent(number.trim()));
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Tool not found'); }
+    return res.json();
+  }
+
+  // ── Available tools + search ──
+  let allAvailable = [];
+  let soCart = [];
+
+  async function loadAvailableTools() {
+    try { allAvailable = await fetch('/api/tools?status=available').then(r => r.json()); } catch {}
+  }
+  await loadAvailableTools();
+
+  function soRenderSearch(query) {
+    const q = (query || '').toLowerCase().trim();
+    const resultsEl  = document.getElementById('so-search-results');
+    const noResultEl = document.getElementById('so-no-results');
+    const cartIds = new Set(soCart.map(t => t.id));
+    // Show all when empty, filter when typing
+    if (!q) {
+      const available = allAvailable.filter(t => !cartIds.has(t.id));
+      if (!available.length) { resultsEl.style.display = 'none'; noResultEl.style.display = 'none'; return; }
+      noResultEl.style.display = 'none';
+      resultsEl.style.display = '';
+      resultsEl.innerHTML = soToolRows(available);
+      return;
+    }
+    // Score: exact number match > starts-with name > contains any word
+    const scored = allAvailable
+      .filter(t => !cartIds.has(t.id))
+      .map(t => {
+        const haystack = `${t.tool_number} ${t.name} ${t.category} ${t.description||''}`.toLowerCase();
+        const numMatch  = t.tool_number.toLowerCase() === q ? 100 : 0;
+        const nameStart = t.name.toLowerCase().startsWith(q) ? 80 : 0;
+        const words     = q.split(/\s+/).filter(Boolean);
+        const wordScore = words.reduce((acc, w) => acc + (haystack.includes(w) ? 10 : 0), 0);
+        const score = numMatch + nameStart + wordScore;
+        return { t, score };
+      })
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map(x => x.t);
+
+    if (!scored.length) {
+      resultsEl.style.display = 'none';
+      noResultEl.style.display = '';
+      return;
+    }
+    noResultEl.style.display = 'none';
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = soToolRows(scored);
+  }
+
+  function soToolRows(tools) {
+    return tools.map(t => {
+      const photo = t.photo_data
+        ? `<img src="${t.photo_data}" style="width:38px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>`
+        : `<div style="width:38px;height:38px;border-radius:6px;background:rgba(255,255,255,.07);flex-shrink:0;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:rgba(255,255,255,.3);"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg></div>`;
+      return `<div onclick='soAddToCart(${t.id})' style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.07);transition:background .12s;" onmouseover="this.style.background='rgba(244,121,32,0.12)'" onmouseout="this.style.background='rgba(255,255,255,.04)'">
+        ${photo}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;color:#fff;">${esc(t.name)}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.45);font-family:monospace;">${esc(t.tool_number)} · ${esc(t.category)}</div>
+        </div>
+        <div style="font-size:20px;color:#F47920;font-weight:700;flex-shrink:0;">+</div>
+      </div>`;
+    }).join('');
+  }
+
+  const soSearchEl = document.getElementById('so-search');
+  soSearchEl.addEventListener('input', function() { soRenderSearch(this.value); });
+  soSearchEl.addEventListener('focus', function() { soRenderSearch(this.value); });
+
+  window.soAddToCart = function(toolId) {
+    const tool = allAvailable.find(t => t.id === toolId);
+    if (!tool || soCart.find(t => t.id === toolId)) return;
+    soCart.push(tool);
+    soRenderCart();
+    soRenderSearch(document.getElementById('so-search').value);
+  };
+
+  window.soRemoveFromCart = function(toolId) {
+    soCart = soCart.filter(t => t.id !== toolId);
+    soRenderCart();
+    soRenderSearch(document.getElementById('so-search').value);
+  };
+
+  function soRenderCart() {
+    const cartCard = document.getElementById('so-cart-card');
+    const formCard = document.getElementById('so-form-card');
+    const badge    = document.getElementById('so-cart-badge');
+    const countEl  = document.getElementById('so-submit-count');
+    badge.textContent   = soCart.length;
+    countEl.textContent = soCart.length;
+    if (!soCart.length) {
+      cartCard.style.display = 'none';
+      formCard.style.display = 'none';
+      return;
+    }
+    cartCard.style.display = '';
+    formCard.style.display = '';
+    const list = document.getElementById('so-cart-list');
+    list.innerHTML = soCart.map(t => {
+      const photo = t.photo_data
+        ? `<img src="${t.photo_data}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>`
+        : `<div style="width:36px;height:36px;border-radius:6px;background:rgba(255,255,255,.07);flex-shrink:0;"></div>`;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);">
+        ${photo}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;color:#fff;">${esc(t.name)}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.4);font-family:monospace;">${esc(t.tool_number)}</div>
+        </div>
+        <button onclick="soRemoveFromCart(${t.id})" style="background:rgba(239,68,68,.18);border:none;color:#fca5a5;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Sign out submit
+  document.getElementById('so-submit-btn').addEventListener('click', async () => {
+    if (!soCart.length) { toast('Add at least one tool to sign out', 'error'); return; }
+    const destType = document.querySelector('input[name="so-dest"]:checked').value;
+    const projectId = destType === 'project' ? (document.getElementById('so-project').value || null) : null;
+    const vehicleId = destType === 'vehicle' ? (document.getElementById('so-vehicle-id').value || null) : null;
+    if (destType === 'vehicle' && !vehicleId) { toast('Select a vehicle', 'error'); return; }
+    const btn = document.getElementById('so-submit-btn');
+    btn.disabled = true; btn.textContent = 'Signing out…';
+    try {
+      const body = {
+        tool_ids: soCart.map(t => t.id),
+        project_id: projectId,
+        vehicle_id: vehicleId,
+        assigned_to_name: document.getElementById('so-assigned').value.trim() || null,
+      };
+      const res = await fetch('/api/tools/bulk-checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      toast(`${data.count} tool(s) signed out`, 'success');
+      soCart = [];
+      soRenderCart();
+      document.getElementById('so-search').value = '';
+      document.getElementById('so-search-results').style.display = 'none';
+      document.getElementById('so-assigned').value = '';
+      document.getElementById('so-project').value = '';
+      document.getElementById('so-vehicle-id').value = '';
+      document.querySelectorAll('.so-veh-card').forEach(c => { c.style.borderColor='rgba(255,255,255,.15)'; c.style.background=''; });
+      await loadAvailableTools();
+      loadRecent();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('so-submit-count').textContent = soCart.length;
+      btn.textContent = `Sign Out ${soCart.length} Tool(s)`;
+    }
+  });
+
+  // ── Load recent checkouts ──
+  async function loadRecent() {
+    const list = document.getElementById('so-recent-list');
+    try {
+      const rows = await fetch('/api/tools/my-recent').then(r => r.json());
+      if (!rows.length) {
+        list.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.3);padding:10px 0;">No recent checkouts</div>';
+        return;
+      }
+      list.innerHTML = rows.map(r => `
+        <div class="recent-item">
+          <div class="recent-item-left">
+            <div class="tool-num">${r.tool_number}</div>
+            <div class="tool-nm">${r.tool_name}</div>
+            ${r.project_name ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);">${r.project_name}</div>` : ''}
+          </div>
+          <div class="recent-item-right">
+            <div>${fmtDate(r.checked_out_at)}</div>
+            <span class="recent-badge ${r.status === 'active' ? 'active' : 'returned'}">${r.status === 'active' ? 'Out' : 'Returned'}</span>
+          </div>
+        </div>
+      `).join('');
+    } catch {
+      list.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.3);">Could not load recent checkouts</div>';
+    }
+  }
+  loadRecent();
+
+  // ── Return tab state ──
+  let rtAssignmentId = null;
+
+  function renderRTResult(tool) {
+    const resultEl = document.getElementById('rt-tool-result');
+    const formCard = document.getElementById('rt-form-card');
+    document.getElementById('rt-result-number').textContent = tool.tool_number;
+    document.getElementById('rt-result-name').textContent = tool.name;
+    document.getElementById('rt-result-meta').textContent = tool.category + (tool.description ? ' — ' + tool.description : '');
+    const statusEl = document.getElementById('rt-result-status');
+    const ciEl = document.getElementById('rt-checkout-info');
+    if (tool.status !== 'checked_out' || !tool.current_assignment) {
+      resultEl.className = 'tool-result available';
+      statusEl.className = 'tool-status-badge available';
+      statusEl.textContent = '✓ Not signed out';
+      ciEl.style.display = 'none';
+      formCard.style.display = 'none';
+      rtAssignmentId = null;
+    } else {
+      resultEl.className = 'tool-result checked-out';
+      statusEl.className = 'tool-status-badge checked-out';
+      statusEl.textContent = '✗ Currently Signed Out';
+      const ca = tool.current_assignment;
+      rtAssignmentId = ca.id;
+      const lines = [];
+      if (ca.checked_out_by_name) lines.push('Signed out by: <strong>' + ca.checked_out_by_name + '</strong>');
+      if (ca.assigned_to_name) lines.push('Assigned to: <strong>' + ca.assigned_to_name + '</strong>');
+      if (ca.project_name) lines.push('Project: <strong>' + ca.project_name + '</strong>');
+      if (ca.vehicle_unit) lines.push('Vehicle: <strong>' + ca.vehicle_unit + '</strong>');
+      if (ca.checked_out_at) lines.push('Since: <strong>' + fmtDate(ca.checked_out_at) + '</strong>');
+      ciEl.innerHTML = lines.join('<br>');
+      ciEl.style.display = '';
+      formCard.style.display = '';
+    }
+    resultEl.style.display = '';
+  }
+
+  document.getElementById('rt-lookup-btn').addEventListener('click', async () => {
+    const num = document.getElementById('rt-tool-number').value.trim();
+    if (!num) { toast('Enter a tool number first', 'error'); return; }
+    const btn = document.getElementById('rt-lookup-btn');
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const tool = await lookupTool(num);
+      renderRTResult(tool);
+    } catch (err) {
+      toast(err.message, 'error');
+      document.getElementById('rt-tool-result').style.display = 'none';
+      document.getElementById('rt-form-card').style.display = 'none';
+      rtAssignmentId = null;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Look Up';
+    }
+  });
+
+  // Return photo FileReader
+  let rtPhotoData = null;
+  document.getElementById('rt-photo-input').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) { rtPhotoData = null; return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      rtPhotoData = e.target.result;
+      const preview = document.getElementById('rt-photo-preview');
+      preview.src = rtPhotoData;
+      preview.style.display = '';
+      document.getElementById('rt-photo-error').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Return submit
+  document.getElementById('rt-submit-btn').addEventListener('click', async () => {
+    if (!rtAssignmentId) return;
+    if (!rtPhotoData) {
+      document.getElementById('rt-photo-error').style.display = '';
+      document.getElementById('rt-photo-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    const btn = document.getElementById('rt-submit-btn');
+    btn.disabled = true; btn.textContent = 'Returning…';
+    try {
+      const condition = document.querySelector('input[name="condition"]:checked')?.value || 'Good';
+      const notes = document.getElementById('rt-notes').value.trim() || null;
+      const res = await fetch('/api/tools/checkin/' + rtAssignmentId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condition_on_return: condition, return_notes: notes, return_photo_data: rtPhotoData }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to return tool');
+      toast('Tool returned successfully', 'success');
+      // Reset
+      document.getElementById('rt-tool-number').value = '';
+      document.getElementById('rt-tool-result').style.display = 'none';
+      document.getElementById('rt-form-card').style.display = 'none';
+      document.getElementById('rt-notes').value = '';
+      document.querySelector('input[name="condition"][value="Good"]').checked = true;
+      document.getElementById('rt-photo-input').value = '';
+      document.getElementById('rt-photo-preview').style.display = 'none';
+      rtPhotoData = null;
+      rtAssignmentId = null;
+      loadRecent();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Return Tool';
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

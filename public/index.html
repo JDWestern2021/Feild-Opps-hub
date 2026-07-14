@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
   <meta name="apple-mobile-web-app-title" content="Field Ops"/>
-  <meta name="theme-color" content="#111111"/>
+  <meta name="theme-color" content="#1c1e22"/>
   <title>Field Operations Hub — J&D Western Electric</title>
   <link rel="stylesheet" href="style.css"/>
   <link rel="stylesheet" href="theme.css"/>
@@ -16,7 +16,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #000;
+      background: #374151;
       min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overflow-x: hidden;
@@ -38,7 +38,7 @@
       right: -5%;
       width: 55%;
       height: 130%;
-      background: linear-gradient(135deg, #1a1a1a 0%, #111 60%, transparent 100%);
+      background: linear-gradient(135deg, #3a4456 0%, #2d3748 60%, transparent 100%);
       clip-path: polygon(25% 0%, 100% 0%, 100% 100%, 0% 100%);
     }
     .bg-slash::after {
@@ -50,7 +50,7 @@
       height: 130%;
       background: linear-gradient(160deg, #F47920 0%, #c1380a 50%, #8c2a08 100%);
       clip-path: polygon(45% 0%, 100% 0%, 100% 100%, 10% 100%);
-      opacity: 0.18;
+      opacity: 0.22;
     }
 
     /* Extra angular accent lines */
@@ -85,7 +85,7 @@
       height: 80px;
       pointer-events: none;
       z-index: 0;
-      background-image: radial-gradient(circle, rgba(244,121,32,0.35) 1px, transparent 1px);
+      background-image: radial-gradient(circle, rgba(244,121,32,0.5) 1px, transparent 1px);
       background-size: 14px 14px;
       mask-image: linear-gradient(135deg, black 30%, transparent 100%);
     }
@@ -97,7 +97,7 @@
       height: 80px;
       pointer-events: none;
       z-index: 0;
-      background-image: radial-gradient(circle, rgba(244,121,32,0.3) 1px, transparent 1px);
+      background-image: radial-gradient(circle, rgba(244,121,32,0.45) 1px, transparent 1px);
       background-size: 14px 14px;
       mask-image: linear-gradient(315deg, black 30%, transparent 100%);
     }
@@ -184,11 +184,43 @@
     }
     .hub-title span { color: #C1380A; }
 
+    /* ── Stats bar (admin only) ── */
+    .stats-bar {
+      display: none;
+      width: 100%;
+      max-width: 720px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 10px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .stats-bar.visible { display: flex; }
+    .stat-item {
+      flex: 1;
+      padding: 10px 8px;
+      text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.07);
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-num {
+      font-size: 20px;
+      font-weight: 900;
+      color: #F47920;
+      line-height: 1;
+    }
+    .stat-lbl {
+      font-size: 9px;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-top: 3px;
+    }
+
     /* ── Nav cards ── */
     .nav-cards {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
       width: 100%;
       max-width: 720px;
       margin-bottom: 40px;
@@ -198,15 +230,15 @@
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      gap: 10px;
-      padding: 22px 24px;
+      gap: 8px;
+      padding: 16px 18px;
       background: #F47920;
       border-radius: 8px;
       text-decoration: none;
-      color: #000;
+      color: #fff;
       position: relative;
       overflow: hidden;
-      transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+      transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
       border: none;
     }
     .nav-card::before {
@@ -220,56 +252,75 @@
       clip-path: polygon(30% 0%, 100% 0%, 100% 100%, 0% 100%);
       pointer-events: none;
     }
-    .nav-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 40px rgba(244,121,32,0.45);
-      background: #ff7d28;
-    }
+    .nav-card:hover { transform: translateY(-3px); filter: brightness(1.1); box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
     .nav-card-icon {
-      width: 40px; height: 40px;
+      width: 38px; height: 38px;
       background: rgba(0,0,0,0.2);
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .nav-card-icon svg { width: 22px; height: 22px; fill: #fff; }
+    .nav-card-icon svg { width: 20px; height: 20px; fill: #fff; }
     .nav-card h2 {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 900;
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: #fff;
-      line-height: 1.1;
+      line-height: 1.15;
     }
     .nav-card p {
-      font-size: 12px;
-      color: rgba(255,255,255,0.8);
+      font-size: 11px;
+      color: rgba(255,255,255,0.72);
       line-height: 1.4;
     }
     .nav-card-arrow {
       position: absolute;
-      bottom: 18px;
-      right: 20px;
-      font-size: 20px;
-      color: rgba(255,255,255,0.6);
+      bottom: 14px;
+      right: 16px;
+      font-size: 16px;
+      color: rgba(255,255,255,0.5);
       font-weight: 700;
     }
 
-    /* secondary card style */
-    .nav-card.secondary {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
+    /* Color variants */
+    .nav-card.c-green  { background: #166534; }
+    .nav-card.c-blue   { background: #1e3a6e; }
+    .nav-card.c-teal   { background: #0e5a5c; }
+    .nav-card.c-purple { background: #4c1d95; }
+    .nav-card.c-amber  { background: #78350f; }
+    .nav-card.c-indigo { background: #312e81; }
+    .nav-card.c-slate  { background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.1); }
+    .nav-card.c-slate .nav-card-icon { background: rgba(244,121,32,0.18); }
+    .nav-card.c-sky    { background: #0369a1; }
+    .nav-card.c-sky .nav-card-icon { background: rgba(255,255,255,0.15); }
+
+    /* ── Greeting ── */
+    .greeting-block {
+      text-align: center;
+      margin-bottom: 6px;
     }
-    .nav-card.secondary::before { background: rgba(244,121,32,0.06); }
-    .nav-card.secondary:hover {
-      background: #222;
-      box-shadow: 0 12px 40px rgba(244,121,32,0.2);
-      border-color: rgba(244,121,32,0.3);
+    .greeting-time {
+      font-size: clamp(10px, 2vw, 11px);
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 4px;
     }
-    .nav-card.secondary .nav-card-icon { background: rgba(244,121,32,0.15); }
-    .nav-card.secondary h2 { color: #fff; }
-    .nav-card.secondary p { color: rgba(255,255,255,0.45); }
-    .nav-card.secondary .nav-card-arrow { color: rgba(244,121,32,0.5); }
+    .greeting-name {
+      font-size: clamp(18px, 4vw, 26px);
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+    .greeting-name span { color: #F47920; }
+    .greeting-date {
+      font-size: clamp(10px, 2vw, 12px);
+      color: rgba(255,255,255,0.3);
+      margin-top: 3px;
+      letter-spacing: 0.06em;
+    }
 
     /* ── Tagline ── */
     .tagline {
@@ -294,9 +345,19 @@
     .contact-footer a:hover { color: rgba(244,121,32,0.7); }
 
     body { visibility: hidden; }
-    @media (max-width: 480px) {
-      .nav-cards { grid-template-columns: 1fr; max-width: 340px; }
-      .logo-wrap img { width: 110px; height: 110px; }
+    @media (max-width: 600px) {
+      .nav-cards { grid-template-columns: 1fr 1fr; gap: 9px; max-width: 100%; }
+      .nav-card { padding: 13px 14px; gap: 6px; }
+      .nav-card h2 { font-size: 12px; }
+      .nav-card p { font-size: 10px; }
+      .nav-card-icon { width: 30px; height: 30px; }
+      .nav-card-icon svg { width: 16px; height: 16px; }
+      .nav-card-arrow { font-size: 14px; bottom: 10px; right: 12px; }
+      .logo-wrap img { width: 90px; height: 90px; }
+      .stats-bar.visible { flex-wrap: wrap; }
+      .stat-item { flex: 1 1 50%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .stat-item:nth-child(odd) { border-right: 1px solid rgba(255,255,255,0.07); }
+      .stat-item:nth-last-child(-n+2) { border-bottom: none; }
     }
   </style>
 </head>
@@ -325,8 +386,23 @@
 
   <div class="divider-line"></div>
 
+  <!-- Greeting -->
+  <div class="greeting-block" id="greeting-block" style="display:none;">
+    <div class="greeting-time" id="greeting-time"></div>
+    <div class="greeting-name">Welcome back, <span id="greeting-name">—</span></div>
+    <div class="greeting-date" id="greeting-date"></div>
+  </div>
+
   <!-- Hub label -->
-  <div class="hub-title">Field Operations <span>Hub</span></div>
+  <div class="hub-title" style="margin-top:18px;">Field Operations <span>Hub</span></div>
+
+  <!-- Stats bar (admin only) -->
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-item"><div class="stat-num" id="stat-tickets">—</div><div class="stat-lbl">Open Tickets</div></div>
+    <div class="stat-item"><div class="stat-num" id="stat-po">—</div><div class="stat-lbl">Pending POs</div></div>
+    <div class="stat-item"><div class="stat-num" id="stat-timeoff">—</div><div class="stat-lbl">Time Off Reqs</div></div>
+    <div class="stat-item"><div class="stat-num" id="stat-safety">—</div><div class="stat-lbl">Safety Forms</div></div>
+  </div>
 
   <!-- Nav cards -->
   <div class="nav-cards">
@@ -339,43 +415,16 @@
       <span class="nav-card-arrow">→</span>
     </a>
 
-    <a href="my-timesheet.html" class="nav-card secondary" id="card-ts">
+    <a href="tools.html" class="nav-card c-indigo" id="card-tools">
       <div class="nav-card-icon">
-        <svg viewBox="0 0 24 24" fill="#F47920"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
       </div>
-      <h2>My Timesheet</h2>
-      <p>View your hours &amp; pay period</p>
+      <h2>Tools</h2>
+      <p>Sign out &amp; return tools</p>
       <span class="nav-card-arrow">→</span>
     </a>
 
-    <a href="get-po.html" class="nav-card" id="card-po">
-      <div class="nav-card-icon">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-      </div>
-      <h2>Get PO</h2>
-      <p>Generate a purchase order at the supplier</p>
-      <span class="nav-card-arrow">→</span>
-    </a>
-
-    <a href="time-off.html" class="nav-card" id="card-timeoff" style="position:relative;">
-      <div class="nav-card-icon">
-        <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-      </div>
-      <h2>Time Off <span id="to-notif-dot" style="display:none;background:#f47920;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:800;display:none;align-items:center;justify-content:center;vertical-align:middle;margin-left:4px;" title="You have a time off update">!</span></h2>
-      <p id="to-notif-text">Request time off &amp; view the shared calendar</p>
-      <span class="nav-card-arrow">→</span>
-    </a>
-
-    <a href="panel-schedule.html" class="nav-card" id="card-ps">
-      <div class="nav-card-icon">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
-      </div>
-      <h2>Panel Schedule</h2>
-      <p>Create &amp; manage electrical panel schedules</p>
-      <span class="nav-card-arrow">→</span>
-    </a>
-
-    <a href="safety.html" class="nav-card" id="card-safety" style="position:relative;">
+    <a href="safety.html" class="nav-card c-green" id="card-safety" style="position:relative;">
       <div class="nav-card-icon">
         <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4l5 2.18V11c0 3.47-2.34 6.72-5 7.93-2.66-1.21-5-4.46-5-7.93V7.18L12 5zm-1 5v2h2v-2h-2zm0 4v2h2v-2h-2z"/></svg>
       </div>
@@ -384,9 +433,45 @@
       <span class="nav-card-arrow">→</span>
     </a>
 
-    <a href="office.html" class="nav-card secondary" id="card-od">
+    <a href="get-po.html" class="nav-card c-sky" id="card-po">
       <div class="nav-card-icon">
-        <svg viewBox="0 0 24 24" fill="#F47920"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+      </div>
+      <h2>Get PO</h2>
+      <p>Generate a purchase order at the supplier</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
+
+    <a href="time-off.html" class="nav-card c-teal" id="card-timeoff" style="position:relative;">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+      </div>
+      <h2>Time Off <span id="to-notif-dot" style="display:none;background:#ef4444;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:800;display:none;align-items:center;justify-content:center;vertical-align:middle;margin-left:4px;" title="You have a time off update">!</span></h2>
+      <p id="to-notif-text">Request time off &amp; view the shared calendar</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
+
+    <a href="panel-schedule.html" class="nav-card c-amber" id="card-ps">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+      </div>
+      <h2>Panel Schedule</h2>
+      <p>Create &amp; manage electrical panel schedules</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
+
+    <a href="my-timesheet.html" class="nav-card c-slate" id="card-ts">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+      </div>
+      <h2>My Timesheet</h2>
+      <p>View your hours &amp; pay period</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
+
+    <a href="office.html" class="nav-card c-purple" id="card-od">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
       </div>
       <h2>Office<br>Dashboard</h2>
       <p>View, filter &amp; export all time tickets</p>
@@ -411,6 +496,11 @@
     <a href="#" id="logout-link" style="font-size:12px;color:rgba(255,255,255,0.2);text-decoration:none;">Sign out</a>
   </div>
 
+  <div style="margin-top:28px;font-size:11px;color:rgba(255,255,255,0.15);text-align:center;letter-spacing:0.03em;line-height:1.6;">
+    &copy; 2025 J&amp;D Western Electric Ltd. All rights reserved.<br/>
+    Proprietary and confidential. Unauthorized use or distribution is prohibited.
+  </div>
+
 </main>
 
 <script>
@@ -419,16 +509,39 @@
   if (!r.ok) { location.href = '/login.html'; return; }
   const u = await r.json();
   const perms = (u.permissions || '').split(',');
+
+  // Greeting
+  const firstName = u.name ? u.name.split(' ')[0] : u.name;
+  const hr = new Date().getHours();
+  const tod = hr < 12 ? 'Good Morning' : hr < 17 ? 'Good Afternoon' : 'Good Evening';
+  const dateStr = new Date().toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric' });
+  document.getElementById('greeting-name').textContent = firstName;
+  document.getElementById('greeting-time').textContent = tod;
+  document.getElementById('greeting-date').textContent = dateStr;
+  document.getElementById('greeting-block').style.display = '';
   const hasTT = u.role === 'admin' || perms.includes('time_ticket');
   const hasPO = u.role === 'admin' || perms.includes('get_po');
   const hasOD = u.role === 'admin';
-  const hasSF = u.role === 'admin' || perms.includes('safety_forms');
   if (!hasTT) document.getElementById('card-tt').style.display = 'none';
   if (!hasPO) document.getElementById('card-po').style.display = 'none';
   if (!hasOD) document.getElementById('card-od').style.display = 'none';
-  if (!hasSF) { const c = document.getElementById('card-safety'); if (c) c.style.display = 'none'; }
+  // Safety card visible to all employees — near miss & incident report gated inside safety.html
   // My Timesheet always visible to authenticated users
-  if (document.getElementById('card-ts')) document.getElementById('card-ts').style.display = '';
+
+  // Stats bar — admin only
+  if (hasOD) {
+    document.getElementById('stats-bar').classList.add('visible');
+    try {
+      const ov = await fetch('/api/dashboard/overview').then(r => r.ok ? r.json() : null);
+      if (ov) {
+        document.getElementById('stat-tickets').textContent = ov.tickets?.pending  ?? '—';
+        document.getElementById('stat-po').textContent      = ov.pos?.open        ?? '—';
+        document.getElementById('stat-timeoff').textContent = ov.time_off?.pending ?? '—';
+        const sr = await fetch('/api/safety/pending-signatures').then(r => r.ok ? r.json() : []).catch(() => []);
+        document.getElementById('stat-safety').textContent  = Array.isArray(sr) ? sr.length : '—';
+      }
+    } catch { /* leave dashes */ }
+  }
 
   // Apply saved logo
   const s = await fetch('/api/settings/public').then(r=>r.json()).catch(()=>({}));

@@ -8,73 +8,227 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
   <meta name="apple-mobile-web-app-title" content="Field Ops"/>
-  <meta name="theme-color" content="#111111"/>
-  <title>Manage Team — J&D Western Electric</title>
+  <meta name="theme-color" content="#1c1e22"/>
+  <title>Team — J&D Western Electric</title>
   <link rel="stylesheet" href="style.css"/>
   <link rel="stylesheet" href="theme.css"/>
   <style>
-    body { visibility: hidden; background: var(--gray-100); }
+    body { visibility: hidden; background: #f1f3f5; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-    /* ── User table ── */
-    .user-table { width: 100%; border-collapse: collapse; }
-    .user-table th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); padding: 8px 12px; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); text-align: left; }
-    .user-table td { padding: 12px 12px; border-bottom: 1px solid var(--gray-100); font-size: 13px; vertical-align: middle; }
-    .user-table tr:last-child td { border-bottom: none; }
-    .user-table tr:hover td { background: var(--gray-50); }
+    /* ── Layout ── */
+    .tm-layout { display: flex; min-height: calc(100vh - 56px); }
 
-    /* ── Badges ── */
-    .role-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    /* ── Sidebar ── */
+    .tm-sidebar {
+      width: 220px; flex-shrink: 0;
+      background: var(--graphite, #2e3138); color: #fff;
+      padding: 20px 0 32px;
+      display: flex; flex-direction: column; gap: 0;
+      position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto;
+    }
+    .tm-sidebar-section { padding: 0 12px; margin-bottom: 24px; }
+    .tm-sidebar-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #6b7280; padding: 0 8px; margin-bottom: 6px; }
+    .tm-nav-btn {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 10px 12px; border-radius: 8px;
+      background: none; border: none; color: #d1d5db; cursor: pointer;
+      font-size: 13px; font-weight: 600; text-align: left;
+      transition: background .12s, color .12s; margin-bottom: 2px;
+    }
+    .tm-nav-btn:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .tm-nav-btn.active { background: rgba(234,88,12,.18); color: #f97316; }
+    .tm-nav-btn svg { flex-shrink: 0; }
+    .tm-sidebar-count {
+      margin-left: auto; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,.1); color: #9ca3af;
+      border-radius: 20px; padding: 1px 7px; min-width: 20px; text-align: center;
+    }
+    .tm-nav-btn.active .tm-sidebar-count { background: rgba(234,88,12,.25); color: #f97316; }
+
+    .tm-invite-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin: 0 12px 16px;
+      padding: 11px 14px; border-radius: 10px;
+      background: #ea580c; color: #fff; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 700; transition: background .12s;
+    }
+    .tm-invite-btn:hover { background: #c2410c; }
+
+    /* ── Main content ── */
+    .tm-main { flex: 1; padding: 24px 28px 48px; min-width: 0; }
+    .tm-main-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .tm-main-title { font-size: 20px; font-weight: 800; color: #111; }
+    .tm-search { padding: 8px 14px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: #fff; width: 220px; outline: none; }
+    .tm-search:focus { border-color: #ea580c; }
+
+    /* ── Member cards ── */
+    .tm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .tm-card {
+      background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+      padding: 18px 16px; cursor: pointer; transition: box-shadow .15s, transform .12s;
+      border: 2px solid transparent; position: relative;
+    }
+    .tm-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-1px); border-color: #e5e7eb; }
+    .tm-card.selected { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234,88,12,.1); }
+    .tm-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .tm-avatar {
+      width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 800; color: #fff; flex-shrink: 0;
+    }
+    .tm-card-name { font-weight: 700; font-size: 14px; color: #111; }
+    .tm-card-email { font-size: 11px; color: #6b7280; margin-top: 1px; word-break: break-all; }
+    .tm-card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+
+    .role-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
     .role-admin { background: #dbeafe; color: #1d4ed8; }
-    .role-field { background: var(--gray-100); color: var(--gray-700); }
-    .status-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-    .status-active   { background: #d4edda; color: #155724; }
-    .status-invited  { background: #fff3cd; color: #856404; }
-    .status-inactive { background: var(--gray-100); color: var(--gray-500); }
+    .role-field { background: #f3f4f6; color: #374151; }
+    .status-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .status-active   { background: #dcfce7; color: #166534; }
+    .status-invited  { background: #fef3c7; color: #92400e; }
+    .status-inactive { background: #f3f4f6; color: #6b7280; }
 
-    /* ── Permission tags ── */
-    .perm-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-    .perm-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: var(--orange-light); color: var(--orange-dark); }
-    .perm-tag.inactive { background: var(--gray-100); color: var(--gray-400); text-decoration: line-through; }
+    .tm-card-me { position: absolute; top: 10px; right: 12px; font-size: 10px; font-weight: 700; color: #ea580c; background: rgba(234,88,12,.08); padding: 2px 6px; border-radius: 6px; }
 
-    /* ── Inline edit controls ── */
-    .inline-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    .inline-select { padding: 4px 8px; font-size: 12px; border: 1.5px solid var(--gray-300); border-radius: 6px; background: #fff; color: var(--dark); cursor: pointer; }
-    .inline-select:focus { outline: none; border-color: var(--orange); }
-    .perm-check-row { display: flex; flex-wrap: wrap; gap: 10px; }
-    .perm-check-label { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; font-weight: 500; }
-    .perm-check-label input { width: 14px; height: 14px; accent-color: var(--orange); cursor: pointer; }
-    .btn-save-role { padding: 4px 12px; font-size: 12px; font-weight: 700; background: var(--orange); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-    .btn-save-role:hover { background: var(--orange-dark); }
-    .btn-save-role:disabled { opacity: .5; cursor: not-allowed; }
+    /* ── Empty state ── */
+    .tm-empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+    .tm-empty svg { margin-bottom: 14px; opacity: .35; }
 
-    /* ── Action buttons ── */
-    .actions-cell { display: flex; gap: 5px; flex-wrap: wrap; }
+    /* ── Right drawer ── */
+    .tm-drawer-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 300;
+      opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .tm-drawer-overlay.open { opacity: 1; pointer-events: all; }
+    .tm-drawer {
+      position: fixed; top: 0; right: 0; height: 100%; width: 420px; max-width: 95vw;
+      background: #fff; z-index: 310; box-shadow: -8px 0 40px rgba(0,0,0,.18);
+      transform: translateX(100%); transition: transform .25s cubic-bezier(.4,0,.2,1);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .tm-drawer.open { transform: translateX(0); }
+    .tm-drawer-head {
+      padding: 20px 20px 16px; border-bottom: 1px solid #f3f4f6;
+      display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+      background: var(--graphite, #2e3138); color: #fff;
+    }
+    .tm-drawer-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #fff; flex-shrink: 0; }
+    .tm-drawer-head-name { font-size: 16px; font-weight: 800; }
+    .tm-drawer-head-email { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+    .tm-drawer-close { margin-left: auto; background: rgba(255,255,255,.1); border: none; color: #fff; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .tm-drawer-close:hover { background: rgba(255,255,255,.2); }
 
-    /* ── Reset password modal ── */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .2s; }
-    .modal-overlay.open { opacity: 1; pointer-events: all; }
-    .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 380px; box-shadow: 0 16px 48px rgba(0,0,0,.2); transform: scale(.96); transition: transform .2s; }
-    .modal-overlay.open .modal { transform: scale(1); }
-    .modal-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--gray-100); display: flex; justify-content: space-between; align-items: center; }
-    .modal-header h3 { font-size: 16px; font-weight: 800; }
-    .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--gray-500); line-height: 1; }
-    .modal-body { padding: 18px 20px; }
-    .modal-footer { padding: 12px 20px 18px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--gray-100); }
-    .err-inline { font-size: 12px; color: var(--red); margin-top: 6px; display: none; }
+    .tm-drawer-tabs { display: flex; border-bottom: 1px solid #f3f4f6; background: #fff; flex-shrink: 0; }
+    .tm-dtab { flex: 1; padding: 12px 8px; text-align: center; font-size: 12px; font-weight: 700; color: #6b7280; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: color .12s, border-color .12s; }
+    .tm-dtab.active { color: #ea580c; border-bottom-color: #ea580c; }
 
-    /* ── Warning banner ── */
-    .warning-msg { background: rgba(217,52,43,.1); border: 1px solid rgba(217,52,43,.25); color: #c0392b; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; display: none; font-weight: 600; }
+    .tm-drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
+    .tm-drawer-footer { padding: 14px 20px; border-top: 1px solid #f3f4f6; display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
 
-    .page-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
-    .page-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
-    .page-sub   { font-size: 14px; color: var(--gray-500); margin-bottom: 24px; }
-    .section-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 24px; overflow: hidden; }
-    .section-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-100); font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
-    .section-body { padding: 20px; }
-    .grid-3i { display: grid; grid-template-columns: 1fr 1fr 140px; gap: 12px; align-items: end; }
-    .invite-link-box { background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: 8px; padding: 12px 14px; font-size: 12px; color: var(--gray-700); word-break: break-all; margin-top: 12px; display: none; }
-    .invite-link-box .link-url { font-family: monospace; font-size: 11px; color: var(--orange); margin: 6px 0; }
-    @media(max-width:600px){ .grid-3i { grid-template-columns: 1fr; } }
+    /* ── Form elements ── */
+    .td-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin-bottom: 5px; }
+    .td-input { width: 100%; padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: #fff; outline: none; box-sizing: border-box; }
+    .td-input:focus { border-color: #ea580c; }
+    .td-select { width: 100%; padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: #fff; outline: none; cursor: pointer; box-sizing: border-box; }
+    .td-select:focus { border-color: #ea580c; }
+    .td-row { margin-bottom: 16px; }
+    .td-section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: #374151; margin: 20px 0 10px; border-top: 1px solid #f3f4f6; padding-top: 16px; }
+    .td-section-title:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+
+    /* ── Permission toggles ── */
+    .perm-grid { display: flex; flex-direction: column; gap: 8px; }
+    .perm-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f9fafb; border-radius: 8px; }
+    .perm-row-name { font-size: 13px; font-weight: 600; color: #374151; }
+    .perm-toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .perm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .perm-toggle-track {
+      position: absolute; inset: 0; border-radius: 20px; background: #d1d5db; cursor: pointer; transition: background .15s;
+    }
+    .perm-toggle input:checked + .perm-toggle-track { background: #ea580c; }
+    .perm-toggle-thumb {
+      position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff;
+      transition: transform .15s; pointer-events: none;
+    }
+    .perm-toggle input:checked ~ .perm-toggle-thumb { transform: translateX(16px); }
+
+    /* ── Actions panel ── */
+    .action-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 14px; background: #f9fafb; border-radius: 10px; margin-bottom: 8px;
+    }
+    .action-item-info { flex: 1; }
+    .action-item-title { font-size: 13px; font-weight: 700; color: #111; }
+    .action-item-desc { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .action-btn { padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; }
+    .action-btn-gray { background: #e5e7eb; color: #374151; }
+    .action-btn-gray:hover { background: #d1d5db; }
+    .action-btn-orange { background: #ea580c; color: #fff; }
+    .action-btn-orange:hover { background: #c2410c; }
+    .action-btn-red { background: #fef2f2; color: #dc2626; }
+    .action-btn-red:hover { background: #fee2e2; }
+    .action-btn-green { background: #dcfce7; color: #166534; }
+    .action-btn-green:hover { background: #bbf7d0; }
+
+    /* ── Color swatch ── */
+    .color-swatch-wrap { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #f9fafb; border-radius: 8px; }
+    .color-swatch { width: 36px; height: 36px; border-radius: 8px; border: 2px solid rgba(0,0,0,.1); cursor: pointer; padding: 1px; background: none; }
+
+    /* ── Invite drawer ── */
+    .inv-drawer-head { background: var(--graphite, #2e3138); color: #fff; padding: 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .inv-drawer-head h3 { font-size: 16px; font-weight: 800; }
+    .inv-result-box { background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 14px; margin-top: 16px; }
+    .inv-result-box .inv-url { font-family: monospace; font-size: 11px; color: #ea580c; word-break: break-all; margin: 8px 0 10px; padding: 6px 8px; background: #fff; border-radius: 6px; border: 1px solid #e5e7eb; }
+
+    /* ── Pending invites list ── */
+    .pending-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb; margin-bottom: 8px; }
+    .pending-avatar { width: 38px; height: 38px; border-radius: 50%; background: #fef3c7; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: #92400e; flex-shrink: 0; }
+
+    /* ── Warning ── */
+    .warn-box { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; display: none; margin-bottom: 12px; }
+
+    /* ── Save btn ── */
+    .btn-save-primary { padding: 10px 20px; background: #ea580c; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .btn-save-primary:hover { background: #c2410c; }
+    .btn-save-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-cancel-secondary { padding: 10px 16px; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-cancel-secondary:hover { background: #e5e7eb; }
+
+    /* ── Mobile tab strip (replaces sidebar) ── */
+    .tm-tabstrip {
+      display: none;
+      background: var(--graphite, var(--graphite, #2e3138));
+      overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+      position: sticky; top: 52px; z-index: 50;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .tm-tabstrip::-webkit-scrollbar { display: none; }
+    .tm-tabstrip-inner { display: flex; padding: 0 8px; gap: 2px; white-space: nowrap; min-width: max-content; }
+    .tm-tab-pill {
+      padding: 10px 14px; color: #9ca3af; font-size: 12px; font-weight: 700;
+      border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent;
+      white-space: nowrap; transition: color .12s, border-color .12s;
+    }
+    .tm-tab-pill.active { color: #f97316; border-bottom-color: #f97316; }
+
+    @media(max-width:700px){
+      .tm-sidebar { display: none; }
+      .tm-tabstrip { display: block; }
+      .tm-layout { flex-direction: column; }
+      .tm-main { padding: 14px 12px 80px; }
+      .tm-main-header { flex-wrap: wrap; gap: 10px; }
+      .tm-search { width: 100%; }
+      .tm-cards { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .tm-drawer { width: 100%; max-width: 100%; }
+      .tm-invite-btn-mobile {
+        position: fixed; bottom: 20px; right: 16px; z-index: 200;
+        width: 52px; height: 52px; border-radius: 50%;
+        background: #ea580c; color: #fff; border: none; cursor: pointer;
+        font-size: 26px; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(234,88,12,.45);
+      }
+    }
+    @media(max-width:400px){
+      .tm-cards { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -83,143 +237,159 @@
     <a href="index.html"><img class="header-logo" src="logo-bolt.png" alt="J&D Western Electric"/></a>
     <div class="header-title">
       <span class="company">J&D Western Electric</span>
-      <span class="module">Manage Team</span>
+      <span class="module">Team</span>
     </div>
   </div>
   <nav class="header-nav" style="display:flex;gap:4px;align-items:center;">
     <a href="office.html">Dashboard</a>
-    <a href="settings-admin.html">Settings</a>
     <a href="#" id="logout-btn">Sign Out</a>
   </nav>
 </header>
 
-<div class="page-wrap">
-
-  <!-- BACK BUTTON -->
-  <div class="back-bar">
-    <button class="back-btn" onclick="goBack()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      Back
-    </button>
-  </div>
-
-  <div class="page-title">Manage Team</div>
-  <div class="page-sub">Invite users and manage their roles and module access.</div>
-
-  <!-- Invite form -->
-  <div class="section-card">
-    <div class="section-header">Invite New User</div>
-    <div class="section-body">
-      <div class="warning-msg" id="invite-warning"></div>
-      <div class="grid-3i">
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Full Name</label>
-          <input type="text" id="inv-name" class="form-control" placeholder="Jane Smith"/>
-        </div>
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Email Address</label>
-          <input type="email" id="inv-email" class="form-control" placeholder="jane@example.com"/>
-        </div>
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Role</label>
-          <select id="inv-role" class="form-control">
-            <option value="field">Field User</option>
-            <option value="admin">Office Admin</option>
-          </select>
-        </div>
-      </div>
-      <div style="margin-top:14px;">
-        <button class="btn btn-primary" id="btn-invite">Send Invitation</button>
-      </div>
-      <div class="invite-link-box" id="invite-result">
-        <strong>✅ User invited!</strong>
-        <div>Share this link with them to activate their account:</div>
-        <div class="link-url" id="invite-url"></div>
-        <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('invite-url').textContent).then(()=>showToast('Link copied!','success'))">Copy Link</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- User list -->
-  <div class="section-card">
-    <div class="section-header">
-      <span>Team Members</span>
-      <span id="user-count" class="badge badge-gray">—</span>
-    </div>
-    <div class="team-table-wrap" style="overflow-x:auto;">
-      <table class="user-table team-table">
-        <thead>
-          <tr>
-            <th>Color</th>
-            <th>Name / Email</th>
-            <th>Role</th>
-            <th>Module Access</th>
-            <th>Status</th>
-            <th>Last Login</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="user-tbody"></tbody>
-      </table>
-    </div>
+<!-- Mobile tab strip — hidden on desktop, shown on mobile via CSS -->
+<div class="tm-tabstrip" id="tm-tabstrip">
+  <div class="tm-tabstrip-inner">
+    <button class="tm-tab-pill active" onclick="setView('all',this)">All Members</button>
+    <button class="tm-tab-pill" onclick="setView('admin',this)">Office Admin</button>
+    <button class="tm-tab-pill" onclick="setView('field',this)">Field Users</button>
+    <button class="tm-tab-pill" onclick="setView('pending',this)">Pending</button>
   </div>
 </div>
 
-<!-- Edit User Modal -->
-<div class="modal-overlay" id="edit-user-modal">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-header">
-      <h3>Edit User</h3>
-      <button class="modal-close" id="edit-modal-close">×</button>
+<!-- Mobile FAB invite button -->
+<button class="tm-invite-btn-mobile" id="btn-open-invite-fab" onclick="openInviteDrawer()" title="Invite member" style="display:none;">+</button>
+
+<div class="tm-layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="tm-sidebar">
+    <button class="tm-invite-btn" id="btn-open-invite">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Invite Member
+    </button>
+
+    <div class="tm-sidebar-section">
+      <div class="tm-sidebar-label">Views</div>
+      <button class="tm-nav-btn active" id="nav-all" onclick="setView('all')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        All Members
+        <span class="tm-sidebar-count" id="cnt-all">—</span>
+      </button>
+      <button class="tm-nav-btn" id="nav-admin" onclick="setView('admin')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Office Admin
+        <span class="tm-sidebar-count" id="cnt-admin">—</span>
+      </button>
+      <button class="tm-nav-btn" id="nav-field" onclick="setView('field')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><line x1="12" y1="7" x2="12" y2="17"/></svg>
+        Field Users
+        <span class="tm-sidebar-count" id="cnt-field">—</span>
+      </button>
+      <button class="tm-nav-btn" id="nav-pending" onclick="setView('pending')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Pending Invites
+        <span class="tm-sidebar-count" id="cnt-pending">—</span>
+      </button>
     </div>
-    <div class="modal-body">
-      <input type="hidden" id="edit-user-id"/>
-      <div class="warning-msg" id="edit-warning"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">Name</label><input type="text" id="edit-name" class="form-control"/></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Email</label><input type="email" id="edit-email" class="form-control"/></div>
-      </div>
-      <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Role</label>
-        <select id="edit-role" class="form-control">
-          <option value="field">Field User</option>
-          <option value="admin">Office Admin</option>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Module Permissions</label>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;" id="edit-perms-wrap"></div>
-      </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="tm-main">
+    <div class="tm-main-header">
+      <div class="tm-main-title" id="main-view-title">All Members</div>
+      <input type="search" class="tm-search" id="tm-search" placeholder="Search by name or email…" oninput="renderCards()"/>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-primary btn-sm" id="edit-save-btn">Save Changes</button>
-      <button class="btn btn-secondary btn-sm" id="edit-cancel-btn">Cancel</button>
+    <div class="tm-cards" id="tm-cards"></div>
+    <div class="tm-empty" id="tm-empty" style="display:none;">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <div style="font-size:14px;font-weight:700;color:#6b7280;">No members found</div>
     </div>
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════
+     MEMBER DETAIL DRAWER
+══════════════════════════════════════ -->
+<div class="tm-drawer-overlay" id="member-overlay" onclick="closeMemberDrawer()"></div>
+<div class="tm-drawer" id="member-drawer">
+  <div class="tm-drawer-head">
+    <div class="tm-drawer-avatar" id="md-avatar">JD</div>
+    <div>
+      <div class="tm-drawer-head-name" id="md-name">—</div>
+      <div class="tm-drawer-head-email" id="md-email">—</div>
+    </div>
+    <button class="tm-drawer-close" onclick="closeMemberDrawer()">×</button>
+  </div>
+  <div class="tm-drawer-tabs">
+    <button class="tm-dtab active" id="dtab-profile" onclick="switchDTab('profile')">Profile</button>
+    <button class="tm-dtab" id="dtab-perms" onclick="switchDTab('perms')">Permissions</button>
+    <button class="tm-dtab" id="dtab-actions" onclick="switchDTab('actions')">Actions</button>
+  </div>
+  <div class="tm-drawer-body" id="md-body"></div>
+  <div class="tm-drawer-footer" id="md-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════
+     INVITE DRAWER
+══════════════════════════════════════ -->
+<div class="tm-drawer-overlay" id="invite-overlay" onclick="closeInviteDrawer()"></div>
+<div class="tm-drawer" id="invite-drawer">
+  <div class="inv-drawer-head">
+    <h3>Invite New Member</h3>
+    <button class="tm-drawer-close" onclick="closeInviteDrawer()">×</button>
+  </div>
+  <div class="tm-drawer-body">
+    <div class="warn-box" id="inv-warn"></div>
+
+    <div class="td-row">
+      <div class="td-label">Full Name</div>
+      <input type="text" class="td-input" id="inv-name" placeholder="Jane Smith"/>
+    </div>
+    <div class="td-row">
+      <div class="td-label">Email Address</div>
+      <input type="email" class="td-input" id="inv-email" placeholder="jane@example.com"/>
+    </div>
+    <div class="td-row">
+      <div class="td-label">Role</div>
+      <select class="td-select" id="inv-role">
+        <option value="field">Field User</option>
+        <option value="admin">Office Admin</option>
+      </select>
+    </div>
+
+    <div class="td-section-title">Module Permissions</div>
+    <div class="perm-grid" id="inv-perms-grid"></div>
+
+    <div class="inv-result-box" id="inv-result" style="display:none;">
+      <strong style="font-size:13px;color:#166534;">✅ Member invited!</strong>
+      <div style="font-size:12px;color:#374151;margin-top:4px;">Share this link to activate their account:</div>
+      <div class="inv-url" id="inv-url"></div>
+      <button class="action-btn action-btn-orange" onclick="copyInviteLink()" style="font-size:12px;">Copy Link</button>
+    </div>
+  </div>
+  <div class="tm-drawer-footer">
+    <button class="btn-save-primary" id="btn-do-invite">Send Invitation</button>
+    <button class="btn-cancel-secondary" onclick="closeInviteDrawer()">Cancel</button>
   </div>
 </div>
 
 <!-- Reset Password Modal -->
-<div class="modal-overlay" id="reset-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>Reset Password</h3>
-      <button class="modal-close" id="modal-close-btn">×</button>
+<div class="tm-drawer-overlay" id="pw-overlay" onclick="closePwModal()" style="z-index:400;"></div>
+<div style="position:fixed;inset:0;z-index:410;display:flex;align-items:center;justify-content:center;pointer-events:none;" id="pw-modal-wrap">
+  <div id="pw-modal" style="background:#fff;border-radius:14px;width:360px;max-width:90vw;box-shadow:0 16px 48px rgba(0,0,0,.2);transform:scale(.95);transition:transform .18s;pointer-events:all;display:none;">
+    <div style="padding:18px 20px 14px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:16px;font-weight:800;">Reset Password</span>
+      <button onclick="closePwModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">×</button>
     </div>
-    <div class="modal-body">
-      <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">
-        Set a temporary password for <strong id="modal-user-name"></strong>.
-      </p>
-      <div class="warning-msg" id="modal-err"></div>
-      <div class="form-group">
-        <label class="form-label">New Password</label>
-        <input type="password" id="new-pw" class="form-control" placeholder="Min 8 characters" autocomplete="new-password"/>
-      </div>
-      <div class="form-group" style="margin-top:12px;">
-        <label class="form-label">Confirm Password</label>
-        <input type="password" id="confirm-pw" class="form-control" placeholder="Re-enter password" autocomplete="new-password"/>
-      </div>
+    <div style="padding:18px 20px;">
+      <p style="font-size:13px;color:#6b7280;margin:0 0 14px;">Set a temporary password for <strong id="pw-modal-name"></strong>.</p>
+      <div class="warn-box" id="pw-warn"></div>
+      <div class="td-row"><div class="td-label">New Password</div><input type="password" class="td-input" id="pw-new" placeholder="Min 8 characters" autocomplete="new-password"/></div>
+      <div class="td-row" style="margin-bottom:0;"><div class="td-label">Confirm Password</div><input type="password" class="td-input" id="pw-confirm" placeholder="Re-enter password" autocomplete="new-password"/></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary btn-sm" id="modal-cancel-btn">Cancel</button>
-      <button class="btn btn-primary btn-sm" id="modal-save-btn">Save Password</button>
+    <div style="padding:12px 20px 18px;border-top:1px solid #f3f4f6;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn-cancel-secondary" onclick="closePwModal()">Cancel</button>
+      <button class="btn-save-primary" id="pw-save-btn">Save Password</button>
     </div>
   </div>
 </div>
@@ -228,21 +398,23 @@
 
 <script>
 const $ = id => document.getElementById(id);
-let currentUser;
-let resetTargetId = null;
-const ALL_MODULES = ['time_ticket','get_po','office_dashboard','timesheet_edit','time_off_approve','receive_emails','safety_forms'];
-const MODULE_LABELS = { time_ticket: 'Time Ticket', get_po: 'Get PO', office_dashboard: 'Office Dashboard', timesheet_edit: 'Timesheet Edit', time_off_approve: 'Time Off Approval', receive_emails: '📧 Receives Email Notifications', safety_forms: '🦺 Safety Forms (Incident / Near Miss)' };
+let currentUser, allUsers = [], currentView = 'all', activeMemberId = null;
+let pwTargetId = null;
+const ALL_MODULES = ['time_ticket','get_po','office_dashboard','timesheet_edit','time_off_approve','receive_emails','safety_forms','safety_supervisor'];
+const MODULE_LABELS = {
+  time_ticket: 'Time Tickets', get_po: 'Get PO', office_dashboard: 'Office Dashboard',
+  timesheet_edit: 'Timesheet Edit', time_off_approve: 'Time Off Approval',
+  receive_emails: 'Email Notifications', safety_forms: 'Safety Forms',
+  safety_supervisor: 'Safety Supervisor (incident & near-miss reports)'
+};
 
-function goBack() {
-  if (document.referrer && document.referrer !== location.href) { history.back(); }
-  else { location.href = '/office.html'; }
-}
-
-function showToast(msg, type='') {
-  const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
-  setTimeout(()=>t.className='', 3200);
-}
+function showToast(msg, type='') { const t=$('toast'); t.textContent=msg; t.className=`show ${type}`; setTimeout(()=>t.className='',3200); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function initials(name) { return (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+function avatarBg(name) {
+  const colors = ['#ea580c','#2563eb','#16a34a','#7c3aed','#0891b2','#b45309','#be185d','#0f766e'];
+  let h=0; for(let c of (name||'')) h=(h*31+c.charCodeAt(0))&0xffff; return colors[h%colors.length];
+}
 
 // ── Auth ──
 (async () => {
@@ -252,262 +424,357 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
   if (currentUser.role !== 'admin') { location.href='/field.html'; return; }
   document.body.style.visibility='visible';
   loadUsers();
+  buildInvitePermsGrid();
 })();
 
 $('logout-btn').addEventListener('click', async e => {
-  e.preventDefault();
-  await fetch('/api/auth/logout',{method:'POST'});
-  location.href='/login.html';
+  e.preventDefault(); await fetch('/api/auth/logout',{method:'POST'}); location.href='/login.html';
 });
 
-// ── Load users ──
+// ── Data ──
 async function loadUsers() {
   const res = await fetch('/api/users');
-  const users = await res.json();
-  $('user-count').textContent = users.length;
+  allUsers = await res.json();
+  updateCounts();
+  renderCards();
+}
 
-  $('user-tbody').innerHTML = users.map(u => {
-    const perms    = (u.permissions||'').split(',').filter(Boolean);
-    const isAdmin  = u.role === 'admin';
-    const isMe     = u.id === currentUser.id;
-    const lastLogin = u.last_login
-      ? new Date(u.last_login).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'})
-      : '—';
+function updateCounts() {
+  const admin = allUsers.filter(u=>u.role==='admin').length;
+  const field = allUsers.filter(u=>u.role!=='admin').length;
+  const pending = allUsers.filter(u=>u.status==='invited').length;
+  $('cnt-all').textContent = allUsers.length;
+  $('cnt-admin').textContent = admin;
+  $('cnt-field').textContent = field;
+  $('cnt-pending').textContent = pending;
+}
 
-    // Permission checkboxes — admins always have all (but still show toggles)
-    const permChecks = ALL_MODULES.map(mod => {
-      const checked  = isAdmin || perms.includes(mod);
-      const disabled = isAdmin && mod === 'office_dashboard' ? 'disabled title="Admins always have this"' : '';
-      return `<label class="perm-check-label">
-        <input type="checkbox" class="perm-cb" data-uid="${u.id}" data-role="${u.role}" data-perm="${mod}"
-          ${checked?'checked':''} ${disabled}/>
-        ${MODULE_LABELS[mod]}
-      </label>`;
-    }).join('');
+// ── Views ──
+const VIEW_TITLES = { all: 'All Members', admin: 'Office Admins', field: 'Field Users', pending: 'Pending Invites' };
+function setView(v, tabEl) {
+  currentView = v;
+  // Sidebar buttons
+  ['all','admin','field','pending'].forEach(x => {
+    const b = $('nav-'+x); if (b) b.classList.toggle('active', x===v);
+  });
+  // Mobile tab pills
+  document.querySelectorAll('.tm-tab-pill').forEach(p => p.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+  $('main-view-title').textContent = VIEW_TITLES[v];
+  $('tm-search').value = '';
+  renderCards();
+}
 
-    return `<tr data-uid="${u.id}">
-      <td style="width:44px;text-align:center;padding:8px 6px;">
-        <input type="color" class="user-color-swatch" data-uid="${u.id}"
-          value="${u.time_off_color || '#93c5fd'}"
-          title="Calendar color for ${esc(u.name)} — click to change"
-          style="width:32px;height:32px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:none;"/>
-      </td>
-      <td>
-        <div style="font-weight:700;">${esc(u.name)}</div>
-        <div style="font-size:11px;color:var(--gray-500);">${esc(u.email)}</div>
-      </td>
-      <td>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span class="role-badge role-${u.role}">${isAdmin?'Office Admin':'Field User'}</span>
-          ${!isMe ? `
-            <select class="inline-select role-select" data-uid="${u.id}" data-current-role="${u.role}" title="Change role">
-              <option value="field" ${u.role!=='admin'?'selected':''}>Field User</option>
-              <option value="admin" ${u.role==='admin'?'selected':''}>Office Admin</option>
-            </select>
-            <button class="btn-save-role" data-uid="${u.id}" data-action="save-role">Save</button>
-          ` : '<span style="font-size:11px;color:var(--gray-400);">(you)</span>'}
+// Show mobile FAB when sidebar is hidden
+function updateFABVisibility() {
+  const fab = $('btn-open-invite-fab');
+  if (fab) fab.style.display = window.innerWidth <= 700 ? 'flex' : 'none';
+}
+window.addEventListener('resize', updateFABVisibility);
+window.addEventListener('DOMContentLoaded', updateFABVisibility);
+
+function filterUsers() {
+  const q = ($('tm-search').value||'').toLowerCase();
+  let users = allUsers;
+  if (currentView === 'admin')   users = users.filter(u=>u.role==='admin');
+  if (currentView === 'field')   users = users.filter(u=>u.role!=='admin');
+  if (currentView === 'pending') users = users.filter(u=>u.status==='invited');
+  if (q) users = users.filter(u=>(u.name+' '+u.email).toLowerCase().includes(q));
+  return users;
+}
+
+function renderCards() {
+  const users = filterUsers();
+  const wrap = $('tm-cards');
+  $('tm-empty').style.display = users.length ? 'none' : 'block';
+  wrap.innerHTML = users.map(u => {
+    const bg = u.time_off_color || avatarBg(u.name);
+    const isMe = u.id === currentUser.id;
+    return `<div class="tm-card${activeMemberId===u.id?' selected':''}" onclick="openMemberDrawer(${u.id})">
+      ${isMe ? `<div class="tm-card-me">You</div>` : ''}
+      <div class="tm-card-top">
+        <div class="tm-avatar" style="background:${bg};">${esc(initials(u.name))}</div>
+        <div>
+          <div class="tm-card-name">${esc(u.name)}</div>
+          <div class="tm-card-email">${esc(u.email)}</div>
         </div>
-      </td>
-      <td>
-        <div class="perm-check-row">${permChecks}</div>
-      </td>
-      <td><span class="status-badge status-${u.status}">${u.status}</span></td>
-      <td style="font-size:12px;color:var(--gray-500);">${lastLogin}</td>
-      <td>
-        ${!isMe ? `<div class="actions-cell">
-          <button class="btn btn-sm btn-secondary" onclick="openEditModal(${u.id})">Edit</button>
-          <button class="btn btn-sm btn-ghost" onclick="openResetModal(${u.id},'${esc(u.name)}')">Reset PW</button>
-          <button class="btn btn-sm btn-secondary" onclick="sendResetLink(${u.id},'${esc(u.name)}')">Send Link</button>
-          ${u.status==='active'
-            ? `<button class="btn btn-sm btn-secondary" onclick="deactivate(${u.id},'${esc(u.name)}')">Deactivate</button>`
-            : `<button class="btn btn-sm btn-ghost" onclick="reactivate(${u.id})">Reactivate</button>`}
-          <button class="btn btn-sm btn-danger" onclick="removeUser(${u.id},'${esc(u.name)}')">Remove</button>
-        </div>` : ''}
-      </td>
-    </tr>`;
+      </div>
+      <div class="tm-card-footer">
+        <span class="role-pill role-${u.role}">${u.role==='admin'?'Office Admin':'Field User'}</span>
+        <span class="status-pill status-${u.status}">${u.status}</span>
+      </div>
+    </div>`;
   }).join('');
+}
 
-  // Permission checkboxes — save on change
-  $('user-tbody').addEventListener('change', handlePermChange);
+// ── Member drawer ──
+function openMemberDrawer(uid) {
+  const u = allUsers.find(x=>x.id===uid);
+  if (!u) return;
+  activeMemberId = uid;
+  renderCards();
 
-  // Color swatch — save on change
-  $('user-tbody').addEventListener('change', async e => {
-    const swatch = e.target.closest('.user-color-swatch');
-    if (!swatch) return;
-    const uid = swatch.dataset.uid;
-    const color = swatch.value;
-    const r = await fetch(`/api/users/${uid}/color`, {
-      method: 'PATCH',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ color })
+  const bg = u.time_off_color || avatarBg(u.name);
+  $('md-avatar').textContent = initials(u.name);
+  $('md-avatar').style.background = bg;
+  $('md-name').textContent = u.name;
+  $('md-email').textContent = u.email;
+
+  switchDTab('profile');
+  $('member-overlay').classList.add('open');
+  $('member-drawer').classList.add('open');
+}
+
+function closeMemberDrawer() {
+  activeMemberId = null;
+  renderCards();
+  $('member-overlay').classList.remove('open');
+  $('member-drawer').classList.remove('open');
+}
+
+let _activeTab = 'profile';
+function switchDTab(tab) {
+  _activeTab = tab;
+  ['profile','perms','actions'].forEach(t => {
+    $('dtab-'+t).classList.toggle('active', t===tab);
+  });
+  const u = allUsers.find(x=>x.id===activeMemberId);
+  if (!u) return;
+  const isMe = u.id === currentUser.id;
+  const body = $('md-body');
+  const footer = $('md-footer');
+
+  if (tab === 'profile') {
+    body.innerHTML = `
+      <div class="warn-box" id="md-warn"></div>
+      <div class="td-row"><div class="td-label">Full Name</div><input type="text" class="td-input" id="md-inp-name" value="${esc(u.name)}"${isMe?'':''}/></div>
+      <div class="td-row"><div class="td-label">Email</div><input type="email" class="td-input" id="md-inp-email" value="${esc(u.email)}" readonly style="background:#f9fafb;color:#6b7280;cursor:default;" title="Email cannot be changed"/></div>
+      ${!isMe ? `<div class="td-row"><div class="td-label">Role</div>
+        <select class="td-select" id="md-inp-role">
+          <option value="field"${u.role!=='admin'?' selected':''}>Field User</option>
+          <option value="admin"${u.role==='admin'?' selected':''}>Office Admin</option>
+        </select></div>` : `<div class="td-row"><div class="td-label">Role</div><div style="padding:9px 12px;background:#f9fafb;border-radius:8px;font-size:13px;font-weight:700;color:#6b7280;">${u.role==='admin'?'Office Admin':'Field User'} <span style="font-size:11px;font-weight:400;">(your account)</span></div></div>`}
+      <div class="td-section-title">Calendar Colour</div>
+      <div class="color-swatch-wrap">
+        <input type="color" class="color-swatch" id="md-color" value="${esc(u.time_off_color||'#93c5fd')}" title="Calendar colour"/>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#374151;">Time-off calendar colour</div>
+          <div style="font-size:11px;color:#6b7280;">Shown on the team schedule</div>
+        </div>
+      </div>
+      <div class="td-section-title">Status</div>
+      <div style="padding:10px 12px;background:#f9fafb;border-radius:8px;">
+        <span class="status-pill status-${u.status}" style="font-size:12px;">${u.status}</span>
+        <span style="font-size:12px;color:#6b7280;margin-left:8px;">Last login: ${u.last_login ? new Date(u.last_login).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'}) : 'Never'}</span>
+      </div>`;
+
+    footer.innerHTML = !isMe
+      ? `<button class="btn-save-primary" id="md-save-profile">Save Changes</button>
+         <button class="btn-cancel-secondary" onclick="closeMemberDrawer()">Cancel</button>`
+      : `<button class="btn-save-primary" id="md-save-profile">Save Name</button>`;
+
+    $('md-inp-name').focus();
+    $('md-color').addEventListener('change', async e => {
+      const r = await fetch(`/api/users/${u.id}/color`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({color:e.target.value})});
+      if (r.ok) showToast('Color saved','success'); else showToast('Failed to save color','error');
     });
-    if (!r.ok) { const d = await r.json().catch(()=>({})); alert(d.error || 'Failed to save color'); }
-    // else: saved silently — swatch already shows the new color visually
-  });
 
-  // Role save buttons
-  $('user-tbody').querySelectorAll('[data-action="save-role"]').forEach(btn => {
-    btn.addEventListener('click', () => saveRole(btn.dataset.uid));
-  });
+    $('md-save-profile').addEventListener('click', async () => {
+      const name = $('md-inp-name').value.trim();
+      const role = isMe ? u.role : ($('md-inp-role')||{value:u.role}).value;
+      if (!name) { showWarn('md-warn','Name is required'); return; }
+      $('md-save-profile').disabled=true; $('md-save-profile').textContent='Saving…';
+      const r = await fetch(`/api/users/${u.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,role})});
+      const d = await r.json();
+      $('md-save-profile').disabled=false; $('md-save-profile').textContent='Save Changes';
+      if (!r.ok) { showWarn('md-warn', d.error||'Failed'); return; }
+      showToast('Profile updated','success');
+      await loadUsers();
+      // refresh drawer header
+      $('md-name').textContent = name;
+    });
+  }
+
+  if (tab === 'perms') {
+    const perms = (u.permissions||'').split(',').filter(Boolean);
+    const isAdmin = u.role === 'admin';
+    body.innerHTML = `
+      <p style="font-size:12px;color:#6b7280;margin:0 0 14px;">${isAdmin ? 'Admins have access to all modules. You can still adjust optional extras below.' : 'Toggle which modules this user can access.'}</p>
+      <div class="perm-grid" id="md-perm-grid">
+        ${ALL_MODULES.map(mod => {
+          const checked = isAdmin || perms.includes(mod);
+          const locked = isAdmin && mod==='office_dashboard';
+          return `<div class="perm-row">
+            <div class="perm-row-name">${MODULE_LABELS[mod]}</div>
+            <label class="perm-toggle" title="${locked?'Admins always have this':''}">
+              <input type="checkbox" class="md-perm-cb" data-perm="${mod}" ${checked?'checked':''} ${locked?'disabled':''} ${!isMe||mod!=='office_dashboard'?'':'disabled'}>
+              <div class="perm-toggle-track"></div>
+              <div class="perm-toggle-thumb"></div>
+            </label>
+          </div>`;
+        }).join('')}
+      </div>`;
+    footer.innerHTML = `<button class="btn-save-primary" id="md-save-perms">Save Permissions</button>
+      <button class="btn-cancel-secondary" onclick="closeMemberDrawer()">Cancel</button>`;
+
+    $('md-save-perms').addEventListener('click', async () => {
+      const permsNew = Array.from($('md-perm-grid').querySelectorAll('.md-perm-cb:checked')).map(c=>c.dataset.perm);
+      $('md-save-perms').disabled=true; $('md-save-perms').textContent='Saving…';
+      const r = await fetch(`/api/users/${u.id}/permissions`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({permissions:permsNew})});
+      $('md-save-perms').disabled=false; $('md-save-perms').textContent='Save Permissions';
+      if (r.ok) { showToast('Permissions saved','success'); await loadUsers(); }
+      else showToast('Failed to save permissions','error');
+    });
+  }
+
+  if (tab === 'actions') {
+    const isActive = u.status === 'active';
+    body.innerHTML = `
+      <div class="action-item">
+        <div class="action-item-info">
+          <div class="action-item-title">Reset Password</div>
+          <div class="action-item-desc">Set a new temporary password manually</div>
+        </div>
+        <button class="action-btn action-btn-gray" onclick="openPwModal(${u.id},'${esc(u.name)}')">Reset</button>
+      </div>
+      <div class="action-item">
+        <div class="action-item-info">
+          <div class="action-item-title">Send Reset Link</div>
+          <div class="action-item-desc">Email a password reset link to ${esc(u.email)}</div>
+        </div>
+        <button class="action-btn action-btn-orange" onclick="doSendResetLink(${u.id},'${esc(u.name)}')">Send</button>
+      </div>
+      ${!isMe ? `
+      <div class="action-item">
+        <div class="action-item-info">
+          <div class="action-item-title">${isActive ? 'Deactivate Account' : 'Reactivate Account'}</div>
+          <div class="action-item-desc">${isActive ? 'Block this user from logging in' : 'Restore login access'}</div>
+        </div>
+        <button class="action-btn ${isActive?'action-btn-red':'action-btn-green'}" onclick="${isActive?`doDeactivate(${u.id},'${esc(u.name)}')`:`doReactivate(${u.id})`}">${isActive?'Deactivate':'Reactivate'}</button>
+      </div>
+      <div class="action-item" style="border:1px solid #fecaca;background:#fef2f2;">
+        <div class="action-item-info">
+          <div class="action-item-title" style="color:#dc2626;">Remove Member</div>
+          <div class="action-item-desc">Permanently delete this account — cannot be undone</div>
+        </div>
+        <button class="action-btn action-btn-red" onclick="doRemove(${u.id},'${esc(u.name)}')">Remove</button>
+      </div>` : `<div style="text-align:center;padding:24px;color:#6b7280;font-size:13px;">These actions are not available for your own account.</div>`}`;
+    footer.innerHTML = '';
+  }
 }
 
-// ── Save role ──
-async function saveRole(uid) {
-  const row = $('user-tbody').querySelector(`tr[data-uid="${uid}"]`);
-  const sel = row.querySelector('.role-select');
-  const newRole = sel.value;
-  const btn = row.querySelector('[data-action="save-role"]');
-  btn.disabled = true; btn.textContent = '…';
+function showWarn(id, msg) { const el=$(id); if(!el)return; el.textContent=msg; el.style.display='block'; }
 
-  const res = await fetch(`/api/users/${uid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:newRole})});
-  const data = await res.json();
-  btn.disabled = false; btn.textContent = 'Save';
-
-  if (!res.ok) { showToast(data.error,'error'); sel.value = sel.dataset.currentRole; return; }
-  showToast('Role updated successfully','success');
-  loadUsers();
-}
-
-// ── Permission checkbox handler ──
-async function handlePermChange(e) {
-  const cb = e.target.closest('.perm-cb');
-  if (!cb) return;
-  const uid  = cb.dataset.uid;
-  const role = cb.dataset.role;
-
-  // Collect all checked perms for this user
-  const allCbs = $('user-tbody').querySelectorAll(`.perm-cb[data-uid="${uid}"]`);
-  const perms  = Array.from(allCbs).filter(c=>c.checked).map(c=>c.dataset.perm);
-
-  const res = await fetch(`/api/users/${uid}/permissions`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({permissions:perms})});
-  const data = await res.json();
-
-  if (res.ok) { showToast('Permissions updated','success'); }
-  else { showToast(data.error||'Failed to update permissions','error'); cb.checked=!cb.checked; }
-}
-
-// ── Invite ──
-$('btn-invite').addEventListener('click', async () => {
-  const name=  $('inv-name').value.trim();
-  const email= $('inv-email').value.trim();
-  const role=  $('inv-role').value;
-  if (!name||!email) { showToast('Name and email required','error'); return; }
-  $('btn-invite').disabled=true; $('btn-invite').textContent='Sending…';
-  const res = await fetch('/api/users/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,role})});
-  const data = await res.json();
-  $('btn-invite').disabled=false; $('btn-invite').textContent='Send Invitation';
-  if (!res.ok) { showToast(data.error||'Failed','error'); return; }
-  $('invite-url').textContent=data.invite_url;
-  $('invite-result').style.display='block';
-  if (data.email_sent) showToast('Invitation email sent!','success');
-  else showToast('User invited — share the link below','');
-  $('inv-name').value=''; $('inv-email').value='';
-  loadUsers();
-});
-
-// ── Deactivate / Reactivate ──
-async function deactivate(id,name) {
+// ── User actions ──
+async function doDeactivate(id,name) {
   if (!confirm(`Deactivate ${name}? They will not be able to log in.`)) return;
   const r=await fetch(`/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'inactive'})});
-  if (r.ok) { showToast('User deactivated','success'); loadUsers(); }
+  if (r.ok) { showToast('User deactivated','success'); await loadUsers(); switchDTab('actions'); }
 }
-async function reactivate(id) {
+async function doReactivate(id) {
   const r=await fetch(`/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'active'})});
-  if (r.ok) { showToast('User reactivated','success'); loadUsers(); }
+  if (r.ok) { showToast('User reactivated','success'); await loadUsers(); switchDTab('actions'); }
 }
-async function removeUser(id,name) {
+async function doRemove(id,name) {
   if (!confirm(`Permanently remove ${name}? This cannot be undone.`)) return;
   const r=await fetch(`/api/users/${id}`,{method:'DELETE'});
-  if (r.ok) { showToast('User removed','success'); loadUsers(); }
+  if (r.ok) { showToast('User removed','success'); closeMemberDrawer(); await loadUsers(); }
 }
-
-// ── Send reset link ──
-async function sendResetLink(id,name) {
-  if (!confirm(`Send a password reset email to ${name}?`)) return;
+async function doSendResetLink(id,name) {
   const res=await fetch(`/api/users/${id}/send-reset-link`,{method:'POST'});
   const data=await res.json();
   if (!res.ok) { showToast(data.error||'Failed','error'); return; }
   if (data.email_sent) { showToast(`Reset email sent to ${name}`,'success'); return; }
   const copied=await navigator.clipboard.writeText(data.reset_url).then(()=>true).catch(()=>false);
-  showToast(copied?'Reset link copied to clipboard!':'Link generated — check console','success');
+  showToast(copied?'Reset link copied!':'Check console for link','success');
   if (!copied) console.info('Reset link:',data.reset_url);
 }
 
-// ── Reset password modal ──
-function openResetModal(id,name) {
-  resetTargetId=id;
-  $('modal-user-name').textContent=name;
-  $('new-pw').value=''; $('confirm-pw').value='';
-  $('modal-err').style.display='none';
-  $('modal-save-btn').disabled=false; $('modal-save-btn').textContent='Save Password';
-  $('reset-modal').classList.add('open');
-  setTimeout(()=>$('new-pw').focus(),100);
+// ── Password modal ──
+function openPwModal(id,name) {
+  pwTargetId=id; $('pw-modal-name').textContent=name;
+  $('pw-new').value=''; $('pw-confirm').value='';
+  $('pw-warn').style.display='none'; $('pw-save-btn').disabled=false; $('pw-save-btn').textContent='Save Password';
+  $('pw-overlay').classList.add('open');
+  $('pw-modal').style.display='block';
+  setTimeout(()=>{ $('pw-modal').style.transform='scale(1)'; $('pw-new').focus(); },10);
 }
-function closeResetModal() { $('reset-modal').classList.remove('open'); resetTargetId=null; }
-$('modal-close-btn').addEventListener('click',closeResetModal);
-$('modal-cancel-btn').addEventListener('click',closeResetModal);
-$('reset-modal').addEventListener('click',e=>{ if(e.target===$('reset-modal')) closeResetModal(); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeResetModal(); });
-
-// ── Edit user modal ──
-let editUserData = null;
-
-async function openEditModal(id) {
-  const res = await fetch('/api/users');
-  const users = await res.json();
-  const u = users.find(x=>x.id===id);
-  if(!u) return;
-  editUserData = u;
-  $('edit-user-id').value = u.id;
-  $('edit-name').value  = u.name;
-  $('edit-email').value = u.email;
-  $('edit-role').value  = u.role;
-  $('edit-warning').style.display='none';
-  // Build permission checkboxes
-  const perms = (u.permissions||'').split(',').filter(Boolean);
-  $('edit-perms-wrap').innerHTML = ALL_MODULES.map(mod=>`
-    <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
-      <input type="checkbox" class="edit-perm-cb" data-perm="${mod}" ${perms.includes(mod)||u.role==='admin'?'checked':''} style="width:14px;height:14px;accent-color:var(--orange);"/>
-      ${MODULE_LABELS[mod]}
-    </label>`).join('');
-  $('edit-user-modal').classList.add('open');
+function closePwModal() {
+  $('pw-overlay').classList.remove('open');
+  $('pw-modal').style.transform='scale(.95)';
+  setTimeout(()=>{ $('pw-modal').style.display='none'; },180);
+  pwTargetId=null;
 }
-function closeEditModal(){ $('edit-user-modal').classList.remove('open'); editUserData=null; }
-$('edit-modal-close').addEventListener('click',closeEditModal);
-$('edit-cancel-btn').addEventListener('click',closeEditModal);
-$('edit-user-modal').addEventListener('click',e=>{ if(e.target===$('edit-user-modal')) closeEditModal(); });
+$('pw-save-btn').addEventListener('click', async () => {
+  const pw=$('pw-new').value, cf=$('pw-confirm').value;
+  $('pw-warn').style.display='none';
+  if (!pw||pw.length<8) { $('pw-warn').textContent='Password must be at least 8 characters.'; $('pw-warn').style.display='block'; return; }
+  if (pw!==cf) { $('pw-warn').textContent='Passwords do not match.'; $('pw-warn').style.display='block'; return; }
+  $('pw-save-btn').disabled=true; $('pw-save-btn').textContent='Saving…';
+  const res=await fetch(`/api/users/${pwTargetId}/reset-password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  const data=await res.json();
+  if (res.ok) { closePwModal(); showToast('Password updated','success'); }
+  else { $('pw-warn').textContent=data.error||'Failed.'; $('pw-warn').style.display='block'; $('pw-save-btn').disabled=false; $('pw-save-btn').textContent='Save Password'; }
+});
 
-$('edit-save-btn').addEventListener('click', async()=>{
-  const id    = parseInt($('edit-user-id').value);
-  const name  = $('edit-name').value.trim();
-  const email = $('edit-email').value.trim();
-  const role  = $('edit-role').value;
-  const perms = Array.from($('edit-perms-wrap').querySelectorAll('.edit-perm-cb:checked')).map(c=>c.dataset.perm);
-  if(!name||!email){ showToast('Name and email required','error'); return; }
-  $('edit-save-btn').disabled=true; $('edit-save-btn').textContent='Saving…';
-  // Update name/role
-  const r1 = await fetch(`/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,role})});
-  const d1 = await r1.json();
-  if(!r1.ok){ $('edit-warning').textContent=d1.error; $('edit-warning').style.display='block'; $('edit-save-btn').disabled=false; $('edit-save-btn').textContent='Save Changes'; return; }
-  // Update permissions
-  await fetch(`/api/users/${id}/permissions`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({permissions:perms})});
-  $('edit-save-btn').disabled=false; $('edit-save-btn').textContent='Save Changes';
-  showToast('User updated successfully','success');
-  closeEditModal();
+// ── Invite drawer ──
+function buildInvitePermsGrid() {
+  $('inv-perms-grid').innerHTML = ALL_MODULES.map(mod => `
+    <div class="perm-row">
+      <div class="perm-row-name">${MODULE_LABELS[mod]}</div>
+      <label class="perm-toggle">
+        <input type="checkbox" class="inv-perm-cb" data-perm="${mod}">
+        <div class="perm-toggle-track"></div>
+        <div class="perm-toggle-thumb"></div>
+      </label>
+    </div>`).join('');
+
+  // Auto-set perms when role changes
+  $('inv-role').addEventListener('change', () => {
+    const isAdmin = $('inv-role').value === 'admin';
+    $('inv-perms-grid').querySelectorAll('.inv-perm-cb').forEach(cb => {
+      if (isAdmin) cb.checked=true;
+    });
+  });
+}
+
+function openInviteDrawer() {
+  $('inv-name').value=''; $('inv-email').value='';
+  $('inv-role').value='field';
+  $('inv-warn').style.display='none'; $('inv-result').style.display='none';
+  $('inv-perms-grid').querySelectorAll('.inv-perm-cb').forEach(cb=>cb.checked=false);
+  $('invite-overlay').classList.add('open');
+  $('invite-drawer').classList.add('open');
+  setTimeout(()=>$('inv-name').focus(),200);
+}
+function closeInviteDrawer() {
+  $('invite-overlay').classList.remove('open');
+  $('invite-drawer').classList.remove('open');
+}
+$('btn-open-invite').addEventListener('click', openInviteDrawer);
+
+function copyInviteLink() {
+  navigator.clipboard.writeText($('inv-url').textContent).then(()=>showToast('Link copied!','success'));
+}
+
+$('btn-do-invite').addEventListener('click', async () => {
+  const name=$('inv-name').value.trim(), email=$('inv-email').value.trim(), role=$('inv-role').value;
+  if (!name||!email) { showWarn('inv-warn','Name and email are required'); return; }
+  const perms = Array.from($('inv-perms-grid').querySelectorAll('.inv-perm-cb:checked')).map(c=>c.dataset.perm);
+  $('btn-do-invite').disabled=true; $('btn-do-invite').textContent='Sending…';
+  const res=await fetch('/api/users/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,role,permissions:perms})});
+  const data=await res.json();
+  $('btn-do-invite').disabled=false; $('btn-do-invite').textContent='Send Invitation';
+  if (!res.ok) { showWarn('inv-warn',data.error||'Failed'); return; }
+  $('inv-url').textContent=data.invite_url;
+  $('inv-result').style.display='block';
+  $('inv-name').value=''; $('inv-email').value='';
+  if (data.email_sent) showToast('Invitation email sent!','success');
+  else showToast('User invited — share the link','');
   loadUsers();
 });
 
-$('modal-save-btn').addEventListener('click',async()=>{
-  const pw=$('new-pw').value, cf=$('confirm-pw').value;
-  const err=$('modal-err'); err.style.display='none';
-  if (!pw||pw.length<8) { err.textContent='Password must be at least 8 characters.'; err.style.display='block'; return; }
-  if (pw!==cf) { err.textContent='Passwords do not match.'; err.style.display='block'; return; }
-  $('modal-save-btn').disabled=true; $('modal-save-btn').textContent='Saving…';
-  const res=await fetch(`/api/users/${resetTargetId}/reset-password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
-  const data=await res.json();
-  if (res.ok) { closeResetModal(); showToast('Password updated successfully','success'); }
-  else { err.textContent=data.error||'Failed.'; err.style.display='block'; $('modal-save-btn').disabled=false; $('modal-save-btn').textContent='Save Password'; }
-});
+document.addEventListener('keydown', e => { if(e.key==='Escape') { closeMemberDrawer(); closeInviteDrawer(); closePwModal(); }});
 </script>
 </body>
 </html>
