@@ -8,30 +8,142 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
   <meta name="apple-mobile-web-app-title" content="Field Ops"/>
-  <meta name="theme-color" content="#111111"/>
+  <meta name="theme-color" content="#1c1e22"/>
   <title>Settings — J&D Western Electric</title>
   <link rel="stylesheet" href="style.css"/>
   <link rel="stylesheet" href="theme.css"/>
   <style>
-    body { visibility: hidden; background: var(--gray-100); }
-    .page-wrap { max-width: 780px; margin: 0 auto; padding: 24px 20px 48px; }
-    .page-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
-    .page-sub   { font-size: 14px; color: var(--gray-500); margin-bottom: 24px; }
-    .section-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px; overflow: hidden; }
-    .section-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-100); font-size: 15px; font-weight: 700; }
-    .section-body { padding: 20px; }
-    .setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--gray-100); }
-    .setting-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .setting-label { font-size: 14px; font-weight: 600; }
-    .setting-hint  { font-size: 12px; color: var(--gray-500); margin-top: 3px; }
-    .setting-control { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
-    .color-swatch { width: 36px; height: 36px; border-radius: 8px; border: 2px solid var(--gray-300); cursor: pointer; overflow: hidden; padding: 0; }
-    input[type=color] { width: 36px; height: 36px; padding: 2px; border: none; cursor: pointer; border-radius: 8px; background: none; }
-    .upload-btn { position: relative; overflow: hidden; }
-    .upload-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-    .preview-img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; border: 1px solid var(--gray-100); background: var(--gray-50); }
-    .grid-2s { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    @media(max-width:500px){ .setting-row { flex-direction: column; } .grid-2s { grid-template-columns: 1fr; } }
+    body { visibility: hidden; background: #f1f3f5; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+    /* ── Layout ── */
+    .st-layout { display: flex; min-height: calc(100vh - 56px); }
+
+    /* ── Sidebar ── */
+    .st-sidebar {
+      width: 220px; flex-shrink: 0;
+      background: var(--graphite, #2e3138); color: #fff;
+      padding: 20px 0 32px;
+      display: flex; flex-direction: column;
+      position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto;
+    }
+    .st-sidebar-section { padding: 0 12px; margin-bottom: 24px; }
+    .st-sidebar-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #6b7280; padding: 0 8px; margin-bottom: 6px; }
+    .st-nav-btn {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 10px 12px; border-radius: 8px;
+      background: none; border: none; color: #d1d5db; cursor: pointer;
+      font-size: 13px; font-weight: 600; text-align: left;
+      transition: background .12s, color .12s; margin-bottom: 2px;
+    }
+    .st-nav-btn:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .st-nav-btn.active { background: rgba(234,88,12,.18); color: #f97316; }
+    .st-nav-btn svg { flex-shrink: 0; opacity: .7; }
+    .st-nav-btn.active svg { opacity: 1; }
+
+    /* ── Main ── */
+    .st-main { flex: 1; padding: 32px 36px 60px; min-width: 0; max-width: 700px; }
+    .st-panel { display: none; }
+    .st-panel.active { display: block; }
+    .st-panel-title { font-size: 20px; font-weight: 800; color: #111; margin-bottom: 4px; }
+    .st-panel-sub { font-size: 13px; color: #6b7280; margin-bottom: 28px; }
+
+    /* ── Setting rows ── */
+    .st-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); margin-bottom: 12px; overflow: hidden; }
+    .st-card-header { padding: 14px 18px; border-bottom: 1px solid #f3f4f6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: #6b7280; }
+    .st-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 20px;
+      padding: 16px 18px; border-bottom: 1px solid #f9fafb;
+    }
+    .st-row:last-child { border-bottom: none; }
+    .st-row-info { flex: 1; min-width: 0; }
+    .st-row-label { font-size: 14px; font-weight: 700; color: #111; }
+    .st-row-hint { font-size: 12px; color: #6b7280; margin-top: 3px; line-height: 1.4; }
+    .st-row-control { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+
+    /* ── Buttons ── */
+    .btn-st-primary { padding: 8px 18px; background: #ea580c; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .12s; }
+    .btn-st-primary:hover { background: #c2410c; }
+    .btn-st-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-st-secondary { padding: 8px 14px; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s; }
+    .btn-st-secondary:hover { background: #e5e7eb; }
+    .btn-st-ghost { padding: 8px 14px; background: none; color: #ea580c; border: 1.5px solid #ea580c; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .12s; }
+    .btn-st-ghost:hover { background: rgba(234,88,12,.06); }
+    .btn-st-danger { padding: 8px 14px; background: #fef2f2; color: #dc2626; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .btn-st-danger:hover { background: #fee2e2; }
+
+    /* ── Form inputs ── */
+    .st-input { width: 100%; padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: #fff; outline: none; box-sizing: border-box; }
+    .st-input:focus { border-color: #ea580c; }
+    .st-input[readonly] { background: #f9fafb; color: #6b7280; cursor: default; }
+    .st-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin-bottom: 5px; }
+    .st-field { margin-bottom: 16px; }
+    .st-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* ── Color picker ── */
+    .color-preview { width: 36px; height: 36px; border-radius: 8px; border: 2px solid #e5e7eb; cursor: pointer; padding: 2px; background: none; }
+
+    /* ── Colour presets ── */
+    .preset-swatch { width: 28px; height: 28px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: transform .12s, border-color .12s; flex-shrink: 0; }
+    .preset-swatch:hover { transform: scale(1.18); border-color: rgba(0,0,0,.2); }
+
+    /* ── Radius / density toggle buttons ── */
+    .radius-btn { padding: 6px 14px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 700; color: #6b7280; cursor: pointer; transition: all .12s; }
+    .radius-btn:hover { border-color: #ea580c; color: #ea580c; }
+    .radius-btn.active { background: #ea580c; border-color: #ea580c; color: #fff; }
+
+    /* ── Logo preview ── */
+    .logo-preview-img { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb; }
+
+    /* ── Status badge ── */
+    .smtp-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .smtp-status.configured { background: #dcfce7; color: #166534; }
+    .smtp-status.not-configured { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Account card ── */
+    .account-avatar {
+      width: 54px; height: 54px; border-radius: 50%;
+      background: #ea580c; color: #fff; font-size: 20px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    /* ── Danger zone ── */
+    .danger-zone { border: 1.5px solid #fecaca; border-radius: 12px; padding: 18px; background: #fff; }
+    .danger-zone-title { font-size: 13px; font-weight: 800; color: #dc2626; margin-bottom: 4px; }
+    .danger-zone-desc { font-size: 12px; color: #6b7280; margin-bottom: 14px; }
+
+    /* ── Warn box ── */
+    .warn-box { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; display: none; margin-bottom: 12px; }
+    .success-box { background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; display: none; margin-bottom: 12px; }
+
+    /* ── Mobile tab strip ── */
+    .st-tabstrip {
+      display: none;
+      background: var(--graphite, #2e3138);
+      overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+      position: sticky; top: 52px; z-index: 50;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .st-tabstrip::-webkit-scrollbar { display: none; }
+    .st-tabstrip-inner { display: flex; padding: 0 8px; white-space: nowrap; }
+    .st-tab-pill {
+      padding: 11px 16px; color: #9ca3af; font-size: 12px; font-weight: 700;
+      border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent;
+      white-space: nowrap; transition: color .12s, border-color .12s;
+    }
+    .st-tab-pill.active { color: #f97316; border-bottom-color: #f97316; }
+
+    @media(max-width:700px){
+      .st-sidebar { display: none; }
+      .st-tabstrip { display: block; }
+      .st-layout { flex-direction: column; }
+      .st-main { padding: 16px 12px 48px; max-width: 100%; }
+      .st-grid-2 { grid-template-columns: 1fr; }
+      /* Stack setting rows vertically on small screens */
+      .st-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .st-row-control { width: 100%; flex-wrap: wrap; }
+      /* Colour picker row — keep swatch + buttons on one line */
+      .st-row-control .color-preview { flex-shrink: 0; }
+    }
   </style>
 </head>
 <body>
@@ -50,217 +162,474 @@
   </nav>
 </header>
 
-<div class="page-wrap">
-  <div class="page-title">Settings</div>
-  <div class="page-sub">Customize the app appearance and configure integrations.</div>
+<!-- Mobile tab strip -->
+<div class="st-tabstrip">
+  <div class="st-tabstrip-inner">
+    <button class="st-tab-pill active" data-panel="appearance" onclick="showPanel('appearance',this)">Appearance</button>
+    <button class="st-tab-pill" data-panel="account" onclick="showPanel('account',this)">My Account</button>
+    <button class="st-tab-pill" data-panel="email" onclick="showPanel('email',this)">Email / SMTP</button>
+  </div>
+</div>
 
-  <!-- Appearance -->
-  <div class="section-card">
-    <div class="section-header">Appearance</div>
-    <div class="section-body">
+<div class="st-layout">
 
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Theme Color</div>
-          <div class="setting-hint">Primary accent color used across all pages (buttons, highlights, icons)</div>
-        </div>
-        <div class="setting-control">
-          <input type="color" id="theme-color" value="#F47920" title="Pick theme color"/>
-          <button class="btn btn-primary btn-sm" id="btn-save-color">Apply</button>
-          <button class="btn btn-secondary btn-sm" id="btn-reset-color">Reset</button>
-        </div>
-      </div>
+  <!-- ── Sidebar ── -->
+  <aside class="st-sidebar">
+    <div class="st-sidebar-section">
+      <div class="st-sidebar-label">Settings</div>
 
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">App Logo</div>
-          <div class="setting-hint">Replace the logo shown in headers and the home page (PNG, JPG, SVG — max 5MB)</div>
+      <button class="st-nav-btn active" onclick="showPanel('appearance',null)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        Appearance
+      </button>
+
+      <button class="st-nav-btn" onclick="showPanel('account',null)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        My Account
+      </button>
+
+      <button class="st-nav-btn" onclick="showPanel('email',null)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+        Email / SMTP
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="st-main">
+
+    <!-- ═══════════ APPEARANCE ═══════════ -->
+    <div class="st-panel active" id="panel-appearance">
+      <div class="st-panel-title">Appearance</div>
+      <div class="st-panel-sub">Customize the look and feel of the app for everyone on your team.</div>
+
+      <!-- Theme colour -->
+      <div class="st-card">
+        <div class="st-card-header">Colours</div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Primary Accent Colour</div>
+            <div class="st-row-hint">Applied to buttons, badges, highlights, and icons across every page.</div>
+          </div>
+          <div class="st-row-control">
+            <input type="color" class="color-preview" id="theme-color" value="#F47920" title="Pick accent colour"/>
+            <button class="btn-st-primary" id="btn-save-color">Apply</button>
+            <button class="btn-st-secondary" id="btn-reset-color">Reset</button>
+          </div>
         </div>
-        <div class="setting-control" style="align-items:center;">
-          <img id="logo-preview" src="/logo-bolt.png" class="preview-img" alt="Current logo"/>
-          <div class="upload-btn">
-            <button class="btn btn-ghost btn-sm">Upload Logo</button>
-            <input type="file" id="logo-upload" accept="image/*"/>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Sidebar &amp; Header Colour</div>
+            <div class="st-row-hint">The graphite colour used in the app header, sidebars, and navigation.</div>
+          </div>
+          <div class="st-row-control">
+            <input type="color" class="color-preview" id="graphite-color" value="#2e3138" title="Pick graphite colour"/>
+            <button class="btn-st-primary" id="btn-save-graphite">Apply</button>
+            <button class="btn-st-secondary" id="btn-reset-graphite">Reset</button>
+          </div>
+        </div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Quick Colour Presets</div>
+            <div class="st-row-hint">Tap a preset to apply an accent colour instantly.</div>
+          </div>
+          <div class="st-row-control" style="flex-wrap:wrap;gap:8px;">
+            <button class="preset-swatch" style="background:#F47920;" title="J&D Orange" onclick="applyPreset('#F47920')"></button>
+            <button class="preset-swatch" style="background:#2563eb;" title="Blue" onclick="applyPreset('#2563eb')"></button>
+            <button class="preset-swatch" style="background:#16a34a;" title="Green" onclick="applyPreset('#16a34a')"></button>
+            <button class="preset-swatch" style="background:#7c3aed;" title="Purple" onclick="applyPreset('#7c3aed')"></button>
+            <button class="preset-swatch" style="background:#dc2626;" title="Red" onclick="applyPreset('#dc2626')"></button>
+            <button class="preset-swatch" style="background:#0891b2;" title="Teal" onclick="applyPreset('#0891b2')"></button>
           </div>
         </div>
       </div>
 
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Home Page Background</div>
-          <div class="setting-hint">Custom background image for the home page (optional)</div>
-        </div>
-        <div class="setting-control">
-          <div class="upload-btn">
-            <button class="btn btn-ghost btn-sm">Upload Image</button>
-            <input type="file" id="bg-upload" accept="image/*"/>
+      <!-- Branding -->
+      <div class="st-card">
+        <div class="st-card-header">Branding</div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">App Logo</div>
+            <div class="st-row-hint">Shown in the header and on the home screen. PNG, JPG, or SVG — max 5 MB.</div>
           </div>
-          <button class="btn btn-secondary btn-sm" id="btn-reset-bg">Reset</button>
+          <div class="st-row-control">
+            <img id="logo-preview" src="/logo-bolt.png" class="logo-preview-img" alt="Current logo"/>
+            <label style="cursor:pointer;">
+              <span class="btn-st-ghost" style="display:inline-block;">Upload Logo</span>
+              <input type="file" id="logo-upload" accept="image/*" style="display:none;"/>
+            </label>
+          </div>
+        </div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Company Name</div>
+            <div class="st-row-hint">Displayed in the header and on printed documents.</div>
+          </div>
+          <div class="st-row-control" style="flex:1;max-width:260px;">
+            <input type="text" class="st-input" id="company-name" placeholder="J&amp;D Western Electric" style="font-size:13px;"/>
+            <button class="btn-st-primary" id="btn-save-company">Save</button>
+          </div>
+        </div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Home Page Background</div>
+            <div class="st-row-hint">Optional custom background image on the home page.</div>
+          </div>
+          <div class="st-row-control">
+            <label style="cursor:pointer;">
+              <span class="btn-st-ghost" style="display:inline-block;">Upload Image</span>
+              <input type="file" id="bg-upload" accept="image/*" style="display:none;"/>
+            </label>
+            <button class="btn-st-secondary" id="btn-reset-bg">Reset</button>
+          </div>
         </div>
       </div>
 
+      <!-- Layout & density -->
+      <div class="st-card">
+        <div class="st-card-header">Layout &amp; Density</div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Card Corner Radius</div>
+            <div class="st-row-hint">Controls how rounded the cards and buttons appear throughout the app.</div>
+          </div>
+          <div class="st-row-control" style="gap:6px;">
+            <button class="radius-btn active" id="radius-btn-sm" onclick="applyRadius('sm')">Subtle</button>
+            <button class="radius-btn" id="radius-btn-md" onclick="applyRadius('md')">Rounded</button>
+            <button class="radius-btn" id="radius-btn-lg" onclick="applyRadius('lg')">Pill</button>
+          </div>
+        </div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Dashboard Density</div>
+            <div class="st-row-hint">How compact the stats cards and tables appear on the office dashboard.</div>
+          </div>
+          <div class="st-row-control" style="gap:6px;">
+            <button class="radius-btn active" id="density-btn-normal" onclick="applyDensity('normal')">Normal</button>
+            <button class="radius-btn" id="density-btn-compact" onclick="applyDensity('compact')">Compact</button>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <!-- Account -->
-  <div class="section-card">
-    <div class="section-header">My Account</div>
-    <div class="section-body">
-      <div id="account-info" style="margin-bottom:16px;font-size:14px;color:var(--gray-700);"></div>
-      <div class="grid-2s">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Current Password</label>
-          <input type="password" id="cur-pw" class="form-control" placeholder="••••••••"/>
-        </div>
-        <div></div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">New Password</label>
-          <input type="password" id="new-pw" class="form-control" placeholder="Min 8 characters"/>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Confirm New Password</label>
-          <input type="password" id="confirm-pw" class="form-control" placeholder="Re-enter new password"/>
-        </div>
-      </div>
-      <div style="margin-top:14px;">
-        <button class="btn btn-primary btn-sm" id="btn-change-pw">Change Password</button>
-      </div>
-    </div>
-  </div>
+    <!-- ═══════════ MY ACCOUNT ═══════════ -->
+    <div class="st-panel" id="panel-account">
+      <div class="st-panel-title">My Account</div>
+      <div class="st-panel-sub">Update your display name and password.</div>
 
-  <!-- SMTP Email -->
-  <div class="section-card">
-    <div class="section-header">Email (SMTP for Invitations)</div>
-    <div class="section-body">
-      <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">Configure SMTP to send invitation emails automatically. If not configured, invite links will be shown on screen instead.</p>
-      <div class="grid-2s">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">SMTP Host</label>
-          <input type="text" id="smtp-host" class="form-control" placeholder="smtp.gmail.com"/>
+      <!-- Account card -->
+      <div class="st-card" style="margin-bottom:12px;">
+        <div class="st-card-header">Profile</div>
+        <div style="padding:18px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #f3f4f6;">
+          <div class="account-avatar" id="acct-avatar">JD</div>
+          <div>
+            <div style="font-size:16px;font-weight:800;color:#111;" id="acct-name">—</div>
+            <div style="font-size:13px;color:#6b7280;" id="acct-email">—</div>
+            <div style="font-size:11px;font-weight:700;margin-top:4px;" id="acct-role-badge"></div>
+          </div>
         </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">SMTP Port</label>
-          <input type="number" id="smtp-port" class="form-control" placeholder="587" value="587"/>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">SMTP Username</label>
-          <input type="text" id="smtp-user" class="form-control" placeholder="user@gmail.com"/>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">SMTP Password</label>
-          <input type="password" id="smtp-pass" class="form-control" placeholder="App password"/>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">From Address</label>
-          <input type="email" id="smtp-from" class="form-control" placeholder="noreply@jdwesternelectric.ca"/>
+        <div style="padding:18px;">
+          <div class="warn-box" id="acct-warn"></div>
+          <div class="st-field">
+            <div class="st-label">Display Name</div>
+            <input type="text" class="st-input" id="acct-inp-name" placeholder="Your full name"/>
+          </div>
+          <button class="btn-st-primary" id="btn-save-name">Save Name</button>
         </div>
       </div>
-      <div style="margin-top:14px;">
-        <button class="btn btn-primary btn-sm" id="btn-save-smtp">Save Email Settings</button>
+
+      <!-- Change password -->
+      <div class="st-card">
+        <div class="st-card-header">Change Password</div>
+        <div style="padding:18px;">
+          <div class="warn-box" id="pw-warn"></div>
+          <div class="success-box" id="pw-success">Password changed successfully.</div>
+          <div class="st-grid-2">
+            <div class="st-field" style="margin-bottom:0;">
+              <div class="st-label">Current Password</div>
+              <input type="password" class="st-input" id="cur-pw" placeholder="••••••••"/>
+            </div>
+            <div></div>
+            <div class="st-field" style="margin-bottom:0;">
+              <div class="st-label">New Password</div>
+              <input type="password" class="st-input" id="new-pw" placeholder="Min 8 characters"/>
+            </div>
+            <div class="st-field" style="margin-bottom:0;">
+              <div class="st-label">Confirm New Password</div>
+              <input type="password" class="st-input" id="confirm-pw" placeholder="Re-enter"/>
+            </div>
+          </div>
+          <div style="margin-top:18px;">
+            <button class="btn-st-primary" id="btn-change-pw">Update Password</button>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- ═══════════ EMAIL / SMTP ═══════════ -->
+    <div class="st-panel" id="panel-email">
+      <div class="st-panel-title">Email / SMTP</div>
+      <div class="st-panel-sub">Configure outbound email for invitations, time-off notifications, and alerts.</div>
+
+      <div class="st-card">
+        <div class="st-card-header" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>SMTP Configuration</span>
+          <span class="smtp-status not-configured" id="smtp-status-badge">Not Configured</span>
+        </div>
+        <div style="padding:18px;">
+          <p style="font-size:13px;color:#6b7280;margin:0 0 18px;">If SMTP is not configured, invite links and alerts will be shown on-screen instead of emailed automatically.</p>
+          <div class="warn-box" id="smtp-warn"></div>
+          <div class="st-grid-2">
+            <div class="st-field">
+              <div class="st-label">SMTP Host</div>
+              <input type="text" class="st-input" id="smtp-host" placeholder="smtp.gmail.com"/>
+            </div>
+            <div class="st-field">
+              <div class="st-label">Port</div>
+              <input type="number" class="st-input" id="smtp-port" placeholder="587" value="587"/>
+            </div>
+            <div class="st-field">
+              <div class="st-label">Username</div>
+              <input type="text" class="st-input" id="smtp-user" placeholder="user@gmail.com"/>
+            </div>
+            <div class="st-field">
+              <div class="st-label">Password / App Password</div>
+              <input type="password" class="st-input" id="smtp-pass" placeholder="App password"/>
+            </div>
+            <div class="st-field" style="grid-column:1/-1;">
+              <div class="st-label">From Address</div>
+              <input type="email" class="st-input" id="smtp-from" placeholder="noreply@jdwesternelectric.ca"/>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-st-primary" id="btn-save-smtp">Save Email Settings</button>
+            <button class="btn-st-secondary" id="btn-test-smtp">Send Test Email</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
 </div>
 
 <div id="toast"></div>
 
 <script>
 const $ = id => document.getElementById(id);
+function showToast(msg, type='') { const t=$('toast'); t.textContent=msg; t.className=`show ${type}`; setTimeout(()=>t.className='',3200); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function initials(name) { return (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 
-function showToast(msg, type='') {
-  const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
-  setTimeout(()=>t.className='', 3200);
+// ── Sidebar / tab nav ──
+function showPanel(id, tabEl) {
+  document.querySelectorAll('.st-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.st-nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.st-tab-pill').forEach(b => b.classList.remove('active'));
+  $('panel-' + id).classList.add('active');
+  // Sidebar button (desktop)
+  const sideBtn = document.querySelector(`.st-nav-btn[onclick*="'${id}'"]`);
+  if (sideBtn) sideBtn.classList.add('active');
+  // Mobile tab pill
+  const pill = tabEl || document.querySelector(`.st-tab-pill[data-panel="${id}"]`);
+  if (pill) pill.classList.add('active');
 }
 
-// ── Auth check ──
+// ── Auth ──
+let currentUser;
 (async () => {
   const r = await fetch('/api/auth/me');
-  if (!r.ok) { location.href = '/login.html'; return; }
-  const u = await r.json();
-  if (u.role !== 'admin') { location.href = '/field.html'; return; }
-  document.body.style.visibility = 'visible';
-  $('account-info').innerHTML = `Signed in as <strong>${u.name}</strong> (${u.email})`;
+  if (!r.ok) { location.href='/login.html'; return; }
+  currentUser = await r.json();
+  if (currentUser.role !== 'admin') { location.href='/field.html'; return; }
+  document.body.style.visibility='visible';
+  // Populate account panel
+  const ini = initials(currentUser.name);
+  $('acct-avatar').textContent = ini;
+  $('acct-name').textContent = currentUser.name;
+  $('acct-email').textContent = currentUser.email;
+  $('acct-role-badge').innerHTML = `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-size:10px;">Office Admin</span>`;
+  $('acct-inp-name').value = currentUser.name;
   loadSettings();
 })();
 
 $('logout-btn').addEventListener('click', async e => {
-  e.preventDefault();
-  await fetch('/api/auth/logout', {method:'POST'});
-  location.href = '/login.html';
+  e.preventDefault(); await fetch('/api/auth/logout',{method:'POST'}); location.href='/login.html';
 });
 
+// ── Load settings ──
 async function loadSettings() {
-  const s = await fetch('/api/settings').then(r=>r.json());
+  const s = await fetch('/api/settings').then(r=>r.json()).catch(()=>({}));
   if (s.theme_color) $('theme-color').value = s.theme_color;
+  if (s.graphite_color) { $('graphite-color').value = s.graphite_color; document.documentElement.style.setProperty('--graphite', s.graphite_color); }
+  if (s.company_name) $('company-name').value = s.company_name;
+  if (s.border_radius) applyRadius(s.border_radius, false);
+  if (s.density) applyDensity(s.density, false);
   if (s.smtp_host) $('smtp-host').value = s.smtp_host;
   if (s.smtp_port) $('smtp-port').value = s.smtp_port;
   if (s.smtp_user) $('smtp-user').value = s.smtp_user;
   if (s.smtp_pass) $('smtp-pass').value = s.smtp_pass;
   if (s.smtp_from) $('smtp-from').value = s.smtp_from;
+  const configured = !!(s.smtp_host && s.smtp_user);
+  $('smtp-status-badge').textContent = configured ? 'Configured' : 'Not Configured';
+  $('smtp-status-badge').className = 'smtp-status ' + (configured ? 'configured' : 'not-configured');
 }
 
-// Theme color
+function reloadThemeCss() {
+  const link = document.querySelector('link[href*="theme.css"]');
+  if (link) link.href = '/theme.css?t=' + Date.now();
+}
+
+// ── Appearance: accent colour ──
 $('btn-save-color').addEventListener('click', async () => {
   const color = $('theme-color').value;
-  const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({theme_color: color})});
+  const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme_color:color})});
   if (r.ok) {
     document.documentElement.style.setProperty('--orange', color);
-    // Force theme.css reload
-    const link = document.querySelector('link[href="/theme.css"]');
-    if (link) link.href = '/theme.css?t=' + Date.now();
-    showToast('Theme color saved — reload other pages to apply', 'success');
-  }
-});
-$('btn-reset-color').addEventListener('click', async () => {
-  await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({theme_color: '#F47920'})});
-  $('theme-color').value = '#F47920';
-  document.documentElement.style.setProperty('--orange', '#F47920');
-  showToast('Theme reset to default', 'success');
+    reloadThemeCss();
+    showToast('Accent colour applied — reload other pages to see it everywhere', 'success');
+  } else showToast('Failed to save', 'error');
 });
 
-// Logo upload
+$('btn-reset-color').addEventListener('click', async () => {
+  await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme_color:'#F47920'})});
+  $('theme-color').value = '#F47920';
+  document.documentElement.style.setProperty('--orange', '#F47920');
+  reloadThemeCss();
+  showToast('Accent colour reset to J&D Orange', 'success');
+});
+
+// ── Colour presets ──
+async function applyPreset(color) {
+  $('theme-color').value = color;
+  await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme_color:color})});
+  document.documentElement.style.setProperty('--orange', color);
+  reloadThemeCss();
+  showToast('Preset applied', 'success');
+}
+
+// ── Graphite colour ──
+$('btn-save-graphite').addEventListener('click', async () => {
+  const color = $('graphite-color').value;
+  const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({graphite_color:color})});
+  if (r.ok) {
+    document.documentElement.style.setProperty('--graphite', color);
+    reloadThemeCss();
+    showToast('Sidebar colour applied — reload other pages to see it', 'success');
+  } else showToast('Failed to save', 'error');
+});
+
+$('btn-reset-graphite').addEventListener('click', async () => {
+  const def = '#2e3138';
+  await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({graphite_color:def})});
+  $('graphite-color').value = def;
+  document.documentElement.style.setProperty('--graphite', def);
+  reloadThemeCss();
+  showToast('Sidebar colour reset to default', 'success');
+});
+
+// ── Company name ──
+$('btn-save-company').addEventListener('click', async () => {
+  const name = $('company-name').value.trim();
+  if (!name) return;
+  const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company_name:name})});
+  if (r.ok) showToast('Company name saved', 'success');
+  else showToast('Failed to save', 'error');
+});
+
+// ── Border radius ──
+const RADIUS_MAP = { sm: '6px', md: '10px', lg: '18px' };
+function applyRadius(key, save=true) {
+  ['sm','md','lg'].forEach(k => { const b=$('radius-btn-'+k); if(b) b.classList.toggle('active', k===key); });
+  document.documentElement.style.setProperty('--radius', RADIUS_MAP[key] || '10px');
+  if (save) {
+    fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({border_radius:key})});
+    showToast('Corner radius updated', 'success');
+  }
+}
+
+// ── Density ──
+function applyDensity(key, save=true) {
+  ['normal','compact'].forEach(k => { const b=$('density-btn-'+k); if(b) b.classList.toggle('active', k===key); });
+  document.documentElement.style.setProperty('--density', key);
+  if (save) {
+    fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({density:key})});
+    showToast('Density updated', 'success');
+  }
+}
+
 $('logo-upload').addEventListener('change', async e => {
   const file = e.target.files[0]; if (!file) return;
   const fd = new FormData(); fd.append('logo', file);
-  const r = await fetch('/api/settings/logo', {method:'POST', body: fd});
+  const r = await fetch('/api/settings/logo',{method:'POST',body:fd});
   const d = await r.json();
   if (r.ok) { $('logo-preview').src = d.path + '?t=' + Date.now(); showToast('Logo updated — reload home page to see it', 'success'); }
-  else showToast(d.error, 'error');
+  else showToast(d.error || 'Upload failed', 'error');
 });
 
-// Home BG upload
 $('bg-upload').addEventListener('change', async e => {
   const file = e.target.files[0]; if (!file) return;
   const fd = new FormData(); fd.append('home_bg', file);
-  const r = await fetch('/api/settings/home-bg', {method:'POST', body: fd});
+  const r = await fetch('/api/settings/home-bg',{method:'POST',body:fd});
   if (r.ok) showToast('Home background updated', 'success');
   else showToast('Upload failed', 'error');
 });
+
 $('btn-reset-bg').addEventListener('click', async () => {
-  await fetch('/api/settings/home-bg', {method:'DELETE'});
+  await fetch('/api/settings/home-bg',{method:'DELETE'});
   showToast('Home background reset to default', 'success');
 });
 
-// Change password
-$('btn-change-pw').addEventListener('click', async () => {
-  const cur = $('cur-pw').value, nw = $('new-pw').value, cf = $('confirm-pw').value;
-  if (!cur || !nw) { showToast('All password fields required', 'error'); return; }
-  if (nw !== cf) { showToast('New passwords do not match', 'error'); return; }
-  const r = await fetch('/api/auth/change-password', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({current_password: cur, new_password: nw})});
-  const d = await r.json();
-  if (r.ok) { showToast('Password changed successfully', 'success'); $('cur-pw').value=''; $('new-pw').value=''; $('confirm-pw').value=''; }
-  else showToast(d.error, 'error');
+// ── My Account ──
+$('btn-save-name').addEventListener('click', async () => {
+  const name = $('acct-inp-name').value.trim();
+  if (!name) { showWarn('acct-warn','Name is required'); return; }
+  $('btn-save-name').disabled=true; $('btn-save-name').textContent='Saving…';
+  const r = await fetch(`/api/users/${currentUser.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,role:currentUser.role})});
+  $('btn-save-name').disabled=false; $('btn-save-name').textContent='Save Name';
+  if (r.ok) { $('acct-name').textContent=name; $('acct-avatar').textContent=initials(name); showToast('Name updated','success'); }
+  else showWarn('acct-warn','Failed to update name');
 });
 
-// Save SMTP
-$('btn-save-smtp').addEventListener('click', async () => {
-  const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-    smtp_host: $('smtp-host').value, smtp_port: $('smtp-port').value,
-    smtp_user: $('smtp-user').value, smtp_pass: $('smtp-pass').value,
-    smtp_from: $('smtp-from').value,
-  })});
-  if (r.ok) showToast('Email settings saved', 'success');
+$('btn-change-pw').addEventListener('click', async () => {
+  $('pw-warn').style.display='none'; $('pw-success').style.display='none';
+  const cur=$('cur-pw').value, nw=$('new-pw').value, cf=$('confirm-pw').value;
+  if (!cur||!nw) { showWarn('pw-warn','All fields required'); return; }
+  if (nw.length < 8) { showWarn('pw-warn','New password must be at least 8 characters'); return; }
+  if (nw !== cf) { showWarn('pw-warn','New passwords do not match'); return; }
+  $('btn-change-pw').disabled=true; $('btn-change-pw').textContent='Updating…';
+  const r = await fetch('/api/auth/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password:cur,new_password:nw})});
+  const d = await r.json();
+  $('btn-change-pw').disabled=false; $('btn-change-pw').textContent='Update Password';
+  if (r.ok) { $('cur-pw').value=''; $('new-pw').value=''; $('confirm-pw').value=''; $('pw-success').style.display='block'; }
+  else showWarn('pw-warn', d.error||'Failed');
 });
+
+// ── SMTP ──
+$('btn-save-smtp').addEventListener('click', async () => {
+  $('smtp-warn').style.display='none';
+  $('btn-save-smtp').disabled=true; $('btn-save-smtp').textContent='Saving…';
+  const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    smtp_host:$('smtp-host').value, smtp_port:$('smtp-port').value,
+    smtp_user:$('smtp-user').value, smtp_pass:$('smtp-pass').value, smtp_from:$('smtp-from').value,
+  })});
+  $('btn-save-smtp').disabled=false; $('btn-save-smtp').textContent='Save Email Settings';
+  if (r.ok) {
+    showToast('Email settings saved', 'success');
+    const configured = !!($('smtp-host').value && $('smtp-user').value);
+    $('smtp-status-badge').textContent = configured ? 'Configured' : 'Not Configured';
+    $('smtp-status-badge').className = 'smtp-status ' + (configured ? 'configured' : 'not-configured');
+  } else showWarn('smtp-warn','Failed to save settings');
+});
+
+$('btn-test-smtp').addEventListener('click', async () => {
+  $('btn-test-smtp').disabled=true; $('btn-test-smtp').textContent='Sending…';
+  const r = await fetch('/api/settings/test-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:currentUser.email})}).catch(()=>({ok:false}));
+  $('btn-test-smtp').disabled=false; $('btn-test-smtp').textContent='Send Test Email';
+  if (r && r.ok) showToast('Test email sent to ' + currentUser.email, 'success');
+  else showToast('Test failed — check SMTP settings', 'error');
+});
+
+function showWarn(id, msg) { const el=$(id); if (!el) return; el.textContent=msg; el.style.display='block'; }
 </script>
 </body>
 </html>

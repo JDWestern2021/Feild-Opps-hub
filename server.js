@@ -147,10 +147,13 @@ const resetLimiter = rateLimit({
 // ─────────────────────────────────────────────
 
 app.get('/theme.css', async (req, res) => {
-  const color = await getSetting('theme_color', '#F47920');
+  const [color, graphite] = await Promise.all([
+    getSetting('theme_color', '#F47920'),
+    getSetting('graphite_color', '#2e3138'),
+  ]);
   res.setHeader('Content-Type','text/css');
   res.setHeader('Cache-Control','no-cache');
-  res.send(`:root { --orange: ${color}; --orange-dark: color-mix(in srgb, ${color} 85%, black); --orange-light: color-mix(in srgb, ${color} 15%, white); }`);
+  res.send(`:root { --orange: ${color}; --orange-dark: color-mix(in srgb, ${color} 85%, black); --orange-light: color-mix(in srgb, ${color} 15%, white); --graphite: ${graphite}; }`);
 });
 
 app.get('/api/settings/public', async (req, res) => {
@@ -324,7 +327,7 @@ app.patch('/api/users/:id/permissions', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.params.id]);
   const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const valid = ['time_ticket','get_po','office_dashboard','timesheet_edit','time_off_approve','receive_emails','safety_forms'];
+  const valid = ['time_ticket','get_po','office_dashboard','timesheet_edit','time_off_approve','receive_emails','safety_forms','safety_supervisor'];
   if (user.role==='admin' && !permissions.includes('office_dashboard')) {
     const { rows: ac } = await pool.query("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND status='active'");
     if (parseInt(ac[0].c) <= 1) return res.status(400).json({ error: 'Cannot revoke Office Dashboard access — at least one Office Admin must keep this permission.' });
@@ -490,7 +493,7 @@ app.get('/api/settings', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/settings', requireAdmin, async (req, res) => {
-  const allowed = ['theme_color','smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from'];
+  const allowed = ['theme_color','graphite_color','company_name','border_radius','density','smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from'];
   for (const [key,val] of Object.entries(req.body)) {
     if (allowed.includes(key) && val !== '••••••••') await setSetting(key, val);
   }
@@ -1800,6 +1803,23 @@ app.get('/api/time-off/calendar', requireAuth, async (req, res) => {
   }
 });
 
+// ── My notifications (must be before /:id) ──
+app.get('/api/time-off/my-notifications', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id,type,start_date,end_date,status,reviewed_at,review_note
+     FROM time_off_requests
+     WHERE user_id=$1 AND status IN ('approved','denied') ORDER BY reviewed_at DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
+app.get('/api/time-off/pending-count', requireAuth, async (req, res) => {
+  if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
+  const { rows } = await pool.query("SELECT COUNT(*) AS c FROM time_off_requests WHERE status='pending'");
+  res.json({ count: parseInt(rows[0].c) });
+});
+
 // ── Get single request ──
 app.get('/api/time-off/:id', requireAuth, async (req, res) => {
   try {
@@ -1998,24 +2018,6 @@ app.delete('/api/time-off/:id', requireAuth, async (req, res) => {
 });
 
 // ── My notifications: approved/denied requests the user hasn't acknowledged ──
-app.get('/api/time-off/my-notifications', requireAuth, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT id,type,start_date,end_date,status,reviewed_at,review_note
-     FROM time_off_requests
-     WHERE user_id=$1 AND status IN ('approved','denied') ORDER BY reviewed_at DESC`,
-    [req.user.id]
-  );
-  res.json(rows);
-});
-
-// ── Dashboard overview includes pending time-off count ──
-// (Exposed via /api/time-off/pending-count for nav badge)
-app.get('/api/time-off/pending-count', requireAuth, async (req, res) => {
-  if (!canApproveTimeOff(req.user)) return res.status(403).json({ error: 'Forbidden' });
-  const { rows } = await pool.query("SELECT COUNT(*) AS c FROM time_off_requests WHERE status='pending'");
-  res.json({ count: parseInt(rows[0].c) });
-});
-
 // ─────────────────────────────────────────────
 // SAFETY
 // ─────────────────────────────────────────────
@@ -2117,6 +2119,15 @@ app.post('/api/safety', requireAuth, async (req, res) => {
   try {
     const { form_type, project_id, job_number, date, form_data } = req.body;
     if (!form_type || !date) return res.status(400).json({ error: 'form_type and date are required' });
+    const ADMIN_ONLY_FORMS = ['corrective_action','ojt_record','emergency_review'];
+    const SUPERVISOR_FORMS = ['incident_report','near_miss'];
+    const userPerms = (req.user.permissions||'').split(',');
+    const isAdminUser = req.user.role === 'admin';
+    const isSupervisor = isAdminUser || userPerms.includes('safety_supervisor');
+    if (ADMIN_ONLY_FORMS.includes(form_type) && !isAdminUser)
+      return res.status(403).json({ error: 'This form type requires admin access.' });
+    if (SUPERVISOR_FORMS.includes(form_type) && !isSupervisor)
+      return res.status(403).json({ error: 'Incident and near-miss reports require supervisor access.' });
     const form_number = generateSafetyNumber(form_type);
     // Resolve project name if project_id provided
     let project_name = req.body.project_name || null;
@@ -2535,12 +2546,12 @@ app.get('/api/vehicles', requireAuth, async (req, res) => {
 
 app.post('/api/vehicles', requireAdmin, async (req, res) => {
   try {
-    const { unit_number, make, model, year, vin, license_plate, notes } = req.body;
+    const { unit_number, make, model, year, vin, license_plate, notes, nickname, photo_data } = req.body;
     if (!unit_number) return res.status(400).json({ error: 'unit_number required' });
     const { rows } = await pool.query(
-      `INSERT INTO vehicles (unit_number, make, model, year, vin, license_plate, notes, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [unit_number, make||null, model||null, year||null, vin||null, license_plate||null, notes||null, new Date().toISOString()]
+      `INSERT INTO vehicles (unit_number, make, model, year, vin, license_plate, notes, nickname, photo_data, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [unit_number, make||null, model||null, year||null, vin||null, license_plate||null, notes||null, nickname||null, photo_data||null, new Date().toISOString()]
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2550,7 +2561,7 @@ app.patch('/api/vehicles/:id', requireAdmin, async (req, res) => {
   try {
     const { unit_number, make, model, year, vin, license_plate, status, notes,
             current_odometer, next_oil_change_km, last_oil_change_date,
-            insurance_expiry, registration_expiry } = req.body;
+            insurance_expiry, registration_expiry, nickname, photo_data } = req.body;
     await pool.query(
       `UPDATE vehicles SET unit_number=COALESCE($1,unit_number), make=COALESCE($2,make), model=COALESCE($3,model),
        year=COALESCE($4,year), vin=COALESCE($5,vin), license_plate=COALESCE($6,license_plate),
@@ -2559,11 +2570,15 @@ app.patch('/api/vehicles/:id', requireAdmin, async (req, res) => {
        next_oil_change_km=COALESCE($11,next_oil_change_km),
        last_oil_change_date=COALESCE($12,last_oil_change_date),
        insurance_expiry=COALESCE($13,insurance_expiry),
-       registration_expiry=COALESCE($14,registration_expiry)
+       registration_expiry=COALESCE($14,registration_expiry),
+       nickname=COALESCE($15,nickname),
+       photo_data=COALESCE($16,photo_data)
        WHERE id=$9`,
       [unit_number, make, model, year, vin, license_plate, status, notes, parseInt(req.params.id),
        current_odometer || null, next_oil_change_km || null, last_oil_change_date || null,
-       insurance_expiry || null, registration_expiry || null]
+       insurance_expiry || null, registration_expiry || null,
+       nickname !== undefined ? (nickname || null) : undefined,
+       photo_data !== undefined ? (photo_data || null) : undefined]
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2755,6 +2770,48 @@ app.get('/api/vehicles/:id/inspections', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Vehicle service records
+app.get('/api/vehicles/:id/service-records', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM vehicle_service_records WHERE vehicle_id=$1 ORDER BY service_date DESC, created_at DESC`,
+      [parseInt(req.params.id)]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/vehicles/:id/service-records', requireAdmin, async (req, res) => {
+  try {
+    const { service_type, description, service_date, odometer, performed_by, cost, notes } = req.body;
+    if (!description || !service_date) return res.status(400).json({ error: 'description and service_date required' });
+    const { rows } = await pool.query(
+      `INSERT INTO vehicle_service_records
+        (vehicle_id, service_type, description, service_date, odometer, performed_by, cost, notes, created_by_id, created_by_name, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [parseInt(req.params.id), service_type||'other', description, service_date,
+       odometer||null, performed_by||null, cost||null, notes||null,
+       req.user.id, req.user.name, new Date().toISOString()]
+    );
+    // If oil_change, update vehicle odometer + last_oil_change_date
+    if ((service_type === 'oil_change' || service_type === 'oil_and_filter') && odometer) {
+      await pool.query(
+        `UPDATE vehicles SET current_odometer=$1, last_oil_change_date=$2 WHERE id=$3`,
+        [parseInt(odometer), service_date, parseInt(req.params.id)]
+      );
+    }
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/vehicles/:id/service-records/:recordId', requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM vehicle_service_records WHERE id=$1 AND vehicle_id=$2`,
+      [parseInt(req.params.recordId), parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Delete vehicle (soft delete)
 app.delete('/api/vehicles/:id', requireAdmin, async (req, res) => {
   try {
@@ -2929,6 +2986,379 @@ app.patch('/api/panel-schedules/:id/project-archive', requireAdmin, async (req, 
     await pool.query('UPDATE panel_schedules SET project_archived=$1 WHERE id=$2',
       [archive ? 1 : 0, parseInt(req.params.id)]);
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// TOOLS
+// ─────────────────────────────────────────────
+
+async function generateToolNumber() {
+  const { rows } = await pool.query('UPDATE tool_number_seq SET last_seq = last_seq + 1 RETURNING last_seq');
+  return 'T-' + String(rows[0].last_seq).padStart(4, '0');
+}
+
+// List all tools with current assignment info
+app.get('/api/tools', requireAuth, async (req, res) => {
+  try {
+    // Auto-purge tools archived more than 30 days ago
+    await pool.query(
+      `DELETE FROM tools WHERE status='archived' AND archived_at < $1`,
+      [new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()]
+    );
+    const { status, category, search } = req.query;
+    const params = []; let where = []; let p = 0;
+    if (status === 'all') {
+      // all except archived
+      where.push(`t.status != 'archived'`);
+    } else if (status === 'archived') {
+      where.push(`t.status = 'archived'`);
+    } else if (status) {
+      p++; where.push(`t.status=$${p}`); params.push(status);
+    } else {
+      // default: exclude archived
+      where.push(`t.status != 'archived'`);
+    }
+    if (category) { p++; where.push(`LOWER(t.category)=LOWER($${p})`); params.push(category); }
+    if (search) {
+      p++;
+      where.push(`(LOWER(t.tool_number) LIKE $${p} OR LOWER(t.name) LIKE $${p} OR LOWER(t.category) LIKE $${p})`);
+      params.push(`%${search.toLowerCase()}%`);
+    }
+    const wc = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const { rows } = await pool.query(
+      `SELECT t.id, t.tool_number, t.name, t.category, t.description, t.serial_number, t.status,
+        t.notes, t.added_by_name, t.created_at, t.photo_data,
+        ta.id AS assignment_id, ta.project_id AS ca_project_id, ta.project_name AS ca_project_name,
+        ta.vehicle_id AS ca_vehicle_id, ta.vehicle_unit AS ca_vehicle_unit,
+        ta.assigned_to_name AS ca_assigned_to_name,
+        ta.checked_out_by_name AS ca_checked_out_by_name, ta.checked_out_at AS ca_checked_out_at
+       FROM tools t
+       LEFT JOIN tool_assignments ta ON ta.tool_id=t.id AND ta.status='active'
+       ${wc} ORDER BY t.tool_number ASC`,
+      params
+    );
+    const tools = rows.map(r => {
+      const tool = {
+        id: r.id, tool_number: r.tool_number, name: r.name, category: r.category,
+        description: r.description, serial_number: r.serial_number, status: r.status,
+        notes: r.notes, added_by_name: r.added_by_name, created_at: r.created_at,
+        photo_data: r.photo_data || null,
+        current_assignment: r.assignment_id ? {
+          id: r.assignment_id, project_id: r.ca_project_id, project_name: r.ca_project_name,
+          vehicle_id: r.ca_vehicle_id, vehicle_unit: r.ca_vehicle_unit,
+          assigned_to_name: r.ca_assigned_to_name,
+          checked_out_by_name: r.ca_checked_out_by_name, checked_out_at: r.ca_checked_out_at,
+        } : null,
+      };
+      return tool;
+    });
+    res.json(tools);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Look up a single tool by tool_number
+app.get('/api/tools/lookup/:number', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.id, t.tool_number, t.name, t.category, t.description, t.serial_number, t.status,
+        t.notes, t.added_by_name, t.created_at, t.photo_data,
+        ta.id AS assignment_id, ta.project_id AS ca_project_id, ta.project_name AS ca_project_name,
+        ta.vehicle_id AS ca_vehicle_id, ta.vehicle_unit AS ca_vehicle_unit,
+        ta.assigned_to_name AS ca_assigned_to_name,
+        ta.checked_out_by_name AS ca_checked_out_by_name, ta.checked_out_at AS ca_checked_out_at
+       FROM tools t
+       LEFT JOIN tool_assignments ta ON ta.tool_id=t.id AND ta.status='active'
+       WHERE LOWER(t.tool_number)=LOWER($1)`,
+      [req.params.number.trim()]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tool not found' });
+    const r = rows[0];
+    res.json({
+      id: r.id, tool_number: r.tool_number, name: r.name, category: r.category,
+      description: r.description, serial_number: r.serial_number, status: r.status,
+      notes: r.notes, added_by_name: r.added_by_name, created_at: r.created_at,
+      photo_data: r.photo_data || null,
+      current_assignment: r.assignment_id ? {
+        id: r.assignment_id, project_id: r.ca_project_id, project_name: r.ca_project_name,
+        vehicle_id: r.ca_vehicle_id, vehicle_unit: r.ca_vehicle_unit,
+        assigned_to_name: r.ca_assigned_to_name,
+        checked_out_by_name: r.ca_checked_out_by_name, checked_out_at: r.ca_checked_out_at,
+      } : null,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Create a new tool
+app.post('/api/tools', requireAdmin, async (req, res) => {
+  try {
+    const { name, category, description, serial_number, notes, photo_data } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Tool name is required' });
+    const tool_number = await generateToolNumber();
+    const now = new Date().toISOString();
+    const { rows } = await pool.query(
+      `INSERT INTO tools (tool_number, name, category, description, serial_number, notes, photo_data, added_by_id, added_by_name, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, tool_number`,
+      [tool_number, name.trim(), category||'General', description||null, serial_number||null,
+       notes||null, photo_data||null, req.user.id, req.user.name, now]
+    );
+    res.status(201).json({ ok: true, tool_number: rows[0].tool_number, id: rows[0].id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Update a tool
+app.patch('/api/tools/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, category, description, serial_number, notes, status, photo_data } = req.body;
+    await pool.query(
+      `UPDATE tools SET
+        name=COALESCE($1,name), category=COALESCE($2,category), description=$3,
+        serial_number=$4, notes=$5, status=COALESCE($6,status),
+        photo_data=COALESCE($7,photo_data)
+       WHERE id=$8`,
+      [name||null, category||null, description||null, serial_number||null, notes||null,
+       status||null, photo_data||null, parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Archive a tool (soft delete)
+app.patch('/api/tools/:id/archive', requireAdmin, async (req, res) => {
+  try {
+    // Can only archive available or maintenance tools (not checked out)
+    const { rows } = await pool.query('SELECT status FROM tools WHERE id=$1', [parseInt(req.params.id)]);
+    if (!rows[0]) return res.status(404).json({ error: 'Tool not found' });
+    if (rows[0].status === 'checked_out') return res.status(409).json({ error: 'Cannot archive a tool that is currently checked out' });
+    await pool.query(
+      `UPDATE tools SET status='archived', archived_at=$1 WHERE id=$2`,
+      [new Date().toISOString(), parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Restore an archived tool
+app.patch('/api/tools/:id/restore', requireAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE tools SET status='available', archived_at=NULL WHERE id=$1`,
+      [parseInt(req.params.id)]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Permanently delete an archived tool
+app.delete('/api/tools/:id', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT status FROM tools WHERE id=$1', [parseInt(req.params.id)]);
+    if (!rows[0]) return res.status(404).json({ error: 'Tool not found' });
+    if (rows[0].status !== 'archived') return res.status(409).json({ error: 'Tool must be archived before permanent deletion' });
+    await pool.query('DELETE FROM tools WHERE id=$1', [parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Reassign a tool assignment to a different project or vehicle
+app.patch('/api/tools/assignments/:id', requireAdmin, async (req, res) => {
+  try {
+    const aid = parseInt(req.params.id);
+    const { project_id, vehicle_id } = req.body;
+    const pid = project_id ? parseInt(project_id) : null;
+    const vid = vehicle_id ? parseInt(vehicle_id) : null;
+    let project_name = null, vehicle_unit = null;
+    if (pid) {
+      const { rows } = await pool.query('SELECT name FROM projects WHERE id=$1', [pid]);
+      project_name = rows[0]?.name || null;
+    }
+    if (vid) {
+      const { rows } = await pool.query('SELECT unit_number FROM vehicles WHERE id=$1', [vid]);
+      vehicle_unit = rows[0]?.unit_number || null;
+    }
+    const { rowCount } = await pool.query(
+      `UPDATE tool_assignments SET project_id=$1, project_name=$2, vehicle_id=$3, vehicle_unit=$4 WHERE id=$5 AND status='active'`,
+      [pid, project_name, vid, vehicle_unit, aid]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Active assignment not found' });
+    res.json({ ok: true, project_name, vehicle_unit });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Check out a tool
+app.post('/api/tools/checkout', requireAuth, async (req, res) => {
+  try {
+    const { tool_number, project_id, vehicle_id, assigned_to_name, notes } = req.body;
+    if (!tool_number) return res.status(400).json({ error: 'tool_number is required' });
+    const { rows: toolRows } = await pool.query('SELECT * FROM tools WHERE LOWER(tool_number)=LOWER($1)', [tool_number.trim()]);
+    if (!toolRows[0]) return res.status(404).json({ error: 'Tool not found' });
+    const tool = toolRows[0];
+    if (tool.status !== 'available') return res.status(409).json({ error: `Tool is currently ${tool.status} and cannot be signed out` });
+    // Resolve project/vehicle names
+    let project_name = null, vehicle_unit = null;
+    const pid = project_id ? parseInt(project_id) : null;
+    const vid = vehicle_id ? parseInt(vehicle_id) : null;
+    if (pid) {
+      const { rows: pr } = await pool.query('SELECT name FROM projects WHERE id=$1', [pid]);
+      project_name = pr[0]?.name || null;
+    }
+    if (vid) {
+      const { rows: vr } = await pool.query('SELECT unit_number FROM vehicles WHERE id=$1', [vid]);
+      vehicle_unit = vr[0]?.unit_number || null;
+    }
+    const now = new Date().toISOString();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(
+        `INSERT INTO tool_assignments
+          (tool_id, tool_number, tool_name, project_id, project_name, vehicle_id, vehicle_unit,
+           assigned_to_name, checked_out_by_id, checked_out_by_name, checked_out_at, return_notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+        [tool.id, tool.tool_number, tool.name, pid, project_name, vid, vehicle_unit,
+         assigned_to_name||null, req.user.id, req.user.name, now, notes||null]
+      );
+      await client.query("UPDATE tools SET status='checked_out' WHERE id=$1", [tool.id]);
+      await client.query('COMMIT');
+      res.json({ ok: true, assignment_id: rows[0].id });
+    } catch (err) { await client.query('ROLLBACK'); throw err; }
+    finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk check out tools (admin)
+app.post('/api/tools/bulk-checkout', requireAuth, async (req, res) => {
+  try {
+    const { tool_ids, project_id, vehicle_id, assigned_to_name } = req.body;
+    if (!Array.isArray(tool_ids) || !tool_ids.length) return res.status(400).json({ error: 'tool_ids array required' });
+    const pid = project_id ? parseInt(project_id) : null;
+    const vid = vehicle_id ? parseInt(vehicle_id) : null;
+    let project_name = null, vehicle_unit = null;
+    if (pid) {
+      const { rows: pr } = await pool.query('SELECT name FROM projects WHERE id=$1', [pid]);
+      project_name = pr[0]?.name || null;
+    }
+    if (vid) {
+      const { rows: vr } = await pool.query('SELECT unit_number FROM vehicles WHERE id=$1', [vid]);
+      vehicle_unit = vr[0]?.unit_number || null;
+    }
+    const { rows: tools } = await pool.query(
+      "SELECT * FROM tools WHERE id=ANY($1) AND status='available'", [tool_ids]
+    );
+    if (!tools.length) return res.status(409).json({ error: 'No available tools found in the provided list' });
+    const now = new Date().toISOString();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const tool of tools) {
+        await client.query(
+          `INSERT INTO tool_assignments
+            (tool_id, tool_number, tool_name, project_id, project_name, vehicle_id, vehicle_unit,
+             assigned_to_name, checked_out_by_id, checked_out_by_name, checked_out_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [tool.id, tool.tool_number, tool.name, pid, project_name, vid, vehicle_unit,
+           assigned_to_name||null, req.user.id, req.user.name, now]
+        );
+        await client.query("UPDATE tools SET status='checked_out' WHERE id=$1", [tool.id]);
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true, count: tools.length });
+    } catch (err) { await client.query('ROLLBACK'); throw err; }
+    finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Return a tool
+app.post('/api/tools/checkin/:assignment_id', requireAuth, async (req, res) => {
+  try {
+    const { condition_on_return, return_notes, return_photo_data } = req.body;
+    const { rows: aRows } = await pool.query(
+      "SELECT * FROM tool_assignments WHERE id=$1 AND status='active'", [parseInt(req.params.assignment_id)]
+    );
+    if (!aRows[0]) return res.status(404).json({ error: 'Active assignment not found' });
+    const now = new Date().toISOString();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE tool_assignments SET status='returned', checked_in_by_id=$1, checked_in_by_name=$2,
+         checked_in_at=$3, condition_on_return=$4, return_notes=$5, return_photo_data=$6 WHERE id=$7`,
+        [req.user.id, req.user.name, now, condition_on_return||null, return_notes||null, return_photo_data||null, aRows[0].id]
+      );
+      const newToolStatus = (condition_on_return && condition_on_return.toLowerCase() === 'damaged') ? 'maintenance' : 'available';
+      await client.query(`UPDATE tools SET status=$1 WHERE id=$2`, [newToolStatus, aRows[0].tool_id]);
+      if (condition_on_return && condition_on_return.toLowerCase() === 'damaged') {
+        const { rows: toolRows } = await client.query('SELECT tool_number, tool_name FROM tool_assignments WHERE id=$1', [aRows[0].id]);
+        const tNum = aRows[0].tool_number;
+        const tName = aRows[0].tool_name;
+        const { rows: admins } = await client.query("SELECT id FROM users WHERE role='admin' AND status='active'");
+        const notifBody = `${tName} returned damaged by ${req.user.name}.${return_notes ? ' Notes: ' + return_notes : ''}`;
+        for (const admin of admins) {
+          await pool.query(
+            `INSERT INTO notifications (user_id, type, title, body, link, created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+            [admin.id, 'tool_damaged', `Tool ${tNum} returned damaged`, notifBody, '/office.html#tools', new Date().toISOString()]
+          );
+        }
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true });
+    } catch (err) { await client.query('ROLLBACK'); throw err; }
+    finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get active tool assignments for a project
+app.get('/api/tools/project/:project_id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT ta.*, t.category FROM tool_assignments ta JOIN tools t ON t.id=ta.tool_id WHERE ta.project_id=$1 AND ta.status='active' ORDER BY ta.checked_out_at DESC",
+      [parseInt(req.params.project_id)]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get active tool assignments for a vehicle
+app.get('/api/tools/vehicle/:vehicle_id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT ta.*, t.category FROM tool_assignments ta JOIN tools t ON t.id=ta.tool_id WHERE ta.vehicle_id=$1 AND ta.status='active' ORDER BY ta.checked_out_at DESC",
+      [parseInt(req.params.vehicle_id)]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get full assignment history for a tool (admin)
+app.get('/api/tools/history/:tool_id', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM tool_assignments WHERE tool_id=$1 ORDER BY checked_out_at DESC',
+      [parseInt(req.params.tool_id)]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get distinct tool categories
+app.get('/api/tools/categories', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT DISTINCT category FROM tools ORDER BY category ASC');
+    res.json(rows.map(r => r.category));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get my recent tool checkouts
+app.get('/api/tools/my-recent', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ta.*, t.category FROM tool_assignments ta
+       JOIN tools t ON t.id=ta.tool_id
+       WHERE ta.checked_out_by_id=$1
+       ORDER BY ta.checked_out_at DESC LIMIT 5`,
+      [req.user.id]
+    );
+    res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
