@@ -84,7 +84,38 @@
       .sidebar { position: fixed; left: -220px; top: 0; transition: left .25s; z-index: 100; }
       .sidebar.open { left: 0; }
       .sidebar-overlay.visible { display: block; }
-      .sidebar-toggle { display: flex; }
+      /* toggle is now inside .mobile-topbar, hide the old fixed one */
+      .sidebar-toggle { display: none; }
+    }
+
+    /* ── Mobile top bar (replaces floating hamburger) ───────────*/
+    .mobile-topbar {
+      display: none;
+      position: sticky; top: 0; z-index: 90;
+      background: #0f172a;
+      padding: 0 12px;
+      height: 52px;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    .mobile-topbar-title {
+      font-size: 14px; font-weight: 800; color: #fff;
+      letter-spacing: .02em;
+    }
+    .mobile-topbar-home {
+      font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7);
+      text-decoration: none; padding: 6px 10px; border-radius: 6px;
+      background: rgba(255,255,255,.08); border: none; cursor: pointer;
+    }
+    .mobile-topbar-home:hover { background: rgba(255,255,255,.15); color: #fff; }
+    @media (max-width: 768px) {
+      .mobile-topbar { display: flex; }
+      /* shift toggle button down so it doesn't clash with topbar */
+      .sidebar-toggle { top: 10px; }
+      /* push content below topbar */
+      .main-content { display: flex; flex-direction: column; }
     }
 
     /* ── Content area ────────────────────────────────────────── */
@@ -93,6 +124,9 @@
       max-width: 760px;
       margin: 0 auto;
       padding: 20px 16px 80px;
+    }
+    @media (max-width: 768px) {
+      .safety-content { padding: 16px 12px 80px; }
     }
 
     /* Keep these for JS compatibility but hide the old tab bar */
@@ -284,18 +318,33 @@
     .sf-asn-btn:hover { background: #e5e7eb; color: #111827; }
     .sf-asn-btn.active { background: rgba(244,121,32,.12); color: var(--orange,#F47920); font-weight: 700; }
     .sf-asn-icon { font-size: 13px; flex-shrink: 0; }
-    /* Mobile: stack sub-nav above content */
+    /* Mobile: horizontal pill strip above content */
     @media (max-width: 640px) {
       #sf-panel-admin > div { flex-direction: column !important; }
       .sf-admin-subnav {
         width: 100%; min-width: 0; border-right: none;
-        border-bottom: 1px solid #e5e7eb;
-        padding: 8px; display: flex; flex-wrap: nowrap;
-        overflow-x: auto; overflow-y: hidden; gap: 4px;
+        border-bottom: 2px solid #e5e7eb;
+        padding: 10px 10px; display: flex; flex-wrap: nowrap;
+        overflow-x: auto; overflow-y: hidden; gap: 6px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
       }
+      .sf-admin-subnav::-webkit-scrollbar { display: none; }
       .sf-asn-label { display: none; }
-      .sf-asn-btn { white-space: nowrap; flex-shrink: 0; }
+      .sf-asn-btn {
+        white-space: nowrap; flex-shrink: 0;
+        padding: 8px 14px; border-radius: 20px;
+        font-size: 13px; font-weight: 700;
+        border: 1.5px solid #e5e7eb;
+        background: #fff;
+      }
+      .sf-asn-btn.active {
+        background: var(--orange,#F47920);
+        color: #fff !important;
+        border-color: var(--orange,#F47920);
+      }
       .sf-admin-subnav hr { display: none; }
+      .sf-admin-content { padding: 14px 12px 80px; }
     }
 
     /* ── Team Tickets cert pill filters ─────────────────────────*/
@@ -392,9 +441,14 @@
 </div>
 
 <!-- Mobile sidebar toggle -->
-<button class="sidebar-toggle" id="sidebar-toggle" aria-label="Menu">
-  <span></span><span></span><span></span>
-</button>
+<!-- Mobile top bar — visible only on small screens -->
+<div class="mobile-topbar">
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Menu" style="position:static;display:flex;top:auto;left:auto;">
+    <span></span><span></span><span></span>
+  </button>
+  <span class="mobile-topbar-title">Safety</span>
+  <a href="/" class="mobile-topbar-home">← Hub</a>
+</div>
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
 <!-- LEFT SIDEBAR -->
