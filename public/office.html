@@ -1129,6 +1129,7 @@
     <div class="flex-between" style="margin-bottom:16px;">
       <h2 style="font-size:18px;font-weight:800;">Projects</h2>
       <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-sm" id="btn-proj-bulk-toggle">☑ Bulk</button>
         <button class="btn btn-primary btn-sm" id="btn-new-project">+ New Project</button>
         <button class="btn btn-secondary btn-sm" id="btn-close-projects">← Back to Tickets</button>
       </div>
@@ -1141,13 +1142,14 @@
         <button class="proj-tab" id="ptab-complete" data-status="complete">Completed Projects</button>
         <button class="proj-tab" id="ptab-archived-proj" data-status="archived">Archived Projects</button>
       </div>
-      <!-- Bulk actions bar for archived projects (visible only when archived tab active + items checked) -->
+      <!-- Bulk actions bar (archive mode for active/complete, delete mode for archived) -->
       <div class="po-bulk-bar" id="proj-bulk-bar" style="margin-bottom:10px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;margin-right:8px;">
           <input type="checkbox" id="proj-select-all-cb" style="width:14px;height:14px;accent-color:var(--orange);"/> Select All
         </label>
         <span class="sel-count" id="proj-bulk-count">0 selected</span>
-        <button class="btn btn-danger btn-sm" id="btn-delete-selected-projects">🗑 Delete Selected</button>
+        <button class="btn btn-sm" id="btn-archive-selected-projects" style="background:var(--orange);color:#fff;display:none;">📦 Archive Selected</button>
+        <button class="btn btn-danger btn-sm" id="btn-delete-selected-projects" style="display:none;">🗑 Delete Selected</button>
       </div>
       <div id="project-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
     </div>
@@ -3016,18 +3018,22 @@ $('ptab-active').addEventListener('click', () => switchProjectListTab('active'))
 $('ptab-complete').addEventListener('click', () => switchProjectListTab('complete'));
 $('ptab-archived-proj').addEventListener('click', () => switchProjectListTab('archived'));
 
+let _projBulkMode = false;
+
 function updateProjBulkBar() {
   const checked = document.querySelectorAll('.proj-archive-cb:checked');
   const all = document.querySelectorAll('.proj-archive-cb');
   const bar = $('proj-bulk-bar');
-  if (projectListStatus === 'archived') {
-    bar.classList.add('visible');
-    $('proj-bulk-count').textContent = checked.length > 0 ? `${checked.length} of ${all.length} selected` : `${all.length} project${all.length!==1?'s':''} in archive`;
-    const selAll = $('proj-select-all-cb');
-    if (selAll) selAll.checked = all.length > 0 && checked.length === all.length;
-  } else {
-    bar.classList.remove('visible');
-  }
+  const isArchived = projectListStatus === 'archived';
+  const showBar = isArchived || _projBulkMode;
+  bar.classList.toggle('visible', showBar);
+  if (!showBar) return;
+  const n = checked.length, total = all.length;
+  $('proj-bulk-count').textContent = n > 0 ? `${n} of ${total} selected` : `${total} project${total!==1?'s':''} shown`;
+  const selAll = $('proj-select-all-cb');
+  if (selAll) selAll.checked = total > 0 && n === total;
+  $('btn-archive-selected-projects').style.display = (!isArchived && n > 0) ? '' : 'none';
+  $('btn-delete-selected-projects').style.display  = (isArchived && n > 0)  ? '' : 'none';
 }
 
 document.addEventListener('change', e => {
@@ -3035,6 +3041,36 @@ document.addEventListener('change', e => {
     document.querySelectorAll('.proj-archive-cb').forEach(cb => { cb.checked = e.target.checked; });
     updateProjBulkBar();
   }
+});
+
+$('btn-proj-bulk-toggle').addEventListener('click', () => {
+  _projBulkMode = !_projBulkMode;
+  $('btn-proj-bulk-toggle').textContent = _projBulkMode ? '✕ Cancel' : '☑ Bulk';
+  $('btn-proj-bulk-toggle').classList.toggle('btn-secondary', !_projBulkMode);
+  $('btn-proj-bulk-toggle').style.background = _projBulkMode ? 'var(--orange)' : '';
+  $('btn-proj-bulk-toggle').style.color = _projBulkMode ? '#fff' : '';
+  loadProjects();
+});
+
+$('btn-archive-selected-projects').addEventListener('click', async () => {
+  const checked = Array.from(document.querySelectorAll('.proj-archive-cb:checked'));
+  if (!checked.length) return;
+  const names = checked.map(cb => cb.dataset.projName).join('\n  • ');
+  if (!confirm(`Archive ${checked.length} project${checked.length!==1?'s':''}?\n\n  • ${names}\n\nThey can be restored later from the Archived tab.`)) return;
+  let done = 0;
+  for (const cb of checked) {
+    const res = await fetch(`/api/project-folders/${cb.dataset.projId}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'archived' })
+    });
+    if (res.ok) done++;
+  }
+  showToast(`${done} project${done!==1?'s':''} archived`, 'success');
+  _projBulkMode = false;
+  $('btn-proj-bulk-toggle').textContent = '☑ Bulk';
+  $('btn-proj-bulk-toggle').style.background = '';
+  $('btn-proj-bulk-toggle').style.color = '';
+  loadProjects();
 });
 
 $('btn-delete-selected-projects').addEventListener('click', async () => {
@@ -3048,7 +3084,6 @@ $('btn-delete-selected-projects').addEventListener('click', async () => {
     if (res.ok) deleted++;
   }
   showToast(`${deleted} project${deleted!==1?'s':''} permanently deleted`, 'success');
-  updateProjBulkBar();
   loadProjects();
 });
 function switchProjectListTab(status) {
@@ -3056,11 +3091,16 @@ function switchProjectListTab(status) {
   $('ptab-active').classList.toggle('active', status === 'active');
   $('ptab-complete').classList.toggle('active', status === 'complete');
   $('ptab-archived-proj').classList.toggle('active', status === 'archived');
-  if (status !== 'archived') {
-    $('proj-bulk-bar').classList.remove('visible');
-    const selAll = $('proj-select-all-cb');
-    if (selAll) selAll.checked = false;
-  }
+  // exit bulk mode when switching tabs
+  _projBulkMode = false;
+  $('btn-proj-bulk-toggle').textContent = '☑ Bulk';
+  $('btn-proj-bulk-toggle').style.background = '';
+  $('btn-proj-bulk-toggle').style.color = '';
+  // hide bulk toggle button on archived tab (has its own always-on checkboxes)
+  $('btn-proj-bulk-toggle').style.display = status === 'archived' ? 'none' : '';
+  $('proj-bulk-bar').classList.remove('visible');
+  const selAll = $('proj-select-all-cb');
+  if (selAll) selAll.checked = false;
   loadProjects();
 }
 
@@ -3080,32 +3120,37 @@ async function loadProjects() {
       $('project-cards').innerHTML = `<div class=”empty-state” style=”grid-column:1/-1;”><h3>${h}</h3><p>${p}</p></div>`;
       return;
     }
+    const isArchived = projectListStatus === 'archived';
+    const showCb = isArchived || _projBulkMode;
     $('project-cards').innerHTML = projects.map(p => {
       const outstanding = parseInt(p.pending_tickets || 0) + parseInt(p.open_pos || 0);
       const badge = outstanding > 0
         ? `<span class="outstanding-badge">${outstanding} outstanding</span>`
         : (p.ticket_count + p.po_count > 0 ? `<span class="all-ok-badge">✓ All up to date</span>` : '');
+      const cb = showCb ? `<input type="checkbox" class="po-cb proj-archive-cb" data-proj-id="${p.id}" data-proj-name="${esc(p.name)}" style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0;margin-top:2px;" onchange="updateProjBulkBar()"/>` : '';
       return `
-      <div class="project-card" data-id="${p.id}" style="cursor:pointer;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-          <h3 style="flex:1;">${esc(p.name)}</h3>
-          ${badge}
-        </div>
-        ${p.job_numbers ? `<div class="job-tags">${jobTags(p.job_numbers)}</div>` : ''}
-        <div class="meta">
-          <span><strong>${p.ticket_count}</strong> ticket${parseInt(p.ticket_count) !== 1 ? 's' : ''}</span>
-          <span><strong>${p.po_count}</strong> PO${parseInt(p.po_count) !== 1 ? 's' : ''}</span>
-          ${p.status === 'complete' && p.completed_at ? `<span>Completed ${fmtDate(p.completed_at.slice(0,10))}</span>` : ''}
-          ${p.status === 'archived' ? `<span style="color:#888;">Archived</span>` : ''}
-        </div>
-        ${projectListStatus === 'archived' ? `
-          <div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px;" onclick="event.stopPropagation()">
-            <input type="checkbox" class="po-cb proj-archive-cb" data-proj-id="${p.id}" data-proj-name="${esc(p.name)}" style="width:15px;height:15px;accent-color:var(--orange);margin-top:2px;flex-shrink:0;" onchange="updateProjBulkBar()"/>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button class="btn btn-sm" data-proj-id="${p.id}" data-action="proj-restore" style="background:#2563eb;color:white;font-size:12px;">Restore</button>
-              <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-edit-arch" style="font-size:12px;">Edit</button>
-              <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-open" style="font-size:12px;">View</button>
+      <div class="project-card" data-id="${p.id}" style="cursor:pointer;${showCb?'padding-left:10px;':''}">
+        <div style="display:flex;align-items:flex-start;gap:8px;" onclick="${showCb?`event.stopPropagation();this.closest('.project-card').querySelector('.proj-archive-cb').click()`:''}">
+          ${cb}
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <h3 style="flex:1;">${esc(p.name)}</h3>
+              ${badge}
             </div>
+            ${p.job_numbers ? `<div class="job-tags">${jobTags(p.job_numbers)}</div>` : ''}
+            <div class="meta">
+              <span><strong>${p.ticket_count}</strong> ticket${parseInt(p.ticket_count) !== 1 ? 's' : ''}</span>
+              <span><strong>${p.po_count}</strong> PO${parseInt(p.po_count) !== 1 ? 's' : ''}</span>
+              ${p.status === 'complete' && p.completed_at ? `<span>Completed ${fmtDate(p.completed_at.slice(0,10))}</span>` : ''}
+              ${p.status === 'archived' ? `<span style="color:#888;">Archived</span>` : ''}
+            </div>
+          </div>
+        </div>
+        ${isArchived ? `
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;" onclick="event.stopPropagation()">
+            <button class="btn btn-sm" data-proj-id="${p.id}" data-action="proj-restore" style="background:#2563eb;color:white;font-size:12px;">Restore</button>
+            <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-edit-arch" style="font-size:12px;">Edit</button>
+            <button class="btn btn-secondary btn-sm" data-proj-id="${p.id}" data-action="proj-open" style="font-size:12px;">View</button>
           </div>` : ''}
       </div>`;
     }).join('');
