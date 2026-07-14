@@ -1445,9 +1445,13 @@
     if (typeF) rows = rows.filter(r => r.form_type === typeF);
     if (statF) rows = rows.filter(r => r.status === statF);
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9" class="sf-empty">No forms found</td></tr>'; return; }
-    tbody.innerHTML = rows.map(r => `
-      <tr>
-        <td><input type="checkbox" class="sf-row-chk" data-id="${r.id}" onchange="sfUpdateBulkBar()"></td>
+    tbody.innerHTML = rows.map(r => {
+      const url = Safety.formUrl(r.form_type) ? `${Safety.formUrl(r.form_type)}?id=${r.id}` : null;
+      const rowClick = url ? `onclick="window.location.href='${url}'"` : '';
+      const rowStyle = url ? 'cursor:pointer;' : '';
+      return `
+      <tr ${rowClick} style="${rowStyle}" onmouseover="if(this.style.cursor==='pointer')this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+        <td onclick="event.stopPropagation()"><input type="checkbox" class="sf-row-chk" data-id="${r.id}" onchange="sfUpdateBulkBar()"></td>
         <td style="font-size:.8rem;">${r.form_number || '—'}</td>
         <td>${Safety.formIcon(r.form_type)} ${Safety.formShort(r.form_type)}</td>
         <td>${r.submitted_by}</td>
@@ -1455,12 +1459,13 @@
         <td style="font-size:.8rem;">${r.project_name || '—'}</td>
         <td><span class="sf-chip ${r.status === 'Draft' ? 'sf-chip-draft' : 'sf-chip-submitted'}">${r.status}</span></td>
         <td style="font-size:.8rem;">${r.psi_flag ? '🔴 PSI' : ''}${r.wcb_flag ? '⚠️ WCB' : ''}</td>
-        <td style="display:flex;gap:4px;flex-wrap:wrap;">
-          ${Safety.formUrl(r.form_type) ? `<a href="${Safety.formUrl(r.form_type)}?id=${r.id}" class="sf-link-btn">View</a>` : ''}
+        <td style="display:flex;gap:4px;flex-wrap:wrap;" onclick="event.stopPropagation()">
+          ${url ? `<a href="${url}" class="sf-link-btn">Open ↗</a>` : '<span style="font-size:11px;color:#9ca3af;">No form</span>'}
           <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="sfAdminArchiveOne(${r.id})">📦</button>
           <button class="btn btn-sm" style="font-size:11px;background:#dc2626;color:#fff;border:none;" onclick="sfAdminDeleteOne(${r.id})">🗑</button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     sfUpdateBulkBar();
   }
 
