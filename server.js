@@ -3368,13 +3368,13 @@ app.get('/api/tools/my-recent', requireAuth, async (req, res) => {
 
 (async () => {
   try {
-    await connectWithRetry();
-    await initSchema();
-    await ensureDefaultAdmin();
     app.listen(PORT, () => {
       console.log(`\n  J&D Western Electric — Field Operations Hub`);
       console.log(`  Running at http://localhost:${PORT}\n`);
     });
+    await connectWithRetry();
+    await initSchema();
+    await ensureDefaultAdmin();
   } catch (err) {
     console.error('Startup failed:', err.message);
     process.exit(1);
