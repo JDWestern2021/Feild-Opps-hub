@@ -3374,6 +3374,7 @@ app.get('/api/tools/my-recent', requireAuth, async (req, res) => {
 // SOP — Standard Operating Procedures
 // ─────────────────────────────────────────────
 
+const fs = require('fs');
 const sopStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = path.join(__dirname, 'public', 'uploads', 'sop');
