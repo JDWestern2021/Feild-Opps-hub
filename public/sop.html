@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#1c1e22"/>
+  <title>SOP — J&D Western Electric</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      min-height: 100vh;
+    }
+
+    /* ── Mobile topbar (hidden on desktop) ── */
+    .mobile-topbar {
+      display: none;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: #1c1e22;
+      height: 52px;
+      align-items: center;
+      padding: 0 12px;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    }
+    .mobile-topbar-title {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      text-align: center;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .mobile-topbar-home {
+      font-size: 12px;
+      font-weight: 700;
+      color: #84cc16;
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 5px 8px;
+      border-radius: 6px;
+      background: rgba(132,204,22,0.12);
+    }
+
+    /* Hamburger button */
+    .sidebar-toggle {
+      width: 36px; height: 36px;
+      background: none; border: none;
+      cursor: pointer;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 5px; flex-shrink: 0;
+      border-radius: 6px;
+      padding: 0;
+    }
+    .sidebar-toggle span {
+      display: block;
+      width: 20px; height: 2px;
+      background: #fff;
+      border-radius: 2px;
+      transition: all 0.2s;
+    }
+
+    /* ── Layout ── */
+    .sop-layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sop-sidebar {
+      width: 230px;
+      flex-shrink: 0;
+      background: #1c1e22;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 20px 16px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      margin-bottom: 14px;
+    }
+    .sidebar-logo img {
+      width: 32px; height: 32px;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 6px;
+      padding: 3px;
+    }
+    .sidebar-logo-text {
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      line-height: 1.2;
+    }
+    .sidebar-logo-text span { color: #84cc16; }
+
+    .sidebar-section-label {
+      font-size: 9px;
+      font-weight: 800;
+      color: rgba(255,255,255,0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      padding: 14px 16px 6px;
+    }
+
+    .sop-nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: rgba(255,255,255,0.6);
+      font-size: 13px;
+      font-weight: 600;
+      width: 100%;
+      text-align: left;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .sop-nav-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+    .sop-nav-btn.active {
+      background: rgba(132,204,22,0.12);
+      color: #84cc16;
+      border-left-color: #84cc16;
+    }
+    .sop-nav-btn .nav-icon {
+      width: 28px; height: 28px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .sop-nav-btn.active .nav-icon { background: rgba(132,204,22,0.18); }
+    .sop-nav-btn .nav-label { flex: 1; }
+
+    .sidebar-back {
+      margin-top: auto;
+      padding: 14px 16px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-back a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255,255,255,0.35);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      transition: color 0.15s;
+    }
+    .sidebar-back a:hover { color: rgba(255,255,255,0.7); }
+
+    /* ── Main content ── */
+    .sop-main {
+      flex: 1;
+      min-width: 0;
+      padding: 28px 28px 40px;
+    }
+
+    .sop-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .sop-title {
+      font-size: 22px;
+      font-weight: 900;
+      color: #111827;
+    }
+    .sop-subtitle {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+
+    /* ── Upload button ── */
+    .btn-upload {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #3f6212;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-upload:hover { filter: brightness(1.12); }
+
+    .btn-add-cat {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(63,98,18,0.1);
+      color: #3f6212;
+      border: 1px solid rgba(63,98,18,0.3);
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-add-cat:hover { background: rgba(63,98,18,0.18); }
+
+    /* ── Document list ── */
+    .doc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .doc-card {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+      transition: box-shadow 0.15s, transform 0.15s;
+    }
+    .doc-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.1); transform: translateY(-1px); }
+
+    .doc-card-icon {
+      width: 44px; height: 44px;
+      background: rgba(63,98,18,0.1);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .doc-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.3;
+    }
+    .doc-card-meta {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+    .doc-card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+    .btn-view {
+      flex: 1;
+      background: #3f6212;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 7px 0;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      transition: filter 0.15s;
+    }
+    .btn-view:hover { filter: brightness(1.12); }
+    .btn-delete-doc {
+      background: #fee2e2;
+      color: #991b1b;
+      border: none;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-delete-doc:hover { background: #fca5a5; }
+
+    .doc-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: #9ca3af;
+    }
+    .doc-empty-icon { font-size: 48px; margin-bottom: 14px; }
+    .doc-empty-title { font-size: 16px; font-weight: 700; color: #374151; margin-bottom: 6px; }
+    .doc-empty-sub { font-size: 13px; }
+
+    /* ── Upload modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-box {
+      background: #fff;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-head {
+      padding: 20px 22px 14px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-head h3 { font-size: 16px; font-weight: 800; }
+    .modal-close {
+      background: none; border: none; font-size: 22px; cursor: pointer; color: #6b7280; line-height: 1;
+    }
+    .modal-body { padding: 20px 22px; }
+    .modal-foot { padding: 12px 22px 18px; display: flex; gap: 10px; justify-content: flex-end; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .form-input {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #111827;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: #84cc16; box-shadow: 0 0 0 3px rgba(132,204,22,0.15); }
+
+    .file-drop {
+      border: 2px dashed #d1d5db;
+      border-radius: 10px;
+      padding: 28px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: #f9fafb;
+    }
+    .file-drop:hover, .file-drop.dragover { border-color: #84cc16; background: rgba(132,204,22,0.05); }
+    .file-drop-icon { font-size: 32px; margin-bottom: 8px; }
+    .file-drop-text { font-size: 13px; color: #6b7280; }
+    .file-drop-text strong { color: #3f6212; }
+    .file-name-display { margin-top: 8px; font-size: 12px; font-weight: 700; color: #3f6212; }
+
+    .btn-primary {
+      background: #3f6212;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.15s;
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-cancel {
+      background: #f3f4f6;
+      color: #374151;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* ── Sidebar overlay for mobile ── */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 149;
+    }
+
+    /* ── Mobile styles ── */
+    @media (max-width: 768px) {
+      .mobile-topbar { display: flex; }
+
+      .sop-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        z-index: 150;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        width: 240px;
+      }
+      .sop-sidebar.open { transform: translateX(0); }
+      .sidebar-overlay.open { display: block; }
+
+      .sop-layout { display: block; }
+      .sop-main { padding: 16px 14px 32px; }
+      .sop-title { font-size: 18px; }
+      .doc-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .doc-card { padding: 12px; }
+    }
+
+    @media (max-width: 480px) {
+      .doc-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Mobile topbar -->
+<div class="mobile-topbar">
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+  <span class="mobile-topbar-title">SOP</span>
+  <a href="/" class="mobile-topbar-home">← Hub</a>
+</div>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="sop-layout">
+
+  <!-- Sidebar -->
+  <nav class="sop-sidebar" id="sop-sidebar">
+    <div class="sidebar-header">
+      <a href="/" class="sidebar-logo">
+        <img src="logo-bolt.png" alt="J&D"/>
+        <div class="sidebar-logo-text">J<span>&amp;</span>D Western<br>Electric</div>
+      </a>
+    </div>
+
+    <div class="sidebar-section-label">Procedures</div>
+    <div id="sop-nav-list">
+      <!-- Populated by JS -->
+    </div>
+
+    <div id="admin-cat-section" style="display:none;">
+      <div class="sidebar-section-label">Admin</div>
+      <div style="padding:0 12px 12px;">
+        <button class="btn-add-cat" id="btn-add-cat" style="width:100%;">+ Add Category</button>
+      </div>
+    </div>
+
+    <div class="sidebar-back">
+      <a href="/"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="flex-shrink:0;"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg> Back to Hub</a>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="sop-main">
+    <div class="sop-header">
+      <div>
+        <div class="sop-title" id="sop-page-title">Standard Operating Procedures</div>
+        <div class="sop-subtitle" id="sop-page-sub">Select a category from the left</div>
+      </div>
+      <button class="btn-upload" id="btn-upload-doc" style="display:none;">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+        Upload Document
+      </button>
+    </div>
+
+    <div class="doc-grid" id="doc-grid">
+      <div class="doc-empty">
+        <div class="doc-empty-icon">📋</div>
+        <div class="doc-empty-title">Standard Operating Procedures</div>
+        <div class="doc-empty-sub">Choose a category from the sidebar to view documents.</div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<!-- Upload modal -->
+<div class="modal-overlay" id="upload-modal" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Upload Document</h3>
+      <button class="modal-close" id="upload-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Document Title</label>
+        <input type="text" class="form-input" id="upload-title" placeholder="e.g. Electrical Rough-In Procedure"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">File (PDF, Word, Image)</label>
+        <div class="file-drop" id="file-drop">
+          <div class="file-drop-icon">📂</div>
+          <div class="file-drop-text">Drag &amp; drop or <strong>tap to browse</strong></div>
+          <div class="file-name-display" id="file-name-display" style="display:none;"></div>
+        </div>
+        <input type="file" id="upload-file-input" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.xls" style="display:none;"/>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" id="upload-cancel">Cancel</button>
+      <button class="btn-primary" id="upload-submit" disabled>Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add category modal -->
+<div class="modal-overlay" id="addcat-modal" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Add Category</h3>
+      <button class="modal-close" id="addcat-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Category Name</label>
+        <input type="text" class="form-input" id="addcat-name" placeholder="e.g. Commercial Buildings"/>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" id="addcat-cancel">Cancel</button>
+      <button class="btn-primary" id="addcat-submit">Add Category</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  // ── Auth ──────────────────────────────────────
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  const me = await r.json();
+  const isAdmin = me.role === 'admin';
+
+  let _categories = [];
+  let _activeCat  = null;
+
+  // ── Load categories ───────────────────────────
+  async function loadCategories() {
+    const res = await fetch('/api/sop/categories');
+    _categories = res.ok ? await res.json() : [];
+    renderNav();
+    // Auto-select first category
+    if (_categories.length && !_activeCat) {
+      selectCategory(_categories[0].slug);
+    }
+  }
+
+  function renderNav() {
+    const list = document.getElementById('sop-nav-list');
+    const icons = { residential:'🏠', commercial:'🏢', industrial:'🏭', vehicles:'🚛', safety:'🦺' };
+    list.innerHTML = _categories.map(c => `
+      <button class="sop-nav-btn ${c.slug === _activeCat ? 'active' : ''}" onclick="selectCategory('${c.slug}')">
+        <span class="nav-icon">${icons[c.slug] || '📁'}</span>
+        <span class="nav-label">${esc(c.label)}</span>
+      </button>`).join('');
+    if (isAdmin) document.getElementById('admin-cat-section').style.display = '';
+  }
+
+  window.selectCategory = async function(slug) {
+    _activeCat = slug;
+    renderNav();
+    // Close sidebar on mobile
+    document.getElementById('sop-sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('open');
+
+    const cat = _categories.find(c => c.slug === slug);
+    document.getElementById('sop-page-title').textContent = cat ? cat.label : slug;
+    document.getElementById('sop-page-sub').textContent = 'Standard operating procedures for ' + (cat ? cat.label.toLowerCase() : slug);
+    if (isAdmin) document.getElementById('btn-upload-doc').style.display = '';
+
+    const grid = document.getElementById('doc-grid');
+    grid.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:20px;">Loading…</div>';
+
+    const dres = await fetch('/api/sop/documents?category=' + encodeURIComponent(slug));
+    const docs  = dres.ok ? await dres.json() : [];
+    renderDocs(docs);
+  };
+
+  function renderDocs(docs) {
+    const grid = document.getElementById('doc-grid');
+    if (!docs.length) {
+      grid.innerHTML = `<div class="doc-empty">
+        <div class="doc-empty-icon">📄</div>
+        <div class="doc-empty-title">No documents yet</div>
+        <div class="doc-empty-sub">${isAdmin ? 'Click "Upload Document" to add the first SOP.' : 'Documents will appear here once uploaded by an admin.'}</div>
+      </div>`;
+      return;
+    }
+    grid.innerHTML = docs.map(d => {
+      const ext = d.filename.split('.').pop().toLowerCase();
+      const icon = ext === 'pdf' ? '📕' : ['doc','docx'].includes(ext) ? '📝' : ['xls','xlsx'].includes(ext) ? '📊' : ['png','jpg','jpeg'].includes(ext) ? '🖼' : '📄';
+      const size = d.file_size ? (d.file_size > 1024*1024 ? (d.file_size/1024/1024).toFixed(1)+' MB' : Math.round(d.file_size/1024)+' KB') : '';
+      const date = d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString('en-CA') : '';
+      const deleteBtn = isAdmin ? `<button class="btn-delete-doc" onclick="deleteDoc(${d.id})" title="Delete">🗑</button>` : '';
+      return `<div class="doc-card">
+        <div class="doc-card-icon">${icon}</div>
+        <div>
+          <div class="doc-card-title">${esc(d.title)}</div>
+          <div class="doc-card-meta">${[ext.toUpperCase(), size, date ? 'Uploaded '+date : ''].filter(Boolean).join(' · ')}</div>
+        </div>
+        <div class="doc-card-actions">
+          <a class="btn-view" href="/uploads/sop/${encodeURIComponent(d.filename)}" target="_blank" rel="noopener">View / Download</a>
+          ${deleteBtn}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  window.deleteDoc = async function(id) {
+    if (!confirm('Delete this document? This cannot be undone.')) return;
+    const res = await fetch('/api/sop/documents/' + id, { method: 'DELETE' });
+    if (res.ok) selectCategory(_activeCat);
+    else alert('Delete failed — please try again.');
+  };
+
+  // ── Upload modal ──────────────────────────────
+  let _uploadFile = null;
+
+  document.getElementById('btn-upload-doc').addEventListener('click', () => {
+    _uploadFile = null;
+    document.getElementById('upload-title').value = '';
+    document.getElementById('file-name-display').style.display = 'none';
+    document.getElementById('upload-submit').disabled = true;
+    document.getElementById('upload-modal').style.display = 'flex';
+  });
+
+  function closeUploadModal() { document.getElementById('upload-modal').style.display = 'none'; }
+  document.getElementById('upload-modal-close').addEventListener('click', closeUploadModal);
+  document.getElementById('upload-cancel').addEventListener('click', closeUploadModal);
+  document.getElementById('upload-modal').addEventListener('click', e => { if (e.target === document.getElementById('upload-modal')) closeUploadModal(); });
+
+  const fileDrop = document.getElementById('file-drop');
+  const fileInput = document.getElementById('upload-file-input');
+
+  fileDrop.addEventListener('click', () => fileInput.click());
+  fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+  fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+  fileDrop.addEventListener('drop', e => {
+    e.preventDefault();
+    fileDrop.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+  function setFile(f) {
+    _uploadFile = f;
+    const disp = document.getElementById('file-name-display');
+    disp.textContent = f.name;
+    disp.style.display = '';
+    checkUploadReady();
+    // Auto-fill title from filename if blank
+    const titleEl = document.getElementById('upload-title');
+    if (!titleEl.value) titleEl.value = f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
+  }
+
+  document.getElementById('upload-title').addEventListener('input', checkUploadReady);
+  function checkUploadReady() {
+    document.getElementById('upload-submit').disabled = !(_uploadFile && document.getElementById('upload-title').value.trim());
+  }
+
+  document.getElementById('upload-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('upload-submit');
+    btn.disabled = true; btn.textContent = 'Uploading…';
+    const fd = new FormData();
+    fd.append('file', _uploadFile);
+    fd.append('category_slug', _activeCat);
+    fd.append('title', document.getElementById('upload-title').value.trim());
+    const res = await fetch('/api/sop/documents', { method: 'POST', body: fd });
+    btn.textContent = 'Upload';
+    if (res.ok) {
+      closeUploadModal();
+      selectCategory(_activeCat);
+    } else {
+      const e = await res.json().catch(() => ({}));
+      alert('Upload failed: ' + (e.error || 'Unknown error'));
+      btn.disabled = false;
+    }
+  });
+
+  // ── Add category modal ────────────────────────
+  document.getElementById('btn-add-cat').addEventListener('click', () => {
+    document.getElementById('addcat-name').value = '';
+    document.getElementById('addcat-modal').style.display = 'flex';
+  });
+  function closeAddCat() { document.getElementById('addcat-modal').style.display = 'none'; }
+  document.getElementById('addcat-modal-close').addEventListener('click', closeAddCat);
+  document.getElementById('addcat-cancel').addEventListener('click', closeAddCat);
+  document.getElementById('addcat-modal').addEventListener('click', e => { if (e.target === document.getElementById('addcat-modal')) closeAddCat(); });
+
+  document.getElementById('addcat-submit').addEventListener('click', async () => {
+    const label = document.getElementById('addcat-name').value.trim();
+    if (!label) return;
+    const btn = document.getElementById('addcat-submit');
+    btn.disabled = true; btn.textContent = 'Adding…';
+    const res = await fetch('/api/sop/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label })
+    });
+    btn.textContent = 'Add Category'; btn.disabled = false;
+    if (res.ok) {
+      closeAddCat();
+      await loadCategories();
+      const c = await res.json().catch(() => null);
+      if (c) selectCategory(c.slug);
+    } else {
+      const e = await res.json().catch(() => ({}));
+      alert('Error: ' + (e.error || 'Unknown'));
+    }
+  });
+
+  // ── Mobile sidebar toggle ─────────────────────
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    document.getElementById('sop-sidebar').classList.toggle('open');
+    document.getElementById('sidebar-overlay').classList.toggle('open');
+  });
+  document.getElementById('sidebar-overlay').addEventListener('click', () => {
+    document.getElementById('sop-sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('open');
+  });
+
+  // ── Helpers ───────────────────────────────────
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  await loadCategories();
+})();
+</script>
+</body>
+</html>

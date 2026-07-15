@@ -486,6 +486,26 @@ async function initSchema() {
     created_at TEXT NOT NULL
   )`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS sop_categories (
+    id SERIAL PRIMARY KEY,
+    slug TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS sop_documents (
+    id SERIAL PRIMARY KEY,
+    category_slug TEXT NOT NULL,
+    title TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    file_size INTEGER,
+    uploaded_by TEXT,
+    uploaded_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
+    sort_order INTEGER DEFAULT 0
+  )`);
+  // Seed default category if none exist
+  await pool.query(`INSERT INTO sop_categories (slug,label,sort_order) VALUES ('residential','Residential Homes',0) ON CONFLICT(slug) DO NOTHING`);
+
   console.log('  ✓ Database schema ready');
 }
 

@@ -3371,6 +3371,94 @@ app.get('/api/tools/my-recent', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// SOP — Standard Operating Procedures
+// ─────────────────────────────────────────────
+
+const sopStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'public', 'uploads', 'sop');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => cb(null, `sop-${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname).toLowerCase()}`)
+});
+const sopUpload = multer({ storage: sopStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+
+// GET /api/sop/categories
+app.get('/api/sop/categories', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM sop_categories ORDER BY sort_order,label');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/sop/categories  (admin only)
+app.post('/api/sop/categories', requireAdmin, async (req, res) => {
+  try {
+    const { label } = req.body;
+    if (!label?.trim()) return res.status(400).json({ error: 'label required' });
+    const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g,'');
+    const { rows } = await pool.query(
+      `INSERT INTO sop_categories (slug,label,sort_order) VALUES ($1,$2,(SELECT COALESCE(MAX(sort_order),0)+1 FROM sop_categories)) ON CONFLICT(slug) DO NOTHING RETURNING *`,
+      [slug, label.trim()]
+    );
+    if (!rows.length) return res.status(409).json({ error: 'Category already exists' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/sop/categories/:slug  (admin only)
+app.delete('/api/sop/categories/:slug', requireAdmin, async (req, res) => {
+  try {
+    const { rows: docs } = await pool.query('SELECT filename FROM sop_documents WHERE category_slug=$1', [req.params.slug]);
+    for (const d of docs) {
+      try { fs.unlinkSync(path.join(__dirname,'public','uploads','sop',d.filename)); } catch {}
+    }
+    await pool.query('DELETE FROM sop_documents WHERE category_slug=$1', [req.params.slug]);
+    await pool.query('DELETE FROM sop_categories WHERE slug=$1', [req.params.slug]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/sop/documents?category=slug
+app.get('/api/sop/documents', requireAuth, async (req, res) => {
+  try {
+    const { category } = req.query;
+    const q = category
+      ? 'SELECT * FROM sop_documents WHERE category_slug=$1 ORDER BY sort_order,uploaded_at'
+      : 'SELECT * FROM sop_documents ORDER BY sort_order,uploaded_at';
+    const params = category ? [category] : [];
+    const { rows } = await pool.query(q, params);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/sop/documents  (admin only)
+app.post('/api/sop/documents', requireAdmin, sopUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const { category_slug, title } = req.body;
+    if (!category_slug || !title?.trim()) return res.status(400).json({ error: 'category_slug and title required' });
+    const { rows } = await pool.query(
+      `INSERT INTO sop_documents (category_slug,title,filename,file_size,uploaded_by) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [category_slug, title.trim(), req.file.filename, req.file.size, req.user.name || req.user.email]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/sop/documents/:id  (admin only)
+app.delete('/api/sop/documents/:id', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT filename FROM sop_documents WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    try { fs.unlinkSync(path.join(__dirname,'public','uploads','sop',rows[0].filename)); } catch {}
+    await pool.query('DELETE FROM sop_documents WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
 // START
 // ─────────────────────────────────────────────
 
