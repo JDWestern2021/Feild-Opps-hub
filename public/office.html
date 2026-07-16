@@ -3761,28 +3761,21 @@ $('psub-wire').addEventListener('click', () => setProjectSubTab('wire'));
 $('psub-proj-archived').addEventListener('click', () => setProjectSubTab('proj-archived'));
 
 // ── Wire Tracking ─────────────────────────────────────────────────────────────
-// kg_per_m values from J&D wire weight cheat sheet
-
 const WIRE_PRESETS = [
-  // ── NMD ──────────────────────────────────────────────
   { wire_type:'NMD', gauge:'10/3c', color:'Orange', kg_per_m:0.53 },
   { wire_type:'NMD', gauge:'12/2c', color:'Yellow', kg_per_m:0.22 },
   { wire_type:'NMD', gauge:'12/2c', color:'Red',    kg_per_m:0.26 },
   { wire_type:'NMD', gauge:'14/2c', color:'White',  kg_per_m:0.22 },
   { wire_type:'NMD', gauge:'14/3c', color:'White',  kg_per_m:0.26 },
-  // ── BX (Armoured) ────────────────────────────────────
   { wire_type:'BX',  gauge:'10/2C', color:'', kg_per_m:0.44 },
   { wire_type:'BX',  gauge:'12/2C', color:'', kg_per_m:0.31 },
   { wire_type:'BX',  gauge:'12/3C', color:'', kg_per_m:0.44 },
   { wire_type:'BX',  gauge:'12/4C', color:'', kg_per_m:0.53 },
-  // ── LVT (Low Voltage) ────────────────────────────────
-  { wire_type:'LVT', gauge:'18/2',       color:'', kg_per_m:0.09 },
-  { wire_type:'LVT', gauge:'18/6',       color:'', kg_per_m:0.20 },
-  { wire_type:'LVT', gauge:'Speaker',    color:'', kg_per_m:0.10 },
-  // ── Data / Coax ──────────────────────────────────────
-  { wire_type:'Cat 6',       gauge:'',   color:'', kg_per_m:0.08 },
-  { wire_type:'Coax 2-pair', gauge:'',   color:'', kg_per_m:0.20 },
-  // ── THHN ─────────────────────────────────────────────
+  { wire_type:'LVT', gauge:'18/2',    color:'', kg_per_m:0.09 },
+  { wire_type:'LVT', gauge:'18/6',    color:'', kg_per_m:0.20 },
+  { wire_type:'LVT', gauge:'Speaker', color:'', kg_per_m:0.10 },
+  { wire_type:'Cat 6',       gauge:'', color:'', kg_per_m:0.08 },
+  { wire_type:'Coax 2-pair', gauge:'', color:'', kg_per_m:0.20 },
   { wire_type:'THHN', gauge:'#14', color:'', kg_per_m:0 },
   { wire_type:'THHN', gauge:'#12', color:'', kg_per_m:0 },
   { wire_type:'THHN', gauge:'#10', color:'', kg_per_m:0 },
@@ -3790,92 +3783,69 @@ const WIRE_PRESETS = [
   { wire_type:'THHN', gauge:'#6',  color:'', kg_per_m:0 },
   { wire_type:'THHN', gauge:'#4',  color:'', kg_per_m:0 },
   { wire_type:'THHN', gauge:'#2',  color:'', kg_per_m:0 },
-  // ── Aluminum ─────────────────────────────────────────
   { wire_type:'Aluminum SEU', gauge:'2/0', color:'', kg_per_m:0 },
   { wire_type:'Aluminum SEU', gauge:'3/0', color:'', kg_per_m:0 },
   { wire_type:'Aluminum SEU', gauge:'4/0', color:'', kg_per_m:0 },
 ];
 
-let _wireRows = [];
-let _wireDirty = new Set();
+let _wireTypes = [];
+let _wireEntries = {};
+let _wireExpanded = new Set();
 
-// helpers
 function wireFmt(n) { const v = parseFloat(n)||0; return v % 1 === 0 ? String(v) : v.toFixed(2); }
 function wireMeters(kg, kgpm) { if (!kgpm || kgpm <= 0) return null; return kg / kgpm; }
 function wireFmtM(m) { if (m === null) return '—'; return (m % 1 === 0 ? m : m.toFixed(1)) + ' m'; }
-
-function wireCalc(r) {
-  // use qty_sent = weight sent (kg), qty_installed = weight installed (kg), kg_per_m from row
-  const kgpm  = parseFloat(r.kg_per_m) || 0;
-  const sent  = parseFloat(r.qty_sent) || 0;
-  const inst  = parseFloat(r.qty_installed) || 0;
-  const remKg = sent - inst;
-  return {
-    kgpm, sent, inst, remKg,
-    mSent : wireMeters(sent,  kgpm),
-    mInst : wireMeters(inst,  kgpm),
-    mRem  : wireMeters(remKg, kgpm),
-  };
+function wireFmtDate(iso) {
+  if (!iso) return '—';
+  const [y, mo, d] = iso.split('-');
+  return new Date(+y, +mo-1, +d).toLocaleDateString('en-CA', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
 }
 
 async function renderProjectWire(projectId) {
   const panel = $('ptab-panel-wire');
   panel.innerHTML = `<div style="padding:20px;color:var(--gray-400);">Loading wire log…</div>`;
   const res = await fetch('/api/projects/' + projectId + '/wire');
-  _wireRows = res.ok ? await res.json() : [];
-  _wireDirty.clear();
+  _wireTypes = res.ok ? await res.json() : [];
+  _wireEntries = {};
+  _wireExpanded.clear();
 
   panel.innerHTML = `
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <div style="font-size:14px;font-weight:800;color:var(--gray-800);">Wire Log</div>
       <div style="font-size:11px;color:var(--gray-400);background:#f3f4f6;border-radius:6px;padding:3px 8px;">Enter kg → meters auto-calculate</div>
       <span style="flex:1;"></span>
-      <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:flex;align-items:center;gap:6px;">
-        Date:
-        <input type="date" id="wire-date-picker" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px;font-family:inherit;"/>
-      </label>
       <button id="wire-add-preset-btn" class="btn btn-secondary btn-sm">+ Add from Preset</button>
-      <button id="wire-add-custom-btn" class="btn btn-secondary btn-sm">+ Custom Row</button>
-      <button id="wire-save-btn" class="btn btn-sm" style="background:var(--orange);color:#fff;display:none;">Save Changes</button>
+      <button id="wire-add-custom-btn" class="btn btn-secondary btn-sm">+ Custom Wire Type</button>
     </div>
 
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table id="wire-table" style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px;">
+      <table id="wire-table" style="width:100%;border-collapse:collapse;font-size:13px;min-width:740px;">
         <thead>
-          <tr style="background:#f1f5f9;">
-            <th colspan="4" style="padding:6px 10px;text-align:left;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #e2e8f0;">Wire</th>
-            <th colspan="2" style="padding:6px 10px;text-align:center;font-size:10px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #e2e8f0;border-left:2px solid #bfdbfe;">Sent to Site</th>
-            <th colspan="2" style="padding:6px 10px;text-align:center;font-size:10px;font-weight:800;color:#15803d;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #e2e8f0;border-left:2px solid #bbf7d0;">Installed</th>
-            <th colspan="2" style="padding:6px 10px;text-align:center;font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #e2e8f0;border-left:2px solid #fde68a;">Remaining on Roll</th>
-            <th style="border-bottom:1px solid #e2e8f0;"></th>
-            <th style="border-bottom:1px solid #e2e8f0;width:28px;"></th>
-          </tr>
           <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+            <th style="width:20px;"></th>
             <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">Type</th>
             <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">Gauge</th>
             <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">Color</th>
             <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">kg/m</th>
-            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;border-left:2px solid #bfdbfe;">kg</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;border-left:2px solid #bfdbfe;">Sent (kg)</th>
             <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;">≈ m</th>
-            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;border-left:2px solid #bbf7d0;">kg</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;border-left:2px solid #bbf7d0;">Installed (kg)</th>
             <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;">≈ m</th>
-            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;border-left:2px solid #fde68a;">kg</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;border-left:2px solid #fde68a;">Remaining on Site (kg)</th>
             <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;">≈ m</th>
-            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">Notes</th>
-            <th style="width:28px;"></th>
+            <th style="width:180px;"></th>
           </tr>
         </thead>
         <tbody id="wire-tbody"></tbody>
       </table>
     </div>
 
-    ${_wireRows.length === 0 ? `<div id="wire-empty" style="padding:40px;text-align:center;color:var(--gray-400);">
-      <div style="font-size:32px;margin-bottom:10px;">🪛</div>
+    ${_wireTypes.length === 0 ? `<div id="wire-empty" style="padding:40px;text-align:center;color:var(--gray-400);">
       <div style="font-weight:700;color:var(--gray-600);margin-bottom:6px;">No wire added yet</div>
-      <div style="font-size:12px;">Click <strong>+ Add from Preset</strong> to pick from your wire list, or add a custom row.</div>
+      <div style="font-size:12px;">Click <strong>+ Add from Preset</strong> to get started.</div>
     </div>` : ''}
 
-    <!-- Preset picker modal -->
+    <!-- Preset modal -->
     <div id="wire-preset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;padding:20px;">
       <div style="background:#fff;border-radius:14px;width:100%;max-width:500px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);">
         <div style="padding:16px 20px 12px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
@@ -3892,14 +3862,37 @@ async function renderProjectWire(projectId) {
         </div>
       </div>
     </div>
+
+    <!-- Entry log modal -->
+    <div id="wire-entry-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#fff;border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+        <div style="padding:16px 20px 12px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+          <div id="wire-entry-modal-title" style="font-size:15px;font-weight:800;"></div>
+          <button onclick="$('wire-entry-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1;">×</button>
+        </div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;">
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
+            Date
+            <input type="date" id="wire-entry-date" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;"/>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
+            Weight (kg)
+            <input type="number" id="wire-entry-kg" min="0" step="0.1" placeholder="0.0" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;"/>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
+            Notes (optional)
+            <input type="text" id="wire-entry-notes" placeholder="e.g. Roll #2…" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;"/>
+          </label>
+        </div>
+        <div style="padding:12px 20px 16px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;">
+          <button onclick="$('wire-entry-modal').style.display='none'" class="btn btn-secondary btn-sm">Cancel</button>
+          <button id="wire-entry-save-btn" class="btn btn-sm" style="background:var(--orange);color:#fff;">Log Entry</button>
+        </div>
+      </div>
+    </div>
   `;
 
-  // Default date picker to today
-  const todayISO = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-  $('wire-date-picker').value = todayISO;
-
-  renderWireRows();
-  $('wire-save-btn').addEventListener('click', saveWireChanges);
+  renderWireTable();
 
   $('wire-add-preset-btn').addEventListener('click', () => {
     $('wire-preset-search').value = '';
@@ -3907,179 +3900,210 @@ async function renderProjectWire(projectId) {
     $('wire-preset-modal').style.display = 'flex';
   });
   $('wire-preset-modal').addEventListener('click', e => { if (e.target === $('wire-preset-modal')) $('wire-preset-modal').style.display = 'none'; });
+  $('wire-entry-modal').addEventListener('click', e => { if (e.target === $('wire-entry-modal')) $('wire-entry-modal').style.display = 'none'; });
 
   $('wire-add-custom-btn').addEventListener('click', async () => {
-    const entry_date = $('wire-date-picker').value || todayISO;
-    const res = await fetch('/api/projects/' + projectId + '/wire', {
+    const r = await fetch('/api/projects/' + projectId + '/wire', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wire_type:'', gauge:'', color:'', kg_per_m:0, qty_sent:0, qty_installed:0, notes:'', entry_date })
+      body: JSON.stringify({ wire_type:'', gauge:'', color:'', kg_per_m:0, notes:'' })
     });
-    if (res.ok) {
-      const row = await res.json();
-      _wireRows.unshift(row); // newest first
+    if (r.ok) {
+      _wireTypes.push(await r.json());
       const empty = $('wire-empty'); if (empty) empty.remove();
-      renderWireRows();
-      document.querySelector(`[data-wire-id="${row.id}"][data-field="wire_type"]`)?.focus();
+      renderWireTable();
     }
   });
 }
 
-function wireFmtDateHeader(iso) {
-  if (!iso) return 'Unknown Date';
-  const [y, m, d] = iso.split('-');
-  return new Date(+y, +m - 1, +d).toLocaleDateString('en-CA', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-}
-
-function wireRowHTML(r, CELL) {
-  const c = wireCalc(r);
-  const isDirty = _wireDirty.has(r.id);
-  const remColor = c.remKg < 0 ? '#991b1b' : c.remKg === 0 && c.sent > 0 ? '#166534' : '#92400e';
-  const remShow  = c.sent > 0 || c.inst > 0;
-  return `<tr data-wire-row="${r.id}" style="border-bottom:1px solid #f3f4f6;${isDirty?'background:#fffbeb;':''}">
-    <td style="padding:5px 6px;"><input class="wire-cell" data-wire-id="${r.id}" data-field="wire_type" value="${esc(r.wire_type)}" placeholder="NMD" style="${CELL}min-width:72px;"/></td>
-    <td style="padding:5px 6px;"><input class="wire-cell" data-wire-id="${r.id}" data-field="gauge" value="${esc(r.gauge)}" placeholder="14/2c" style="${CELL}width:66px;"/></td>
-    <td style="padding:5px 6px;"><input class="wire-cell" data-wire-id="${r.id}" data-field="color" value="${esc(r.color)}" placeholder="White" style="${CELL}width:64px;"/></td>
-    <td style="padding:5px 6px;border-right:1px solid #e2e8f0;">
-      <input class="wire-cell" data-wire-id="${r.id}" data-field="kg_per_m" type="number" min="0" step="0.01" value="${c.kgpm||''}" placeholder="0.22" style="${CELL}width:58px;text-align:right;"/>
-    </td>
-    <td style="padding:5px 6px;border-left:2px solid #bfdbfe;">
-      <input class="wire-cell" data-wire-id="${r.id}" data-field="qty_sent" type="number" min="0" step="0.01" value="${c.sent||''}" placeholder="0" style="${CELL}width:72px;text-align:right;background:#eff6ff;"/>
-    </td>
-    <td style="padding:5px 8px;text-align:right;white-space:nowrap;">
-      <span data-wire-calc="${r.id}-msent" style="font-size:12px;color:#1d4ed8;font-weight:600;">${wireFmtM(c.mSent)}</span>
-    </td>
-    <td style="padding:5px 6px;border-left:2px solid #bbf7d0;">
-      <input class="wire-cell" data-wire-id="${r.id}" data-field="qty_installed" type="number" min="0" step="0.01" value="${c.inst||''}" placeholder="0" style="${CELL}width:72px;text-align:right;background:#f0fdf4;"/>
-    </td>
-    <td style="padding:5px 8px;text-align:right;white-space:nowrap;">
-      <span data-wire-calc="${r.id}-minst" style="font-size:12px;color:#15803d;font-weight:600;">${wireFmtM(c.mInst)}</span>
-    </td>
-    <td style="padding:5px 8px;text-align:right;border-left:2px solid #fde68a;">
-      <span data-wire-calc="${r.id}-remkg" style="font-weight:700;font-size:13px;color:${remShow?remColor:'#9ca3af'};">${remShow ? wireFmt(c.remKg)+' kg' : '—'}</span>
-    </td>
-    <td style="padding:5px 8px;text-align:right;">
-      <span data-wire-calc="${r.id}-remm" style="font-size:12px;color:${remShow&&c.mRem!==null?remColor:'#9ca3af'};font-weight:600;">${remShow ? wireFmtM(c.mRem) : '—'}</span>
-    </td>
-    <td style="padding:5px 6px;"><input class="wire-cell" data-wire-id="${r.id}" data-field="notes" value="${esc(r.notes)}" placeholder="Notes…" style="${CELL}min-width:90px;"/></td>
-    <td style="padding:5px 4px;text-align:center;">
-      <button onclick="deleteWireRow(${r.id})" title="Remove" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:15px;padding:2px 4px;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'">✕</button>
-    </td>
-  </tr>`;
-}
-
-function renderWireRows() {
+function renderWireTable() {
   const tbody = $('wire-tbody');
   if (!tbody) return;
-  if (!_wireRows.length) { tbody.innerHTML = ''; return; }
+  if (!_wireTypes.length) { tbody.innerHTML = ''; return; }
 
-  const CELL = 'border:1px solid #e5e7eb;border-radius:6px;padding:5px 7px;font-size:13px;background:#fff;outline:none;box-sizing:border-box;width:100%;';
-
-  // Group by date, newest first
-  const groups = {};
-  _wireRows.forEach(r => {
-    const d = r.entry_date || 'Unknown';
-    if (!groups[d]) groups[d] = [];
-    groups[d].push(r);
-  });
-  const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-
-  tbody.innerHTML = sortedDates.map(date => {
-    const header = `<tr>
-      <td colspan="12" style="padding:9px 14px;background:#1c1e22;color:#fff;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;user-select:none;">
-        ${wireFmtDateHeader(date)}
-      </td>
-    </tr>`;
-    const rows = groups[date].map(r => wireRowHTML(r, CELL)).join('');
-    return header + rows;
+  tbody.innerHTML = _wireTypes.map(w => {
+    const kgpm = parseFloat(w.kg_per_m) || 0;
+    const sent = parseFloat(w.total_sent) || 0;
+    const inst = parseFloat(w.total_installed) || 0;
+    const remKg = sent - inst;
+    const mSent = wireMeters(sent, kgpm);
+    const mInst = wireMeters(inst, kgpm);
+    const mRem  = wireMeters(remKg, kgpm);
+    const hasData = sent > 0 || inst > 0;
+    const remColor = remKg < 0 ? '#991b1b' : remKg === 0 && sent > 0 ? '#166534' : '#92400e';
+    const expanded = _wireExpanded.has(w.id);
+    return `
+      <tr data-wire-type-row="${w.id}" style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:6px 4px;text-align:center;">
+          <button onclick="wireToggleExpand(${w.id})" title="Show history" id="wire-expand-btn-${w.id}" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:13px;padding:2px 4px;line-height:1;">${expanded ? '▼' : '▶'}</button>
+        </td>
+        <td style="padding:6px 8px;font-size:13px;font-weight:700;">${esc(w.wire_type)||'<span style="color:#9ca3af;">—</span>'}</td>
+        <td style="padding:6px 8px;font-size:13px;">${esc(w.gauge)||'—'}</td>
+        <td style="padding:6px 8px;font-size:13px;">${esc(w.color)||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:12px;color:var(--gray-500);">${kgpm > 0 ? kgpm + ' kg/m' : '—'}</td>
+        <td style="padding:6px 10px;text-align:right;font-weight:700;color:#1d4ed8;border-left:2px solid #bfdbfe;">${sent > 0 ? wireFmt(sent) : '<span style="color:#9ca3af;">—</span>'}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:12px;color:#1d4ed8;">${wireFmtM(mSent)}</td>
+        <td style="padding:6px 10px;text-align:right;font-weight:700;color:#15803d;border-left:2px solid #bbf7d0;">${inst > 0 ? wireFmt(inst) : '<span style="color:#9ca3af;">—</span>'}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:12px;color:#15803d;">${wireFmtM(mInst)}</td>
+        <td style="padding:6px 10px;text-align:right;font-weight:800;font-size:13px;border-left:2px solid #fde68a;color:${hasData ? remColor : '#9ca3af'};">${hasData ? wireFmt(remKg) : '—'}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:12px;color:${hasData ? remColor : '#9ca3af'};">${wireFmtM(mRem)}</td>
+        <td style="padding:6px 4px;text-align:right;white-space:nowrap;">
+          <button onclick="wireOpenEntry(${w.id},'sent')" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;margin-right:3px;">+ Sent</button>
+          <button onclick="wireOpenEntry(${w.id},'installed')" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;margin-right:3px;">+ Installed</button>
+          <button onclick="wireDeleteType(${w.id})" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:15px;padding:2px 4px;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'">✕</button>
+        </td>
+      </tr>
+      <tr id="wire-history-row-${w.id}" style="display:${expanded ? 'table-row' : 'none'};">
+        <td colspan="12" style="padding:0;background:#fafafa;border-bottom:2px solid #e5e7eb;">
+          <div id="wire-history-${w.id}" style="padding:8px 16px 12px 44px;"></div>
+        </td>
+      </tr>`;
   }).join('');
 
-  document.querySelectorAll('.wire-cell').forEach(el => {
-    el.addEventListener('focus', () => { el.style.borderColor = 'var(--orange)'; el.style.boxShadow = '0 0 0 2px rgba(244,121,32,.15)'; });
-    el.addEventListener('blur',  () => { el.style.borderColor = '#e5e7eb'; el.style.boxShadow = ''; });
-    el.addEventListener('input',  () => wireMarkDirty(el.dataset.wireId));
-    el.addEventListener('change', () => wireMarkDirty(el.dataset.wireId));
-  });
+  _wireExpanded.forEach(id => wireLoadEntries(id));
 }
 
-function wireMarkDirty(id) {
-  const numId = parseInt(id);
-  _wireDirty.add(numId);
-  const saveBtn = $('wire-save-btn');
-  if (saveBtn) saveBtn.style.display = '';
-
-  // Read current values from DOM
-  const kgpm = parseFloat(document.querySelector(`[data-wire-id="${id}"][data-field="kg_per_m"]`)?.value) || 0;
-  const sent  = parseFloat(document.querySelector(`[data-wire-id="${id}"][data-field="qty_sent"]`)?.value) || 0;
-  const inst  = parseFloat(document.querySelector(`[data-wire-id="${id}"][data-field="qty_installed"]`)?.value) || 0;
-  const remKg = sent - inst;
-  const mSent = wireMeters(sent, kgpm);
-  const mInst = wireMeters(inst, kgpm);
-  const mRem  = wireMeters(remKg, kgpm);
-  const remShow = sent > 0 || inst > 0;
-  const remColor = remKg < 0 ? '#991b1b' : remKg === 0 && sent > 0 ? '#166534' : '#92400e';
-
-  const q = s => document.querySelector(`[data-wire-calc="${id}-${s}"]`);
-  const ms = q('msent'); if (ms) ms.textContent = wireFmtM(mSent);
-  const mi = q('minst'); if (mi) mi.textContent = wireFmtM(mInst);
-  const rk = q('remkg'); if (rk) { rk.textContent = remShow ? wireFmt(remKg)+' kg' : '—'; rk.style.color = remShow ? remColor : '#9ca3af'; }
-  const rm = q('remm');  if (rm) { rm.textContent = remShow ? wireFmtM(mRem) : '—'; rm.style.color = remShow && mRem !== null ? remColor : '#9ca3af'; }
-
-  const tr = document.querySelector(`[data-wire-row="${id}"]`);
-  if (tr) tr.style.background = '#fffbeb';
-}
-
-async function saveWireChanges() {
-  if (!_wireDirty.size) return;
-  const saveBtn = $('wire-save-btn');
-  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
-
-  const saves = [..._wireDirty].map(async id => {
-    const fields = ['wire_type','gauge','color','kg_per_m','qty_sent','qty_installed','notes','entry_date'];
-    const body = {};
-    fields.forEach(f => {
-      const el = document.querySelector(`[data-wire-id="${id}"][data-field="${f}"]`);
-      if (el) body[f] = ['kg_per_m','qty_sent','qty_installed'].includes(f) ? (parseFloat(el.value)||0) : el.value;
-    });
-    // entry_date comes from the row data (not an editable cell), preserve it
-    if (!body.entry_date) {
-      const row = _wireRows.find(r => r.id === id);
-      if (row) body.entry_date = row.entry_date;
+async function wireToggleExpand(wireId) {
+  if (_wireExpanded.has(wireId)) {
+    _wireExpanded.delete(wireId);
+    const row = document.getElementById('wire-history-row-' + wireId);
+    if (row) row.style.display = 'none';
+    const btn = document.getElementById('wire-expand-btn-' + wireId);
+    if (btn) btn.textContent = '▶';
+  } else {
+    _wireExpanded.add(wireId);
+    const row = document.getElementById('wire-history-row-' + wireId);
+    if (row) row.style.display = 'table-row';
+    const btn = document.getElementById('wire-expand-btn-' + wireId);
+    if (btn) btn.textContent = '▼';
+    const container = document.getElementById('wire-history-' + wireId);
+    if (container && !_wireEntries[wireId]) {
+      container.innerHTML = '<span style="color:#9ca3af;font-size:12px;">Loading…</span>';
     }
-    const res = await fetch('/api/projects/wire/' + id, {
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      const idx = _wireRows.findIndex(r => r.id === id);
-      if (idx >= 0) _wireRows[idx] = updated;
-      const tr = document.querySelector(`[data-wire-row="${id}"]`);
-      if (tr) tr.style.background = '';
-    }
-  });
-
-  await Promise.all(saves);
-  _wireDirty.clear();
-  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Save Changes'; saveBtn.style.display = 'none'; }
-  showToast('Wire log saved', 'success');
+    wireLoadEntries(wireId);
+  }
 }
 
-window.deleteWireRow = async function(id) {
-  if (!confirm('Remove this wire row?')) return;
-  const res = await fetch('/api/projects/wire/' + id, { method:'DELETE' });
+async function wireLoadEntries(wireId) {
+  const container = document.getElementById('wire-history-' + wireId);
+  if (!container) return;
+  const res = await fetch('/api/projects/wire/' + wireId + '/entries');
+  if (!res.ok) { container.innerHTML = '<span style="color:#9ca3af;font-size:12px;">Failed to load history</span>'; return; }
+  _wireEntries[wireId] = await res.json();
+  wireRenderEntries(wireId);
+}
+
+function wireRenderEntries(wireId) {
+  const container = document.getElementById('wire-history-' + wireId);
+  if (!container) return;
+  const entries = _wireEntries[wireId] || [];
+  const w = _wireTypes.find(t => t.id === wireId);
+  const kgpm = w ? parseFloat(w.kg_per_m) || 0 : 0;
+
+  if (!entries.length) {
+    container.innerHTML = '<span style="color:#9ca3af;font-size:12px;font-style:italic;">No entries yet — use + Sent or + Installed to log activity.</span>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table style="font-size:12px;border-collapse:collapse;width:100%;max-width:600px;">
+      <thead>
+        <tr style="border-bottom:1px solid #e5e7eb;">
+          <th style="padding:4px 10px;text-align:left;font-size:10px;color:var(--gray-500);text-transform:uppercase;">Date</th>
+          <th style="padding:4px 10px;text-align:left;font-size:10px;color:var(--gray-500);text-transform:uppercase;">Type</th>
+          <th style="padding:4px 10px;text-align:right;font-size:10px;color:var(--gray-500);text-transform:uppercase;">kg</th>
+          <th style="padding:4px 10px;text-align:right;font-size:10px;color:var(--gray-500);text-transform:uppercase;">≈ m</th>
+          <th style="padding:4px 10px;text-align:left;font-size:10px;color:var(--gray-500);text-transform:uppercase;">Notes</th>
+          <th style="padding:4px 4px;width:24px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${entries.map(e => {
+          const m = wireMeters(parseFloat(e.kg), kgpm);
+          const color = e.entry_type === 'sent' ? '#1d4ed8' : '#15803d';
+          const label = e.entry_type === 'sent' ? 'Sent' : 'Installed';
+          return `<tr style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:5px 10px;color:var(--gray-600);">${wireFmtDate(e.entry_date)}</td>
+            <td style="padding:5px 10px;"><span style="font-weight:700;color:${color};background:${e.entry_type==='sent'?'#eff6ff':'#f0fdf4'};padding:2px 7px;border-radius:5px;font-size:11px;">${label}</span></td>
+            <td style="padding:5px 10px;text-align:right;font-weight:700;color:${color};">${wireFmt(e.kg)} kg</td>
+            <td style="padding:5px 10px;text-align:right;color:var(--gray-500);">${wireFmtM(m)}</td>
+            <td style="padding:5px 10px;color:var(--gray-500);">${esc(e.notes||'')}</td>
+            <td style="padding:5px 4px;text-align:center;">
+              <button onclick="wireDeleteEntry(${wireId},${e.id})" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:13px;padding:2px 3px;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'">✕</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+window.wireOpenEntry = function(wireId, entryType) {
+  const w = _wireTypes.find(t => t.id === wireId);
+  const typeName = w ? [w.wire_type, w.gauge, w.color].filter(Boolean).join(' · ') : '';
+  const label = entryType === 'sent' ? 'Log Sent to Site' : 'Log Installed';
+  $('wire-entry-modal-title').textContent = label + (typeName ? ' — ' + typeName : '');
+  $('wire-entry-date').value = new Date().toLocaleDateString('en-CA');
+  $('wire-entry-kg').value = '';
+  $('wire-entry-notes').value = '';
+  $('wire-entry-modal').style.display = 'flex';
+  setTimeout(() => $('wire-entry-kg')?.focus(), 100);
+
+  const saveBtn = $('wire-entry-save-btn');
+  const newBtn = saveBtn.cloneNode(true);
+  saveBtn.parentNode.replaceChild(newBtn, saveBtn);
+  newBtn.onclick = async () => {
+    const kg = parseFloat($('wire-entry-kg').value);
+    const entry_date = $('wire-entry-date').value;
+    if (!kg || kg <= 0) { alert('Enter a weight in kg.'); return; }
+    if (!entry_date) { alert('Select a date.'); return; }
+    newBtn.disabled = true; newBtn.textContent = 'Saving…';
+    const res = await fetch('/api/projects/wire/' + wireId + '/entries', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entry_type: entryType, entry_date, kg, notes: $('wire-entry-notes').value || '' })
+    });
+    newBtn.disabled = false; newBtn.textContent = 'Log Entry';
+    if (!res.ok) { alert('Failed to save entry.'); return; }
+    $('wire-entry-modal').style.display = 'none';
+    const wires = await fetch('/api/projects/' + currentProjectId + '/wire');
+    if (wires.ok) _wireTypes = await wires.json();
+    if (_wireExpanded.has(wireId)) await wireLoadEntries(wireId);
+    renderWireTable();
+    if (_wireExpanded.has(wireId)) wireRenderEntries(wireId);
+    showToast('Entry logged', 'success');
+  };
+};
+
+window.wireDeleteEntry = async function(wireId, entryId) {
+  if (!confirm('Remove this entry?')) return;
+  const res = await fetch('/api/projects/wire/entries/' + entryId, { method:'DELETE' });
   if (res.ok) {
-    _wireRows = _wireRows.filter(r => r.id !== id);
-    _wireDirty.delete(id);
-    renderWireRows();
-    if (!_wireRows.length) {
-      const tbl = $('ptab-panel-wire').querySelector('table');
-      if (tbl) tbl.insertAdjacentHTML('afterend', '<div id="wire-empty" style="padding:40px;text-align:center;color:var(--gray-400);"><div style="font-size:32px;margin-bottom:10px;">🪛</div><div style="font-weight:700;color:var(--gray-600);">No wire rows yet</div></div>');
+    _wireEntries[wireId] = (_wireEntries[wireId]||[]).filter(e => e.id !== entryId);
+    const wires = await fetch('/api/projects/' + currentProjectId + '/wire');
+    if (wires.ok) _wireTypes = await wires.json();
+    renderWireTable();
+    if (_wireExpanded.has(wireId)) wireRenderEntries(wireId);
+  }
+};
+
+window.wireDeleteType = async function(wireId) {
+  if (!confirm('Remove this wire type and all its entries?')) return;
+  const res = await fetch('/api/projects/wire/' + wireId, { method:'DELETE' });
+  if (res.ok) {
+    _wireTypes = _wireTypes.filter(w => w.id !== wireId);
+    _wireExpanded.delete(wireId);
+    delete _wireEntries[wireId];
+    renderWireTable();
+    if (!_wireTypes.length) {
+      const panel = $('ptab-panel-wire');
+      if (panel && !$('wire-empty')) {
+        panel.insertAdjacentHTML('beforeend', '<div id="wire-empty" style="padding:40px;text-align:center;color:var(--gray-400);"><div style="font-weight:700;color:var(--gray-600);margin-bottom:6px;">No wire added yet</div></div>');
+      }
     }
   }
 };
 
 function renderWirePresetList() {
   const q = ($('wire-preset-search')?.value||'').toLowerCase();
-  const used = new Set(_wireRows.map(r => `${r.wire_type}|${r.gauge}|${r.color}`));
+  const used = new Set(_wireTypes.map(w => `${w.wire_type}|${w.gauge}|${w.color}`));
   const filtered = WIRE_PRESETS.filter(p =>
     !used.has(`${p.wire_type}|${p.gauge}|${p.color}`) &&
     (!q || `${p.wire_type} ${p.gauge} ${p.color}`.toLowerCase().includes(q))
@@ -4087,17 +4111,13 @@ function renderWirePresetList() {
   const list = $('wire-preset-list');
   if (!list) return;
   if (!filtered.length) { list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px;">No presets match</div>'; return; }
-
-  // Group by wire_type
   const groups = {};
   filtered.forEach(p => { (groups[p.wire_type] = groups[p.wire_type]||[]).push(p); });
   list.innerHTML = Object.entries(groups).map(([type, items]) => `
     <div style="padding:6px 16px 2px;font-size:10px;font-weight:800;color:var(--gray-400);text-transform:uppercase;letter-spacing:.08em;background:#f9fafb;border-bottom:1px solid #f3f4f6;">${esc(type)}</div>
     ${items.map(p => `<label style="display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
       <input type="checkbox" data-preset-idx="${WIRE_PRESETS.indexOf(p)}" style="width:16px;height:16px;accent-color:var(--orange);flex-shrink:0;">
-      <div style="flex:1;">
-        <div style="font-size:13px;font-weight:700;">${esc(p.gauge||'—')}${p.color?' <span style="color:var(--gray-400);font-weight:400;">· '+esc(p.color)+'</span>':''}</div>
-      </div>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:700;">${esc(p.gauge||'—')}${p.color?' <span style="color:var(--gray-400);font-weight:400;">· '+esc(p.color)+'</span>':''}</div></div>
       ${p.kg_per_m > 0 ? `<div style="font-size:11px;font-weight:700;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:6px;">${p.kg_per_m} kg/m</div>` : ''}
     </label>`).join('')}
   `).join('');
@@ -4108,24 +4128,19 @@ async function addSelectedPresets() {
   if (!checked.length) { alert('Select at least one wire type.'); return; }
   const btn = $('wire-preset-add-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
-
-  const entry_date = $('wire-date-picker')?.value || new Date().toLocaleDateString('en-CA');
   for (const cb of checked) {
     const p = WIRE_PRESETS[parseInt(cb.dataset.presetIdx)];
     if (!p) continue;
     const res = await fetch('/api/projects/' + currentProjectId + '/wire', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ wire_type:p.wire_type, gauge:p.gauge, color:p.color, kg_per_m:p.kg_per_m||0, qty_sent:0, qty_installed:0, notes:'', entry_date })
+      body: JSON.stringify({ wire_type:p.wire_type, gauge:p.gauge, color:p.color, kg_per_m:p.kg_per_m||0, notes:'' })
     });
-    if (res.ok) _wireRows.unshift(await res.json());
+    if (res.ok) _wireTypes.push(await res.json());
   }
-
   if (btn) { btn.disabled = false; btn.textContent = 'Add Selected'; }
   $('wire-preset-modal').style.display = 'none';
-  renderWireRows();
-  // Remove empty-state placeholder if present
-  const empty = $('ptab-panel-wire').querySelector('div[style*="padding:40px"]');
-  if (empty) empty.remove();
+  const empty = $('wire-empty'); if (empty) empty.remove();
+  renderWireTable();
 }
 
 // Refresh the open project after a record changes (keeps archived labels current)

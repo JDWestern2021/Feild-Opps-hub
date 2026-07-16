@@ -512,17 +512,23 @@ async function initSchema() {
     wire_type TEXT NOT NULL DEFAULT '',
     gauge TEXT NOT NULL DEFAULT '',
     color TEXT NOT NULL DEFAULT '',
-    unit TEXT NOT NULL DEFAULT 'm',
     kg_per_m NUMERIC(8,4) NOT NULL DEFAULT 0,
-    qty_sent NUMERIC(10,3) NOT NULL DEFAULT 0,
-    qty_installed NUMERIC(10,3) NOT NULL DEFAULT 0,
     notes TEXT NOT NULL DEFAULT '',
     sort_order INTEGER NOT NULL DEFAULT 0,
-    updated_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
-    updated_by TEXT NOT NULL DEFAULT ''
+    created_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
   )`);
+  // Safe migrations for existing installs
   await pool.query(`ALTER TABLE project_wire ADD COLUMN IF NOT EXISTS kg_per_m NUMERIC(8,4) NOT NULL DEFAULT 0`);
-  await pool.query(`ALTER TABLE project_wire ADD COLUMN IF NOT EXISTS entry_date TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD')`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS project_wire_entries (
+    id SERIAL PRIMARY KEY,
+    wire_id INTEGER NOT NULL REFERENCES project_wire(id) ON DELETE CASCADE,
+    entry_type TEXT NOT NULL CHECK (entry_type IN ('sent','installed')),
+    entry_date TEXT NOT NULL,
+    kg NUMERIC(10,3) NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+  )`);
 
   console.log('  ✓ Database schema ready');
 }

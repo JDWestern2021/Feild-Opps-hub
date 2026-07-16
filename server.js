@@ -3374,54 +3374,92 @@ app.get('/api/tools/my-recent', requireAuth, async (req, res) => {
 // PROJECT WIRE TRACKING
 // ─────────────────────────────────────────────
 
-// GET /api/projects/:id/wire
+// GET /api/projects/:id/wire  — wire types + aggregated totals
 app.get('/api/projects/:id/wire', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM project_wire WHERE project_id=$1 ORDER BY sort_order, id',
-      [req.params.id]
-    );
+    const { rows } = await pool.query(`
+      SELECT w.*,
+        COALESCE(SUM(CASE WHEN e.entry_type='sent'      THEN e.kg ELSE 0 END),0) AS total_sent,
+        COALESCE(SUM(CASE WHEN e.entry_type='installed' THEN e.kg ELSE 0 END),0) AS total_installed
+      FROM project_wire w
+      LEFT JOIN project_wire_entries e ON e.wire_id = w.id
+      WHERE w.project_id=$1
+      GROUP BY w.id
+      ORDER BY w.sort_order, w.id`, [req.params.id]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/projects/:id/wire  — add row
+// POST /api/projects/:id/wire  — add wire type
 app.post('/api/projects/:id/wire', requireAuth, async (req, res) => {
   try {
-    const { wire_type='', gauge='', color='', kg_per_m=0, qty_sent=0, qty_installed=0, notes='', entry_date=null } = req.body;
-    const dateVal = entry_date || new Date().toISOString().slice(0,10);
+    const { wire_type='', gauge='', color='', kg_per_m=0, notes='' } = req.body;
     const { rows } = await pool.query(
-      `INSERT INTO project_wire (project_id,wire_type,gauge,color,kg_per_m,qty_sent,qty_installed,notes,entry_date,sort_order,updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,(SELECT COALESCE(MAX(sort_order),0)+1 FROM project_wire WHERE project_id=$1),$10) RETURNING *`,
-      [req.params.id, wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes, dateVal, req.user.name||req.user.email]
-    );
+      `INSERT INTO project_wire (project_id,wire_type,gauge,color,kg_per_m,notes,sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,(SELECT COALESCE(MAX(sort_order),0)+1 FROM project_wire WHERE project_id=$1)) RETURNING *,0 AS total_sent,0 AS total_installed`,
+      [req.params.id, wire_type, gauge, color, kg_per_m, notes]);
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PATCH /api/projects/wire/:rowId  — update a row
-app.patch('/api/projects/wire/:rowId', requireAuth, async (req, res) => {
+// PATCH /api/projects/wire/:id  — edit wire type fields
+app.patch('/api/projects/wire/:id', requireAuth, async (req, res) => {
   try {
-    const { wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes, entry_date } = req.body;
+    const { wire_type, gauge, color, kg_per_m, notes } = req.body;
     const { rows } = await pool.query(
       `UPDATE project_wire SET
         wire_type=COALESCE($1,wire_type), gauge=COALESCE($2,gauge), color=COALESCE($3,color),
-        kg_per_m=COALESCE($4,kg_per_m), qty_sent=COALESCE($5,qty_sent), qty_installed=COALESCE($6,qty_installed),
-        notes=COALESCE($7,notes), entry_date=COALESCE($8,entry_date),
-        updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'), updated_by=$9
-       WHERE id=$10 RETURNING *`,
-      [wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes, entry_date,
-       req.user.name||req.user.email, req.params.rowId]
-    );
+        kg_per_m=COALESCE($4,kg_per_m), notes=COALESCE($5,notes)
+       WHERE id=$6 RETURNING *`,
+      [wire_type, gauge, color, kg_per_m, notes, req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    // Re-fetch with totals
+    const { rows: full } = await pool.query(`
+      SELECT w.*,
+        COALESCE(SUM(CASE WHEN e.entry_type='sent'      THEN e.kg ELSE 0 END),0) AS total_sent,
+        COALESCE(SUM(CASE WHEN e.entry_type='installed' THEN e.kg ELSE 0 END),0) AS total_installed
+      FROM project_wire w LEFT JOIN project_wire_entries e ON e.wire_id=w.id
+      WHERE w.id=$1 GROUP BY w.id`, [req.params.id]);
+    res.json(full[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/projects/wire/:id
+app.delete('/api/projects/wire/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM project_wire WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/projects/wire/:id/entries
+app.get('/api/projects/wire/:id/entries', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM project_wire_entries WHERE wire_id=$1 ORDER BY entry_date DESC, created_at DESC',
+      [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/projects/wire/:id/entries  — log a sent or installed entry
+app.post('/api/projects/wire/:id/entries', requireAuth, async (req, res) => {
+  try {
+    const { entry_type, entry_date, kg, notes='' } = req.body;
+    if (!['sent','installed'].includes(entry_type)) return res.status(400).json({ error: 'Invalid entry_type' });
+    if (!entry_date || !kg) return res.status(400).json({ error: 'entry_date and kg required' });
+    const { rows } = await pool.query(
+      `INSERT INTO project_wire_entries (wire_id,entry_type,entry_date,kg,notes,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.params.id, entry_type, entry_date, kg, notes, req.user.name||req.user.email]);
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// DELETE /api/projects/wire/:rowId
-app.delete('/api/projects/wire/:rowId', requireAuth, async (req, res) => {
+// DELETE /api/projects/wire/entries/:id
+app.delete('/api/projects/wire/entries/:id', requireAuth, async (req, res) => {
   try {
-    await pool.query('DELETE FROM project_wire WHERE id=$1', [req.params.rowId]);
+    await pool.query('DELETE FROM project_wire_entries WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
