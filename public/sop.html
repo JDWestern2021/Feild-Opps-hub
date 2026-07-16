@@ -48,9 +48,12 @@
       color: #84cc16;
       text-decoration: none;
       white-space: nowrap;
-      padding: 5px 8px;
+      padding: 6px 10px;
       border-radius: 6px;
       background: rgba(132,204,22,0.12);
+      min-height: 36px;
+      display: flex;
+      align-items: center;
     }
 
     /* Hamburger button */
@@ -220,6 +223,7 @@
       cursor: pointer;
       transition: filter 0.15s;
       flex-shrink: 0;
+      min-height: 44px;
     }
     .btn-upload:hover { filter: brightness(1.12); }
 
@@ -288,14 +292,18 @@
       color: #fff;
       border: none;
       border-radius: 6px;
-      padding: 7px 0;
-      font-size: 12px;
+      padding: 10px 0;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
       text-align: center;
       text-decoration: none;
       display: inline-block;
       transition: filter 0.15s;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .btn-view:hover { filter: brightness(1.12); }
     .btn-delete-doc {
@@ -303,13 +311,36 @@
       color: #991b1b;
       border: none;
       border-radius: 6px;
-      padding: 7px 10px;
-      font-size: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
       transition: background 0.15s;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .btn-delete-doc:hover { background: #fca5a5; }
+
+    .btn-restore {
+      flex: 1;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: 10px 0;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-restore:hover { background: #dbeafe; }
 
     .doc-empty {
       grid-column: 1 / -1;
@@ -320,6 +351,64 @@
     .doc-empty-icon { font-size: 48px; margin-bottom: 14px; }
     .doc-empty-title { font-size: 16px; font-weight: 700; color: #374151; margin-bottom: 6px; }
     .doc-empty-sub { font-size: 13px; }
+
+    /* ── Archive section ── */
+    .archive-section {
+      margin-top: 36px;
+    }
+    .archive-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      color: #6b7280;
+      padding: 8px 0;
+      width: 100%;
+      text-align: left;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 16px;
+    }
+    .archive-toggle:hover { color: #374151; }
+    .archive-toggle-chevron {
+      width: 18px; height: 18px;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    .archive-toggle.open .archive-toggle-chevron { transform: rotate(90deg); }
+    .archive-body { display: none; margin-top: 14px; }
+    .archive-body.open { display: block; }
+    .archive-card {
+      background: #fafafa;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .archive-card-meta { font-size: 11px; color: #9ca3af; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1c1e22;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 700;
+      z-index: 9999;
+      transition: transform 0.3s ease;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
 
     /* ── Upload modal ── */
     .modal-overlay {
@@ -349,6 +438,7 @@
     .modal-head h3 { font-size: 16px; font-weight: 800; }
     .modal-close {
       background: none; border: none; font-size: 22px; cursor: pointer; color: #6b7280; line-height: 1;
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
     }
     .modal-body { padding: 20px 22px; }
     .modal-foot { padding: 12px 22px 18px; display: flex; gap: 10px; justify-content: flex-end; }
@@ -357,14 +447,15 @@
     .form-label { display: block; font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em; }
     .form-input {
       width: 100%;
-      padding: 9px 12px;
+      padding: 10px 12px;
       border: 1px solid #d1d5db;
       border-radius: 8px;
-      font-size: 13px;
+      font-size: 14px;
       color: #111827;
       background: #fff;
       outline: none;
       transition: border-color 0.15s;
+      -webkit-appearance: none;
     }
     .form-input:focus { border-color: #84cc16; box-shadow: 0 0 0 3px rgba(132,204,22,0.15); }
 
@@ -388,11 +479,12 @@
       color: #fff;
       border: none;
       border-radius: 8px;
-      padding: 9px 20px;
-      font-size: 13px;
+      padding: 11px 20px;
+      font-size: 14px;
       font-weight: 700;
       cursor: pointer;
       transition: filter 0.15s;
+      min-height: 44px;
     }
     .btn-primary:hover { filter: brightness(1.1); }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -401,10 +493,11 @@
       color: #374151;
       border: none;
       border-radius: 8px;
-      padding: 9px 16px;
-      font-size: 13px;
+      padding: 11px 16px;
+      font-size: 14px;
       font-weight: 700;
       cursor: pointer;
+      min-height: 44px;
     }
 
     /* ── Sidebar overlay for mobile ── */
@@ -434,18 +527,33 @@
       .sidebar-overlay.open { display: block; }
 
       .sop-layout { display: block; }
-      .sop-main { padding: 16px 14px 32px; }
+      .sop-main { padding: 16px 14px 48px; }
       .sop-title { font-size: 18px; }
-      .doc-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-      .doc-card { padding: 12px; }
-    }
 
-    @media (max-width: 480px) {
-      .doc-grid { grid-template-columns: 1fr; }
+      .doc-grid { grid-template-columns: 1fr; gap: 10px; }
+      .doc-card { padding: 14px; flex-direction: row; align-items: flex-start; flex-wrap: wrap; }
+      .doc-card-icon { width: 40px; height: 40px; font-size: 20px; }
+      .doc-card > div:not(.doc-card-icon):not(.doc-card-actions) { flex: 1; min-width: 0; }
+      .doc-card-actions { width: 100%; margin-top: 4px; flex-direction: row; }
+      .btn-view { min-height: 48px; font-size: 14px; }
+      .btn-delete-doc { min-height: 48px; padding: 10px 16px; font-size: 14px; }
+
+      .sop-header { flex-direction: column; align-items: flex-start; }
+      .btn-upload { width: 100%; justify-content: center; }
+
+      .modal-box { max-width: 100%; margin: 8px; border-radius: 12px; }
+      .modal-body { padding: 16px; }
+      .modal-foot { padding: 10px 16px 16px; }
+      .modal-foot .btn-primary, .modal-foot .btn-cancel { flex: 1; text-align: center; justify-content: center; }
+
+      .toast { bottom: 80px; width: calc(100% - 48px); text-align: center; }
     }
   </style>
 </head>
 <body>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
 
 <!-- Mobile topbar -->
 <div class="mobile-topbar">
@@ -504,6 +612,20 @@
         <div class="doc-empty-icon">📋</div>
         <div class="doc-empty-title">Standard Operating Procedures</div>
         <div class="doc-empty-sub">Choose a category from the sidebar to view documents.</div>
+      </div>
+    </div>
+
+    <!-- Archive section (admin only) -->
+    <div class="archive-section" id="archive-section" style="display:none;">
+      <button class="archive-toggle" id="archive-toggle">
+        <svg class="archive-toggle-chevron" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        Archived Documents
+        <span id="archive-count" style="margin-left:4px;font-size:11px;color:#9ca3af;font-weight:600;"></span>
+      </button>
+      <div class="archive-body" id="archive-body">
+        <div class="doc-grid" id="archive-grid">
+          <div style="color:#9ca3af;font-size:13px;padding:8px 0;">Loading…</div>
+        </div>
       </div>
     </div>
   </main>
@@ -570,6 +692,14 @@
   let _categories = [];
   let _activeCat  = null;
 
+  // ── Toast ──────────────────────────────────────
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
   // ── Load categories ───────────────────────────
   async function loadCategories() {
     const res = await fetch('/api/sop/categories');
@@ -610,7 +740,25 @@
     const dres = await fetch('/api/sop/documents?category=' + encodeURIComponent(slug));
     const docs  = dres.ok ? await dres.json() : [];
     renderDocs(docs);
+
+    // Show archive section for admins
+    if (isAdmin) {
+      document.getElementById('archive-section').style.display = '';
+      // Only load if already open
+      if (document.getElementById('archive-body').classList.contains('open')) {
+        loadArchived();
+      }
+    }
   };
+
+  function fileIcon(filename, mimeType) {
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf' || mimeType === 'application/pdf') return '📕';
+    if (['doc','docx'].includes(ext)) return '📝';
+    if (['xls','xlsx'].includes(ext)) return '📊';
+    if (['png','jpg','jpeg'].includes(ext)) return '🖼';
+    return '📄';
+  }
 
   function renderDocs(docs) {
     const grid = document.getElementById('doc-grid');
@@ -623,21 +771,19 @@
       return;
     }
     grid.innerHTML = docs.map(d => {
-      const ext = d.filename.split('.').pop().toLowerCase();
-      const icon = ext === 'pdf' ? '📕' : ['doc','docx'].includes(ext) ? '📝' : ['xls','xlsx'].includes(ext) ? '📊' : ['png','jpg','jpeg'].includes(ext) ? '🖼' : '📄';
+      const icon = fileIcon(d.filename, d.mime_type);
+      const ext = (d.filename || '').split('.').pop().toUpperCase();
       const size = d.file_size ? (d.file_size > 1024*1024 ? (d.file_size/1024/1024).toFixed(1)+' MB' : Math.round(d.file_size/1024)+' KB') : '';
       const date = d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString('en-CA') : '';
-      const deleteBtn = isAdmin ? `<button class="btn-delete-doc" onclick="deleteDoc(${d.id})" title="Delete">🗑</button>` : '';
-      const reuploadBtn = isAdmin ? `<button class="btn-view" style="background:#f59e0b;" onclick="sopReupload(${d.id}, '${esc(d.title)}', '${esc(d.category_slug||_activeCat)}')">Re-upload</button>` : '';
+      const deleteBtn = isAdmin ? `<button class="btn-delete-doc" onclick="deleteDoc(${d.id})" title="Archive document">🗑</button>` : '';
       return `<div class="doc-card" id="doc-card-${d.id}">
         <div class="doc-card-icon">${icon}</div>
-        <div style="flex:1;">
+        <div style="flex:1;min-width:0;">
           <div class="doc-card-title">${esc(d.title)}</div>
-          <div class="doc-card-meta">${[ext.toUpperCase(), size, date ? 'Uploaded '+date : ''].filter(Boolean).join(' · ')}</div>
-          <div id="doc-file-status-${d.id}" style="font-size:11px;color:#9ca3af;margin-top:2px;"></div>
+          <div class="doc-card-meta">${[ext, size, date ? 'Uploaded '+date : '', d.uploaded_by || ''].filter(Boolean).join(' · ')}</div>
         </div>
         <div class="doc-card-actions">
-          <button class="btn-view" onclick="sopOpenFile('${esc(d.filename)}', ${d.id})">View / Download</button>
+          <button class="btn-view" onclick="sopOpenFile(${d.id})">View / Download</button>
           ${deleteBtn}
         </div>
       </div>`;
@@ -645,11 +791,69 @@
   }
 
   window.deleteDoc = async function(id) {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+    if (!confirm('Archive this document? It can be restored later from the Archived Documents section.')) return;
     const res = await fetch('/api/sop/documents/' + id, { method: 'DELETE' });
-    if (res.ok) selectCategory(_activeCat);
-    else alert('Delete failed — please try again.');
+    if (res.ok) {
+      showToast('Document archived');
+      selectCategory(_activeCat);
+    } else {
+      alert('Archive failed — please try again.');
+    }
   };
+
+  // ── Archive section ───────────────────────────
+  async function loadArchived() {
+    const grid = document.getElementById('archive-grid');
+    grid.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px 0;">Loading…</div>';
+    const res = await fetch('/api/sop/documents/archived');
+    const docs = res.ok ? await res.json() : [];
+    const countEl = document.getElementById('archive-count');
+    countEl.textContent = docs.length ? `(${docs.length})` : '';
+    if (!docs.length) {
+      grid.innerHTML = `<div class="doc-empty" style="padding:30px 0;">
+        <div class="doc-empty-icon">🗄</div>
+        <div class="doc-empty-title">No archived documents</div>
+      </div>`;
+      return;
+    }
+    grid.innerHTML = docs.map(d => {
+      const icon = fileIcon(d.filename, d.mime_type);
+      const ext = (d.filename || '').split('.').pop().toUpperCase();
+      const size = d.file_size ? (d.file_size > 1024*1024 ? (d.file_size/1024/1024).toFixed(1)+' MB' : Math.round(d.file_size/1024)+' KB') : '';
+      const archivedDate = d.archived_at ? new Date(d.archived_at).toLocaleDateString('en-CA') : '';
+      const cat = _categories.find(c => c.slug === d.category_slug);
+      return `<div class="doc-card archive-card" id="doc-card-${d.id}">
+        <div class="doc-card-icon">${icon}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="doc-card-title">${esc(d.title)}</div>
+          <div class="doc-card-meta">${[ext, size, cat ? cat.label : d.category_slug].filter(Boolean).join(' · ')}</div>
+          <div class="archive-card-meta">Archived ${archivedDate}${d.archived_by ? ' by '+esc(d.archived_by) : ''}</div>
+        </div>
+        <div class="doc-card-actions">
+          <button class="btn-restore" onclick="restoreDoc(${d.id})">↩ Restore</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  window.restoreDoc = async function(id) {
+    const res = await fetch('/api/sop/documents/' + id + '/restore', { method: 'POST' });
+    if (res.ok) {
+      showToast('Document restored');
+      loadArchived();
+      if (_activeCat) selectCategory(_activeCat);
+    } else {
+      alert('Restore failed — please try again.');
+    }
+  };
+
+  document.getElementById('archive-toggle').addEventListener('click', async () => {
+    const btn = document.getElementById('archive-toggle');
+    const body = document.getElementById('archive-body');
+    const isOpen = body.classList.toggle('open');
+    btn.classList.toggle('open', isOpen);
+    if (isOpen) loadArchived();
+  });
 
   // ── Upload modal ──────────────────────────────
   let _uploadFile = null;
@@ -690,6 +894,7 @@
     // Auto-fill title from filename if blank
     const titleEl = document.getElementById('upload-title');
     if (!titleEl.value) titleEl.value = f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
+    checkUploadReady();
   }
 
   document.getElementById('upload-title').addEventListener('input', checkUploadReady);
@@ -708,6 +913,7 @@
     btn.textContent = 'Upload';
     if (res.ok) {
       closeUploadModal();
+      showToast('Document uploaded');
       selectCategory(_activeCat);
     } else {
       const e = await res.json().catch(() => ({}));
@@ -739,8 +945,8 @@
     btn.textContent = 'Add Category'; btn.disabled = false;
     if (res.ok) {
       closeAddCat();
-      await loadCategories();
       const c = await res.json().catch(() => null);
+      await loadCategories();
       if (c) selectCategory(c.slug);
     } else {
       const e = await res.json().catch(() => ({}));
@@ -758,23 +964,12 @@
     document.getElementById('sidebar-overlay').classList.remove('open');
   });
 
-  // ── Helpers ───────────────────────────────────
-  window.sopOpenFile = async function(filename, docId) {
-    const url = '/api/sop/files/' + encodeURIComponent(filename);
-    // Quick HEAD check first so we can show a clear error if missing
-    const check = await fetch(url, { method: 'HEAD' }).catch(() => null);
-    if (!check || !check.ok) {
-      const statusEl = document.getElementById('doc-file-status-' + docId);
-      if (statusEl) {
-        statusEl.textContent = 'File missing from server — please re-upload this document.';
-        statusEl.style.color = '#dc2626';
-      }
-      alert('This file is no longer on the server.\n\nThis can happen after a server redeploy. Please re-upload the document to restore it.');
-      return;
-    }
-    window.open(url, '_blank', 'noopener');
+  // ── Open file by ID ───────────────────────────
+  window.sopOpenFile = function(id) {
+    window.open('/api/sop/files/' + id, '_blank', 'noopener');
   };
 
+  // ── Helpers ───────────────────────────────────
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }

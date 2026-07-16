@@ -3520,15 +3520,7 @@ app.delete('/api/projects/wire/entries/:id', requireAuth, async (req, res) => {
 // ─────────────────────────────────────────────
 
 const fs = require('fs');
-const sopStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, 'public', 'uploads', 'sop');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => cb(null, `sop-${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname).toLowerCase()}`)
-});
-const sopUpload = multer({ storage: sopStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+const sopUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // GET /api/sop/categories
 app.get('/api/sop/categories', requireAuth, async (req, res) => {
@@ -3556,24 +3548,41 @@ app.post('/api/sop/categories', requireAdmin, async (req, res) => {
 // DELETE /api/sop/categories/:slug  (admin only)
 app.delete('/api/sop/categories/:slug', requireAdmin, async (req, res) => {
   try {
-    const { rows: docs } = await pool.query('SELECT filename FROM sop_documents WHERE category_slug=$1', [req.params.slug]);
-    for (const d of docs) {
-      try { fs.unlinkSync(path.join(__dirname,'public','uploads','sop',d.filename)); } catch {}
-    }
     await pool.query('DELETE FROM sop_documents WHERE category_slug=$1', [req.params.slug]);
     await pool.query('DELETE FROM sop_categories WHERE slug=$1', [req.params.slug]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/sop/files/:filename  — serve an SOP file with auth check + existence check
-app.get('/api/sop/files/:filename', requireAuth, (req, res) => {
-  const safeName = path.basename(req.params.filename); // prevent directory traversal
-  const filePath = path.join(__dirname, 'public', 'uploads', 'sop', safeName);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File not found on server. It may have been lost during a redeploy — please re-upload the document.' });
-  }
-  res.sendFile(filePath);
+// GET /api/sop/files/:id  — serve SOP file from DB by ID
+app.get('/api/sop/files/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT file_data, mime_type, title, filename FROM sop_documents WHERE id=$1 AND archived_at IS NULL',
+      [req.params.id]
+    );
+    if (!rows.length || !rows[0].file_data) {
+      return res.status(404).json({ error: 'File not found — it may need to be re-uploaded.' });
+    }
+    const { file_data, mime_type, title, filename } = rows[0];
+    const ct = mime_type || 'application/octet-stream';
+    // Use original filename for Content-Disposition; sanitise title for header
+    const safeName = (title || filename).replace(/[^\w\s.\-]/g, '_');
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    res.send(file_data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/sop/documents/archived  — list soft-deleted documents
+app.get('/api/sop/documents/archived', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id,title,filename,file_size,mime_type,category_slug,uploaded_by,uploaded_at,archived_at,archived_by
+       FROM sop_documents WHERE archived_at IS NOT NULL ORDER BY archived_at DESC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /api/sop/documents?category=slug
@@ -3581,35 +3590,52 @@ app.get('/api/sop/documents', requireAuth, async (req, res) => {
   try {
     const { category } = req.query;
     const q = category
-      ? 'SELECT * FROM sop_documents WHERE category_slug=$1 ORDER BY sort_order,uploaded_at'
-      : 'SELECT * FROM sop_documents ORDER BY sort_order,uploaded_at';
+      ? `SELECT id,category_slug,title,filename,file_size,mime_type,uploaded_by,uploaded_at,sort_order
+         FROM sop_documents WHERE category_slug=$1 AND archived_at IS NULL ORDER BY sort_order,uploaded_at`
+      : `SELECT id,category_slug,title,filename,file_size,mime_type,uploaded_by,uploaded_at,sort_order
+         FROM sop_documents WHERE archived_at IS NULL ORDER BY sort_order,uploaded_at`;
     const params = category ? [category] : [];
     const { rows } = await pool.query(q, params);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/sop/documents  (admin only)
+// POST /api/sop/documents  (admin only) — store file bytes in DB
 app.post('/api/sop/documents', requireAdmin, sopUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const { category_slug, title } = req.body;
     if (!category_slug || !title?.trim()) return res.status(400).json({ error: 'category_slug and title required' });
     const { rows } = await pool.query(
-      `INSERT INTO sop_documents (category_slug,title,filename,file_size,uploaded_by) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [category_slug, title.trim(), req.file.filename, req.file.size, req.user.name || req.user.email]
+      `INSERT INTO sop_documents (category_slug,title,filename,file_size,file_data,mime_type,uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,category_slug,title,filename,file_size,mime_type,uploaded_by,uploaded_at,sort_order`,
+      [category_slug, title.trim(), req.file.originalname, req.file.size, req.file.buffer, req.file.mimetype, req.user.name || req.user.email]
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// DELETE /api/sop/documents/:id  (admin only)
+// DELETE /api/sop/documents/:id  — soft-delete (archive)
 app.delete('/api/sop/documents/:id', requireAdmin, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT filename FROM sop_documents WHERE id=$1', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    try { fs.unlinkSync(path.join(__dirname,'public','uploads','sop',rows[0].filename)); } catch {}
-    await pool.query('DELETE FROM sop_documents WHERE id=$1', [req.params.id]);
+    const archivedBy = req.user.name || req.user.email;
+    const { rowCount } = await pool.query(
+      `UPDATE sop_documents SET archived_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'), archived_by=$1 WHERE id=$2 AND archived_at IS NULL`,
+      [archivedBy, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Not found or already archived' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/sop/documents/:id/restore  — restore archived document
+app.post('/api/sop/documents/:id/restore', requireAdmin, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE sop_documents SET archived_at=NULL, archived_by='' WHERE id=$1`,
+      [req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

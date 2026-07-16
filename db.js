@@ -503,6 +503,11 @@ async function initSchema() {
     uploaded_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
     sort_order INTEGER DEFAULT 0
   )`);
+  // Add new columns if they don't exist yet (safe for live DB)
+  await pool.query(`ALTER TABLE sop_documents ADD COLUMN IF NOT EXISTS file_data BYTEA`);
+  await pool.query(`ALTER TABLE sop_documents ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE sop_documents ADD COLUMN IF NOT EXISTS archived_at TEXT`);
+  await pool.query(`ALTER TABLE sop_documents ADD COLUMN IF NOT EXISTS archived_by TEXT NOT NULL DEFAULT ''`);
   // Seed default category if none exist
   await pool.query(`INSERT INTO sop_categories (slug,label,sort_order) VALUES ('residential','Residential Homes',0) ON CONFLICT(slug) DO NOTHING`);
 
