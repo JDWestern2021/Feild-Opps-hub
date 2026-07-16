@@ -3382,7 +3382,7 @@ app.get('/api/projects/:id/wire', requireAuth, async (req, res) => {
         COALESCE(SUM(CASE WHEN e.entry_type='sent'      THEN e.kg ELSE 0 END),0) AS total_sent,
         COALESCE(SUM(CASE WHEN e.entry_type='installed' THEN e.kg ELSE 0 END),0) AS total_installed
       FROM project_wire w
-      LEFT JOIN project_wire_entries e ON e.wire_id = w.id
+      LEFT JOIN project_wire_entries e ON e.wire_id = w.id AND e.deleted_at IS NULL
       WHERE w.project_id=$1
       GROUP BY w.id
       ORDER BY w.sort_order, w.id`, [req.params.id]);
@@ -3418,7 +3418,7 @@ app.patch('/api/projects/wire/:id', requireAuth, async (req, res) => {
       SELECT w.*,
         COALESCE(SUM(CASE WHEN e.entry_type='sent'      THEN e.kg ELSE 0 END),0) AS total_sent,
         COALESCE(SUM(CASE WHEN e.entry_type='installed' THEN e.kg ELSE 0 END),0) AS total_installed
-      FROM project_wire w LEFT JOIN project_wire_entries e ON e.wire_id=w.id
+      FROM project_wire w LEFT JOIN project_wire_entries e ON e.wire_id=w.id AND e.deleted_at IS NULL
       WHERE w.id=$1 GROUP BY w.id`, [req.params.id]);
     res.json(full[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -3432,7 +3432,7 @@ app.delete('/api/projects/wire/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/projects/:id/wire/activity  — all entries for a project, newest first
+// GET /api/projects/:id/wire/activity  — all entries (including deleted) newest first
 app.get('/api/projects/:id/wire/activity', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -3449,7 +3449,7 @@ app.get('/api/projects/:id/wire/activity', requireAuth, async (req, res) => {
 app.get('/api/projects/wire/:id/entries', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM project_wire_entries WHERE wire_id=$1 ORDER BY entry_date DESC, created_at DESC',
+      'SELECT * FROM project_wire_entries WHERE wire_id=$1 AND deleted_at IS NULL ORDER BY entry_date DESC, created_at DESC',
       [req.params.id]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -3469,10 +3469,12 @@ app.post('/api/projects/wire/:id/entries', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// DELETE /api/projects/wire/entries/:id
+// DELETE /api/projects/wire/entries/:id  — soft delete, keeps record in activity log
 app.delete('/api/projects/wire/entries/:id', requireAuth, async (req, res) => {
   try {
-    await pool.query('DELETE FROM project_wire_entries WHERE id=$1', [req.params.id]);
+    await pool.query(
+      `UPDATE project_wire_entries SET deleted_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'), deleted_by=$1 WHERE id=$2`,
+      [req.user.name||req.user.email, req.params.id]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

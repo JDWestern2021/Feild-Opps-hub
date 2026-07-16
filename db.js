@@ -529,6 +529,8 @@ async function initSchema() {
     created_by TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
   )`);
+  await pool.query(`ALTER TABLE project_wire_entries ADD COLUMN IF NOT EXISTS deleted_at TEXT`);
+  await pool.query(`ALTER TABLE project_wire_entries ADD COLUMN IF NOT EXISTS deleted_by TEXT NOT NULL DEFAULT ''`);
 
   console.log('  ✓ Database schema ready');
 }

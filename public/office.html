@@ -4068,15 +4068,18 @@ async function wireLoadActivity(projectId) {
       const m = wireMeters(parseFloat(e.kg), kgpm);
       const wireLabel = [e.wire_type, e.gauge, e.color].filter(Boolean).join(' · ');
       const isSent = e.entry_type === 'sent';
-      const color  = isSent ? '#1d4ed8' : '#15803d';
-      const bg     = isSent ? '#eff6ff' : '#f0fdf4';
+      const isDeleted = !!e.deleted_at;
+      const color  = isDeleted ? '#6b7280' : isSent ? '#1d4ed8' : '#15803d';
+      const bg     = isDeleted ? '#f3f4f6' : isSent ? '#eff6ff' : '#f0fdf4';
       const verb   = isSent ? 'sent to site' : 'installed';
       const who    = e.created_by || 'Someone';
       const mText  = m !== null ? ` (≈ ${wireFmtM(m)})` : '';
-      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;">
-        <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px;">${isSent?'SENT':'INSTALLED'}</span>
-        <div style="flex:1;line-height:1.5;">
-          <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText} of <strong>${esc(wireLabel)}</strong>${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''}
+      const strikeStyle = isDeleted ? 'text-decoration:line-through;opacity:.6;' : '';
+      const deletedBy = isDeleted ? ` <span style="font-size:11px;color:#9ca3af;font-weight:400;"> — deleted by ${esc(e.deleted_by||'unknown')}</span>` : '';
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;${isDeleted?'opacity:.75;':''}">
+        <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px;">${isDeleted ? 'DELETED' : isSent ? 'SENT' : 'INSTALLED'}</span>
+        <div style="flex:1;line-height:1.5;${strikeStyle}">
+          <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText} of <strong>${esc(wireLabel)}</strong>${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''}${deletedBy}
         </div>
       </div>`;
     }).join('');
