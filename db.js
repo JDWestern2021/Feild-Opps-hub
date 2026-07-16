@@ -506,6 +506,21 @@ async function initSchema() {
   // Seed default category if none exist
   await pool.query(`INSERT INTO sop_categories (slug,label,sort_order) VALUES ('residential','Residential Homes',0) ON CONFLICT(slug) DO NOTHING`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS project_wire (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    wire_type TEXT NOT NULL DEFAULT '',
+    gauge TEXT NOT NULL DEFAULT '',
+    color TEXT NOT NULL DEFAULT '',
+    unit TEXT NOT NULL DEFAULT 'ft',
+    qty_sent NUMERIC(10,2) NOT NULL DEFAULT 0,
+    qty_installed NUMERIC(10,2) NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
+    updated_by TEXT NOT NULL DEFAULT ''
+  )`);
+
   console.log('  ✓ Database schema ready');
 }
 

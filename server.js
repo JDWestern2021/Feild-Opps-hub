@@ -3371,6 +3371,61 @@ app.get('/api/tools/my-recent', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// PROJECT WIRE TRACKING
+// ─────────────────────────────────────────────
+
+// GET /api/projects/:id/wire
+app.get('/api/projects/:id/wire', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM project_wire WHERE project_id=$1 ORDER BY sort_order, id',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/projects/:id/wire  — add row
+app.post('/api/projects/:id/wire', requireAuth, async (req, res) => {
+  try {
+    const { wire_type='', gauge='', color='', unit='ft', qty_sent=0, qty_installed=0, notes='' } = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO project_wire (project_id,wire_type,gauge,color,unit,qty_sent,qty_installed,notes,sort_order,updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,(SELECT COALESCE(MAX(sort_order),0)+1 FROM project_wire WHERE project_id=$1),$9) RETURNING *`,
+      [req.params.id, wire_type, gauge, color, unit, qty_sent, qty_installed, notes, req.user.name||req.user.email]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/projects/wire/:rowId  — update a row
+app.patch('/api/projects/wire/:rowId', requireAuth, async (req, res) => {
+  try {
+    const { wire_type, gauge, color, unit, qty_sent, qty_installed, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE project_wire SET
+        wire_type=COALESCE($1,wire_type), gauge=COALESCE($2,gauge), color=COALESCE($3,color),
+        unit=COALESCE($4,unit), qty_sent=COALESCE($5,qty_sent), qty_installed=COALESCE($6,qty_installed),
+        notes=COALESCE($7,notes),
+        updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'), updated_by=$8
+       WHERE id=$9 RETURNING *`,
+      [wire_type, gauge, color, unit, qty_sent, qty_installed, notes,
+       req.user.name||req.user.email, req.params.rowId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/projects/wire/:rowId
+app.delete('/api/projects/wire/:rowId', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM project_wire WHERE id=$1', [req.params.rowId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
 // SOP — Standard Operating Procedures
 // ─────────────────────────────────────────────
 
