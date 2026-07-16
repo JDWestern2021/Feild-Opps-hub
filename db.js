@@ -512,14 +512,16 @@ async function initSchema() {
     wire_type TEXT NOT NULL DEFAULT '',
     gauge TEXT NOT NULL DEFAULT '',
     color TEXT NOT NULL DEFAULT '',
-    unit TEXT NOT NULL DEFAULT 'ft',
-    qty_sent NUMERIC(10,2) NOT NULL DEFAULT 0,
-    qty_installed NUMERIC(10,2) NOT NULL DEFAULT 0,
+    unit TEXT NOT NULL DEFAULT 'm',
+    kg_per_m NUMERIC(8,4) NOT NULL DEFAULT 0,
+    qty_sent NUMERIC(10,3) NOT NULL DEFAULT 0,
+    qty_installed NUMERIC(10,3) NOT NULL DEFAULT 0,
     notes TEXT NOT NULL DEFAULT '',
     sort_order INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
     updated_by TEXT NOT NULL DEFAULT ''
   )`);
+  await pool.query(`ALTER TABLE project_wire ADD COLUMN IF NOT EXISTS kg_per_m NUMERIC(8,4) NOT NULL DEFAULT 0`);
 
   console.log('  ✓ Database schema ready');
 }
