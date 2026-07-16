@@ -3845,6 +3845,12 @@ async function renderProjectWire(projectId) {
       <div style="font-size:12px;">Click <strong>+ Add from Preset</strong> to get started.</div>
     </div>` : ''}
 
+    <!-- Activity log -->
+    <div style="margin-top:24px;">
+      <div style="font-size:12px;font-weight:800;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Wire Activity Log</div>
+      <div id="wire-activity-log" style="font-size:13px;color:var(--gray-600);">Loading…</div>
+    </div>
+
     <!-- Preset modal -->
     <div id="wire-preset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;padding:20px;">
       <div style="background:#fff;border-radius:14px;width:100%;max-width:500px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);">
@@ -3893,6 +3899,7 @@ async function renderProjectWire(projectId) {
   `;
 
   renderWireTable();
+  wireLoadActivity(projectId);
 
   $('wire-add-preset-btn').addEventListener('click', () => {
     $('wire-preset-search').value = '';
@@ -4036,6 +4043,50 @@ function wireRenderEntries(wireId) {
     </table>`;
 }
 
+async function wireLoadActivity(projectId) {
+  const container = $('wire-activity-log');
+  if (!container) return;
+  const res = await fetch('/api/projects/' + projectId + '/wire/activity');
+  if (!res.ok) { container.innerHTML = '<span style="color:#9ca3af;">Failed to load activity.</span>'; return; }
+  const entries = await res.json();
+  if (!entries.length) {
+    container.innerHTML = '<span style="color:#9ca3af;font-style:italic;">No activity yet.</span>';
+    return;
+  }
+
+  // Group by date
+  const groups = {};
+  entries.forEach(e => { (groups[e.entry_date] = groups[e.entry_date]||[]).push(e); });
+  const dates = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+
+  container.innerHTML = dates.map(date => {
+    const dayEntries = groups[date];
+    const [y,mo,d] = date.split('-');
+    const label = new Date(+y,+mo-1,+d).toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const rows = dayEntries.map(e => {
+      const kgpm = parseFloat(e.kg_per_m)||0;
+      const m = wireMeters(parseFloat(e.kg), kgpm);
+      const wireLabel = [e.wire_type, e.gauge, e.color].filter(Boolean).join(' · ');
+      const isSent = e.entry_type === 'sent';
+      const color  = isSent ? '#1d4ed8' : '#15803d';
+      const bg     = isSent ? '#eff6ff' : '#f0fdf4';
+      const verb   = isSent ? 'sent to site' : 'installed';
+      const who    = e.created_by || 'Someone';
+      const mText  = m !== null ? ` (≈ ${wireFmtM(m)})` : '';
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px;">${isSent?'SENT':'INSTALLED'}</span>
+        <div style="flex:1;line-height:1.5;">
+          <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText} of <strong>${esc(wireLabel)}</strong>${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:12px;">
+      <div style="padding:6px 10px;background:#1c1e22;color:#fff;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;border-radius:6px;margin-bottom:4px;">${label}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
 window.wireOpenEntry = function(wireId, entryType) {
   const w = _wireTypes.find(t => t.id === wireId);
   const typeName = w ? [w.wire_type, w.gauge, w.color].filter(Boolean).join(' · ') : '';
@@ -4068,6 +4119,7 @@ window.wireOpenEntry = function(wireId, entryType) {
     if (_wireExpanded.has(wireId)) await wireLoadEntries(wireId);
     renderWireTable();
     if (_wireExpanded.has(wireId)) wireRenderEntries(wireId);
+    wireLoadActivity(currentProjectId);
     showToast('Entry logged', 'success');
   };
 };
@@ -4081,6 +4133,7 @@ window.wireDeleteEntry = async function(wireId, entryId) {
     if (wires.ok) _wireTypes = await wires.json();
     renderWireTable();
     if (_wireExpanded.has(wireId)) wireRenderEntries(wireId);
+    wireLoadActivity(currentProjectId);
   }
 };
 

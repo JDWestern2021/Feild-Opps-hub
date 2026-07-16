@@ -3432,6 +3432,19 @@ app.delete('/api/projects/wire/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/projects/:id/wire/activity  — all entries for a project, newest first
+app.get('/api/projects/:id/wire/activity', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT e.*, w.wire_type, w.gauge, w.color, w.kg_per_m
+      FROM project_wire_entries e
+      JOIN project_wire w ON w.id = e.wire_id
+      WHERE w.project_id = $1
+      ORDER BY e.entry_date DESC, e.created_at DESC`, [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/projects/wire/:id/entries
 app.get('/api/projects/wire/:id/entries', requireAuth, async (req, res) => {
   try {
