@@ -628,14 +628,16 @@
       const size = d.file_size ? (d.file_size > 1024*1024 ? (d.file_size/1024/1024).toFixed(1)+' MB' : Math.round(d.file_size/1024)+' KB') : '';
       const date = d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString('en-CA') : '';
       const deleteBtn = isAdmin ? `<button class="btn-delete-doc" onclick="deleteDoc(${d.id})" title="Delete">🗑</button>` : '';
-      return `<div class="doc-card">
+      const reuploadBtn = isAdmin ? `<button class="btn-view" style="background:#f59e0b;" onclick="sopReupload(${d.id}, '${esc(d.title)}', '${esc(d.category_slug||_activeCat)}')">Re-upload</button>` : '';
+      return `<div class="doc-card" id="doc-card-${d.id}">
         <div class="doc-card-icon">${icon}</div>
-        <div>
+        <div style="flex:1;">
           <div class="doc-card-title">${esc(d.title)}</div>
           <div class="doc-card-meta">${[ext.toUpperCase(), size, date ? 'Uploaded '+date : ''].filter(Boolean).join(' · ')}</div>
+          <div id="doc-file-status-${d.id}" style="font-size:11px;color:#9ca3af;margin-top:2px;"></div>
         </div>
         <div class="doc-card-actions">
-          <a class="btn-view" href="/uploads/sop/${encodeURIComponent(d.filename)}" target="_blank" rel="noopener">View / Download</a>
+          <button class="btn-view" onclick="sopOpenFile('${esc(d.filename)}', ${d.id})">View / Download</button>
           ${deleteBtn}
         </div>
       </div>`;
@@ -757,6 +759,22 @@
   });
 
   // ── Helpers ───────────────────────────────────
+  window.sopOpenFile = async function(filename, docId) {
+    const url = '/api/sop/files/' + encodeURIComponent(filename);
+    // Quick HEAD check first so we can show a clear error if missing
+    const check = await fetch(url, { method: 'HEAD' }).catch(() => null);
+    if (!check || !check.ok) {
+      const statusEl = document.getElementById('doc-file-status-' + docId);
+      if (statusEl) {
+        statusEl.textContent = 'File missing from server — please re-upload this document.';
+        statusEl.style.color = '#dc2626';
+      }
+      alert('This file is no longer on the server.\n\nThis can happen after a server redeploy. Please re-upload the document to restore it.');
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
+  };
+
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }

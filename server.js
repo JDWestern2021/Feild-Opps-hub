@@ -3566,6 +3566,16 @@ app.delete('/api/sop/categories/:slug', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/sop/files/:filename  — serve an SOP file with auth check + existence check
+app.get('/api/sop/files/:filename', requireAuth, (req, res) => {
+  const safeName = path.basename(req.params.filename); // prevent directory traversal
+  const filePath = path.join(__dirname, 'public', 'uploads', 'sop', safeName);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found on server. It may have been lost during a redeploy — please re-upload the document.' });
+  }
+  res.sendFile(filePath);
+});
+
 // GET /api/sop/documents?category=slug
 app.get('/api/sop/documents', requireAuth, async (req, res) => {
   try {
