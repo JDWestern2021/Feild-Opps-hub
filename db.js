@@ -531,6 +531,9 @@ async function initSchema() {
   )`);
   await pool.query(`ALTER TABLE project_wire_entries ADD COLUMN IF NOT EXISTS deleted_at TEXT`);
   await pool.query(`ALTER TABLE project_wire_entries ADD COLUMN IF NOT EXISTS deleted_by TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE project_wire ADD COLUMN IF NOT EXISTS deleted_at TEXT`);
+  // Store wire label in each entry so the activity log survives wire type deletion
+  await pool.query(`ALTER TABLE project_wire_entries ADD COLUMN IF NOT EXISTS wire_label TEXT NOT NULL DEFAULT ''`);
 
   console.log('  ✓ Database schema ready');
 }

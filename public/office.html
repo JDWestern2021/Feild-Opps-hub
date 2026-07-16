@@ -4066,7 +4066,7 @@ async function wireLoadActivity(projectId) {
     const rows = dayEntries.map(e => {
       const kgpm = parseFloat(e.kg_per_m)||0;
       const m = wireMeters(parseFloat(e.kg), kgpm);
-      const wireLabel = [e.wire_type, e.gauge, e.color].filter(Boolean).join(' · ');
+      const wireLabel = e.wire_label || [e.wire_type, e.gauge, e.color].filter(Boolean).join(' · ') || 'Unknown wire';
       const isSent = e.entry_type === 'sent';
       const isDeleted = !!e.deleted_at;
       const color  = isDeleted ? '#6b7280' : isSent ? '#1d4ed8' : '#15803d';
