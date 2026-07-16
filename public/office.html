@@ -4075,12 +4075,14 @@ async function wireLoadActivity(projectId) {
       const who    = e.created_by || 'Someone';
       const mText  = m !== null ? ` (≈ ${wireFmtM(m)})` : '';
       const strikeStyle = isDeleted ? 'text-decoration:line-through;opacity:.6;' : '';
-      const deletedBy = isDeleted ? ` <span style="font-size:11px;color:#9ca3af;font-weight:400;"> — deleted by ${esc(e.deleted_by||'unknown')}</span>` : '';
-      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;${isDeleted?'opacity:.75;':''}">
-        <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px;">${isDeleted ? 'DELETED' : isSent ? 'SENT' : 'INSTALLED'}</span>
+      const deletedBy = isDeleted ? `<span style="font-size:11px;color:#9ca3af;font-weight:400;"> — deleted by ${esc(e.deleted_by||'unknown')}</span>` : '';
+      const restoreBtn = isDeleted ? `<button onclick="wireRestoreEntry(${e.id})" style="background:#fff;border:1px solid #d1d5db;border-radius:6px;font-size:11px;font-weight:700;color:#374151;padding:3px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#374151'">↩ Restore</button>` : '';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;${isDeleted?'opacity:.7;':''}">
+        <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;">${isDeleted ? 'DELETED' : isSent ? 'SENT' : 'INSTALLED'}</span>
         <div style="flex:1;line-height:1.5;${strikeStyle}">
-          <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText} of <strong>${esc(wireLabel)}</strong>${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''}${deletedBy}
+          <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText} of <strong>${esc(wireLabel)}</strong>${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''} ${deletedBy}
         </div>
+        ${restoreBtn}
       </div>`;
     }).join('');
     return `<div style="margin-bottom:12px;">
@@ -4125,6 +4127,17 @@ window.wireOpenEntry = function(wireId, entryType) {
     wireLoadActivity(currentProjectId);
     showToast('Entry logged', 'success');
   };
+};
+
+window.wireRestoreEntry = async function(entryId) {
+  const res = await fetch('/api/projects/wire/entries/' + entryId + '/restore', { method:'POST' });
+  if (!res.ok) { alert('Failed to restore entry.'); return; }
+  const wires = await fetch('/api/projects/' + currentProjectId + '/wire');
+  if (wires.ok) _wireTypes = await wires.json();
+  _wireExpanded.forEach(id => wireLoadEntries(id));
+  renderWireTable();
+  wireLoadActivity(currentProjectId);
+  showToast('Entry restored', 'success');
 };
 
 window.wireDeleteEntry = async function(wireId, entryId) {

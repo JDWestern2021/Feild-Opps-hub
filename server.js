@@ -3469,6 +3469,16 @@ app.post('/api/projects/wire/:id/entries', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST /api/projects/wire/entries/:id/restore  — undo soft delete
+app.post('/api/projects/wire/entries/:id/restore', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE project_wire_entries SET deleted_at=NULL, deleted_by='' WHERE id=$1`,
+      [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // DELETE /api/projects/wire/entries/:id  — soft delete, keeps record in activity log
 app.delete('/api/projects/wire/entries/:id', requireAuth, async (req, res) => {
   try {
