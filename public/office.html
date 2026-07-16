@@ -4054,42 +4054,85 @@ async function wireLoadActivity(projectId) {
     return;
   }
 
-  // Group by date
-  const groups = {};
-  entries.forEach(e => { (groups[e.entry_date] = groups[e.entry_date]||[]).push(e); });
-  const dates = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+  // Separate: deleted wire-type groups vs. individual active/deleted entries
+  const deletedWireGroups = {}; // wire_id_ref → [entries]
+  const activeEntries = [];
 
-  container.innerHTML = dates.map(date => {
-    const dayEntries = groups[date];
+  entries.forEach(e => {
+    if (e.wire_deleted_at) {
+      // Whole wire type was deleted — group by wire type
+      (deletedWireGroups[e.wire_id_ref] = deletedWireGroups[e.wire_id_ref]||[]).push(e);
+    } else {
+      activeEntries.push(e);
+    }
+  });
+
+  // Active entries grouped by date
+  const dateGroups = {};
+  activeEntries.forEach(e => { (dateGroups[e.entry_date] = dateGroups[e.entry_date]||[]).push(e); });
+  const sortedDates = Object.keys(dateGroups).sort((a,b) => b.localeCompare(a));
+
+  function entryRow(e, isPartOfDeletedGroup) {
+    const kgpm = parseFloat(e.kg_per_m)||0;
+    const m = wireMeters(parseFloat(e.kg), kgpm);
+    const wireLabel = e.wire_label || [e.wire_type, e.gauge, e.color].filter(Boolean).join(' · ') || 'Unknown wire';
+    const isSent = e.entry_type === 'sent';
+    const isDeleted = !!e.deleted_at || isPartOfDeletedGroup;
+    const color = isSent ? '#1d4ed8' : '#15803d';
+    const bg    = isSent ? '#eff6ff' : '#f0fdf4';
+    const verb  = isSent ? 'sent to site' : 'installed';
+    const who   = e.created_by || 'Someone';
+    const mText = m !== null ? ` (≈ ${wireFmtM(m)})` : '';
+    const strike = isDeleted ? 'text-decoration:line-through;opacity:.55;' : '';
+    // Individual deleted entry (not part of a whole-wire-type deletion) gets its own restore
+    const individualRestoreBtn = (isDeleted && !isPartOfDeletedGroup)
+      ? `<button onclick="wireRestoreEntry(${e.id})" style="background:#fff;border:1px solid #d1d5db;border-radius:6px;font-size:11px;font-weight:700;color:#374151;padding:3px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#374151'">↩ Restore</button>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f3f4f6;">
+      <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;">${isSent?'SENT':'INSTALLED'}</span>
+      <div style="flex:1;line-height:1.5;${strike}">
+        <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText}${!isPartOfDeletedGroup ? ' of <strong>'+esc(wireLabel)+'</strong>' : ''}${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''}
+      </div>
+      ${individualRestoreBtn}
+    </div>`;
+  }
+
+  let html = '';
+
+  // ── Active entries by date ──────────────────────
+  html += sortedDates.map(date => {
     const [y,mo,d] = date.split('-');
     const label = new Date(+y,+mo-1,+d).toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    const rows = dayEntries.map(e => {
-      const kgpm = parseFloat(e.kg_per_m)||0;
-      const m = wireMeters(parseFloat(e.kg), kgpm);
-      const wireLabel = e.wire_label || [e.wire_type, e.gauge, e.color].filter(Boolean).join(' · ') || 'Unknown wire';
-      const isSent = e.entry_type === 'sent';
-      const isDeleted = !!e.deleted_at;
-      const color  = isDeleted ? '#6b7280' : isSent ? '#1d4ed8' : '#15803d';
-      const bg     = isDeleted ? '#f3f4f6' : isSent ? '#eff6ff' : '#f0fdf4';
-      const verb   = isSent ? 'sent to site' : 'installed';
-      const who    = e.created_by || 'Someone';
-      const mText  = m !== null ? ` (≈ ${wireFmtM(m)})` : '';
-      const strikeStyle = isDeleted ? 'text-decoration:line-through;opacity:.6;' : '';
-      const deletedBy = isDeleted ? `<span style="font-size:11px;color:#9ca3af;font-weight:400;"> — deleted by ${esc(e.deleted_by||'unknown')}</span>` : '';
-      const restoreBtn = isDeleted ? `<button onclick="wireRestoreEntry(${e.id})" style="background:#fff;border:1px solid #d1d5db;border-radius:6px;font-size:11px;font-weight:700;color:#374151;padding:3px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#374151'">↩ Restore</button>` : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;${isDeleted?'opacity:.7;':''}">
-        <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;">${isDeleted ? 'DELETED' : isSent ? 'SENT' : 'INSTALLED'}</span>
-        <div style="flex:1;line-height:1.5;${strikeStyle}">
-          <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText} of <strong>${esc(wireLabel)}</strong>${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''} ${deletedBy}
-        </div>
-        ${restoreBtn}
-      </div>`;
-    }).join('');
+    const rows = dateGroups[date].map(e => entryRow(e, false)).join('');
     return `<div style="margin-bottom:12px;">
       <div style="padding:6px 10px;background:#1c1e22;color:#fff;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;border-radius:6px;margin-bottom:4px;">${label}</div>
       ${rows}
     </div>`;
   }).join('');
+
+  // ── Deleted wire-type groups ────────────────────
+  const deletedGroupIds = Object.keys(deletedWireGroups);
+  if (deletedGroupIds.length) {
+    html += `<div style="margin-top:${sortedDates.length ? '16px' : '0'};">`;
+    deletedGroupIds.forEach(wireId => {
+      const groupEntries = deletedWireGroups[wireId];
+      const first = groupEntries[0];
+      const wireLabel = first.wire_label || [first.wire_type, first.gauge, first.color].filter(Boolean).join(' · ') || 'Unknown wire';
+      html += `<div style="border:2px solid #fecaca;border-radius:10px;padding:0;margin-bottom:12px;overflow:hidden;">
+        <div style="background:#fef2f2;padding:8px 14px;display:flex;align-items:center;gap:10px;">
+          <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;white-space:nowrap;flex-shrink:0;">LINE ITEM DELETED</span>
+          <div style="flex:1;font-size:13px;font-weight:700;color:#991b1b;">${esc(wireLabel)}</div>
+          <button onclick="wireRestoreLineItem(${wireId})" style="background:#fff;border:2px solid #ef4444;border-radius:6px;font-size:11px;font-weight:800;color:#ef4444;padding:4px 12px;cursor:pointer;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background='#ef4444';this.style.color='#fff'" onmouseout="this.style.background='#fff';this.style.color='#ef4444'">↩ Restore</button>
+        </div>
+        <div style="padding:0 14px 4px;">
+          ${groupEntries.map(e => entryRow(e, true)).join('')}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html || '<span style="color:#9ca3af;font-style:italic;">No activity yet.</span>';
 }
 
 window.wireOpenEntry = function(wireId, entryType) {
@@ -4129,6 +4172,16 @@ window.wireOpenEntry = function(wireId, entryType) {
   };
 };
 
+window.wireRestoreLineItem = async function(wireId) {
+  const res = await fetch('/api/projects/wire/' + wireId + '/restore', { method:'POST' });
+  if (!res.ok) { alert('Failed to restore line item.'); return; }
+  const wires = await fetch('/api/projects/' + currentProjectId + '/wire');
+  if (wires.ok) _wireTypes = await wires.json();
+  renderWireTable();
+  wireLoadActivity(currentProjectId);
+  showToast('Wire type restored', 'success');
+};
+
 window.wireRestoreEntry = async function(entryId) {
   const res = await fetch('/api/projects/wire/entries/' + entryId + '/restore', { method:'POST' });
   if (!res.ok) { alert('Failed to restore entry.'); return; }
@@ -4154,13 +4207,14 @@ window.wireDeleteEntry = async function(wireId, entryId) {
 };
 
 window.wireDeleteType = async function(wireId) {
-  if (!confirm('Remove this wire type and all its entries?')) return;
+  if (!confirm('Remove this wire type? All entries will be recorded as deleted in the activity log.')) return;
   const res = await fetch('/api/projects/wire/' + wireId, { method:'DELETE' });
   if (res.ok) {
     _wireTypes = _wireTypes.filter(w => w.id !== wireId);
     _wireExpanded.delete(wireId);
     delete _wireEntries[wireId];
     renderWireTable();
+    wireLoadActivity(currentProjectId);
     if (!_wireTypes.length) {
       const panel = $('ptab-panel-wire');
       if (panel && !$('wire-empty')) {

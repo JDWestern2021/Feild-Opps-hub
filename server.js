@@ -3444,12 +3444,22 @@ app.delete('/api/projects/wire/:id', requireAuth, async (req, res) => {
 app.get('/api/projects/:id/wire/activity', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT e.*, w.wire_type, w.gauge, w.color, w.kg_per_m
+      SELECT e.*, w.wire_type, w.gauge, w.color, w.kg_per_m,
+             w.deleted_at AS wire_deleted_at, w.id AS wire_id_ref
       FROM project_wire_entries e
       JOIN project_wire w ON w.id = e.wire_id
       WHERE w.project_id = $1
       ORDER BY e.entry_date DESC, e.created_at DESC`, [req.params.id]);
     res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/projects/wire/:id/restore  — restore a soft-deleted wire type and all its entries
+app.post('/api/projects/wire/:id/restore', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`UPDATE project_wire SET deleted_at=NULL WHERE id=$1`, [req.params.id]);
+    await pool.query(`UPDATE project_wire_entries SET deleted_at=NULL, deleted_by='' WHERE wire_id=$1`, [req.params.id]);
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
