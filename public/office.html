@@ -443,11 +443,35 @@
       background: none; border: 1px solid var(--gray-300); border-radius: 8px;
       padding: 7px 16px; font-size: 13px; font-weight: 600; color: var(--gray-700);
       cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 6px;
+      white-space: nowrap; flex-shrink: 0;
     }
     .proj-tab:hover, .proj-subtab:hover { border-color: var(--orange); color: var(--orange); }
     .proj-tab.active, .proj-subtab.active { background: var(--orange); border-color: var(--orange); color: #fff; }
     .proj-subcount { font-size: 11px; background: rgba(0,0,0,.12); border-radius: 10px; padding: 0 7px; font-weight: 700; }
     .proj-subtab.active .proj-subcount { background: rgba(255,255,255,.25); }
+    .proj-subtab-bar {
+      display: flex; gap: 6px; margin-bottom: 14px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; /* Firefox */
+      padding-bottom: 4px;
+    }
+    .proj-subtab-bar::-webkit-scrollbar { display: none; }
+
+    /* Wire log mobile */
+    @media (max-width: 600px) {
+      #ptab-panel-wire { padding: 0; }
+      #ptab-panel-wire > div:first-child { flex-wrap: wrap; gap: 6px; }
+      #ptab-panel-wire .wire-toolbar-btn { flex: 1 1 auto; justify-content: center; }
+      /* Keep table scrollable, shrink action column buttons */
+      #wire-table td:last-child button { font-size: 10px; padding: 3px 5px; margin-right: 1px; }
+      /* Stack the action buttons under each other if really tight */
+      #wire-table td:last-child { white-space: normal; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; justify-content: center; }
+      /* Entry modal full-width on mobile */
+      #wire-entry-modal > div { max-width: 100%; margin: 0 12px; }
+      #wire-preset-modal > div { max-width: 100%; margin: 0 12px; }
+      /* Activity log font size */
+      #wire-activity-log { font-size: 12px; }
+    }
 
     /* Job-number reference tags */
     .job-tag { display:inline-block; background: var(--gray-100); color: var(--gray-700); font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin: 0 4px 4px 0; }
@@ -1176,7 +1200,7 @@
         </div>
         <div class="proj-outstanding-bar" id="project-outstanding-summary"></div>
         <div class="card-body">
-          <div style="display:flex;gap:6px;margin-bottom:14px;">
+          <div class="proj-subtab-bar">
             <button class="proj-subtab active" id="psub-tickets" data-tab="tickets">Time Tickets <span class="proj-subcount" id="psub-tickets-count">0</span></button>
             <button class="proj-subtab" id="psub-pos" data-tab="pos">Purchase Orders <span class="proj-subcount" id="psub-pos-count">0</span></button>
             <button class="proj-subtab" id="psub-safety" data-tab="safety">Safety <span class="proj-subcount" id="psub-safety-count">0</span></button>
