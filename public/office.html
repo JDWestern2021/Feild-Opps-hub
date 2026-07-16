@@ -3895,20 +3895,43 @@ async function renderProjectWire(projectId) {
 
     <!-- Entry log modal -->
     <div id="wire-entry-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;padding:20px;">
-      <div style="background:#fff;border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="background:#fff;border-radius:14px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
         <div style="padding:16px 20px 12px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
           <div id="wire-entry-modal-title" style="font-size:15px;font-weight:800;"></div>
           <button onclick="$('wire-entry-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1;">×</button>
         </div>
-        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;">
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
           <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
             Date
             <input type="date" id="wire-entry-date" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;"/>
           </label>
-          <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
-            Weight (kg)
-            <input type="number" id="wire-entry-kg" min="0" step="0.1" placeholder="0.0" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;"/>
-          </label>
+
+          <!-- kg / meters toggle -->
+          <div>
+            <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;">
+              <button id="wire-unit-kg-btn" onclick="wireSetUnit('kg')" style="flex:1;padding:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:var(--orange);color:#fff;transition:all .15s;">kg</button>
+              <button id="wire-unit-m-btn"  onclick="wireSetUnit('m')"  style="flex:1;padding:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:#fff;color:var(--gray-600);transition:all .15s;">meters</button>
+            </div>
+
+            <!-- kg input -->
+            <div id="wire-unit-kg-field">
+              <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
+                Weight (kg)
+                <input type="number" id="wire-entry-kg" min="0" step="0.1" placeholder="e.g. 4.5" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:16px;font-family:inherit;"/>
+              </label>
+              <div id="wire-entry-kg-hint" style="font-size:12px;color:#6b7280;margin-top:4px;min-height:18px;"></div>
+            </div>
+
+            <!-- meters input -->
+            <div id="wire-unit-m-field" style="display:none;">
+              <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
+                Length (meters)
+                <input type="number" id="wire-entry-m" min="0" step="1" placeholder="e.g. 150" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:16px;font-family:inherit;"/>
+              </label>
+              <div id="wire-entry-m-hint" style="font-size:12px;color:#6b7280;margin-top:4px;min-height:18px;"></div>
+            </div>
+          </div>
+
           <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
             Notes (optional)
             <input type="text" id="wire-entry-notes" placeholder="e.g. Roll #2…" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;"/>
@@ -4159,29 +4182,94 @@ async function wireLoadActivity(projectId) {
   container.innerHTML = html || '<span style="color:#9ca3af;font-style:italic;">No activity yet.</span>';
 }
 
+let _wireEntryKgpm = 0;
+
+function wireSetUnit(unit) {
+  const isKg = unit === 'kg';
+  $('wire-unit-kg-field').style.display = isKg ? '' : 'none';
+  $('wire-unit-m-field').style.display  = isKg ? 'none' : '';
+  $('wire-unit-kg-btn').style.background = isKg ? 'var(--orange)' : '#fff';
+  $('wire-unit-kg-btn').style.color      = isKg ? '#fff' : 'var(--gray-600)';
+  $('wire-unit-m-btn').style.background  = isKg ? '#fff' : 'var(--orange)';
+  $('wire-unit-m-btn').style.color       = isKg ? 'var(--gray-600)' : '#fff';
+  setTimeout(() => (isKg ? $('wire-entry-kg') : $('wire-entry-m'))?.focus(), 50);
+}
+
+function wireEntryUpdateHints() {
+  const kgpm = _wireEntryKgpm;
+  // kg field → show meters hint
+  const kgVal = parseFloat($('wire-entry-kg')?.value) || 0;
+  const kgHint = $('wire-entry-kg-hint');
+  if (kgHint) {
+    if (kgVal > 0 && kgpm > 0) {
+      kgHint.textContent = '≈ ' + (kgVal / kgpm).toFixed(1) + ' m';
+      kgHint.style.color = '#1d4ed8';
+    } else if (kgVal > 0 && kgpm === 0) {
+      kgHint.textContent = 'No kg/m set for this wire type — meters can\'t be calculated';
+      kgHint.style.color = '#9ca3af';
+    } else {
+      kgHint.textContent = '';
+    }
+  }
+  // meters field → show kg hint
+  const mVal = parseFloat($('wire-entry-m')?.value) || 0;
+  const mHint = $('wire-entry-m-hint');
+  if (mHint) {
+    if (mVal > 0 && kgpm > 0) {
+      mHint.textContent = '= ' + (mVal * kgpm).toFixed(2) + ' kg (will be saved as kg)';
+      mHint.style.color = '#15803d';
+    } else if (mVal > 0 && kgpm === 0) {
+      mHint.textContent = 'No kg/m set — can\'t convert to kg. Enter kg directly instead.';
+      mHint.style.color = '#dc2626';
+    } else {
+      mHint.textContent = '';
+    }
+  }
+}
+
 window.wireOpenEntry = function(wireId, entryType) {
   const w = _wireTypes.find(t => t.id === wireId);
   const typeName = w ? [w.wire_type, w.gauge, w.color].filter(Boolean).join(' · ') : '';
+  _wireEntryKgpm = w ? (parseFloat(w.kg_per_m) || 0) : 0;
   const label = entryType === 'sent' ? 'Log Sent to Site' : 'Log Installed';
   $('wire-entry-modal-title').textContent = label + (typeName ? ' — ' + typeName : '');
   $('wire-entry-date').value = new Date().toLocaleDateString('en-CA');
   $('wire-entry-kg').value = '';
+  $('wire-entry-m').value = '';
   $('wire-entry-notes').value = '';
+  $('wire-entry-kg-hint').textContent = '';
+  $('wire-entry-m-hint').textContent = '';
+  wireSetUnit('kg'); // default to kg
   $('wire-entry-modal').style.display = 'flex';
-  setTimeout(() => $('wire-entry-kg')?.focus(), 100);
+
+  // Live hints as user types
+  $('wire-entry-kg').oninput = wireEntryUpdateHints;
+  $('wire-entry-m').oninput = wireEntryUpdateHints;
 
   const saveBtn = $('wire-entry-save-btn');
   const newBtn = saveBtn.cloneNode(true);
   saveBtn.parentNode.replaceChild(newBtn, saveBtn);
   newBtn.onclick = async () => {
-    const kg = parseFloat($('wire-entry-kg').value);
     const entry_date = $('wire-entry-date').value;
-    if (!kg || kg <= 0) { alert('Enter a weight in kg.'); return; }
     if (!entry_date) { alert('Select a date.'); return; }
+
+    // Resolve kg from whichever unit is active
+    let kg;
+    const usingMeters = $('wire-unit-m-field').style.display !== 'none';
+    if (usingMeters) {
+      const mVal = parseFloat($('wire-entry-m').value);
+      if (!mVal || mVal <= 0) { alert('Enter a length in meters.'); return; }
+      if (_wireEntryKgpm <= 0) { alert('This wire type has no kg/m value set — switch to kg entry or set kg/m on the wire type.'); return; }
+      kg = mVal * _wireEntryKgpm;
+    } else {
+      kg = parseFloat($('wire-entry-kg').value);
+      if (!kg || kg <= 0) { alert('Enter a weight in kg.'); return; }
+    }
+
     newBtn.disabled = true; newBtn.textContent = 'Saving…';
     const res = await fetch('/api/projects/wire/' + wireId + '/entries', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entry_type: entryType, entry_date, kg, notes: $('wire-entry-notes').value || '' })
+      body: JSON.stringify({ entry_type: entryType, entry_date, kg: parseFloat(kg.toFixed(3)), notes: $('wire-entry-notes').value || '' })
     });
     newBtn.disabled = false; newBtn.textContent = 'Log Entry';
     if (!res.ok) { alert('Failed to save entry.'); return; }
