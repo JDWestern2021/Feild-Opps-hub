@@ -522,6 +522,7 @@ async function initSchema() {
     updated_by TEXT NOT NULL DEFAULT ''
   )`);
   await pool.query(`ALTER TABLE project_wire ADD COLUMN IF NOT EXISTS kg_per_m NUMERIC(8,4) NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE project_wire ADD COLUMN IF NOT EXISTS entry_date TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD')`);
 
   console.log('  ✓ Database schema ready');
 }

@@ -3388,11 +3388,12 @@ app.get('/api/projects/:id/wire', requireAuth, async (req, res) => {
 // POST /api/projects/:id/wire  — add row
 app.post('/api/projects/:id/wire', requireAuth, async (req, res) => {
   try {
-    const { wire_type='', gauge='', color='', kg_per_m=0, qty_sent=0, qty_installed=0, notes='' } = req.body;
+    const { wire_type='', gauge='', color='', kg_per_m=0, qty_sent=0, qty_installed=0, notes='', entry_date=null } = req.body;
+    const dateVal = entry_date || new Date().toISOString().slice(0,10);
     const { rows } = await pool.query(
-      `INSERT INTO project_wire (project_id,wire_type,gauge,color,kg_per_m,qty_sent,qty_installed,notes,sort_order,updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,(SELECT COALESCE(MAX(sort_order),0)+1 FROM project_wire WHERE project_id=$1),$9) RETURNING *`,
-      [req.params.id, wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes, req.user.name||req.user.email]
+      `INSERT INTO project_wire (project_id,wire_type,gauge,color,kg_per_m,qty_sent,qty_installed,notes,entry_date,sort_order,updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,(SELECT COALESCE(MAX(sort_order),0)+1 FROM project_wire WHERE project_id=$1),$10) RETURNING *`,
+      [req.params.id, wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes, dateVal, req.user.name||req.user.email]
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -3401,15 +3402,15 @@ app.post('/api/projects/:id/wire', requireAuth, async (req, res) => {
 // PATCH /api/projects/wire/:rowId  — update a row
 app.patch('/api/projects/wire/:rowId', requireAuth, async (req, res) => {
   try {
-    const { wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes } = req.body;
+    const { wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes, entry_date } = req.body;
     const { rows } = await pool.query(
       `UPDATE project_wire SET
         wire_type=COALESCE($1,wire_type), gauge=COALESCE($2,gauge), color=COALESCE($3,color),
         kg_per_m=COALESCE($4,kg_per_m), qty_sent=COALESCE($5,qty_sent), qty_installed=COALESCE($6,qty_installed),
-        notes=COALESCE($7,notes),
-        updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'), updated_by=$8
-       WHERE id=$9 RETURNING *`,
-      [wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes,
+        notes=COALESCE($7,notes), entry_date=COALESCE($8,entry_date),
+        updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'), updated_by=$9
+       WHERE id=$10 RETURNING *`,
+      [wire_type, gauge, color, kg_per_m, qty_sent, qty_installed, notes, entry_date,
        req.user.name||req.user.email, req.params.rowId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
