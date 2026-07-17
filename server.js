@@ -3846,63 +3846,426 @@ app.post('/api/rfqs/:id/approve', requireAdmin, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+const ExcelJS = require('exceljs');
+
 app.get('/api/rfqs/:id/export', requireAuth, async (req, res) => {
   try {
-    const { rows: [rfq] } = await pool.query('SELECT * FROM rfqs WHERE id=$1',[req.params.id]);
-    if (!rfq) return res.status(404).json({ error: 'Not found' });
-    const { rows: line_items } = await pool.query('SELECT * FROM rfq_line_items WHERE rfq_id=$1 ORDER BY sort_order,item_num',[req.params.id]);
+    const rfqRes = await pool.query(
+      `SELECT r.*, p.name as proj_name FROM rfqs r LEFT JOIN projects p ON p.id=r.project_id WHERE r.id=$1`,
+      [req.params.id]
+    );
+    if (!rfqRes.rows.length) return res.status(404).json({error:'Not found'});
+    const rfq = rfqRes.rows[0];
 
-    let supplierName = 'Supplier', supplierEmail = '', supplierPhone = '';
+    const lineItems = await pool.query(
+      `SELECT * FROM rfq_line_items WHERE rfq_id=$1 ORDER BY sort_order, item_num`,
+      [req.params.id]
+    );
+
+    let supplier = null;
     if (req.query.supplier_id) {
-      const { rows: [sup] } = await pool.query(
-        `SELECT s.name, s.email, s.phone FROM rfq_suppliers rs JOIN suppliers s ON s.id=rs.supplier_id WHERE rs.id=$1`,
+      const sRes = await pool.query(
+        `SELECT s.* FROM suppliers s JOIN rfq_suppliers rs ON rs.supplier_id=s.id WHERE rs.id=$1`,
         [req.query.supplier_id]
       );
-      if (sup) { supplierName=sup.name; supplierEmail=sup.email; supplierPhone=sup.phone; }
+      if (sRes.rows.length) supplier = sRes.rows[0];
     }
 
-    const today = new Date().toISOString().slice(0,10);
-    const wb = XLSX.utils.book_new();
-    const rows = [
-      ['RFQ'],
-      [`PROJECT: ${rfq.project_name}`, '', `REF: ${rfq.rfq_number}`],
-      [`SUPPLIER: ${supplierName}`, '', `Date: ${today}`],
-      [`EMAIL: ${supplierEmail}`],
-      [`PHONE: ${supplierPhone}`],
-      [`ATTENTION: ${rfq.attention}`, '', `Due Date: ${rfq.due_date}`],
-      [],
-      ['Item', 'Qty', 'UNITS', 'P/N', 'Size', 'Description', 'UNIT COST', 'TOTAL COST'],
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'J&D Western Electric FieldHub';
+    const ws = wb.addWorksheet('RFQ', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true } });
+
+    ws.columns = [
+      {width:6},  // A - Item
+      {width:8},  // B - Qty
+      {width:8},  // C - Units
+      {width:14}, // D - P/N
+      {width:10}, // E - Size
+      {width:40}, // F - Description
+      {width:14}, // G - Unit Cost
+      {width:14}, // H - Total Cost
     ];
 
-    line_items.forEach((li, i) => {
-      rows.push([i+1, Number(li.qty), li.unit, li.part_number, li.size, li.description, '', '']);
+    const BLACK = '0C0C0C';
+    const ORANGE = 'FF6100';
+    const WHITE = 'FFFFFFFF';
+    const DARKGRAY = '1c1e22';
+    const LIGHTGRAY = 'F3F4F6';
+
+    const fill = (color) => ({ type:'pattern', pattern:'solid', fgColor:{argb: color.length===6 ? 'FF'+color : color} });
+    const font = (color, bold=false, size=11) => ({ name:'Calibri', color:{argb: color.length===6 ? 'FF'+color : color}, bold, size });
+    const border = () => ({ top:{style:'thin',color:{argb:'FFD1D5DB'}}, bottom:{style:'thin',color:{argb:'FFD1D5DB'}}, left:{style:'thin',color:{argb:'FFD1D5DB'}}, right:{style:'thin',color:{argb:'FFD1D5DB'}} });
+
+    // Row 1 — Black header band
+    ws.mergeCells('A1:F1');
+    ws.mergeCells('G1:H1');
+    ws.getRow(1).height = 36;
+    const r1left = ws.getCell('A1');
+    r1left.value = 'J&D WESTERN ELECTRIC LTD.';
+    r1left.font = font(WHITE, true, 18);
+    r1left.fill = fill(BLACK);
+    r1left.alignment = {vertical:'middle', horizontal:'left', indent:1};
+    const r1right = ws.getCell('G1');
+    r1right.value = '8716 106 St., Grande Prairie, AB T8V 4C7\n587-343-4349 | jeremy@jdwesternelectric.ca';
+    r1right.font = font(WHITE, false, 9);
+    r1right.fill = fill(BLACK);
+    r1right.alignment = {vertical:'middle', horizontal:'right', wrapText:true};
+
+    // Row 2 — Orange tagline
+    ws.mergeCells('A2:H2');
+    ws.getRow(2).height = 18;
+    const r2 = ws.getCell('A2');
+    r2.value = 'POWER  •  PERFORMANCE  •  PEACE OF MIND';
+    r2.font = font(WHITE, true, 10);
+    r2.fill = fill(ORANGE);
+    r2.alignment = {vertical:'middle', horizontal:'left', indent:1};
+
+    // Row 3 — blank spacer
+    ws.getRow(3).height = 8;
+    ws.mergeCells('A3:H3');
+    ws.getCell('A3').fill = fill('FFFFFF');
+
+    // Row 4 — Document title
+    ws.mergeCells('A4:D4');
+    ws.mergeCells('E4:H4');
+    ws.getRow(4).height = 28;
+    const r4title = ws.getCell('A4');
+    r4title.value = 'REQUEST FOR QUOTATION';
+    r4title.font = font(BLACK, true, 16);
+    r4title.alignment = {vertical:'middle'};
+    const r4ref = ws.getCell('E4');
+    r4ref.value = 'REF: ' + rfq.rfq_number;
+    r4ref.font = font(ORANGE, true, 12);
+    r4ref.alignment = {vertical:'middle', horizontal:'right'};
+
+    // Row 5 — thin orange underline
+    ws.mergeCells('A5:H5');
+    ws.getRow(5).height = 4;
+    ws.getCell('A5').fill = fill(ORANGE);
+
+    // Row 6 blank
+    ws.mergeCells('A6:H6');
+    ws.getRow(6).height = 6;
+
+    // Rows 7-11 — Header info block
+    const infoRows = [
+      ['PROJECT:', rfq.proj_name || rfq.project_name || '—', '', '', 'Date:', new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})],
+      ['SUPPLIER:', supplier?.name || '', '', '', 'Due Date:', rfq.due_date || ''],
+      ['EMAIL:', supplier?.email || '', '', '', '', ''],
+      ['PHONE:', supplier?.phone || '', '', '', '', ''],
+      ['ATTENTION:', rfq.attention || '', '', '', '', ''],
+    ];
+    infoRows.forEach((row, i) => {
+      const rn = 7 + i;
+      ws.getRow(rn).height = 18;
+      ws.mergeCells(`B${rn}:D${rn}`);
+      ws.mergeCells(`G${rn}:H${rn}`);
+      ws.getCell(`A${rn}`).value = row[0];
+      ws.getCell(`A${rn}`).font = font(BLACK, true, 10);
+      ws.getCell(`B${rn}`).value = row[1];
+      ws.getCell(`B${rn}`).font = font(BLACK, false, 10);
+      ws.getCell(`E${rn}`).value = row[4];
+      ws.getCell(`E${rn}`).font = font(BLACK, true, 10);
+      ws.getCell(`G${rn}`).value = row[5];
+      ws.getCell(`G${rn}`).font = font(BLACK, false, 10);
     });
 
-    rows.push([]);
-    rows.push(['', '', '', '', '', 'SUB TOTAL', '', '']);
-    rows.push(['', '', '', '', '', 'GST (5%)', '', '']);
-    rows.push(['', '', '', '', '', 'TOTAL', '', '']);
-    rows.push([]);
-    rows.push([`Quotation Due Date: ${rfq.due_date}`]);
-    rows.push(['Delivery: As per schedule']);
-    rows.push(['Shipping Specification: FOB Destination, Freight Prepaid']);
-    rows.push(['Materials Policy: No substitutions without written approval']);
-    if (rfq.notes) rows.push([`Notes: ${rfq.notes}`]);
-    rows.push([]);
-    rows.push(['J & D WESTERN ELECTRIC LTD.']);
-    rows.push(['Tim Vanderveen C.E.T.']);
-    rows.push(['Electrical Project Manager']);
-    rows.push(['Cell: 780.978.0612 | Office: 1.587.343.4349 | timv@jdwesternelectric.ca']);
+    // Row 12 blank
+    ws.getRow(12).height = 8;
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:6},{wch:8},{wch:8},{wch:16},{wch:12},{wch:40},{wch:14},{wch:14}];
-    XLSX.utils.book_append_sheet(wb, ws, 'RFQ');
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    const safeName = supplierName.replace(/[^a-zA-Z0-9]/g,'_');
+    // Row 13 — Column headers
+    ws.getRow(13).height = 22;
+    ['Item','Qty','Units','P/N','Size','Description','Unit Cost','Total Cost'].forEach((h, i) => {
+      const col = String.fromCharCode(65+i);
+      const cell = ws.getCell(`${col}13`);
+      cell.value = h;
+      cell.font = font(WHITE, true, 10);
+      cell.fill = fill(DARKGRAY);
+      cell.alignment = {vertical:'middle', horizontal: i===5 ? 'left' : 'center'};
+      cell.border = border();
+    });
+
+    // Line item rows starting at 14
+    const items = lineItems.rows;
+    items.forEach((item, i) => {
+      const rn = 14 + i;
+      ws.getRow(rn).height = 18;
+      const rowFill = fill(i % 2 === 0 ? 'FFFFFF' : LIGHTGRAY);
+      const vals = [item.item_num||i+1, item.qty, item.unit, item.part_number, item.size, item.description, '', ''];
+      vals.forEach((v, ci) => {
+        const col = String.fromCharCode(65+ci);
+        const cell = ws.getCell(`${col}${rn}`);
+        cell.value = v;
+        cell.font = font(BLACK, false, 10);
+        cell.fill = rowFill;
+        cell.border = border();
+        cell.alignment = {vertical:'middle', horizontal: ci===5 ? 'left' : 'center', wrapText: ci===5};
+        if (ci===7) {
+          cell.value = {formula:`G${rn}*B${rn}`};
+          cell.numFmt = '$#,##0.00';
+        }
+      });
+    });
+
+    // Totals section
+    const lastItemRow = 13 + items.length;
+    const subtotalRow = lastItemRow + 2;
+    const gstRow = subtotalRow + 1;
+    const totalRow = gstRow + 1;
+
+    ws.getRow(lastItemRow + 1).height = 6;
+
+    ['SUB TOTAL','GST (5%)','TOTAL'].forEach((label, i) => {
+      const rn = subtotalRow + i;
+      ws.getRow(rn).height = 20;
+      ws.mergeCells(`A${rn}:G${rn}`);
+      const labelCell = ws.getCell(`A${rn}`);
+      labelCell.value = label;
+      labelCell.font = font(i===2 ? WHITE : BLACK, true, 10);
+      labelCell.fill = i===2 ? fill(ORANGE) : fill('FFFFFF');
+      labelCell.alignment = {vertical:'middle', horizontal:'right'};
+
+      const amtH = ws.getCell(`H${rn}`);
+      if (i===0) {
+        amtH.value = {formula:`SUM(H14:H${lastItemRow})`};
+      } else if (i===1) {
+        amtH.value = {formula:`H${subtotalRow}*0.05`};
+      } else {
+        amtH.value = {formula:`H${subtotalRow}+H${gstRow}`};
+      }
+      amtH.numFmt = '$#,##0.00';
+      amtH.font = font(i===2 ? WHITE : BLACK, true, 10);
+      amtH.fill = i===2 ? fill(ORANGE) : fill('FFFFFF');
+      amtH.alignment = {vertical:'middle', horizontal:'right'};
+      amtH.border = border();
+    });
+
+    // Notes section
+    const notesStart = totalRow + 2;
+    ws.getRow(notesStart).height = 6;
+    const noteLines = [
+      ['Quotation Due Date:', rfq.due_date || ''],
+      ['Delivery:', 'Please specify the latest delivery date or if items may be stock.  (days/weeks)'],
+      ['Shipping:', 'Please specify approximate total dimensions and weights.  (LxWxH, Lbs/Kgs)'],
+      ['Materials:', 'J&D Western Electric will only accept new materials. No used or reconditioned materials.'],
+      ['Shop Drawings:', 'Please supply Shop Drawings with Smith Landing RFQs for Engineering approval.'],
+    ];
+    noteLines.forEach((nl, i) => {
+      const rn = notesStart + 1 + i;
+      ws.getRow(rn).height = 30;
+      ws.mergeCells(`B${rn}:H${rn}`);
+      ws.getCell(`A${rn}`).value = nl[0];
+      ws.getCell(`A${rn}`).font = font(BLACK, true, 9);
+      ws.getCell(`A${rn}`).alignment = {vertical:'top', wrapText:true};
+      ws.getCell(`B${rn}`).value = nl[1];
+      ws.getCell(`B${rn}`).font = font(BLACK, false, 9);
+      ws.getCell(`B${rn}`).alignment = {vertical:'top', wrapText:true};
+    });
+
+    // Footer
+    const footerRow = notesStart + noteLines.length + 3;
+    ws.mergeCells(`A${footerRow-1}:H${footerRow-1}`);
+    ws.getRow(footerRow-1).height = 4;
+    ws.getCell(`A${footerRow-1}`).fill = fill(ORANGE);
+
+    ws.mergeCells(`A${footerRow}:D${footerRow}`);
+    ws.mergeCells(`E${footerRow}:H${footerRow}`);
+    ws.getRow(footerRow).height = 28;
+    const sigCell = ws.getCell(`A${footerRow}`);
+    sigCell.value = 'Tim Vanderveen, C.E.T.\nElectrical Project Manager\nCell: 780.978.0612 | timv@jdwesternelectric.ca';
+    sigCell.font = font(BLACK, false, 9);
+    sigCell.alignment = {vertical:'middle', wrapText:true};
+
+    const footerRight = ws.getCell(`E${footerRow}`);
+    footerRight.value = 'J&D Western Electric Ltd. • jeremy@jdwesternelectric.ca • 587-343-4349 • jdwesternelectric.ca';
+    footerRight.font = font('6B7280', false, 8);
+    footerRight.alignment = {vertical:'middle', horizontal:'right'};
+
+    ws.pageSetup.margins = {left:0.5, right:0.5, top:0.5, bottom:0.5, header:0.3, footer:0.3};
+
+    const suppName = supplier ? '-' + supplier.name.replace(/[^a-z0-9]/gi,'_') : '';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="JD-RFQ-${rfq.rfq_number}${suppName}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch(err) {
+    console.error('RFQ export error:', err);
+    res.status(500).json({error: err.message});
+  }
+});
+
+app.get('/api/change-orders/:id/export', requireAuth, async (req, res) => {
+  try {
+    const coRes = await pool.query(`SELECT co.*, r.rfq_number FROM rfq_change_orders co JOIN rfqs r ON r.id=co.rfq_id WHERE co.id=$1`, [req.params.id]);
+    if (!coRes.rows.length) return res.status(404).json({error:'Not found'});
+    const co = coRes.rows[0];
+    const lines = await pool.query(`SELECT * FROM rfq_co_line_items WHERE change_order_id=$1 ORDER BY sort_order`, [req.params.id]);
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Change Order');
+
+    const BLACK = '0C0C0C', ORANGE = 'FF6100', WHITE = 'FFFFFFFF', DARKGRAY = '1c1e22', LIGHTGRAY = 'F3F4F6';
+    const fill = (c) => ({type:'pattern',pattern:'solid',fgColor:{argb:c.length===6?'FF'+c:c}});
+    const font = (c,bold=false,size=10) => ({name:'Calibri',color:{argb:c.length===6?'FF'+c:c},bold,size});
+    const bdr = () => ({top:{style:'thin',color:{argb:'FFD1D5DB'}},bottom:{style:'thin',color:{argb:'FFD1D5DB'}},left:{style:'thin',color:{argb:'FFD1D5DB'}},right:{style:'thin',color:{argb:'FFD1D5DB'}}});
+
+    ws.columns = [{width:6},{width:8},{width:8},{width:30},{width:10},{width:10},{width:10},{width:10},{width:14},{width:14},{width:14}];
+
+    ws.mergeCells('A1:G1'); ws.mergeCells('H1:K1');
+    ws.getRow(1).height = 36;
+    const h = ws.getCell('A1');
+    h.value = 'J&D WESTERN ELECTRIC LTD.'; h.font = font(WHITE,true,18); h.fill = fill(BLACK); h.alignment = {vertical:'middle',horizontal:'left',indent:1};
+    const hr = ws.getCell('H1');
+    hr.value = '8716 106 St., Grande Prairie, AB T8V 4C7\n587-343-4349 | jeremy@jdwesternelectric.ca';
+    hr.font = font(WHITE,false,9); hr.fill = fill(BLACK); hr.alignment = {vertical:'middle',horizontal:'right',wrapText:true};
+
+    ws.mergeCells('A2:K2'); ws.getRow(2).height=18;
+    const t = ws.getCell('A2');
+    t.value='POWER  •  PERFORMANCE  •  PEACE OF MIND'; t.font=font(WHITE,true,10); t.fill=fill(ORANGE); t.alignment={vertical:'middle',horizontal:'left',indent:1};
+
+    ws.mergeCells('A3:K3'); ws.getRow(3).height=8; ws.getCell('A3').fill=fill('FFFFFF');
+
+    ws.mergeCells('A4:F4'); ws.mergeCells('G4:K4'); ws.getRow(4).height=28;
+    ws.getCell('A4').value='CHANGE ORDER'; ws.getCell('A4').font=font(BLACK,true,16);
+    ws.getCell('G4').value='REF: '+co.co_number+(co.rfq_number?' | RFQ: '+co.rfq_number:'');
+    ws.getCell('G4').font=font(ORANGE,true,12); ws.getCell('G4').alignment={vertical:'middle',horizontal:'right'};
+
+    ws.mergeCells('A5:K5'); ws.getRow(5).height=4; ws.getCell('A5').fill=fill(ORANGE);
+    ws.mergeCells('A6:K6'); ws.getRow(6).height=6;
+
+    [['PROJECT:',co.project_name||'—','DATE:',new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})],
+     ['TO (GC):',co.gc_name||'','CONTACT:',co.gc_contact||'']].forEach((r,i)=>{
+      const rn=7+i; ws.getRow(rn).height=18;
+      ws.mergeCells(`B${rn}:F${rn}`); ws.mergeCells(`H${rn}:K${rn}`);
+      ws.getCell(`A${rn}`).value=r[0]; ws.getCell(`A${rn}`).font=font(BLACK,true,10);
+      ws.getCell(`B${rn}`).value=r[1]; ws.getCell(`B${rn}`).font=font(BLACK,false,10);
+      ws.getCell(`G${rn}`).value=r[2]; ws.getCell(`G${rn}`).font=font(BLACK,true,10);
+      ws.getCell(`H${rn}`).value=r[3]; ws.getCell(`H${rn}`).font=font(BLACK,false,10);
+    });
+
+    ws.getRow(9).height=8;
+
+    const hdrs=['Item','Qty','Unit','Description','Unit Cost','Markup%','Labour Hrs','Labour Rate','Material Total','Labour Total','Line Total'];
+    ws.getRow(10).height=22;
+    hdrs.forEach((hdr,i)=>{
+      const c=String.fromCharCode(65+i), cell=ws.getCell(`${c}10`);
+      cell.value=hdr; cell.font=font(WHITE,true,9); cell.fill=fill(DARKGRAY);
+      cell.alignment={vertical:'middle',horizontal:'center',wrapText:true}; cell.border=bdr();
+    });
+
+    lines.rows.forEach((li,i)=>{
+      const rn=11+i; ws.getRow(rn).height=20;
+      const rowFill=fill(i%2===0?'FFFFFF':LIGHTGRAY);
+      const vals=[i+1,li.qty,li.unit,li.description,li.unit_cost,li.markup_pct,li.labour_hours,li.labour_rate,
+        {formula:`E${rn}*(1+F${rn}/100)*B${rn}`},
+        {formula:`G${rn}*H${rn}`},
+        {formula:`I${rn}+J${rn}`}];
+      vals.forEach((v,ci)=>{
+        const col=String.fromCharCode(65+ci), cell=ws.getCell(`${col}${rn}`);
+        cell.value=v; cell.fill=rowFill; cell.border=bdr();
+        cell.font=font(BLACK,false,10);
+        cell.alignment={vertical:'middle',horizontal:ci===3?'left':'center'};
+        if(ci>=4) cell.numFmt='$#,##0.00';
+      });
+    });
+
+    const lastLine=10+lines.rows.length;
+    const totRow=lastLine+2;
+    ws.getRow(lastLine+1).height=6;
+    ws.mergeCells(`A${totRow}:H${totRow}`);
+    ws.getCell(`A${totRow}`).value='GRAND TOTAL';
+    ws.getCell(`A${totRow}`).font=font(WHITE,true,12);
+    ws.getCell(`A${totRow}`).fill=fill(ORANGE);
+    ws.getCell(`A${totRow}`).alignment={vertical:'middle',horizontal:'right'};
+    ws.getRow(totRow).height=24;
+    ['I','J','K'].forEach(col=>{
+      const cell=ws.getCell(`${col}${totRow}`);
+      cell.value={formula:`SUM(${col}11:${col}${lastLine})`};
+      cell.font=font(WHITE,true,11); cell.fill=fill(ORANGE); cell.numFmt='$#,##0.00';
+      cell.alignment={vertical:'middle',horizontal:'right'}; cell.border=bdr();
+    });
+
+    const fr=totRow+3;
+    ws.mergeCells(`A${fr-1}:K${fr-1}`); ws.getRow(fr-1).height=4; ws.getCell(`A${fr-1}`).fill=fill(ORANGE);
+    ws.mergeCells(`A${fr}:F${fr}`); ws.mergeCells(`G${fr}:K${fr}`); ws.getRow(fr).height=28;
+    ws.getCell(`A${fr}`).value='Jeremy Williams\nOwner, J&D Western Electric Ltd.';
+    ws.getCell(`A${fr}`).font=font(BLACK,false,9); ws.getCell(`A${fr}`).alignment={vertical:'middle',wrapText:true};
+    ws.getCell(`G${fr}`).value='J&D Western Electric Ltd. • jeremy@jdwesternelectric.ca • 587-343-4349 • jdwesternelectric.ca';
+    ws.getCell(`G${fr}`).font=font('6B7280',false,8); ws.getCell(`G${fr}`).alignment={vertical:'middle',horizontal:'right'};
+
     res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition',`attachment; filename="JD-RFQ-${rfq.rfq_number}-${safeName}.xlsx"`);
-    res.send(buf);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+    res.setHeader('Content-Disposition',`attachment; filename="JD-CO-${co.co_number}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch(err) { res.status(500).json({error:err.message}); }
+});
+
+const rfqImportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10*1024*1024 } });
+
+app.post('/api/rfqs/import-preview', requireAuth, rfqImportUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({error:'No file uploaded'});
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer);
+
+    const results = [];
+    wb.eachSheet((ws) => {
+      if (results.length > 0) return;
+      const rows = [];
+      ws.eachRow((row, rowNum) => {
+        const vals = [];
+        row.eachCell({includeEmpty:true}, (cell) => {
+          vals.push(cell.text || cell.value || '');
+        });
+        rows.push({rowNum, vals});
+      });
+
+      let headerRow = -1;
+      const keywords = ['description','desc','qty','quantity','item','p/n','part'];
+      for (let i=0;i<Math.min(20,rows.length);i++) {
+        const rowText = rows[i].vals.join(' ').toLowerCase();
+        const matches = keywords.filter(k => rowText.includes(k));
+        if (matches.length >= 2) { headerRow = i; break; }
+      }
+
+      if (headerRow < 0) {
+        rows.filter(r => r.vals.some(v => v && String(v).trim())).forEach((r,i) => {
+          if (i > 200) return;
+          results.push({ item_num: i+1, qty:'', unit:'EA', part_number:'', size:'', description: r.vals.filter(v=>v).join(' | ') });
+        });
+        return;
+      }
+
+      const headers = rows[headerRow].vals.map(h => String(h).toLowerCase().trim());
+      const colIdx = (keys) => { for (const k of keys) { const i=headers.findIndex(h=>h.includes(k)); if(i>=0) return i; } return -1; };
+      const descCol = colIdx(['description','desc','name','material']);
+      const qtyCol = colIdx(['qty','quantity']);
+      const unitCol = colIdx(['unit','uom','ea']);
+      const pnCol = colIdx(['p/n','part','part no','pn','catalog']);
+      const sizeCol = colIdx(['size','dim']);
+
+      let itemNum = 1;
+      for (let i=headerRow+1; i<rows.length; i++) {
+        const r = rows[i].vals;
+        const desc = descCol>=0 ? String(r[descCol]||'').trim() : r.filter(v=>String(v).length>5)[0]||'';
+        if (!desc) continue;
+        if (String(desc).toLowerCase().includes('total') || String(desc).toLowerCase().includes('subtotal')) continue;
+        results.push({
+          item_num: itemNum++,
+          qty: qtyCol>=0 ? r[qtyCol]||1 : 1,
+          unit: unitCol>=0 ? r[unitCol]||'EA' : 'EA',
+          part_number: pnCol>=0 ? String(r[pnCol]||'') : '',
+          size: sizeCol>=0 ? String(r[sizeCol]||'') : '',
+          description: desc,
+        });
+        if (itemNum > 200) break;
+      }
+    });
+
+    res.json({ items: results, count: results.length });
+  } catch(err) {
+    res.status(500).json({error: 'Could not parse Excel file: ' + err.message});
+  }
 });
 
 // ── RFQ Line Items ──
