@@ -10047,8 +10047,8 @@ function openNewRFQModalForProject(projectId) {
 </script>
 
 <!-- RFQ Issue POs Modal -->
-<div id="rfq-issue-po-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9000;overflow-y:auto;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);width:100%;max-width:520px;margin:40px auto;border-radius:14px;box-shadow:0 0 60px rgba(0,0,0,0.4);overflow:hidden;">
+<div id="rfq-issue-po-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;overflow-y:auto;align-items:center;justify-content:center;">
+  <div style="background:#ffffff;width:100%;max-width:520px;margin:40px auto;border-radius:14px;box-shadow:0 8px 48px rgba(0,0,0,0.5);overflow:hidden;">
     <div style="background:#0C0C0C;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;">
       <div>
         <div style="color:#fff;font-size:1.1rem;font-weight:700;letter-spacing:0.01em;">Issue POs to Suppliers</div>
@@ -10057,18 +10057,18 @@ function openNewRFQModalForProject(projectId) {
       <button onclick="document.getElementById('rfq-issue-po-modal').style.display='none'" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
     </div>
     <div style="padding:24px;">
-      <p style="font-size:13px;color:var(--text-muted);margin:0 0 18px;">Enter the job details for the Purchase Orders that will be created.</p>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 18px;">Enter the job details for the Purchase Orders that will be created.</p>
       <div style="margin-bottom:14px;">
-        <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px;">Jobber Job Number <span style="color:#dc2626;">*</span></label>
-        <input id="rfq-issue-po-jobber-num" type="text" placeholder="e.g. J-2025-001" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#111827;margin-bottom:5px;">Job Number <span style="color:#dc2626;">*</span></label>
+        <input id="rfq-issue-po-jobber-num" type="text" placeholder="e.g. J-2025-001" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;background:#f9fafb;color:#111827;font-size:13px;">
       </div>
       <div style="margin-bottom:14px;">
-        <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px;">Job Name <span style="color:#dc2626;">*</span></label>
-        <input id="rfq-issue-po-job-name" type="text" placeholder="e.g. Main Street Substation" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#111827;margin-bottom:5px;">Job Name <span style="color:#dc2626;">*</span></label>
+        <input id="rfq-issue-po-job-name" type="text" placeholder="e.g. Main Street Substation" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;background:#f9fafb;color:#111827;font-size:13px;">
       </div>
       <div style="margin-bottom:20px;">
-        <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px;">Project (optional)</label>
-        <select id="rfq-issue-po-project" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#111827;margin-bottom:5px;">Project (optional)</label>
+        <select id="rfq-issue-po-project" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;background:#f9fafb;color:#111827;font-size:13px;">
           <option value="">— No project —</option>
         </select>
       </div>
