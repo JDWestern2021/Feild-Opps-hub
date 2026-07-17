@@ -9418,7 +9418,7 @@ async function renderRFQDetail(id, stageView) {
       const isConverted = rfq.status === 'CONVERTED';
       const isApproved = rfq.status === 'APPROVED';
 
-      if (viewStage === 'SENT') {
+      if (rfq.status === 'SENT' || viewStage === 'SENT') {
         // ── SENT view: always editable so late prices can be entered at any stage ──
         const isLive = rfq.status === 'SENT';
         html += `<div class="rfq-section">
