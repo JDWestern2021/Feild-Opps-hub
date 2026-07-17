@@ -550,6 +550,33 @@
     @media (max-width: 600px) {
       #fleet-maint-cal-grid > div { min-height: 40px; }
     }
+    /* RFQ styles */
+    .rfq-tab { padding:7px 14px;border:none;border-radius:20px;background:var(--surface);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:1px solid var(--border);margin-bottom:8px; }
+    .rfq-tab:hover { border-color:var(--orange);color:var(--orange); }
+    .rfq-tab.active { background:var(--orange);border-color:var(--orange);color:#fff; }
+    .rfq-card { background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;cursor:pointer;transition:box-shadow .15s,border-color .15s; }
+    .rfq-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.12);border-color:var(--orange); }
+    .rfq-status { display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;text-transform:uppercase; }
+    .rfq-status-DRAFT { background:#e5e7eb;color:#374151; }
+    .rfq-status-SENT { background:#FF6100;color:#fff; }
+    .rfq-status-QUOTED { background:#1d4ed8;color:#fff; }
+    .rfq-status-APPROVED { background:#15803d;color:#fff; }
+    .rfq-status-CONVERTED { background:#064e3b;color:#fff; }
+    .rfq-detail-overlay { display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);overflow-y:auto; }
+    .rfq-detail-overlay.open { display:flex;align-items:flex-start;justify-content:center;padding:20px; }
+    .rfq-detail-panel { background:var(--bg);border-radius:12px;width:100%;max-width:1100px;min-height:80vh;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:0;overflow:hidden; }
+    .rfq-section { border-top:1px solid var(--border);padding:20px; }
+    .rfq-section:first-child { border-top:none; }
+    .rfq-section-title { font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--orange);margin-bottom:12px; }
+    .quote-grid { overflow-x:auto; }
+    .quote-grid table { border-collapse:collapse;width:100%;font-size:12px; }
+    .quote-grid th { background:var(--surface);padding:7px 10px;text-align:left;font-weight:600;white-space:nowrap;border:1px solid var(--border); }
+    .quote-grid td { padding:6px 8px;border:1px solid var(--border);vertical-align:middle; }
+    .quote-selected { background:rgba(21,128,61,.12); }
+    .co-table { width:100%;border-collapse:collapse;font-size:12px; }
+    .co-table th { background:var(--surface);padding:6px 8px;text-align:left;font-weight:600;border:1px solid var(--border); }
+    .co-table td { padding:5px 6px;border:1px solid var(--border);vertical-align:middle; }
+    .co-table input { width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);font-size:11px; }
   </style>
 </head>
 <body>
@@ -615,6 +642,11 @@
     <a href="#" id="nav-panel-schedules">
       <svg class="sb-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 7h2v2H7V7zm0 4h2v2H7v-2zm0 4h2v2H7v-2zm10 2h-6v-2h6v2zm0-4h-6v-2h6v2zm0-4h-6V7h6v2z"/></svg>
       Panel Schedules
+    </a>
+    <a href="#" id="nav-rfqs">
+      <svg class="sb-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 16h8v2H8v-2zm0-4h8v2H8v-2zm0-4h5v2H8V8z"/></svg>
+      RFQs
+      <span class="sb-badge" id="badge-rfqs"></span>
     </a>
   </nav>
 
@@ -1208,6 +1240,7 @@
             <button class="proj-subtab" id="psub-proj-tools" data-tab="proj-tools">Tools <span class="proj-subcount" id="psub-proj-tools-count">0</span></button>
             <button class="proj-subtab" id="psub-wire" data-tab="wire">Wire Log</button>
             <button class="proj-subtab" id="psub-proj-archived" data-tab="proj-archived">Archived <span class="proj-subcount" id="psub-archived-count">0</span></button>
+            <button class="proj-subtab" id="psub-rfqs" data-tab="rfqs">RFQs <span class="proj-subcount" id="psub-rfqs-count">0</span></button>
           </div>
           <div id="ptab-panel-tickets"></div>
           <div id="ptab-panel-pos" style="display:none;"></div>
@@ -1216,7 +1249,53 @@
           <div id="ptab-panel-proj-tools" style="display:none;"></div>
           <div id="ptab-panel-wire" style="display:none;"></div>
           <div id="ptab-panel-proj-archived" style="display:none;"></div>
+          <div id="ptab-panel-rfqs" style="display:none;"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RFQ VIEW -->
+  <div id="rfq-view" style="display:none;">
+    <div class="card" style="max-width:1200px;margin:0 auto;">
+      <div class="card-header flex-between" style="flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:#FF6100;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 24 24" fill="white" style="width:20px;height:20px;"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 16h8v2H8v-2zm0-4h8v2H8v-2zm0-4h5v2H8V8z"/></svg>
+          </div>
+          <div>
+            <h2 style="margin:0;font-size:1.2rem;font-weight:700;">RFQ Management</h2>
+            <div style="font-size:12px;color:var(--gray-400);">Request for Quotation</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="rfq-search" placeholder="Search RFQ# or title…" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;width:200px;" oninput="filterRFQList()">
+          <select id="rfq-filter-status" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;" onchange="filterRFQList()">
+            <option value="">All Statuses</option>
+            <option value="DRAFT">Draft</option>
+            <option value="SENT">Sent</option>
+            <option value="QUOTED">Quoted</option>
+            <option value="APPROVED">Approved</option>
+            <option value="CONVERTED">Converted</option>
+          </select>
+          <select id="rfq-filter-project" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;" onchange="filterRFQList()">
+            <option value="">All Projects</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openNewRFQModal()">+ New RFQ</button>
+          <button class="btn btn-secondary btn-sm" onclick="openSuppliersModal()">Manage Suppliers</button>
+        </div>
+      </div>
+      <!-- Status tabs -->
+      <div style="display:flex;gap:6px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+        <button class="rfq-tab active" data-status="" onclick="setRFQTab(this,'')">All</button>
+        <button class="rfq-tab" data-status="DRAFT" onclick="setRFQTab(this,'DRAFT')">Draft</button>
+        <button class="rfq-tab" data-status="SENT" onclick="setRFQTab(this,'SENT')">Sent</button>
+        <button class="rfq-tab" data-status="QUOTED" onclick="setRFQTab(this,'QUOTED')">Quoted</button>
+        <button class="rfq-tab" data-status="APPROVED" onclick="setRFQTab(this,'APPROVED')">Approved</button>
+        <button class="rfq-tab" data-status="CONVERTED" onclick="setRFQTab(this,'CONVERTED')">Converted</button>
+      </div>
+      <div class="card-body">
+        <div id="rfq-list" style="display:grid;gap:12px;"></div>
       </div>
     </div>
   </div>
@@ -3247,11 +3326,13 @@ async function openProject(id) {
     renderProjectSafety(data.safety_forms||[]);
     renderProjectPanels(data.panel_schedules||[]);
     renderProjectArchived(data.archived_tickets||[], data.archived_pos||[], data.archived_safety||[], data.archived_panels||[]);
+    renderProjectRFQTab(data.rfqs||[], currentProjectId);
     $('psub-tickets-count').textContent = data.tickets.length;
     $('psub-pos-count').textContent = data.purchase_orders.length;
     $('psub-safety-count').textContent = (data.safety_forms||[]).length;
     $('psub-panels-count').textContent = (data.panel_schedules||[]).length;
     $('psub-archived-count').textContent = (data.archived_tickets||[]).length + (data.archived_pos||[]).length + (data.archived_safety||[]).length + (data.archived_panels||[]).length;
+    $('psub-rfqs-count').textContent = (data.rfqs||[]).length;
     updateProjectOutstandingSummary();
   } catch {
     $('ptab-panel-tickets').innerHTML = `<div class="empty-state"><h3>Error loading project</h3></div>`;
@@ -3766,6 +3847,7 @@ function setProjectSubTab(tab) {
   $('psub-proj-tools').classList.toggle('active', tab === 'proj-tools');
   $('psub-wire').classList.toggle('active', tab === 'wire');
   $('psub-proj-archived').classList.toggle('active', tab === 'proj-archived');
+  $('psub-rfqs').classList.toggle('active', tab === 'rfqs');
   $('ptab-panel-tickets').style.display = tab === 'tickets' ? 'block' : 'none';
   $('ptab-panel-pos').style.display = tab === 'pos' ? 'block' : 'none';
   $('ptab-panel-safety').style.display = tab === 'safety' ? 'block' : 'none';
@@ -3773,6 +3855,7 @@ function setProjectSubTab(tab) {
   $('ptab-panel-proj-tools').style.display = tab === 'proj-tools' ? 'block' : 'none';
   $('ptab-panel-wire').style.display = tab === 'wire' ? 'block' : 'none';
   $('ptab-panel-proj-archived').style.display = tab === 'proj-archived' ? 'block' : 'none';
+  $('ptab-panel-rfqs').style.display = tab === 'rfqs' ? 'block' : 'none';
   if (tab === 'proj-tools' && currentProjectId) renderProjectTools(currentProjectId);
   if (tab === 'wire' && currentProjectId) renderProjectWire(currentProjectId);
 }
@@ -3783,6 +3866,7 @@ $('psub-panels').addEventListener('click', () => setProjectSubTab('panels'));
 $('psub-proj-tools').addEventListener('click', () => setProjectSubTab('proj-tools'));
 $('psub-wire').addEventListener('click', () => setProjectSubTab('wire'));
 $('psub-proj-archived').addEventListener('click', () => setProjectSubTab('proj-archived'));
+$('psub-rfqs').addEventListener('click', () => setProjectSubTab('rfqs'));
 
 // ── Wire Tracking ─────────────────────────────────────────────────────────────
 const WIRE_PRESETS = [
@@ -4597,7 +4681,7 @@ $('hm-link-to').addEventListener('click',   e => { e.preventDefault(); showTimeO
 $('hm-card-timeoff').addEventListener('click', () => showTimeOffView());
 
 function hideAllSpecialViews() {
-  ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view','timeoff-view','safety-view','panel-schedules-view','fleet-reg-view','tools-view'].forEach(id => {
+  ['home-view','tt-dashboard','pos-view','projects-view','archive-section','timesheets-view','timeoff-view','safety-view','panel-schedules-view','fleet-reg-view','tools-view','rfq-view'].forEach(id => {
     const el = $(id); if (el) el.style.display = 'none';
   });
   closeFleetDetail();
@@ -8293,6 +8377,761 @@ async function loadAuditLog(ticketId) {
       logs.map(l => `<div class="audit-entry"><div class="audit-dot ${dotClass[l.action]||''}"></div><div class="audit-text"><strong>${actionLabel[l.action]||l.action}</strong> by <strong>${esc(l.user_name)}</strong> — ${fmtDateTime(l.created_at)}</div></div>`).join('');
   } catch { $('audit-entries').innerHTML = ''; }
 }
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     RFQ MODALS
+     ═══════════════════════════════════════════════════════ -->
+
+<!-- New RFQ Modal -->
+<div class="modal-overlay" id="new-rfq-modal">
+  <div class="modal" style="max-width:780px;width:95%;">
+    <div class="modal-header flex-between">
+      <h3 class="modal-title">New RFQ</h3>
+      <button class="modal-close" onclick="$('new-rfq-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" style="display:grid;gap:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Title / Description *</label>
+          <input type="text" id="nrfq-title" class="form-input" placeholder="e.g. Conduit & Fittings for Phase 2">
+        </div>
+        <div>
+          <label class="form-label">Project (optional)</label>
+          <select id="nrfq-project" class="form-input">
+            <option value="">— No Project —</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Attention</label>
+          <input type="text" id="nrfq-attention" class="form-input" placeholder="Contact name at supplier">
+        </div>
+        <div>
+          <label class="form-label">Due Date</label>
+          <input type="date" id="nrfq-due-date" class="form-input">
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Notes</label>
+        <textarea id="nrfq-notes" class="form-input" rows="2" placeholder="Any additional notes…"></textarea>
+      </div>
+      <div>
+        <div class="flex-between" style="margin-bottom:8px;">
+          <strong style="font-size:13px;">Line Items</strong>
+          <button class="btn btn-secondary btn-sm" onclick="addRFQLineRow()">+ Add Line Item</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;" id="nrfq-lines-table">
+            <thead>
+              <tr style="background:var(--surface);">
+                <th style="padding:6px 8px;border:1px solid var(--border);width:40px;">#</th>
+                <th style="padding:6px 8px;border:1px solid var(--border);width:70px;">Qty</th>
+                <th style="padding:6px 8px;border:1px solid var(--border);width:70px;">Unit</th>
+                <th style="padding:6px 8px;border:1px solid var(--border);width:120px;">P/N</th>
+                <th style="padding:6px 8px;border:1px solid var(--border);width:100px;">Size</th>
+                <th style="padding:6px 8px;border:1px solid var(--border);">Description</th>
+                <th style="padding:6px 8px;border:1px solid var(--border);width:32px;"></th>
+              </tr>
+            </thead>
+            <tbody id="nrfq-lines-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border);">
+      <button class="btn btn-secondary" onclick="$('new-rfq-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewRFQ()">Save as Draft</button>
+    </div>
+  </div>
+</div>
+
+<!-- Suppliers Management Modal -->
+<div class="modal-overlay" id="suppliers-modal">
+  <div class="modal" style="max-width:700px;width:95%;">
+    <div class="modal-header flex-between">
+      <h3 class="modal-title">Manage Suppliers</h3>
+      <button class="modal-close" onclick="$('suppliers-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" onclick="openAddSupplierForm()">+ Add Supplier</button>
+      </div>
+      <div id="add-supplier-form" style="display:none;background:var(--surface);border-radius:8px;padding:14px;margin-bottom:14px;border:1px solid var(--border);">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div><label class="form-label">Name *</label><input type="text" id="sup-name" class="form-input" placeholder="Supplier name"></div>
+          <div><label class="form-label">Contact</label><input type="text" id="sup-contact" class="form-input" placeholder="Contact person"></div>
+          <div><label class="form-label">Email</label><input type="email" id="sup-email" class="form-input" placeholder="email@example.com"></div>
+          <div><label class="form-label">Phone</label><input type="text" id="sup-phone" class="form-input" placeholder="780-xxx-xxxx"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="$('add-supplier-form').style.display='none'">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveSupplier()">Save Supplier</button>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:var(--surface);">
+          <th style="padding:8px;border:1px solid var(--border);text-align:left;">Name</th>
+          <th style="padding:8px;border:1px solid var(--border);text-align:left;">Contact</th>
+          <th style="padding:8px;border:1px solid var(--border);text-align:left;">Email</th>
+          <th style="padding:8px;border:1px solid var(--border);text-align:left;">Phone</th>
+          <th style="padding:8px;border:1px solid var(--border);width:80px;"></th>
+        </tr></thead>
+        <tbody id="suppliers-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- RFQ Detail Overlay -->
+<div class="rfq-detail-overlay" id="rfq-detail-overlay">
+  <div class="rfq-detail-panel">
+    <div style="background:#0C0C0C;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="rfqd-number" style="font-size:1.1rem;font-weight:700;color:#FF6100;"></span>
+        <span id="rfqd-status-badge" class="rfq-status"></span>
+      </div>
+      <button onclick="closeRFQDetail()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;">✕</button>
+    </div>
+    <div style="padding:0;" id="rfq-detail-body"></div>
+  </div>
+</div>
+
+<!-- Add Supplier to RFQ Modal -->
+<div class="modal-overlay" id="rfq-add-supplier-modal">
+  <div class="modal" style="max-width:500px;width:95%;">
+    <div class="modal-header flex-between">
+      <h3 class="modal-title">Add Supplier to RFQ</h3>
+      <button class="modal-close" onclick="$('rfq-add-supplier-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label">Select Supplier</label>
+      <select id="rfq-sup-select" class="form-input" style="margin-bottom:10px;"></select>
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" id="rfq-sup-notes" class="form-input" placeholder="Any notes for this supplier…">
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border);">
+      <button class="btn btn-secondary" onclick="$('rfq-add-supplier-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="addSupplierToRFQ()">Add Supplier</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// RFQ MODULE
+// ═══════════════════════════════════════════════════════
+
+$('nav-rfqs').addEventListener('click', e => { e.preventDefault(); showRFQView(); });
+
+let _rfqAll = [];
+let _rfqTabStatus = '';
+let _currentRFQId = null;
+let _rfqSuppliers = [];
+let _allSuppliers = [];
+let _rfqProjects = [];
+
+function showRFQView() {
+  hideAllSpecialViews();
+  $('rfq-view').style.display = 'block';
+  setNavActive('nav-rfqs');
+  loadRFQs();
+  loadRFQProjects();
+}
+
+async function loadRFQs() {
+  try {
+    const res = await fetch('/api/rfqs');
+    if (!res.ok) return;
+    _rfqAll = await res.json();
+    renderRFQList();
+  } catch(e) { console.error(e); }
+}
+
+async function loadRFQProjects() {
+  try {
+    const res = await fetch('/api/project-folders/all?status=active');
+    if (!res.ok) return;
+    _rfqProjects = await res.json();
+    const sel = $('rfq-filter-project');
+    sel.innerHTML = '<option value="">All Projects</option>' +
+      _rfqProjects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    // Also populate new RFQ modal project dropdown
+    const nsel = $('nrfq-project');
+    nsel.innerHTML = '<option value="">— No Project —</option>' +
+      _rfqProjects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  } catch(e) {}
+}
+
+function setRFQTab(btn, status) {
+  document.querySelectorAll('.rfq-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _rfqTabStatus = status;
+  renderRFQList();
+}
+
+function filterRFQList() { renderRFQList(); }
+
+function renderRFQList() {
+  const search = ($('rfq-search')?.value||'').toLowerCase();
+  const projId = $('rfq-filter-project')?.value||'';
+  let list = _rfqAll.filter(r => {
+    if (_rfqTabStatus && r.status !== _rfqTabStatus) return false;
+    if (projId && String(r.project_id) !== projId) return false;
+    if (search && !r.rfq_number.toLowerCase().includes(search) && !r.title.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const today = new Date().toISOString().slice(0,10);
+  $('rfq-list').innerHTML = list.length ? list.map(r => {
+    const overdue = r.due_date && r.due_date < today && r.status !== 'APPROVED' && r.status !== 'CONVERTED';
+    return `<div class="rfq-card" onclick="openRFQDetail(${r.id})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <div>
+          <span style="font-size:15px;font-weight:700;color:var(--orange);">${esc(r.rfq_number)}</span>
+          <span class="rfq-status rfq-status-${r.status}" style="margin-left:10px;">${r.status}</span>
+        </div>
+        <div style="font-size:12px;color:var(--gray-400);">
+          ${r.due_date ? `<span style="${overdue?'color:#dc2626;font-weight:700;':''}">Due: ${r.due_date}</span>` : ''}
+        </div>
+      </div>
+      <div style="margin-top:6px;font-size:14px;font-weight:600;">${esc(r.title)}</div>
+      ${r.project_name ? `<div style="font-size:12px;color:var(--gray-400);margin-top:2px;">📁 ${esc(r.project_name)}</div>` : ''}
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--gray-400);">
+        <span>${r.line_item_count} line item${r.line_item_count!=1?'s':''}</span>
+        <span>${r.supplier_count} supplier${r.supplier_count!=1?'s':''}</span>
+        <span>By ${esc(r.created_by_name||'—')} · ${r.created_at?r.created_at.slice(0,10):''}</span>
+      </div>
+    </div>`;
+  }).join('') : `<div style="padding:40px;text-align:center;color:var(--gray-400);">No RFQs found.</div>`;
+}
+
+// ── New RFQ Modal ──
+let _nrfqRowCount = 0;
+
+function openNewRFQModal(prefillProjectId, prefillProjectName) {
+  _nrfqRowCount = 0;
+  $('nrfq-title').value = '';
+  $('nrfq-attention').value = '';
+  $('nrfq-due-date').value = '';
+  $('nrfq-notes').value = '';
+  $('nrfq-lines-body').innerHTML = '';
+  if (prefillProjectId) $('nrfq-project').value = prefillProjectId;
+  else $('nrfq-project').value = '';
+  addRFQLineRow();
+  $('new-rfq-modal').classList.add('open');
+}
+
+function addRFQLineRow() {
+  _nrfqRowCount++;
+  const n = _nrfqRowCount;
+  const tr = document.createElement('tr');
+  tr.id = `nrfq-row-${n}`;
+  tr.innerHTML = `
+    <td style="padding:4px 6px;border:1px solid var(--border);text-align:center;">${n}</td>
+    <td style="padding:4px 6px;border:1px solid var(--border);"><input type="number" class="form-input" style="padding:3px 5px;font-size:12px;" data-field="qty" placeholder="1" min="0" step="any"></td>
+    <td style="padding:4px 6px;border:1px solid var(--border);"><select class="form-input" style="padding:3px 5px;font-size:12px;" data-field="unit"><option>EA</option><option>FT</option><option>M</option><option>LB</option><option>KG</option><option>LOT</option><option>LS</option></select></td>
+    <td style="padding:4px 6px;border:1px solid var(--border);"><input type="text" class="form-input" style="padding:3px 5px;font-size:12px;" data-field="part_number" placeholder="P/N"></td>
+    <td style="padding:4px 6px;border:1px solid var(--border);"><input type="text" class="form-input" style="padding:3px 5px;font-size:12px;" data-field="size" placeholder='1"'></td>
+    <td style="padding:4px 6px;border:1px solid var(--border);"><input type="text" class="form-input" style="padding:3px 5px;font-size:12px;" data-field="description" placeholder="Description"></td>
+    <td style="padding:4px 6px;border:1px solid var(--border);text-align:center;"><button onclick="$('nrfq-row-${n}').remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:14px;">✕</button></td>
+  `;
+  $('nrfq-lines-body').appendChild(tr);
+}
+
+async function saveNewRFQ() {
+  const title = $('nrfq-title').value.trim();
+  if (!title) { alert('Please enter a title.'); return; }
+  const projSel = $('nrfq-project');
+  const project_id = projSel.value ? parseInt(projSel.value) : null;
+  const project_name = projSel.value ? projSel.options[projSel.selectedIndex].text : '';
+  const line_items = [];
+  $('nrfq-lines-body').querySelectorAll('tr').forEach(tr => {
+    line_items.push({
+      qty: parseFloat(tr.querySelector('[data-field="qty"]')?.value)||0,
+      unit: tr.querySelector('[data-field="unit"]')?.value||'EA',
+      part_number: tr.querySelector('[data-field="part_number"]')?.value||'',
+      size: tr.querySelector('[data-field="size"]')?.value||'',
+      description: tr.querySelector('[data-field="description"]')?.value||'',
+    });
+  });
+  try {
+    const res = await fetch('/api/rfqs', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ title, project_id, project_name, attention:$('nrfq-attention').value, due_date:$('nrfq-due-date').value, notes:$('nrfq-notes').value, line_items })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error||'Failed to create RFQ'); return; }
+    $('new-rfq-modal').classList.remove('open');
+    await loadRFQs();
+    openRFQDetail(data.id);
+  } catch(e) { alert('Error: '+e.message); }
+}
+
+// ── Suppliers ──
+async function loadAllSuppliers() {
+  const res = await fetch('/api/suppliers');
+  if (res.ok) _allSuppliers = await res.json();
+}
+
+function openSuppliersModal() {
+  $('add-supplier-form').style.display = 'none';
+  $('suppliers-modal').classList.add('open');
+  renderSuppliersTable();
+  loadAllSuppliers();
+}
+
+async function renderSuppliersTable() {
+  await loadAllSuppliers();
+  $('suppliers-tbody').innerHTML = _allSuppliers.length
+    ? _allSuppliers.map(s => `<tr>
+        <td style="padding:8px;border:1px solid var(--border);">${esc(s.name)}</td>
+        <td style="padding:8px;border:1px solid var(--border);">${esc(s.contact)}</td>
+        <td style="padding:8px;border:1px solid var(--border);">${esc(s.email)}</td>
+        <td style="padding:8px;border:1px solid var(--border);">${esc(s.phone)}</td>
+        <td style="padding:8px;border:1px solid var(--border);text-align:center;">
+          <button class="btn btn-ghost btn-sm" style="color:#dc2626;" onclick="deleteSupplier(${s.id},'${esc(s.name)}')">Delete</button>
+        </td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--gray-400);">No suppliers yet.</td></tr>`;
+}
+
+function openAddSupplierForm() {
+  ['sup-name','sup-contact','sup-email','sup-phone'].forEach(id => $(id).value='');
+  $('add-supplier-form').style.display = 'block';
+}
+
+async function saveSupplier() {
+  const name = $('sup-name').value.trim();
+  if (!name) { alert('Supplier name is required.'); return; }
+  const res = await fetch('/api/suppliers', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, contact:$('sup-contact').value, email:$('sup-email').value, phone:$('sup-phone').value })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error||'Failed to save supplier'); return; }
+  $('add-supplier-form').style.display = 'none';
+  renderSuppliersTable();
+}
+
+async function deleteSupplier(id, name) {
+  if (!confirm(`Delete supplier "${name}"?`)) return;
+  const res = await fetch(`/api/suppliers/${id}`, { method:'DELETE' });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error||'Cannot delete supplier'); return; }
+  renderSuppliersTable();
+}
+
+// ── RFQ Detail ──
+async function openRFQDetail(id) {
+  _currentRFQId = id;
+  $('rfq-detail-overlay').classList.add('open');
+  $('rfq-detail-body').innerHTML = `<div style="padding:40px;text-align:center;color:var(--gray-400);">Loading…</div>`;
+  await loadAllSuppliers();
+  await renderRFQDetail(id);
+}
+
+function closeRFQDetail() {
+  $('rfq-detail-overlay').classList.remove('open');
+  _currentRFQId = null;
+  loadRFQs();
+}
+
+async function renderRFQDetail(id) {
+  try {
+    const res = await fetch(`/api/rfqs/${id}`);
+    if (!res.ok) { $('rfq-detail-body').innerHTML = `<div style="padding:40px;color:#dc2626;">Failed to load RFQ.</div>`; return; }
+    const { rfq, line_items, rfq_suppliers, quotes } = await res.json();
+    _rfqSuppliers = rfq_suppliers;
+
+    $('rfqd-number').textContent = rfq.rfq_number;
+    $('rfqd-status-badge').className = `rfq-status rfq-status-${rfq.status}`;
+    $('rfqd-status-badge').textContent = rfq.status;
+
+    const isDraft = rfq.status === 'DRAFT';
+    const isSentOrLater = ['SENT','QUOTED','APPROVED','CONVERTED'].includes(rfq.status);
+    const isQuoted = ['QUOTED','APPROVED','CONVERTED'].includes(rfq.status);
+    const isApprovedOrConverted = ['APPROVED','CONVERTED'].includes(rfq.status);
+
+    // Build quote map: lineItemId -> supplierId -> quote
+    const quoteMap = {};
+    quotes.forEach(q => {
+      if (!quoteMap[q.rfq_line_item_id]) quoteMap[q.rfq_line_item_id] = {};
+      quoteMap[q.rfq_line_item_id][q.rfq_supplier_id] = q;
+    });
+
+    let html = '';
+
+    // Section 1: RFQ Info
+    html += `<div class="rfq-section">
+      <div class="rfq-section-title">RFQ Information</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;font-size:13px;">
+        <div><div style="color:var(--gray-400);font-size:11px;margin-bottom:2px;">PROJECT</div><div>${esc(rfq.project_name||'—')}</div></div>
+        <div><div style="color:var(--gray-400);font-size:11px;margin-bottom:2px;">TITLE</div><div>${esc(rfq.title)}</div></div>
+        <div><div style="color:var(--gray-400);font-size:11px;margin-bottom:2px;">ATTENTION</div><div>${esc(rfq.attention||'—')}</div></div>
+        <div><div style="color:var(--gray-400);font-size:11px;margin-bottom:2px;">DUE DATE</div><div>${rfq.due_date||'—'}</div></div>
+        <div><div style="color:var(--gray-400);font-size:11px;margin-bottom:2px;">CREATED BY</div><div>${esc(rfq.created_by_name||'—')}</div></div>
+        ${rfq.approved_by ? `<div><div style="color:var(--gray-400);font-size:11px;margin-bottom:2px;">APPROVED BY</div><div>${esc(rfq.approved_by)}</div></div>` : ''}
+      </div>
+      ${rfq.notes ? `<div style="margin-top:10px;font-size:13px;color:var(--gray-400);">${esc(rfq.notes)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        ${isDraft ? `<button class="btn btn-primary btn-sm" onclick="markRFQSent(${id})">Mark as Sent</button>` : ''}
+        ${rfq.status==='SENT' ? `<button class="btn btn-secondary btn-sm" onclick="markRFQQuoted(${id})">Mark as Quoted</button>` : ''}
+        ${rfq.status==='QUOTED' ? `<button class="btn btn-primary btn-sm" onclick="approveRFQ(${id})">Approve RFQ</button>` : ''}
+        ${isApprovedOrConverted ? `<button class="btn btn-secondary btn-sm" onclick="createChangeOrder(${id})">Create / View Change Order</button>` : ''}
+      </div>
+    </div>`;
+
+    // Section 2: Line Items
+    html += `<div class="rfq-section">
+      <div class="rfq-section-title">Line Items</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:var(--surface);">
+            <th style="padding:6px 8px;border:1px solid var(--border);width:40px;">#</th>
+            <th style="padding:6px 8px;border:1px solid var(--border);width:70px;">Qty</th>
+            <th style="padding:6px 8px;border:1px solid var(--border);width:60px;">Unit</th>
+            <th style="padding:6px 8px;border:1px solid var(--border);width:110px;">P/N</th>
+            <th style="padding:6px 8px;border:1px solid var(--border);width:90px;">Size</th>
+            <th style="padding:6px 8px;border:1px solid var(--border);">Description</th>
+            ${isDraft ? `<th style="padding:6px 8px;border:1px solid var(--border);width:32px;"></th>` : ''}
+          </tr></thead>
+          <tbody>
+            ${line_items.map(li => `<tr>
+              <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;">${li.item_num}</td>
+              <td style="padding:5px 8px;border:1px solid var(--border);">${li.qty}</td>
+              <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.unit)}</td>
+              <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.part_number)}</td>
+              <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.size)}</td>
+              <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.description)}</td>
+              ${isDraft ? `<td style="padding:5px 8px;border:1px solid var(--border);text-align:center;"><button onclick="deleteRFQLineItem(${li.id},${id})" style="background:none;border:none;color:#dc2626;cursor:pointer;">✕</button></td>` : ''}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${isDraft ? `<button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="addLineItemToRFQ(${id})">+ Add Line Item</button>` : ''}
+    </div>`;
+
+    // Section 3: Suppliers
+    html += `<div class="rfq-section">
+      <div class="rfq-section-title">Suppliers</div>
+      ${rfq_suppliers.length ? rfq_suppliers.map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <strong style="font-size:13px;">${esc(s.supplier_name)}</strong>
+            ${s.supplier_email ? `<span style="font-size:12px;color:var(--gray-400);margin-left:10px;">${esc(s.supplier_email)}</span>` : ''}
+            ${s.supplier_phone ? `<span style="font-size:12px;color:var(--gray-400);margin-left:10px;">${esc(s.supplier_phone)}</span>` : ''}
+            ${s.sent_at ? `<span style="font-size:11px;color:var(--green);margin-left:10px;">Sent ${s.sent_at.slice(0,10)}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;">
+            <a href="/api/rfqs/${id}/export?supplier_id=${s.id}" class="btn btn-secondary btn-sm">⬇ Export XLS</a>
+          </div>
+        </div>`).join('') : `<div style="color:var(--gray-400);font-size:13px;">No suppliers added yet.</div>`}
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="openAddSupplierToRFQ(${id})">+ Add Supplier</button>
+        ${rfq_suppliers.length ? `<a href="/api/rfqs/${id}/export" class="btn btn-ghost btn-sm">⬇ Export (No Supplier)</a>` : ''}
+      </div>
+    </div>`;
+
+    // Section 4: Quote Entry (SENT or QUOTED)
+    if (isSentOrLater && line_items.length && rfq_suppliers.length) {
+      html += `<div class="rfq-section">
+        <div class="rfq-section-title">${isQuoted ? 'Quote Comparison' : 'Quote Entry'}</div>
+        <div class="quote-grid">
+          <table>
+            <thead>
+              <tr>
+                <th style="min-width:200px;">Description</th>
+                <th>Qty</th>
+                ${rfq_suppliers.map(s => `<th style="min-width:150px;">${esc(s.supplier_name)}</th>`).join('')}
+                ${!isQuoted ? '<th>Action</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${line_items.map(li => {
+                const liQuotes = rfq_suppliers.map(s => quoteMap[li.id]?.[s.id] || null);
+                const prices = liQuotes.filter(q=>q&&q.unit_price>0).map(q=>Number(q.unit_price));
+                const minPrice = prices.length ? Math.min(...prices) : null;
+                return `<tr>
+                  <td>${esc(li.description)}</td>
+                  <td>${li.qty} ${esc(li.unit)}</td>
+                  ${rfq_suppliers.map((s, si) => {
+                    const q = liQuotes[si];
+                    const isMin = q && minPrice && Number(q.unit_price)===minPrice;
+                    const isSel = q && q.is_selected;
+                    const bg = isSel ? 'background:rgba(21,128,61,.15);' : (isMin&&!isQuoted ? 'background:rgba(255,97,0,.08);' : '');
+                    if (!isQuoted) {
+                      return `<td style="${bg}">
+                        <input type="number" min="0" step="0.01" placeholder="Unit price"
+                          value="${q ? q.unit_price : ''}"
+                          style="width:90px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);font-size:11px;"
+                          data-li="${li.id}" data-sup="${s.id}"
+                          onchange="saveQuoteCell(${id},this)">
+                        ${isMin ? '<span style="font-size:10px;color:var(--orange);">★ Low</span>' : ''}
+                      </td>`;
+                    } else {
+                      return `<td class="${isSel?'quote-selected':''}" style="${bg}">
+                        ${q ? `<div style="font-weight:${isSel?'700':'400'};font-size:13px;">$${Number(q.unit_price).toFixed(2)}</div>
+                               ${isSel ? '<div style="font-size:10px;color:#15803d;">✓ Selected</div>' : ''}
+                               ${isMin&&!isSel ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 6px;" onclick="selectQuote(${id},${li.id},${s.id})">Select</button>` : ''}` : '<span style="color:var(--gray-400);font-size:11px;">—</span>'}
+                      </td>`;
+                    }
+                  }).join('')}
+                  ${!isQuoted ? `<td><button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectLowestQuote(${id},${li.id})">Auto-Select Low</button></td>` : ''}
+                </tr>`;
+              }).join('')}
+              ${isQuoted ? `<tr style="font-weight:700;background:var(--surface);">
+                <td colspan="2">Supplier Total</td>
+                ${rfq_suppliers.map(s => {
+                  let total = 0;
+                  line_items.forEach(li => {
+                    const q = quoteMap[li.id]?.[s.id];
+                    if (q && q.is_selected) total += Number(q.unit_price) * Number(li.qty);
+                  });
+                  return `<td>$${total.toFixed(2)}</td>`;
+                }).join('')}
+              </tr>` : ''}
+            </tbody>
+          </table>
+        </div>
+        ${!isQuoted ? `<div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="markRFQQuoted(${id})">Mark as Quoted</button>
+        </div>` : ''}
+      </div>`;
+    }
+
+    // Section 5: Change Order (APPROVED or CONVERTED)
+    if (isApprovedOrConverted) {
+      html += `<div class="rfq-section" id="co-section-${id}">
+        <div class="rfq-section-title">Change Order</div>
+        <div id="co-content-${id}"><button class="btn btn-primary btn-sm" onclick="loadCOSection(${id})">Load Change Order</button></div>
+      </div>`;
+    }
+
+    $('rfq-detail-body').innerHTML = html;
+  } catch(e) {
+    $('rfq-detail-body').innerHTML = `<div style="padding:40px;color:#dc2626;">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+async function saveQuoteCell(rfqId, input) {
+  const liId = parseInt(input.dataset.li);
+  const supId = parseInt(input.dataset.sup);
+  const price = parseFloat(input.value)||0;
+  await fetch(`/api/rfqs/${rfqId}/quotes`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify([{ rfq_line_item_id: liId, rfq_supplier_id: supId, unit_price: price, lead_time:'', notes:'' }])
+  });
+}
+
+async function selectQuote(rfqId, liId, supId) {
+  await fetch(`/api/rfqs/${rfqId}/select-quote`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ rfq_line_item_id: liId, rfq_supplier_id: supId })
+  });
+  await renderRFQDetail(rfqId);
+}
+
+async function selectLowestQuote(rfqId, liId) {
+  // Collect all cells for this line item and find min
+  let minPrice = Infinity, minSupId = null;
+  document.querySelectorAll(`input[data-li="${liId}"]`).forEach(inp => {
+    const v = parseFloat(inp.value);
+    if (v > 0 && v < minPrice) { minPrice = v; minSupId = parseInt(inp.dataset.sup); }
+  });
+  if (!minSupId) return;
+  await selectQuote(rfqId, liId, minSupId);
+}
+
+async function markRFQSent(id) {
+  await fetch(`/api/rfqs/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status:'SENT' }) });
+  await renderRFQDetail(id);
+  updateRFQBadge(id, 'SENT');
+}
+
+async function markRFQQuoted(id) {
+  await fetch(`/api/rfqs/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status:'QUOTED' }) });
+  await renderRFQDetail(id);
+  updateRFQBadge(id, 'QUOTED');
+}
+
+async function approveRFQ(id) {
+  if (!confirm('Approve this RFQ?')) return;
+  const res = await fetch(`/api/rfqs/${id}/approve`, { method:'POST' });
+  if (!res.ok) { const d=await res.json(); alert(d.error||'Failed'); return; }
+  await renderRFQDetail(id);
+  updateRFQBadge(id, 'APPROVED');
+}
+
+function updateRFQBadge(id, status) {
+  // Update card in list if visible
+  _rfqAll = _rfqAll.map(r => r.id===id ? {...r, status} : r);
+  renderRFQList();
+}
+
+async function deleteRFQLineItem(liId, rfqId) {
+  if (!confirm('Delete this line item?')) return;
+  await fetch(`/api/rfq-line-items/${liId}`, { method:'DELETE' });
+  await renderRFQDetail(rfqId);
+}
+
+async function addLineItemToRFQ(rfqId) {
+  const desc = prompt('Description for new line item:');
+  if (!desc) return;
+  await fetch(`/api/rfqs/${rfqId}/line-items`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ description: desc, qty:1 })
+  });
+  await renderRFQDetail(rfqId);
+}
+
+function openAddSupplierToRFQ(rfqId) {
+  $('rfq-sup-select').innerHTML = _allSuppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  $('rfq-sup-notes').value = '';
+  $('rfq-add-supplier-modal').classList.add('open');
+  $('rfq-add-supplier-modal').dataset.rfqId = rfqId;
+}
+
+async function addSupplierToRFQ() {
+  const rfqId = $('rfq-add-supplier-modal').dataset.rfqId;
+  const supplier_id = parseInt($('rfq-sup-select').value);
+  const notes = $('rfq-sup-notes').value;
+  const res = await fetch(`/api/rfqs/${rfqId}/suppliers`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ supplier_id, notes })
+  });
+  if (!res.ok) { const d=await res.json(); alert(d.error||'Failed'); return; }
+  $('rfq-add-supplier-modal').classList.remove('open');
+  await renderRFQDetail(rfqId);
+}
+
+// ── Change Orders ──
+async function createChangeOrder(rfqId) {
+  const res = await fetch(`/api/rfqs/${rfqId}/change-order`, { method:'POST' });
+  const d = await res.json();
+  if (!res.ok && res.status !== 409) { alert(d.error||'Failed'); return; }
+  await loadCOSection(rfqId);
+}
+
+async function loadCOSection(rfqId) {
+  const el = $(`co-content-${rfqId}`);
+  if (!el) return;
+  try {
+    const res = await fetch(`/api/rfqs/${rfqId}/change-order`);
+    if (!res.ok) {
+      el.innerHTML = `<button class="btn btn-primary btn-sm" onclick="createChangeOrder(${rfqId})">Create Change Order</button>`;
+      return;
+    }
+    const { co, line_items } = await res.json();
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <div style="font-size:13px;"><strong>${esc(co.co_number)}</strong> — Status: <strong>${co.status}</strong></div>
+        <div style="display:flex;gap:8px;">
+          <a href="/api/change-orders/${co.id}/export" class="btn btn-secondary btn-sm">⬇ Export Change Order</a>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="co-table">
+          <thead><tr>
+            <th>Description</th><th>Qty</th><th>Unit</th>
+            <th>Unit Cost</th><th>Markup %</th><th>Mat. Sell</th>
+            <th>Labour Hrs</th><th>Labour Rate</th><th>Labour Total</th><th>Line Total</th>
+          </tr></thead>
+          <tbody id="co-tbody-${co.id}">
+            ${line_items.map((li,i) => renderCORow(li, co.id)).join('')}
+          </tbody>
+          <tfoot id="co-tfoot-${co.id}"></tfoot>
+        </table>
+      </div>`;
+    recalcCOTotals(co.id, line_items);
+  } catch(e) { el.innerHTML = `<div style="color:#dc2626;">${esc(e.message)}</div>`; }
+}
+
+function renderCORow(li, coId) {
+  const matSell = Number(li.qty) * Number(li.unit_cost) * (1 + Number(li.markup_pct)/100);
+  const labTotal = Number(li.labour_hours) * Number(li.labour_rate);
+  const lineTotal = matSell + labTotal;
+  return `<tr data-li-id="${li.id}">
+    <td><input value="${esc(li.description)}" onchange="saveCOLine(${coId},${li.id},this,'description')"></td>
+    <td><input type="number" value="${li.qty}" style="width:60px;" onchange="saveCOLine(${coId},${li.id},this,'qty')"></td>
+    <td><input value="${esc(li.unit)}" style="width:50px;" onchange="saveCOLine(${coId},${li.id},this,'unit')"></td>
+    <td><input type="number" value="${Number(li.unit_cost).toFixed(4)}" style="width:80px;" onchange="saveCOLine(${coId},${li.id},this,'unit_cost')"></td>
+    <td><input type="number" value="${li.markup_pct}" style="width:60px;" onchange="saveCOLine(${coId},${li.id},this,'markup_pct')"></td>
+    <td style="font-weight:600;" id="co-matsell-${li.id}">$${matSell.toFixed(2)}</td>
+    <td><input type="number" value="${li.labour_hours}" style="width:60px;" onchange="saveCOLine(${coId},${li.id},this,'labour_hours')"></td>
+    <td><input type="number" value="${li.labour_rate}" style="width:70px;" onchange="saveCOLine(${coId},${li.id},this,'labour_rate')"></td>
+    <td style="font-weight:600;" id="co-labtotal-${li.id}">$${labTotal.toFixed(2)}</td>
+    <td style="font-weight:700;" id="co-linetotal-${li.id}">$${lineTotal.toFixed(2)}</td>
+  </tr>`;
+}
+
+function recalcCOTotals(coId, line_items) {
+  let grand = 0;
+  line_items.forEach(li => {
+    const row = document.querySelector(`[data-li-id="${li.id}"]`);
+    if (!row) return;
+    const qty = parseFloat(row.querySelector('input:nth-child(1)') ? row.querySelectorAll('input')[1]?.value : li.qty)||0;
+    const uc = parseFloat(row.querySelectorAll('input')[3]?.value)||0;
+    const mk = parseFloat(row.querySelectorAll('input')[4]?.value)||0;
+    const lh = parseFloat(row.querySelectorAll('input')[5]?.value)||0;
+    const lr = parseFloat(row.querySelectorAll('input')[6]?.value)||0;
+    const mat = qty * uc * (1+mk/100);
+    const lab = lh * lr;
+    const tot = mat + lab;
+    grand += tot;
+  });
+  const tfoot = $(`co-tfoot-${coId}`);
+  if (tfoot) tfoot.innerHTML = `<tr style="font-weight:700;background:var(--surface);"><td colspan="9" style="text-align:right;padding:8px;">Grand Total:</td><td style="padding:8px;">$${grand.toFixed(2)}</td></tr>`;
+}
+
+async function saveCOLine(coId, liId, input, field) {
+  const row = input.closest('tr');
+  // Recalc
+  const inputs = row.querySelectorAll('input');
+  const qty = parseFloat(inputs[1]?.value)||0;
+  const uc = parseFloat(inputs[3]?.value)||0;
+  const mk = parseFloat(inputs[4]?.value)||0;
+  const lh = parseFloat(inputs[5]?.value)||0;
+  const lr = parseFloat(inputs[6]?.value)||0;
+  const mat = qty * uc * (1+mk/100);
+  const lab = lh * lr;
+  const tot = mat + lab;
+  const ms = $(`co-matsell-${liId}`); if(ms) ms.textContent = '$'+mat.toFixed(2);
+  const lt = $(`co-labtotal-${liId}`); if(lt) lt.textContent = '$'+lab.toFixed(2);
+  const ltt = $(`co-linetotal-${liId}`); if(ltt) ltt.textContent = '$'+tot.toFixed(2);
+  const body = {};
+  body[field] = input.value;
+  await fetch(`/api/co-line-items/${liId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+}
+
+// ── Project detail RFQ subtab ──
+// This is called from the existing project folder load logic
+function renderProjectRFQTab(rfqs, projectId) {
+  const el = $('ptab-panel-rfqs');
+  if (!el) return;
+  el.innerHTML = `<div style="padding:12px 0;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button class="btn btn-primary btn-sm" onclick="openNewRFQModalForProject(${projectId})">+ Create RFQ</button>
+    </div>
+    ${rfqs && rfqs.length ? rfqs.map(r => `
+      <div class="rfq-card" onclick="openRFQDetail(${r.id})" style="margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-weight:700;color:var(--orange);">${esc(r.rfq_number)}</span>
+          <span class="rfq-status rfq-status-${r.status}">${r.status}</span>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-top:4px;">${esc(r.title)}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px;">${r.created_at?r.created_at.slice(0,10):''}</div>
+      </div>`).join('') : `<div style="padding:20px;text-align:center;color:var(--gray-400);">No RFQs for this project.</div>`}
+  </div>`;
+}
+
+function openNewRFQModalForProject(projectId) {
+  if (!_rfqProjects.length) {
+    // load project name from DOM
+    const projName = document.querySelector('#project-detail h2,#project-detail .proj-name')?.textContent || '';
+    $('nrfq-project').innerHTML = `<option value="${projectId}">${esc(projName)}</option>`;
+  }
+  openNewRFQModal(projectId);
+}
+
 </script>
 
 </body>

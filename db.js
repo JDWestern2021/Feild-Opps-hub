@@ -540,6 +540,119 @@ async function initSchema() {
   // Store wire label in each entry so the activity log survives wire type deletion
   await pool.query(`ALTER TABLE project_wire_entries ADD COLUMN IF NOT EXISTS wire_label TEXT NOT NULL DEFAULT ''`);
 
+  // ─── RFQ MODULE ───────────────────────────────────────────────────────────
+  await pool.query(`CREATE TABLE IF NOT EXISTS suppliers (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    contact    TEXT NOT NULL DEFAULT '',
+    email      TEXT NOT NULL DEFAULT '',
+    phone      TEXT NOT NULL DEFAULT '',
+    notes      TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_sequence (
+    year     INTEGER PRIMARY KEY,
+    last_seq INTEGER DEFAULT 0
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfqs (
+    id              SERIAL PRIMARY KEY,
+    rfq_number      TEXT UNIQUE NOT NULL,
+    project_id      INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    project_name    TEXT NOT NULL DEFAULT '',
+    title           TEXT NOT NULL DEFAULT '',
+    attention       TEXT NOT NULL DEFAULT '',
+    due_date        TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'DRAFT',
+    created_by_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_by_name TEXT NOT NULL DEFAULT '',
+    approved_by     TEXT NOT NULL DEFAULT '',
+    approved_at     TEXT,
+    converted_at    TEXT,
+    created_at      TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
+    updated_at      TEXT
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_line_items (
+    id          SERIAL PRIMARY KEY,
+    rfq_id      INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE CASCADE,
+    item_num    INTEGER NOT NULL DEFAULT 0,
+    qty         NUMERIC(12,3) NOT NULL DEFAULT 0,
+    unit        TEXT NOT NULL DEFAULT 'EA',
+    part_number TEXT NOT NULL DEFAULT '',
+    size        TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    sort_order  INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_suppliers (
+    id          SERIAL PRIMARY KEY,
+    rfq_id      INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE CASCADE,
+    supplier_id INTEGER NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
+    sent_at     TEXT,
+    notes       TEXT NOT NULL DEFAULT ''
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_quotes (
+    id                SERIAL PRIMARY KEY,
+    rfq_id            INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE CASCADE,
+    rfq_line_item_id  INTEGER NOT NULL REFERENCES rfq_line_items(id) ON DELETE CASCADE,
+    rfq_supplier_id   INTEGER NOT NULL REFERENCES rfq_suppliers(id) ON DELETE CASCADE,
+    unit_price        NUMERIC(12,4) NOT NULL DEFAULT 0,
+    lead_time         TEXT NOT NULL DEFAULT '',
+    notes             TEXT NOT NULL DEFAULT '',
+    is_selected       INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
+    updated_at        TEXT
+  )`);
+
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS rfq_quotes_line_supplier_uidx
+    ON rfq_quotes(rfq_line_item_id, rfq_supplier_id)`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_pos (
+    id              SERIAL PRIMARY KEY,
+    rfq_id          INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE RESTRICT,
+    po_id           INTEGER REFERENCES purchase_orders(id) ON DELETE SET NULL,
+    po_number       TEXT NOT NULL DEFAULT '',
+    rfq_supplier_id INTEGER REFERENCES rfq_suppliers(id) ON DELETE SET NULL,
+    supplier_name   TEXT NOT NULL DEFAULT '',
+    subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+    gst             NUMERIC(12,2) NOT NULL DEFAULT 0,
+    total           NUMERIC(12,2) NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_change_orders (
+    id              SERIAL PRIMARY KEY,
+    rfq_id          INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE RESTRICT,
+    co_number       TEXT NOT NULL DEFAULT '',
+    project_id      INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    project_name    TEXT NOT NULL DEFAULT '',
+    gc_name         TEXT NOT NULL DEFAULT '',
+    gc_contact      TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'DRAFT',
+    created_by_name TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
+    updated_at      TEXT
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_co_line_items (
+    id               SERIAL PRIMARY KEY,
+    change_order_id  INTEGER NOT NULL REFERENCES rfq_change_orders(id) ON DELETE CASCADE,
+    rfq_line_item_id INTEGER REFERENCES rfq_line_items(id) ON DELETE SET NULL,
+    description      TEXT NOT NULL DEFAULT '',
+    qty              NUMERIC(12,3) NOT NULL DEFAULT 0,
+    unit             TEXT NOT NULL DEFAULT 'EA',
+    unit_cost        NUMERIC(12,4) NOT NULL DEFAULT 0,
+    markup_pct       NUMERIC(6,2) NOT NULL DEFAULT 0,
+    labour_hours     NUMERIC(10,2) NOT NULL DEFAULT 0,
+    labour_rate      NUMERIC(10,2) NOT NULL DEFAULT 0,
+    sort_order       INTEGER NOT NULL DEFAULT 0
+  )`);
+
   console.log('  ✓ Database schema ready');
 }
 

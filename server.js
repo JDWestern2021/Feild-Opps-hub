@@ -1194,6 +1194,7 @@ app.get('/api/project-folders/:id', requireAdmin, async (req, res) => {
   const { rows: allP } = await pool.query('SELECT * FROM purchase_orders WHERE project_id=$1 ORDER BY date DESC,created_at DESC',[pr[0].id]);
   const { rows: allS } = await pool.query('SELECT id,form_type,form_number,submitted_by,submitted_at,date,status,project_archived,job_number FROM safety_forms WHERE project_id=$1 ORDER BY date DESC,submitted_at DESC',[pr[0].id]);
   const { rows: allPS } = await pool.query('SELECT id,schedule_number,panel_name,voltage,main_breaker,num_circuits,created_by,created_at,status,project_archived FROM panel_schedules WHERE project_id=$1 ORDER BY created_at DESC',[pr[0].id]);
+  const { rows: allRFQ } = await pool.query('SELECT id, rfq_number, title, status, created_at FROM rfqs WHERE project_id=$1 ORDER BY created_at DESC',[pr[0].id]);
   const mapT = t => ({ ...t, employees: parseEmployeesRaw(t.employees_raw), employees_raw: undefined });
   res.json({
     project: pr[0],
@@ -1201,6 +1202,7 @@ app.get('/api/project-folders/:id', requireAdmin, async (req, res) => {
     purchase_orders:  allP.filter(p=>!p.project_archived),
     safety_forms:     allS.filter(s=>!s.project_archived),
     panel_schedules:  allPS.filter(ps=>!ps.project_archived),
+    rfqs:             allRFQ,
     archived_tickets: allT.filter(t=> t.project_archived).map(mapT),
     archived_pos:     allP.filter(p=> p.project_archived),
     archived_safety:  allS.filter(s=> s.project_archived),
@@ -3638,6 +3640,423 @@ app.post('/api/sop/documents/:id/restore', requireAdmin, async (req, res) => {
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// RFQ MODULE
+// ─────────────────────────────────────────────
+
+async function generateRFQNumber(client) {
+  const year = new Date().getFullYear();
+  await client.query(`INSERT INTO rfq_sequence (year,last_seq) VALUES ($1,0) ON CONFLICT DO NOTHING`,[year]);
+  const r = await client.query(`UPDATE rfq_sequence SET last_seq=last_seq+1 WHERE year=$1 RETURNING last_seq`,[year]);
+  return `JD-RFQ-${year}-${String(r.rows[0].last_seq).padStart(4,'0')}`;
+}
+
+// ── Suppliers ──
+app.get('/api/suppliers', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM suppliers ORDER BY name');
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/suppliers', requireAdmin, async (req, res) => {
+  try {
+    const { name, contact='', email='', phone='', notes='' } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+    const { rows } = await pool.query(
+      `INSERT INTO suppliers (name,contact,email,phone,notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, contact, email, phone, notes]
+    );
+    res.json(rows[0]);
+  } catch(e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Supplier name already exists' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/api/suppliers/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, contact, email, phone, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE suppliers SET
+        name=COALESCE($1,name), contact=COALESCE($2,contact),
+        email=COALESCE($3,email), phone=COALESCE($4,phone), notes=COALESCE($5,notes)
+       WHERE id=$6 RETURNING *`,
+      [name, contact, email, phone, notes, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/suppliers/:id', requireAdmin, async (req, res) => {
+  try {
+    const { rows: refs } = await pool.query('SELECT id FROM rfq_suppliers WHERE supplier_id=$1 LIMIT 1',[req.params.id]);
+    if (refs.length) return res.status(409).json({ error: 'Supplier is referenced by one or more RFQs' });
+    await pool.query('DELETE FROM suppliers WHERE id=$1',[req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── RFQs ──
+app.get('/api/rfqs', requireAuth, async (req, res) => {
+  try {
+    let where = 'WHERE 1=1';
+    const params = [];
+    if (req.query.status) { params.push(req.query.status); where += ` AND r.status=$${params.length}`; }
+    if (req.query.project_id) { params.push(req.query.project_id); where += ` AND r.project_id=$${params.length}`; }
+    const { rows } = await pool.query(
+      `SELECT r.*,
+        (SELECT COUNT(*) FROM rfq_line_items WHERE rfq_id=r.id) AS line_item_count,
+        (SELECT COUNT(*) FROM rfq_suppliers WHERE rfq_id=r.id) AS supplier_count
+       FROM rfqs r ${where} ORDER BY r.created_at DESC`,
+      params
+    );
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { title='', project_id=null, project_name='', attention='', due_date='', notes='', line_items=[] } = req.body;
+    const rfq_number = await generateRFQNumber(client);
+    const { rows: [rfq] } = await client.query(
+      `INSERT INTO rfqs (rfq_number,project_id,project_name,title,attention,due_date,notes,status,created_by_id,created_by_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'DRAFT',$8,$9) RETURNING *`,
+      [rfq_number, project_id||null, project_name, title, attention, due_date, notes,
+       req.session.userId, req.session.userName||'']
+    );
+    for (let i=0; i<line_items.length; i++) {
+      const li = line_items[i];
+      await client.query(
+        `INSERT INTO rfq_line_items (rfq_id,item_num,qty,unit,part_number,size,description,sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [rfq.id, i+1, li.qty||0, li.unit||'EA', li.part_number||'', li.size||'', li.description||'', i]
+      );
+    }
+    await client.query('COMMIT');
+    res.json(rfq);
+  } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); }
+  finally { client.release(); }
+});
+
+app.get('/api/rfqs/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows: [rfq] } = await pool.query('SELECT * FROM rfqs WHERE id=$1',[req.params.id]);
+    if (!rfq) return res.status(404).json({ error: 'Not found' });
+    const { rows: line_items } = await pool.query('SELECT * FROM rfq_line_items WHERE rfq_id=$1 ORDER BY sort_order,item_num',[req.params.id]);
+    const { rows: rfq_suppliers } = await pool.query(
+      `SELECT rs.*, s.name AS supplier_name, s.email AS supplier_email, s.phone AS supplier_phone, s.contact AS supplier_contact
+       FROM rfq_suppliers rs JOIN suppliers s ON s.id=rs.supplier_id WHERE rs.rfq_id=$1 ORDER BY rs.id`,
+      [req.params.id]
+    );
+    const { rows: quotes } = await pool.query('SELECT * FROM rfq_quotes WHERE rfq_id=$1',[req.params.id]);
+    res.json({ rfq, line_items, rfq_suppliers, quotes });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/rfqs/:id', requireAuth, async (req, res) => {
+  try {
+    const { title, project_id, project_name, attention, due_date, notes, status } = req.body;
+    const { rows: [rfq] } = await pool.query(
+      `UPDATE rfqs SET
+        title=COALESCE($1,title), project_id=COALESCE($2,project_id),
+        project_name=COALESCE($3,project_name), attention=COALESCE($4,attention),
+        due_date=COALESCE($5,due_date), notes=COALESCE($6,notes),
+        status=COALESCE($7,status),
+        updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+       WHERE id=$8 RETURNING *`,
+      [title, project_id, project_name, attention, due_date, notes, status, req.params.id]
+    );
+    if (!rfq) return res.status(404).json({ error: 'Not found' });
+    res.json(rfq);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/rfqs/:id', requireAdmin, async (req, res) => {
+  try {
+    const { rows: [rfq] } = await pool.query('SELECT status FROM rfqs WHERE id=$1',[req.params.id]);
+    if (!rfq) return res.status(404).json({ error: 'Not found' });
+    if (rfq.status !== 'DRAFT') return res.status(409).json({ error: 'Only DRAFT RFQs can be deleted' });
+    await pool.query('DELETE FROM rfqs WHERE id=$1',[req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/suppliers', requireAuth, async (req, res) => {
+  try {
+    const { supplier_id, notes='' } = req.body;
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO rfq_suppliers (rfq_id,supplier_id,notes) VALUES ($1,$2,$3)
+       ON CONFLICT DO NOTHING RETURNING *`,
+      [req.params.id, supplier_id, notes]
+    );
+    res.json(row || { ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/rfqs/:id/suppliers/:rfqSupplierId', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM rfq_suppliers WHERE id=$1 AND rfq_id=$2',[req.params.rfqSupplierId, req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/quotes', requireAuth, async (req, res) => {
+  try {
+    const quotes = Array.isArray(req.body) ? req.body : [req.body];
+    for (const q of quotes) {
+      await pool.query(
+        `INSERT INTO rfq_quotes (rfq_id,rfq_line_item_id,rfq_supplier_id,unit_price,lead_time,notes)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (rfq_line_item_id,rfq_supplier_id) DO UPDATE
+           SET unit_price=$4, lead_time=$5, notes=$6,
+               updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')`,
+        [req.params.id, q.rfq_line_item_id, q.rfq_supplier_id, q.unit_price||0, q.lead_time||'', q.notes||'']
+      );
+    }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/select-quote', requireAuth, async (req, res) => {
+  try {
+    const { rfq_line_item_id, rfq_supplier_id } = req.body;
+    await pool.query(`UPDATE rfq_quotes SET is_selected=0 WHERE rfq_id=$1 AND rfq_line_item_id=$2`,[req.params.id, rfq_line_item_id]);
+    await pool.query(`UPDATE rfq_quotes SET is_selected=1 WHERE rfq_id=$1 AND rfq_line_item_id=$2 AND rfq_supplier_id=$3`,[req.params.id, rfq_line_item_id, rfq_supplier_id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/approve', requireAdmin, async (req, res) => {
+  try {
+    const { rows: [rfq] } = await pool.query(
+      `UPDATE rfqs SET status='APPROVED', approved_by=$1,
+        approved_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
+        updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+       WHERE id=$2 RETURNING *`,
+      [req.session.userName||'Admin', req.params.id]
+    );
+    if (!rfq) return res.status(404).json({ error: 'Not found' });
+    res.json(rfq);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rfqs/:id/export', requireAuth, async (req, res) => {
+  try {
+    const { rows: [rfq] } = await pool.query('SELECT * FROM rfqs WHERE id=$1',[req.params.id]);
+    if (!rfq) return res.status(404).json({ error: 'Not found' });
+    const { rows: line_items } = await pool.query('SELECT * FROM rfq_line_items WHERE rfq_id=$1 ORDER BY sort_order,item_num',[req.params.id]);
+
+    let supplierName = 'Supplier', supplierEmail = '', supplierPhone = '';
+    if (req.query.supplier_id) {
+      const { rows: [sup] } = await pool.query(
+        `SELECT s.name, s.email, s.phone FROM rfq_suppliers rs JOIN suppliers s ON s.id=rs.supplier_id WHERE rs.id=$1`,
+        [req.query.supplier_id]
+      );
+      if (sup) { supplierName=sup.name; supplierEmail=sup.email; supplierPhone=sup.phone; }
+    }
+
+    const today = new Date().toISOString().slice(0,10);
+    const wb = XLSX.utils.book_new();
+    const rows = [
+      ['RFQ'],
+      [`PROJECT: ${rfq.project_name}`, '', `REF: ${rfq.rfq_number}`],
+      [`SUPPLIER: ${supplierName}`, '', `Date: ${today}`],
+      [`EMAIL: ${supplierEmail}`],
+      [`PHONE: ${supplierPhone}`],
+      [`ATTENTION: ${rfq.attention}`, '', `Due Date: ${rfq.due_date}`],
+      [],
+      ['Item', 'Qty', 'UNITS', 'P/N', 'Size', 'Description', 'UNIT COST', 'TOTAL COST'],
+    ];
+
+    line_items.forEach((li, i) => {
+      rows.push([i+1, Number(li.qty), li.unit, li.part_number, li.size, li.description, '', '']);
+    });
+
+    rows.push([]);
+    rows.push(['', '', '', '', '', 'SUB TOTAL', '', '']);
+    rows.push(['', '', '', '', '', 'GST (5%)', '', '']);
+    rows.push(['', '', '', '', '', 'TOTAL', '', '']);
+    rows.push([]);
+    rows.push([`Quotation Due Date: ${rfq.due_date}`]);
+    rows.push(['Delivery: As per schedule']);
+    rows.push(['Shipping Specification: FOB Destination, Freight Prepaid']);
+    rows.push(['Materials Policy: No substitutions without written approval']);
+    if (rfq.notes) rows.push([`Notes: ${rfq.notes}`]);
+    rows.push([]);
+    rows.push(['J & D WESTERN ELECTRIC LTD.']);
+    rows.push(['Tim Vanderveen C.E.T.']);
+    rows.push(['Electrical Project Manager']);
+    rows.push(['Cell: 780.978.0612 | Office: 1.587.343.4349 | timv@jdwesternelectric.ca']);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:6},{wch:8},{wch:8},{wch:16},{wch:12},{wch:40},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, 'RFQ');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const safeName = supplierName.replace(/[^a-zA-Z0-9]/g,'_');
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',`attachment; filename="JD-RFQ-${rfq.rfq_number}-${safeName}.xlsx"`);
+    res.send(buf);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── RFQ Line Items ──
+app.post('/api/rfqs/:id/line-items', requireAuth, async (req, res) => {
+  try {
+    const { qty=0, unit='EA', part_number='', size='', description='' } = req.body;
+    const { rows: [{ max_item }] } = await pool.query('SELECT COALESCE(MAX(item_num),0) AS max_item FROM rfq_line_items WHERE rfq_id=$1',[req.params.id]);
+    const { rows: [li] } = await pool.query(
+      `INSERT INTO rfq_line_items (rfq_id,item_num,qty,unit,part_number,size,description,sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$2) RETURNING *`,
+      [req.params.id, (max_item||0)+1, qty, unit, part_number, size, description]
+    );
+    res.json(li);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/rfq-line-items/:id', requireAuth, async (req, res) => {
+  try {
+    const { qty, unit, part_number, size, description } = req.body;
+    const { rows: [li] } = await pool.query(
+      `UPDATE rfq_line_items SET
+        qty=COALESCE($1,qty), unit=COALESCE($2,unit),
+        part_number=COALESCE($3,part_number), size=COALESCE($4,size),
+        description=COALESCE($5,description)
+       WHERE id=$6 RETURNING *`,
+      [qty, unit, part_number, size, description, req.params.id]
+    );
+    if (!li) return res.status(404).json({ error: 'Not found' });
+    res.json(li);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/rfq-line-items/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM rfq_line_items WHERE id=$1',[req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Change Orders ──
+app.post('/api/rfqs/:id/change-order', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: [rfq] } = await client.query('SELECT * FROM rfqs WHERE id=$1',[req.params.id]);
+    if (!rfq) return res.status(404).json({ error: 'RFQ not found' });
+    // Check for existing CO
+    const { rows: existing } = await client.query('SELECT id FROM rfq_change_orders WHERE rfq_id=$1',[req.params.id]);
+    if (existing.length) return res.status(409).json({ error: 'Change order already exists', id: existing[0].id });
+    const coNum = `CO-${rfq.rfq_number}`;
+    const { rows: [co] } = await client.query(
+      `INSERT INTO rfq_change_orders (rfq_id,co_number,project_id,project_name,created_by_name)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.params.id, coNum, rfq.project_id, rfq.project_name, req.session.userName||'']
+    );
+    // Populate line items from selected quotes
+    const { rows: selected } = await client.query(
+      `SELECT q.*, li.description, li.qty, li.unit, li.item_num
+       FROM rfq_quotes q
+       JOIN rfq_line_items li ON li.id=q.rfq_line_item_id
+       WHERE q.rfq_id=$1 AND q.is_selected=1
+       ORDER BY li.sort_order, li.item_num`,
+      [req.params.id]
+    );
+    for (let i=0; i<selected.length; i++) {
+      const q = selected[i];
+      await client.query(
+        `INSERT INTO rfq_co_line_items (change_order_id,rfq_line_item_id,description,qty,unit,unit_cost,sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [co.id, q.rfq_line_item_id, q.description, q.qty, q.unit, q.unit_price, i]
+      );
+    }
+    await client.query('COMMIT');
+    res.json(co);
+  } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); }
+  finally { client.release(); }
+});
+
+app.get('/api/rfqs/:id/change-order', requireAuth, async (req, res) => {
+  try {
+    const { rows: [co] } = await pool.query('SELECT * FROM rfq_change_orders WHERE rfq_id=$1',[req.params.id]);
+    if (!co) return res.status(404).json({ error: 'No change order found' });
+    const { rows: line_items } = await pool.query('SELECT * FROM rfq_co_line_items WHERE change_order_id=$1 ORDER BY sort_order',[co.id]);
+    res.json({ co, line_items });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/change-orders/:id', requireAuth, async (req, res) => {
+  try {
+    const { gc_name, gc_contact, notes, status } = req.body;
+    const { rows: [co] } = await pool.query(
+      `UPDATE rfq_change_orders SET
+        gc_name=COALESCE($1,gc_name), gc_contact=COALESCE($2,gc_contact),
+        notes=COALESCE($3,notes), status=COALESCE($4,status),
+        updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+       WHERE id=$5 RETURNING *`,
+      [gc_name, gc_contact, notes, status, req.params.id]
+    );
+    if (!co) return res.status(404).json({ error: 'Not found' });
+    res.json(co);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/co-line-items/:id', requireAuth, async (req, res) => {
+  try {
+    const { description, qty, unit, unit_cost, markup_pct, labour_hours, labour_rate } = req.body;
+    const { rows: [li] } = await pool.query(
+      `UPDATE rfq_co_line_items SET
+        description=COALESCE($1,description), qty=COALESCE($2,qty), unit=COALESCE($3,unit),
+        unit_cost=COALESCE($4,unit_cost), markup_pct=COALESCE($5,markup_pct),
+        labour_hours=COALESCE($6,labour_hours), labour_rate=COALESCE($7,labour_rate)
+       WHERE id=$8 RETURNING *`,
+      [description, qty, unit, unit_cost, markup_pct, labour_hours, labour_rate, req.params.id]
+    );
+    if (!li) return res.status(404).json({ error: 'Not found' });
+    res.json(li);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/change-orders/:id/export', requireAuth, async (req, res) => {
+  try {
+    const { rows: [co] } = await pool.query('SELECT * FROM rfq_change_orders WHERE id=$1',[req.params.id]);
+    if (!co) return res.status(404).json({ error: 'Not found' });
+    const { rows: line_items } = await pool.query('SELECT * FROM rfq_co_line_items WHERE change_order_id=$1 ORDER BY sort_order',[co.id]);
+    const wb = XLSX.utils.book_new();
+    const rows = [
+      ['CHANGE ORDER'],
+      [`CO Number: ${co.co_number}`, '', `Project: ${co.project_name}`],
+      [`GC: ${co.gc_name}`, '', `Contact: ${co.gc_contact}`],
+      [],
+      ['Description','Qty','Unit','Unit Cost','Markup %','Mat. Sell','Labour Hrs','Labour Rate','Labour Total','Line Total'],
+    ];
+    let grandTotal = 0;
+    line_items.forEach(li => {
+      const matSell = Number(li.qty) * Number(li.unit_cost) * (1 + Number(li.markup_pct)/100);
+      const labTotal = Number(li.labour_hours) * Number(li.labour_rate);
+      const lineTotal = matSell + labTotal;
+      grandTotal += lineTotal;
+      rows.push([
+        li.description, Number(li.qty), li.unit, Number(li.unit_cost),
+        Number(li.markup_pct), matSell.toFixed(2),
+        Number(li.labour_hours), Number(li.labour_rate), labTotal.toFixed(2), lineTotal.toFixed(2)
+      ]);
+    });
+    rows.push([]);
+    rows.push(['','','','','','','','','GRAND TOTAL', grandTotal.toFixed(2)]);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:40},{wch:8},{wch:8},{wch:12},{wch:10},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Change Order');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',`attachment; filename="CO-${co.co_number}.xlsx"`);
+    res.send(buf);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─────────────────────────────────────────────
