@@ -9208,6 +9208,8 @@ async function renderRFQDetail(id) {
     const isSentOrLater = ['SENT','QUOTED','APPROVED','CONVERTED'].includes(rfq.status);
     const isQuoted = ['QUOTED','APPROVED','CONVERTED'].includes(rfq.status);
     const isApprovedOrConverted = ['APPROVED','CONVERTED'].includes(rfq.status);
+    const canRevert = ['SENT','QUOTED','APPROVED'].includes(rfq.status);
+    const revertLabel = {SENT:'← Back to Draft', QUOTED:'← Back to Sent', APPROVED:'← Back to Quoted'};
 
     // Build quote map: lineItemId -> supplierId -> quote
     const quoteMap = {};
@@ -9235,6 +9237,7 @@ async function renderRFQDetail(id) {
         ${rfq.status==='SENT' ? `<button class="btn btn-secondary btn-sm" onclick="markRFQQuoted(${id})">Mark as Quoted</button>` : ''}
         ${rfq.status==='QUOTED' ? `<button class="btn btn-primary btn-sm" onclick="approveRFQ(${id})">Approve RFQ</button>` : ''}
         ${isApprovedOrConverted ? `<button class="btn btn-secondary btn-sm" onclick="createChangeOrder(${id})">Create / View Change Order</button>` : ''}
+        ${canRevert ? `<button onclick="rfqRevert(${rfq.id})" class="btn btn-secondary btn-sm" style="border-color:#dc2626;color:#dc2626;">${revertLabel[rfq.status]}</button>` : ''}
       </div>
     </div>`;
 
@@ -9366,6 +9369,7 @@ async function renderRFQDetail(id) {
             <table style="width:100%;border-collapse:collapse;font-size:12px;">
               <thead>
                 <tr style="background:var(--surface);">
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:56px;text-align:center;">✓ Approve</th>
                   <th style="padding:6px 8px;border:1px solid var(--border);width:36px;">#</th>
                   <th style="padding:6px 8px;border:1px solid var(--border);">Description</th>
                   <th style="padding:6px 8px;border:1px solid var(--border);width:55px;">Qty</th>
@@ -9377,7 +9381,11 @@ async function renderRFQDetail(id) {
                 ${line_items.map(li => {
                   const prices = rfq_suppliers.map(s => quoteMap[li.id]?.[s.id]).filter(q=>q&&q.unit_price>0).map(q=>Number(q.unit_price));
                   const minPrice = prices.length ? Math.min(...prices) : null;
+                  const hasSelected = rfq_suppliers.some(s => quoteMap[li.id]?.[s.id]?.is_selected);
                   return `<tr>
+                    <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;">
+                      <input type="checkbox" class="rfq-approve-check" data-line-item-id="${li.id}" ${hasSelected ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
+                    </td>
                     <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;">${li.item_num}</td>
                     <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.description)}</td>
                     <td style="padding:5px 8px;border:1px solid var(--border);">${li.qty}</td>
@@ -9401,7 +9409,7 @@ async function renderRFQDetail(id) {
                   </tr>`;
                 }).join('')}
                 <tr style="font-weight:700;background:var(--surface);">
-                  <td colspan="4" style="padding:6px 8px;border:1px solid var(--border);">Selected Total</td>
+                  <td colspan="5" style="padding:6px 8px;border:1px solid var(--border);">Selected Total</td>
                   ${rfq_suppliers.map(s => {
                     let total = 0;
                     line_items.forEach(li => {
@@ -9414,7 +9422,7 @@ async function renderRFQDetail(id) {
               </tbody>
             </table>
           </div>
-          <div style="margin-top:8px;font-size:11px;color:var(--gray-400);">Click any cell to toggle selection for that line item.</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--gray-400);">Click any cell to toggle selection. Check the ✓ Approve column for the line items you want to approve.</div>
         </div>`;
       } else if (isApproved || isConverted) {
         // ── APPROVED/CONVERTED: PO issuance summary ──
@@ -9466,7 +9474,29 @@ async function renderRFQDetail(id) {
       </div>`;
     }
 
+    // Activity log section
+    html += `<div class="rfq-section" id="rfq-activity-section">
+      <div class="rfq-section-title">Activity Log</div>
+      <div id="rfq-activity-log" style="font-size:12px;color:var(--text-muted);">Loading…</div>
+    </div>`;
+
     $('rfq-detail-body').innerHTML = html;
+
+    // Load activity log async
+    fetch(`/api/rfqs/${id}/activity`).then(r=>r.json()).then(rows => {
+      const el = document.getElementById('rfq-activity-log');
+      if (!el) return;
+      if (!rows.length) { el.textContent = 'No activity yet.'; return; }
+      el.innerHTML = rows.map(r => `
+        <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="width:8px;height:8px;background:#FF6100;border-radius:50%;margin-top:5px;flex-shrink:0;"></div>
+          <div style="flex:1;">
+            <span style="font-weight:600;color:var(--text);">${esc(r.action)}</span>
+            ${r.details ? `<span style="color:var(--text-muted);"> — ${esc(r.details)}</span>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${esc(r.user_name)} · ${new Date(r.created_at).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        </div>`).join('');
+    }).catch(()=>{});
   } catch(e) {
     $('rfq-detail-body').innerHTML = `<div style="padding:40px;color:#dc2626;">Error: ${esc(e.message)}</div>`;
   }
@@ -9529,10 +9559,24 @@ async function rfqToggleSelect(rfqId, lineItemId, supplierId) {
 
 async function rfqApprove(rfqId) {
   if (!confirm('Approve this RFQ and lock in the selected quotes?')) return;
-  const res = await fetch(`/api/rfqs/${rfqId}/approve`, { method: 'POST' });
+  const checks = document.querySelectorAll('.rfq-approve-check:checked');
+  const line_item_ids = checks.length ? Array.from(checks).map(c => parseInt(c.dataset.lineItemId)) : undefined;
+  const body = line_item_ids ? JSON.stringify({ line_item_ids }) : '{}';
+  const res = await fetch(`/api/rfqs/${rfqId}/approve`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body
+  });
   if (!res.ok) { const d = await res.json(); alert(d.error || 'Failed'); return; }
   await renderRFQDetail(rfqId);
   updateRFQBadge(rfqId, 'APPROVED');
+}
+
+async function rfqRevert(rfqId) {
+  if (!confirm('Move this RFQ back one step? This does not undo any data.')) return;
+  const res = await fetch(`/api/rfqs/${rfqId}/revert`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) return alert(data.error || 'Cannot revert');
+  await renderRFQDetail(rfqId);
+  updateRFQBadge(rfqId, data.status);
 }
 
 async function rfqIssuePOs(rfqId) {

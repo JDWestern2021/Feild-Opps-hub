@@ -653,6 +653,18 @@ async function initSchema() {
     sort_order       INTEGER NOT NULL DEFAULT 0
   )`);
 
+  await pool.query(`ALTER TABLE rfqs ADD COLUMN IF NOT EXISTS archived_at TEXT`);
+  await pool.query(`ALTER TABLE rfqs ADD COLUMN IF NOT EXISTS deleted_at TEXT`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_activity (
+    id          SERIAL PRIMARY KEY,
+    rfq_id      INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE CASCADE,
+    user_name   TEXT NOT NULL DEFAULT '',
+    action      TEXT NOT NULL DEFAULT '',
+    details     TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   console.log('  ✓ Database schema ready');
 }
 

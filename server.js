@@ -3646,6 +3646,15 @@ app.post('/api/sop/documents/:id/restore', requireAdmin, async (req, res) => {
 // RFQ MODULE
 // ─────────────────────────────────────────────
 
+async function logRFQActivity(rfqId, userName, action, details='') {
+  try {
+    await pool.query(
+      `INSERT INTO rfq_activity (rfq_id, user_name, action, details) VALUES ($1,$2,$3,$4)`,
+      [rfqId, userName, action, details]
+    );
+  } catch(e) { console.error('Activity log error:', e.message); }
+}
+
 async function generateRFQNumber(client) {
   const year = new Date().getFullYear();
   const yr2 = String(year).slice(-2);
@@ -3792,6 +3801,7 @@ app.post('/api/rfqs/:id/archive', requireAuth, async (req, res) => {
       [now, req.params.id]
     );
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    await logRFQActivity(req.params.id, req.session.userName||'System', 'Archived', '');
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -3805,6 +3815,7 @@ app.post('/api/rfqs/:id/restore', requireAuth, async (req, res) => {
       [now, req.params.id]
     );
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    await logRFQActivity(req.params.id, req.session.userName||'System', 'Restored from archive', '');
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -4019,6 +4030,7 @@ app.post('/api/rfqs/:id/suppliers/:rfqSupplierId/send', requireAuth, async (req,
     await pool.query(`UPDATE rfq_suppliers SET sent_at=$1 WHERE id=$2`, [new Date().toISOString(), rs.id]);
     // Update RFQ status to SENT if still DRAFT
     await pool.query(`UPDATE rfqs SET status=CASE WHEN status='DRAFT' THEN 'SENT' ELSE status END, updated_at=$1 WHERE id=$2`, [new Date().toISOString(), req.params.id]);
+    await logRFQActivity(req.params.id, req.session.userName||'System', 'RFQ sent to supplier', rs.supplier_name);
 
     res.json({ ok: true, to: rs.supplier_email });
   } catch(e) {
@@ -4055,6 +4067,24 @@ app.post('/api/rfqs/:id/select-quote', requireAuth, async (req, res) => {
 
 app.post('/api/rfqs/:id/approve', requireAdmin, async (req, res) => {
   try {
+    const { line_item_ids } = req.body || {};
+    if (line_item_ids && line_item_ids.length) {
+      // Selective approval: set is_selected=1 only for checked line items, 0 for unchecked
+      const { rows: allLIs } = await pool.query(
+        `SELECT DISTINCT rfq_line_item_id FROM rfq_quotes WHERE rfq_id=$1`, [req.params.id]
+      );
+      for (const { rfq_line_item_id } of allLIs) {
+        if (line_item_ids.includes(rfq_line_item_id)) {
+          // keep existing selection for this line item (already selected by user in comparison)
+        } else {
+          // uncheck all quotes for unchecked line items
+          await pool.query(
+            `UPDATE rfq_quotes SET is_selected=0 WHERE rfq_id=$1 AND rfq_line_item_id=$2`,
+            [req.params.id, rfq_line_item_id]
+          );
+        }
+      }
+    }
     const { rows: [rfq] } = await pool.query(
       `UPDATE rfqs SET status='APPROVED', approved_by=$1,
         approved_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
@@ -4063,6 +4093,7 @@ app.post('/api/rfqs/:id/approve', requireAdmin, async (req, res) => {
       [req.session.userName||req.user?.name||'Admin', req.params.id]
     );
     if (!rfq) return res.status(404).json({ error: 'Not found' });
+    await logRFQActivity(req.params.id, req.session.userName||'System', 'Status changed to APPROVED', '');
     res.json(rfq);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -4074,7 +4105,34 @@ app.post('/api/rfqs/:id/mark-quoted', requireAuth, async (req, res) => {
        WHERE id=$1 AND status='SENT'`,
       [req.params.id]
     );
+    await logRFQActivity(req.params.id, req.session.userName||'System', 'Status changed to QUOTED', '');
     res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rfqs/:id/activity', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM rfq_activity WHERE rfq_id=$1 ORDER BY created_at DESC LIMIT 50`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/revert', requireAuth, async (req, res) => {
+  try {
+    const { rows: [rfq] } = await pool.query('SELECT status FROM rfqs WHERE id=$1', [req.params.id]);
+    if (!rfq) return res.status(404).json({ error: 'Not found' });
+    const prev = { SENT:'DRAFT', QUOTED:'SENT', APPROVED:'QUOTED' };
+    const newStatus = prev[rfq.status];
+    if (!newStatus) return res.status(400).json({ error: `Cannot revert from ${rfq.status}` });
+    await pool.query(
+      `UPDATE rfqs SET status=$1, updated_at=NOW() WHERE id=$2`,
+      [newStatus, req.params.id]
+    );
+    await logRFQActivity(req.params.id, req.session.userName||'System', `Reverted to ${newStatus}`, `Was ${rfq.status}`);
+    res.json({ ok: true, status: newStatus });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4171,7 +4229,7 @@ app.post('/api/rfqs/:id/issue-pos', requireAdmin, async (req, res) => {
         `INSERT INTO purchase_orders
            (po_number, date, generated_by_id, generated_by_name, jobber_job_number, job_name,
             supplier, description, estimated_amount, needs_reimbursement, status, created_at, project_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'Open',$10,$11) RETURNING id`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'Draft',$10,$11) RETURNING id`,
         [
           po_number, date, userId, userName,
           rfq.rfq_number,
@@ -4201,6 +4259,7 @@ app.post('/api/rfqs/:id/issue-pos', requireAdmin, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    await logRFQActivity(rfqId, req.session.userName||'System', 'POs Issued', createdPOs.map(p=>p.po_number).join(', '));
     res.json({ ok: true, pos: createdPOs });
   } catch(e) {
     await client.query('ROLLBACK');
