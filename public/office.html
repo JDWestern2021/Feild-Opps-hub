@@ -9518,7 +9518,15 @@ async function renderRFQDetail(id, stageView) {
                     <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.unit)}</td>
                     ${rfq_suppliers.map(s => {
                       const q = quoteMap[li.id]?.[s.id];
-                      if (!q || !q.unit_price) return `<td style="padding:5px 8px;border:1px solid var(--border);color:var(--gray-400);text-align:center;">—</td>`;
+                      if (!q || !q.unit_price) {
+                        if (!isLive) return `<td style="padding:5px 8px;border:1px solid var(--border);color:#9ca3af;text-align:center;">—</td>`;
+                        return `<td style="padding:5px 8px;border:1px solid var(--border);">
+                          <input type="number" min="0" step="0.01" placeholder="0.00"
+                            style="width:70px;padding:2px 4px;border:1px solid #d1d5db;border-radius:3px;font-size:12px;"
+                            data-line-item-id="${li.id}" data-supplier-id="${s.id}"
+                            onchange="rfqSaveQuoteCell(${id},this)">
+                        </td>`;
+                      }
                       const isSel = !!q.is_selected;
                       const isMin = minPrice && Number(q.unit_price)===minPrice;
                       const ext = (Number(q.unit_price)*Number(li.qty)).toFixed(2);
@@ -9526,19 +9534,21 @@ async function renderRFQDetail(id, stageView) {
                         // Read-only: just show prices with selection indicator
                         return `<td style="padding:5px 8px;border:1px solid var(--border);background:${isSel?'rgba(21,128,61,.15)':''};">
                           <div style="display:flex;align-items:center;gap:4px;">
-                            ${isSel ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:var(--gray-400);">○</span>'}
+                            ${isSel ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#9ca3af;">○</span>'}
                             <span style="font-weight:${isSel?'700':'400'};${isMin?'color:#15803d;':''}">$${Number(q.unit_price).toFixed(2)}</span>
-                            <span style="color:var(--gray-400);font-size:11px;">= $${ext}</span>
+                            <span style="color:#9ca3af;font-size:11px;">= $${ext}</span>
                           </div>
                           ${isMin ? '<div style="font-size:10px;color:#15803d;">★ Low</div>' : ''}
                         </td>`;
                       }
-                      return `<td style="padding:5px 8px;border:1px solid var(--border);background:${isSel?'rgba(21,128,61,.15)':''};cursor:pointer;"
-                        onclick="rfqToggleSelect(${id},${li.id},${s.id})">
+                      return `<td style="padding:5px 8px;border:1px solid var(--border);background:${isSel?'rgba(21,128,61,.15)':''};">
                         <div style="display:flex;align-items:center;gap:4px;">
-                          ${isSel ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:var(--gray-400);">○</span>'}
-                          <span style="font-weight:${isSel?'700':'400'};${isMin?'color:#15803d;':''}">$${Number(q.unit_price).toFixed(2)}</span>
-                          <span style="color:var(--gray-400);font-size:11px;">= $${ext}</span>
+                          <span style="cursor:pointer;" onclick="rfqToggleSelect(${id},${li.id},${s.id})">${isSel ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:#9ca3af;">○</span>'}</span>
+                          <input type="number" min="0" step="0.01" value="${Number(q.unit_price).toFixed(2)}"
+                            style="width:70px;padding:2px 4px;border:1px solid #d1d5db;border-radius:3px;font-size:12px;font-weight:${isSel?'700':'400'};${isMin?'color:#15803d;':''}"
+                            data-line-item-id="${li.id}" data-supplier-id="${s.id}"
+                            onchange="rfqSaveQuoteCell(${id},this)">
+                          <span style="color:#9ca3af;font-size:11px;">= $${ext}</span>
                         </div>
                         ${isMin&&!isSel ? '<div style="font-size:10px;color:#f59e0b;">★ Low</div>' : ''}
                       </td>`;
