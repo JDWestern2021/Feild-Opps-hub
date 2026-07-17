@@ -562,9 +562,8 @@
     .rfq-status-QUOTED { background:#1d4ed8;color:#fff; }
     .rfq-status-APPROVED { background:#15803d;color:#fff; }
     .rfq-status-CONVERTED { background:#064e3b;color:#fff; }
-    .rfq-detail-overlay { display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);overflow-y:auto; }
-    .rfq-detail-overlay.open { display:flex;align-items:flex-start;justify-content:center;padding:20px; }
-    .rfq-detail-panel { background:var(--bg);border-radius:12px;width:100%;max-width:1100px;min-height:80vh;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:0;overflow:hidden; }
+    .rfq-detail-overlay { display:none; }
+    .rfq-detail-overlay.open { display:block; }
     .rfq-section { border-top:1px solid var(--border);padding:20px; }
     .rfq-section:first-child { border-top:none; }
     .rfq-section-title { font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--orange);margin-bottom:12px; }
@@ -1257,7 +1256,7 @@
 
   <!-- RFQ VIEW -->
   <div id="rfq-view" style="display:none;">
-    <div class="card" style="max-width:1200px;margin:0 auto;">
+    <div id="rfq-list-card" class="card" style="max-width:1200px;margin:0 auto;">
       <div class="card-header flex-between" style="flex-wrap:wrap;gap:10px;">
         <div style="display:flex;align-items:center;gap:12px;">
           <div style="width:36px;height:36px;background:#FF6100;border-radius:8px;display:flex;align-items:center;justify-content:center;">
@@ -1282,7 +1281,7 @@
             <option value="">All Projects</option>
           </select>
           <button class="btn btn-primary btn-sm" onclick="openNewRFQModal()">+ New RFQ</button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('rfq-import-modal').style.display='flex'">⬆ Import from Excel</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeRFQImportModal();document.getElementById('rfq-import-modal').style.display='flex'">⬆ Import from Excel</button>
           <button class="btn btn-secondary btn-sm" onclick="openSuppliersModal()">Manage Suppliers</button>
         </div>
       </div>
@@ -1294,9 +1293,39 @@
         <button class="rfq-tab" data-status="QUOTED" onclick="setRFQTab(this,'QUOTED')">Quoted</button>
         <button class="rfq-tab" data-status="APPROVED" onclick="setRFQTab(this,'APPROVED')">Approved</button>
         <button class="rfq-tab" data-status="CONVERTED" onclick="setRFQTab(this,'CONVERTED')">Converted</button>
+        <button class="rfq-tab" data-status="ARCHIVED" onclick="setRFQTab(this,'ARCHIVED')" style="margin-left:auto;opacity:0.7;">📦 Archived</button>
       </div>
       <div class="card-body">
         <div id="rfq-list" style="display:grid;gap:12px;"></div>
+      </div>
+    </div>
+
+    <!-- RFQ Detail (inline swap) -->
+    <div id="rfq-detail-panel" style="display:none;">
+      <div class="card" style="max-width:1200px;margin:0 auto;">
+        <!-- Detail header -->
+        <div style="background:#0C0C0C;border-radius:10px 10px 0 0;padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <button onclick="closeRFQDetail()" style="background:rgba(255,255,255,0.12);border:none;color:#fff;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;">← Back to RFQs</button>
+          <div style="width:1px;height:22px;background:rgba(255,255,255,0.2);"></div>
+          <span id="rfqd-number" style="font-size:1rem;font-weight:700;color:#FF6100;"></span>
+          <span id="rfqd-status-badge" class="rfq-status"></span>
+          <div style="flex:1;"></div>
+          <button onclick="openRFQPrintModal()" style="background:#FF6100;border:none;color:#fff;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;">🖨 Print</button>
+          <button onclick="rfqExportCurrent()" style="background:rgba(255,255,255,0.12);border:none;color:#fff;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;">⬇ Export Excel</button>
+          <button onclick="rfqArchiveCurrent()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;" id="rfq-archive-btn">📦 Archive</button>
+          <button onclick="rfqDeleteCurrent()" style="background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.4);color:#fca5a5;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;">🗑 Delete</button>
+        </div>
+        <!-- Status tabs -->
+        <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;display:flex;gap:4px;flex-wrap:wrap;">
+          <button class="rfq-tab active" data-status="" onclick="closeRFQDetail();setRFQTab(this,'')">All</button>
+          <button class="rfq-tab" data-status="DRAFT" onclick="closeRFQDetail();setRFQTab(this,'DRAFT')">Draft</button>
+          <button class="rfq-tab" data-status="SENT" onclick="closeRFQDetail();setRFQTab(this,'SENT')">Sent</button>
+          <button class="rfq-tab" data-status="QUOTED" onclick="closeRFQDetail();setRFQTab(this,'QUOTED')">Quoted</button>
+          <button class="rfq-tab" data-status="APPROVED" onclick="closeRFQDetail();setRFQTab(this,'APPROVED')">Approved</button>
+          <button class="rfq-tab" data-status="CONVERTED" onclick="closeRFQDetail();setRFQTab(this,'CONVERTED')">Converted</button>
+          <button class="rfq-tab" data-status="ARCHIVED" onclick="closeRFQDetail();setRFQTab(this,'ARCHIVED')" style="margin-left:auto;opacity:0.7;">📦 Archived</button>
+        </div>
+        <div class="card-body" id="rfq-detail-body"></div>
       </div>
     </div>
   </div>
@@ -8385,29 +8414,82 @@ async function loadAuditLog(ticketId) {
      ═══════════════════════════════════════════════════════ -->
 
 <!-- RFQ Import Modal -->
-<div id="rfq-import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:12px;padding:24px;width:min(680px,95vw);max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.35);">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <h3 style="margin:0;font-size:1.1rem;font-weight:700;">Import RFQ from Excel</h3>
-      <button onclick="document.getElementById('rfq-import-modal').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-muted);">✕</button>
-    </div>
-    <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;">Upload a spreadsheet (takeoff, estimate, material list) and we'll extract the line items for you.</p>
-    <input type="file" id="rfq-import-file" accept=".xlsx,.xls,.csv" style="margin-bottom:12px;display:block;">
-    <button class="btn btn-primary btn-sm" onclick="rfqImportPreview()">Preview Items</button>
-    <div id="rfq-import-preview" style="display:none;margin-top:16px;">
-      <p id="rfq-import-count" style="font-size:13px;margin-bottom:8px;font-weight:600;"></p>
-      <div id="rfq-import-table" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;"></div>
-      <div style="display:flex;gap:10px;margin-top:14px;">
-        <button class="btn btn-primary btn-sm" onclick="rfqImportCreate()">Create RFQ with These Items</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('rfq-import-modal').style.display='none'">Cancel</button>
+<div id="rfq-import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9000;overflow-y:auto;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);width:100%;min-height:100vh;display:flex;flex-direction:column;max-width:860px;margin:0 auto;box-shadow:0 0 60px rgba(0,0,0,0.15);">
+
+    <!-- Header -->
+    <div style="background:#0C0C0C;border-radius:14px 14px 0 0;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="color:#fff;font-size:1.1rem;font-weight:700;letter-spacing:0.01em;">Import from Excel</div>
+        <div style="color:#FF6100;font-size:11px;font-weight:600;letter-spacing:0.08em;margin-top:2px;">J&D WESTERN ELECTRIC — RFQ BUILDER</div>
       </div>
+      <button onclick="closeRFQImportModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:24px;">
+
+      <!-- Step 1 -->
+      <div id="rfq-import-step1">
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;">Upload a takeoff, estimate, or material list. Supported formats: .xlsx, .xls</p>
+
+        <div id="rfq-drop-zone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--border);border-radius:10px;padding:32px 20px;margin-bottom:16px;text-align:center;">
+          <div style="font-size:32px;margin-bottom:8px;">📂</div>
+          <div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">.xlsx or .xls files only</div>
+          <input type="file" id="rfq-import-file" accept=".xlsx,.xls" style="display:none;" onchange="rfqFileSelected(this)">
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('rfq-import-file').click()" style="padding:10px 24px;font-weight:600;">Browse Files</button>
+        </div>
+
+        <div id="rfq-file-chosen" style="display:none;background:var(--surface-2,#f3f4f6);border-radius:8px;padding:12px 16px;align-items:center;gap:12px;margin-bottom:16px;">
+          <div style="font-size:22px;">📄</div>
+          <div style="flex:1;min-width:0;">
+            <div id="rfq-file-name" style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+            <div id="rfq-file-size" style="font-size:12px;color:var(--text-muted);"></div>
+          </div>
+          <button onclick="rfqClearFile()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:0;">✕</button>
+        </div>
+
+        <button id="rfq-preview-btn" class="btn btn-primary" onclick="rfqImportPreview()" disabled style="width:100%;padding:12px;font-size:0.95rem;font-weight:600;opacity:0.5;cursor:not-allowed;">
+          Extract Line Items →
+        </button>
+      </div>
+
+      <!-- Step 2: Preview -->
+      <div id="rfq-import-preview" style="display:none;margin-top:20px;">
+        <div style="font-weight:700;font-size:0.95rem;margin-bottom:6px;">Review extracted items</div>
+
+        <div id="rfq-import-count" style="font-size:13px;color:var(--text-muted);margin:0 0 12px;"></div>
+
+        <div id="rfq-import-table" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:20px;"></div>
+
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <span style="font-size:18px;">✅</span>
+          <div>
+            <div style="font-weight:600;font-size:0.9rem;color:#166534;">Ready to create your RFQ</div>
+            <div style="font-size:12px;color:#166534;opacity:0.8;">These items will be pre-loaded into the RFQ form. You can edit anything before saving.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary" onclick="rfqImportCreate()" style="flex:1;padding:12px;font-size:0.95rem;font-weight:600;">Create RFQ with These Items →</button>
+          <button class="btn btn-secondary" onclick="closeRFQImportModal()" style="padding:12px 20px;">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="rfq-import-loading" style="display:none;text-align:center;padding:32px;">
+        <div style="font-size:32px;margin-bottom:12px;">⏳</div>
+        <div style="font-weight:600;">Reading your file...</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">Extracting line items from your spreadsheet</div>
+      </div>
+
     </div>
   </div>
 </div>
 
 <!-- New RFQ Modal -->
 <div class="modal-overlay" id="new-rfq-modal">
-  <div class="modal" style="max-width:780px;width:95%;">
+  <div class="modal" style="max-width:900px;width:98%;max-height:95vh;">
     <div class="modal-header flex-between">
       <h3 class="modal-title">New RFQ</h3>
       <button class="modal-close" onclick="$('new-rfq-modal').classList.remove('open')">✕</button>
@@ -8505,16 +8587,36 @@ async function loadAuditLog(ticketId) {
 </div>
 
 <!-- RFQ Detail Overlay -->
-<div class="rfq-detail-overlay" id="rfq-detail-overlay">
-  <div class="rfq-detail-panel">
-    <div style="background:#0C0C0C;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <span id="rfqd-number" style="font-size:1.1rem;font-weight:700;color:#FF6100;"></span>
-        <span id="rfqd-status-badge" class="rfq-status"></span>
-      </div>
-      <button onclick="closeRFQDetail()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;">✕</button>
+<!-- RFQ Detail Panel (inline, inside main-content) -->
+<div class="rfq-detail-overlay" id="rfq-detail-overlay" style="display:none;"></div>
+
+<!-- RFQ Print Setup Modal -->
+<div class="modal-overlay" id="rfq-print-modal">
+  <div class="modal" style="max-width:460px;width:95%;">
+    <div class="modal-header flex-between">
+      <h3 class="modal-title">Print RFQ</h3>
+      <button class="modal-close" onclick="$('rfq-print-modal').classList.remove('open')">✕</button>
     </div>
-    <div style="padding:0;" id="rfq-detail-body"></div>
+    <div class="modal-body" style="display:grid;gap:14px;">
+      <div>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Address to Supplier</label>
+        <select id="print-supplier-select" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
+          <option value="">— Generic (no supplier filled in) —</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Prepared by</label>
+        <input type="text" id="print-prepared-by" placeholder="e.g. Jeremy Williams" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Title / Role <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+        <input type="text" id="print-prepared-title" placeholder="e.g. Project Manager" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px;">
+      <button class="btn btn-secondary" onclick="$('rfq-print-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="rfqDoPrint()">Open Print Preview →</button>
+    </div>
   </div>
 </div>
 
@@ -8562,7 +8664,8 @@ function showRFQView() {
 
 async function loadRFQs() {
   try {
-    const res = await fetch('/api/rfqs');
+    const archived = _rfqTabStatus === 'ARCHIVED' ? '?archived=1' : '';
+    const res = await fetch('/api/rfqs' + archived);
     if (!res.ok) return;
     _rfqAll = await res.json();
     renderRFQList();
@@ -8588,7 +8691,7 @@ function setRFQTab(btn, status) {
   document.querySelectorAll('.rfq-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _rfqTabStatus = status;
-  renderRFQList();
+  loadRFQs(); // reload so archived filter applies
 }
 
 function filterRFQList() { renderRFQList(); }
@@ -8596,8 +8699,9 @@ function filterRFQList() { renderRFQList(); }
 function renderRFQList() {
   const search = ($('rfq-search')?.value||'').toLowerCase();
   const projId = $('rfq-filter-project')?.value||'';
+  const isArchived = _rfqTabStatus === 'ARCHIVED';
   let list = _rfqAll.filter(r => {
-    if (_rfqTabStatus && r.status !== _rfqTabStatus) return false;
+    if (!isArchived && _rfqTabStatus && r.status !== _rfqTabStatus) return false;
     if (projId && String(r.project_id) !== projId) return false;
     if (search && !r.rfq_number.toLowerCase().includes(search) && !r.title.toLowerCase().includes(search)) return false;
     return true;
@@ -8605,14 +8709,17 @@ function renderRFQList() {
   const today = new Date().toISOString().slice(0,10);
   $('rfq-list').innerHTML = list.length ? list.map(r => {
     const overdue = r.due_date && r.due_date < today && r.status !== 'APPROVED' && r.status !== 'CONVERTED';
-    return `<div class="rfq-card" onclick="openRFQDetail(${r.id})">
+    const archived = !!r.archived_at;
+    return `<div class="rfq-card" onclick="${archived ? '' : `openRFQDetail(${r.id})`}" style="${archived ? 'opacity:0.8;cursor:default;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-        <div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <span style="font-size:15px;font-weight:700;color:var(--orange);">${esc(r.rfq_number)}</span>
-          <span class="rfq-status rfq-status-${r.status}" style="margin-left:10px;">${r.status}</span>
+          <span class="rfq-status rfq-status-${r.status}">${r.status}</span>
+          ${archived ? `<span style="font-size:11px;background:#6b7280;color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;">📦 ARCHIVED</span>` : ''}
         </div>
-        <div style="font-size:12px;color:var(--gray-400);">
-          ${r.due_date ? `<span style="${overdue?'color:#dc2626;font-weight:700;':''}">Due: ${r.due_date}</span>` : ''}
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${r.due_date ? `<span style="font-size:12px;${overdue?'color:#dc2626;font-weight:700;':'color:var(--gray-400);'}">Due: ${r.due_date}</span>` : ''}
+          ${archived ? `<button onclick="rfqRestoreFromList(${r.id},event)" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px;">↩ Restore</button>` : ''}
         </div>
       </div>
       <div style="margin-top:6px;font-size:14px;font-weight:600;">${esc(r.title)}</div>
@@ -8623,36 +8730,86 @@ function renderRFQList() {
         <span>By ${esc(r.created_by_name||'—')} · ${r.created_at?r.created_at.slice(0,10):''}</span>
       </div>
     </div>`;
-  }).join('') : `<div style="padding:40px;text-align:center;color:var(--gray-400);">No RFQs found.</div>`;
+  }).join('') : `<div style="padding:40px;text-align:center;color:var(--gray-400);">${isArchived ? 'No archived RFQs.' : 'No RFQs found.'}</div>`;
 }
 
 // ── RFQ Import ──
+function closeRFQImportModal() {
+  document.getElementById('rfq-import-modal').style.display = 'none';
+  document.getElementById('rfq-import-step1').style.display = 'block';
+  document.getElementById('rfq-import-preview').style.display = 'none';
+  document.getElementById('rfq-import-loading').style.display = 'none';
+  document.getElementById('rfq-import-table').innerHTML = '';
+  document.getElementById('rfq-import-count').textContent = '';
+  window._rfqImportItems = null;
+  rfqClearFile();
+}
+
+function rfqFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('rfq-drop-zone').style.display = 'none';
+  const chosen = document.getElementById('rfq-file-chosen');
+  chosen.style.display = 'flex';
+  document.getElementById('rfq-file-name').textContent = file.name;
+  document.getElementById('rfq-file-size').textContent = (file.size / 1024).toFixed(1) + ' KB';
+  const btn = document.getElementById('rfq-preview-btn');
+  btn.disabled = false;
+  btn.style.opacity = '1';
+  btn.style.cursor = 'pointer';
+}
+
+function rfqClearFile() {
+  document.getElementById('rfq-import-file').value = '';
+  document.getElementById('rfq-file-chosen').style.display = 'none';
+  document.getElementById('rfq-drop-zone').style.display = 'flex';
+  const btn = document.getElementById('rfq-preview-btn');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  btn.style.cursor = 'not-allowed';
+}
+
+
 async function rfqImportPreview() {
   const file = document.getElementById('rfq-import-file').files[0];
-  if (!file) return alert('Please select a file');
+  if (!file) return;
+  document.getElementById('rfq-import-step1').style.display = 'none';
+  document.getElementById('rfq-import-loading').style.display = 'block';
+  document.getElementById('rfq-import-preview').style.display = 'none';
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch('/api/rfqs/import-preview', {method:'POST', body:fd});
-  const data = await res.json();
-  if (!res.ok) return alert(data.error || 'Import failed');
-  document.getElementById('rfq-import-count').textContent = `Found ${data.count} line items — review below:`;
+  let res, data;
+  try {
+    res = await fetch('/api/rfqs-import', {method:'POST', body:fd});
+    data = await res.json();
+  } catch(e) {
+    document.getElementById('rfq-import-step1').style.display = 'block';
+    document.getElementById('rfq-import-loading').style.display = 'none';
+    return alert('Network error: ' + e.message);
+  }
+  document.getElementById('rfq-import-loading').style.display = 'none';
+  if (!res.ok) {
+    document.getElementById('rfq-import-step1').style.display = 'block';
+    return alert('Error: ' + (data.error || 'Import failed'));
+  }
+  document.getElementById('rfq-import-count').textContent = `Found ${data.count} line item${data.count===1?'':'s'} — review before creating your RFQ:`;
   document.getElementById('rfq-import-table').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead><tr style="background:#1c1e22;color:#fff;position:sticky;top:0;">
-        <th style="padding:6px 8px;text-align:center;">#</th>
-        <th style="padding:6px 8px;text-align:center;">Qty</th>
-        <th style="padding:6px 8px;text-align:center;">Unit</th>
-        <th style="padding:6px 8px;">P/N</th>
-        <th style="padding:6px 8px;">Size</th>
-        <th style="padding:6px 8px;">Description</th>
+        <th style="padding:8px;text-align:center;font-weight:600;">#</th>
+        <th style="padding:8px;text-align:center;font-weight:600;">Qty</th>
+        <th style="padding:8px;text-align:center;font-weight:600;">Unit</th>
+        <th style="padding:8px;font-weight:600;">P/N</th>
+        <th style="padding:8px;font-weight:600;">Size</th>
+        <th style="padding:8px;font-weight:600;">Description</th>
       </tr></thead>
-      <tbody>${data.items.map(it=>`<tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:5px 8px;text-align:center;">${it.item_num}</td>
-        <td style="text-align:center;padding:5px 8px;">${it.qty}</td>
-        <td style="text-align:center;padding:5px 8px;">${it.unit}</td>
-        <td style="padding:5px 8px;">${it.part_number||''}</td>
-        <td style="padding:5px 8px;">${it.size||''}</td>
-        <td style="padding:5px 8px;">${it.description}</td>
+      <tbody>${data.items.map((it,i)=>`<tr style="background:${i%2===0?'#fff':'#f9fafb'};border-bottom:1px solid #e5e7eb;">
+        <td style="padding:7px 8px;text-align:center;color:#6b7280;">${it.item_num}</td>
+        <td style="text-align:center;padding:7px 8px;font-weight:600;">${it.qty}</td>
+        <td style="text-align:center;padding:7px 8px;color:#6b7280;">${it.unit}</td>
+        <td style="padding:7px 8px;color:#374151;">${it.part_number||''}</td>
+        <td style="padding:7px 8px;color:#374151;">${it.size||''}</td>
+        <td style="padding:7px 8px;color:#111827;font-weight:500;">${it.description}</td>
       </tr>`).join('')}</tbody>
     </table>`;
   document.getElementById('rfq-import-preview').style.display = 'block';
@@ -8789,16 +8946,251 @@ async function deleteSupplier(id, name) {
 // ── RFQ Detail ──
 async function openRFQDetail(id) {
   _currentRFQId = id;
-  $('rfq-detail-overlay').classList.add('open');
+  $('rfq-list-card').style.display = 'none';
+  $('rfq-detail-panel').style.display = 'block';
   $('rfq-detail-body').innerHTML = `<div style="padding:40px;text-align:center;color:var(--gray-400);">Loading…</div>`;
   await loadAllSuppliers();
+  // Check if archived to set button label
+  try {
+    const r = await fetch(`/api/rfqs/${id}`);
+    const rfq = await r.json();
+    const btn = $('rfq-archive-btn');
+    if (btn) {
+      if (rfq.archived_at) {
+        btn.textContent = '↩ Restore';
+        btn.dataset.archived = '1';
+        btn.title = 'Restore this RFQ from archive';
+      } else {
+        btn.textContent = '📦 Archive';
+        btn.dataset.archived = '0';
+        btn.title = 'Move this RFQ to archive';
+      }
+    }
+  } catch(e) {}
   await renderRFQDetail(id);
 }
 
 function closeRFQDetail() {
-  $('rfq-detail-overlay').classList.remove('open');
+  $('rfq-detail-panel').style.display = 'none';
+  $('rfq-list-card').style.display = 'block';
   _currentRFQId = null;
   loadRFQs();
+}
+
+function rfqExportCurrent() {
+  if (_currentRFQId) window.open(`/api/rfqs/${_currentRFQId}/export`, '_blank');
+}
+
+async function rfqArchiveCurrent() {
+  if (!_currentRFQId) return;
+  const btn = $('rfq-archive-btn');
+  const isArchived = btn && btn.dataset.archived === '1';
+  const action = isArchived ? 'restore' : 'archive';
+  const label = isArchived ? 'restore this RFQ?' : 'archive this RFQ?';
+  if (!confirm(`Are you sure you want to ${label}`)) return;
+  const res = await fetch(`/api/rfqs/${_currentRFQId}/${action}`, { method: 'POST' });
+  if (!res.ok) { const d = await res.json(); return alert(d.error || 'Failed'); }
+  closeRFQDetail();
+}
+
+async function rfqDeleteCurrent() {
+  if (!_currentRFQId) return;
+  if (!confirm('Permanently delete this RFQ? This cannot be undone.')) return;
+  const res = await fetch(`/api/rfqs/${_currentRFQId}`, { method: 'DELETE' });
+  if (!res.ok) { const d = await res.json(); return alert(d.error || 'Failed to delete'); }
+  closeRFQDetail();
+}
+
+async function rfqSendToSupplier(rfqId, rfqSupplierId, e) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  if (!confirm('Send this RFQ by email to the supplier?')) return;
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    const res = await fetch(`/api/rfqs/${rfqId}/suppliers/${rfqSupplierId}/send`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert('Failed to send: ' + (data.error || 'Unknown error')); btn.disabled = false; btn.textContent = '✉ Send RFQ'; return; }
+    alert(`✅ RFQ sent to ${data.to}`);
+    await renderRFQDetail(rfqId);
+  } catch(err) {
+    alert('Network error: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '✉ Send RFQ';
+  }
+}
+
+async function rfqRestoreFromList(id, e) {
+  e.stopPropagation();
+  if (!confirm('Restore this RFQ from archive?')) return;
+  const res = await fetch(`/api/rfqs/${id}/restore`, { method: 'POST' });
+  if (!res.ok) { const d = await res.json(); return alert(d.error || 'Failed'); }
+  loadRFQs();
+}
+
+function openRFQPrintModal() {
+  if (!_currentRFQId) return;
+  const sel = $('print-supplier-select');
+  sel.innerHTML = '<option value="">— Generic (no supplier filled in) —</option>';
+  (_rfqSuppliers || []).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.dataset.name = s.supplier_name || '';
+    opt.dataset.email = s.supplier_email || '';
+    opt.dataset.phone = s.supplier_phone || '';
+    opt.textContent = s.supplier_name;
+    sel.appendChild(opt);
+  });
+  $('rfq-print-modal').classList.add('open');
+}
+
+async function rfqDoPrint() {
+  $('rfq-print-modal').classList.remove('open');
+  const sel = $('print-supplier-select');
+  const selOpt = sel.options[sel.selectedIndex];
+  const supplier = sel.value ? {
+    name: selOpt.dataset.name,
+    email: selOpt.dataset.email,
+    phone: selOpt.dataset.phone
+  } : null;
+  const preparedBy = $('print-prepared-by').value.trim();
+  const preparedTitle = $('print-prepared-title').value.trim();
+  await rfqPrintCurrent(supplier, preparedBy, preparedTitle);
+}
+
+async function rfqPrintCurrent(supplier, preparedBy, preparedTitle) {
+  if (!_currentRFQId) return;
+  const [rfqRes, liRes] = await Promise.all([
+    fetch(`/api/rfqs/${_currentRFQId}`),
+    fetch(`/api/rfqs/${_currentRFQId}/line-items`)
+  ]);
+  const rfq = await rfqRes.json();
+  const items = liRes.ok ? await liRes.json() : [];
+
+  const td = (content='', align='center', bold=false) =>
+    `<td style="padding:6px 8px;border:1px solid #ccc;text-align:${align};${bold?'font-weight:700;':''}white-space:pre-wrap;">${content}</td>`;
+
+  const itemRows = items.map((it, i) => `<tr style="background:${i%2===0?'#fff':'#f7f7f7'};">
+    ${td(it.item_num||i+1)}${td(it.qty||'')}${td(it.unit||'EA')}${td(esc(it.part_number||''),'left')}${td(esc(it.size||''),'center')}${td(esc(it.description||''),'left')}${td('','right')}${td('','right')}
+  </tr>`).join('');
+
+  // Pad to at least 12 rows so there's space to write in more items
+  const blankCount = Math.max(0, 12 - items.length);
+  const blankRows = Array(blankCount).fill(`<tr style="height:22px;">
+    ${td('')}${td('')}${td('')}${td('')}${td('')}${td('')}${td('')}${td('')}
+  </tr>`).join('');
+
+  const today = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+  const dueDate = rfq.due_date ? new Date(rfq.due_date).toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}) : '';
+  const supName  = supplier?.name  || '';
+  const supEmail = supplier?.email || '';
+  const supPhone = supplier?.phone || '';
+
+  const html = `<!DOCTYPE html><html><head><title>RFQ ${esc(rfq.rfq_number||'')}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:Calibri,Arial,sans-serif;font-size:10.5pt;color:#111;background:#fff;}
+    @page{margin:12mm 14mm;size:letter portrait;}
+    .hdr{background:#0C0C0C;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;}
+    .hdr-name{font-size:17pt;font-weight:700;letter-spacing:0.01em;}
+    .hdr-addr{font-size:8pt;text-align:right;line-height:1.7;opacity:0.85;}
+    .tagline{background:#FF6100;color:#fff;font-size:8.5pt;font-weight:700;letter-spacing:0.12em;padding:4px 16px;}
+    .rfq-title{font-size:22pt;font-weight:700;padding:10px 16px 2px;}
+    .orange-bar{height:3px;background:#FF6100;margin:4px 16px 10px;}
+    .info-table{width:calc(100% - 32px);margin:0 16px 10px;border-collapse:collapse;font-size:10pt;}
+    .info-table td{padding:3px 6px;vertical-align:top;}
+    .lbl{font-weight:700;width:90px;color:#374151;}
+    .val{border-bottom:1px solid #ddd;min-width:160px;}
+    table.items{width:calc(100% - 32px);margin:0 16px;border-collapse:collapse;font-size:10pt;}
+    table.items thead tr{background:#1c1e22;color:#fff;}
+    table.items thead th{padding:7px 8px;font-weight:700;font-size:9.5pt;}
+    table.items thead th.l{text-align:left;}
+    .sub-row td{background:#f3f4f6;font-weight:600;font-size:10pt;border:1px solid #ccc;padding:6px 8px;}
+    .gst-row td{background:#fff;font-size:10pt;border:1px solid #ccc;padding:6px 8px;}
+    .total-row td{background:#FF6100;color:#fff;font-weight:700;font-size:10.5pt;border:1px solid #e05a00;padding:7px 8px;}
+    .notes{margin:12px 16px 0;font-size:8.5pt;color:#374151;border-top:1px solid #e5e7eb;padding-top:8px;}
+    .notes table{width:100%;border-collapse:collapse;}
+    .notes table td{padding:3px 6px;vertical-align:top;font-size:8.5pt;}
+    .notes .nl{font-weight:700;width:140px;color:#111;white-space:nowrap;}
+    .footer{margin-top:14px;border-top:3px solid #FF6100;padding:10px 16px 0;display:flex;justify-content:space-between;align-items:flex-start;}
+    .sig{font-size:9pt;color:#111;line-height:1.8;}
+    .co-foot{font-size:8pt;color:#6b7280;text-align:right;line-height:1.7;}
+  </style></head><body>
+
+  <div class="hdr">
+    <div class="hdr-name">J&amp;D WESTERN ELECTRIC LTD.</div>
+    <div class="hdr-addr">8716 106 St., Grande Prairie, AB T8V 4C7<br>587-343-4349 | jeremy@jdwesternelectric.ca</div>
+  </div>
+  <div class="tagline">POWER &nbsp;•&nbsp; PERFORMANCE &nbsp;•&nbsp; PEACE OF MIND</div>
+  <div class="rfq-title">RFQ</div>
+  <div class="orange-bar"></div>
+
+  <table class="info-table">
+    <tr>
+      <td class="lbl">PROJECT:</td><td class="val">${esc(rfq.project_name||rfq.proj_name||'')}</td>
+      <td style="width:30px;"></td>
+      <td class="lbl">REF:</td><td class="val" style="color:#FF6100;font-weight:700;">${esc(rfq.rfq_number||'')}</td>
+    </tr>
+    <tr>
+      <td class="lbl">SUPPLIER:</td><td class="val">${esc(supName)}</td>
+      <td></td>
+      <td class="lbl">Date:</td><td class="val">${today}</td>
+    </tr>
+    <tr>
+      <td class="lbl">EMAIL:</td><td class="val">${esc(supEmail)}</td>
+      <td></td>
+      <td class="lbl">Due Date:</td><td class="val" style="font-weight:700;">${dueDate}</td>
+    </tr>
+    <tr><td class="lbl">PHONE:</td><td class="val">${esc(supPhone)}</td><td></td><td></td><td></td></tr>
+    <tr><td class="lbl">ATTENTION:</td><td class="val">${esc(rfq.attention||'')}</td><td></td><td></td><td></td></tr>
+  </table>
+
+  <table class="items">
+    <thead><tr>
+      <th style="width:5%;text-align:center;">Item</th>
+      <th style="width:6%;text-align:center;">Qty</th>
+      <th style="width:7%;text-align:center;">UNITS</th>
+      <th class="l" style="width:13%;">P/N</th>
+      <th style="width:8%;text-align:center;">Size</th>
+      <th class="l" style="width:37%;">Description</th>
+      <th style="width:12%;text-align:center;">UNIT COST</th>
+      <th style="width:12%;text-align:center;">TOTAL COST</th>
+    </tr></thead>
+    <tbody>
+      ${itemRows}
+      ${blankRows}
+    </tbody>
+    <tr class="sub-row"><td colspan="6" style="text-align:right;">SUB TOTAL</td><td style="text-align:right;"></td><td style="text-align:right;"></td></tr>
+    <tr class="gst-row"><td colspan="6" style="text-align:right;">GST</td><td style="text-align:right;"></td><td style="text-align:right;"></td></tr>
+    <tr class="total-row"><td colspan="6" style="text-align:right;">TOTAL</td><td style="text-align:right;"></td><td style="text-align:right;"></td></tr>
+  </table>
+
+  <div class="notes">
+    <table>
+      <tr><td class="nl">Quotation Due Date:</td><td>${dueDate}</td></tr>
+      <tr><td class="nl">Delivery:</td><td>Please specify the latest delivery of the above listed item(s) or if they may be stock? &nbsp;<em>(days/weeks)</em></td></tr>
+      <tr><td class="nl">Shipping Specification:</td><td>Please specify the approximate total dimensions and weights of this complete request of item(s). &nbsp;<em>(L×W×H, Lbs/Kgs)</em></td></tr>
+      <tr><td class="nl">Materials:</td><td>J&amp;D Western Electric will only accept new materials. We will not accept used materials nor reconditioned materials.</td></tr>
+      <tr><td class="nl">Shop Drawings:</td><td>Please supply a Shop Drawing package with Smith Landing RFQs for Engineering approval.</td></tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    <div class="sig">
+      J &amp; D WESTERN ELECTRIC LTD.<br>
+      ${preparedBy ? esc(preparedBy)+'<br>' : ''}
+      ${preparedTitle ? esc(preparedTitle)+'<br>' : ''}
+      587-343-4349 &nbsp;|&nbsp; jeremy@jdwesternelectric.ca
+    </div>
+    <div class="co-foot">jdwesternelectric.ca<br>587-343-4349</div>
+  </div>
+
+  <script>window.onload=()=>{ window.print(); }<\/script>
+  </body></html>`;
+
+  const w = window.open('','_blank','width=950,height=750');
+  w.document.write(html);
+  w.document.close();
 }
 
 async function renderRFQDetail(id) {
@@ -8880,14 +9272,24 @@ async function renderRFQDetail(id) {
     html += `<div class="rfq-section">
       <div class="rfq-section-title">Suppliers</div>
       ${rfq_suppliers.length ? rfq_suppliers.map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;gap:8px;">
-          <div>
-            <strong style="font-size:13px;">${esc(s.supplier_name)}</strong>
-            ${s.supplier_email ? `<span style="font-size:12px;color:var(--gray-400);margin-left:10px;">${esc(s.supplier_email)}</span>` : ''}
-            ${s.supplier_phone ? `<span style="font-size:12px;color:var(--gray-400);margin-left:10px;">${esc(s.supplier_phone)}</span>` : ''}
-            ${s.sent_at ? `<span style="font-size:11px;color:var(--green);margin-left:10px;">Sent ${s.sent_at.slice(0,10)}</span>` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;flex-wrap:wrap;gap:10px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div style="width:42px;height:42px;background:#FF6100;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <span style="color:#fff;font-size:17px;font-weight:800;">${esc(s.supplier_name).charAt(0).toUpperCase()}</span>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--text);">${esc(s.supplier_name)}</div>
+              <div style="display:flex;gap:14px;margin-top:3px;flex-wrap:wrap;">
+                ${s.supplier_email ? `<span style="font-size:12px;color:var(--gray-400);">✉ ${esc(s.supplier_email)}</span>` : ''}
+                ${s.supplier_phone ? `<span style="font-size:12px;color:var(--gray-400);">📞 ${esc(s.supplier_phone)}</span>` : ''}
+                ${s.sent_at ? `<span style="font-size:12px;color:var(--green);font-weight:600;">✓ Sent ${s.sent_at.slice(0,10)}</span>` : ''}
+              </div>
+            </div>
           </div>
-          <div style="display:flex;gap:6px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button onclick="rfqSendToSupplier(${id},${s.id},event)" class="btn btn-primary btn-sm" style="background:#FF6100;border-color:#FF6100;">
+              ${s.sent_at ? '↺ Resend Email' : '✉ Send RFQ'}
+            </button>
             <a href="/api/rfqs/${id}/export?supplier_id=${s.id}" class="btn btn-secondary btn-sm">⬇ Export XLS</a>
           </div>
         </div>`).join('') : `<div style="color:var(--gray-400);font-size:13px;">No suppliers added yet.</div>`}
@@ -8897,71 +9299,163 @@ async function renderRFQDetail(id) {
       </div>
     </div>`;
 
-    // Section 4: Quote Entry (SENT or QUOTED)
+    // Section 4: Quote Entry / Comparison / Approval / Issue POs
     if (isSentOrLater && line_items.length && rfq_suppliers.length) {
-      html += `<div class="rfq-section">
-        <div class="rfq-section-title">${isQuoted ? 'Quote Comparison' : 'Quote Entry'}</div>
-        <div class="quote-grid">
-          <table>
-            <thead>
-              <tr>
-                <th style="min-width:200px;">Description</th>
-                <th>Qty</th>
-                ${rfq_suppliers.map(s => `<th style="min-width:150px;">${esc(s.supplier_name)}</th>`).join('')}
-                ${!isQuoted ? '<th>Action</th>' : ''}
-              </tr>
-            </thead>
-            <tbody>
-              ${line_items.map(li => {
-                const liQuotes = rfq_suppliers.map(s => quoteMap[li.id]?.[s.id] || null);
-                const prices = liQuotes.filter(q=>q&&q.unit_price>0).map(q=>Number(q.unit_price));
-                const minPrice = prices.length ? Math.min(...prices) : null;
-                return `<tr>
-                  <td>${esc(li.description)}</td>
-                  <td>${li.qty} ${esc(li.unit)}</td>
-                  ${rfq_suppliers.map((s, si) => {
-                    const q = liQuotes[si];
-                    const isMin = q && minPrice && Number(q.unit_price)===minPrice;
-                    const isSel = q && q.is_selected;
-                    const bg = isSel ? 'background:rgba(21,128,61,.15);' : (isMin&&!isQuoted ? 'background:rgba(255,97,0,.08);' : '');
-                    if (!isQuoted) {
-                      return `<td style="${bg}">
-                        <input type="number" min="0" step="0.01" placeholder="Unit price"
-                          value="${q ? q.unit_price : ''}"
-                          style="width:90px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);font-size:11px;"
-                          data-li="${li.id}" data-sup="${s.id}"
-                          onchange="saveQuoteCell(${id},this)">
-                        ${isMin ? '<span style="font-size:10px;color:var(--orange);">★ Low</span>' : ''}
+      const isConverted = rfq.status === 'CONVERTED';
+      const isApproved = rfq.status === 'APPROVED';
+
+      if (rfq.status === 'SENT') {
+        // ── SENT: Quote Entry grid ──
+        html += `<div class="rfq-section">
+          <div class="rfq-section-title">Quote Entry</div>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="rfqAutoSelect(${id})">★ Auto-Select Best Price</button>
+            <button class="btn btn-primary btn-sm" onclick="rfqMarkQuoted(${id})">✓ Mark as Quoted</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:var(--surface);">
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:36px;">#</th>
+                  <th style="padding:6px 8px;border:1px solid var(--border);">Description</th>
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:55px;">Qty</th>
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:45px;">Unit</th>
+                  ${rfq_suppliers.map(s => `<th style="padding:6px 8px;border:1px solid var(--border);min-width:120px;">${esc(s.supplier_name)}</th>`).join('')}
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:60px;">Best</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${line_items.map(li => {
+                  const prices = rfq_suppliers.map(s => quoteMap[li.id]?.[s.id]).filter(q=>q&&q.unit_price>0).map(q=>Number(q.unit_price));
+                  const minPrice = prices.length ? Math.min(...prices) : null;
+                  return `<tr>
+                    <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;">${li.item_num}</td>
+                    <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.description)}</td>
+                    <td style="padding:5px 8px;border:1px solid var(--border);">${li.qty}</td>
+                    <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.unit)}</td>
+                    ${rfq_suppliers.map(s => {
+                      const q = quoteMap[li.id]?.[s.id];
+                      const val = q ? q.unit_price : '';
+                      const isMin = q && minPrice && Number(q.unit_price)===minPrice;
+                      return `<td style="padding:4px 6px;border:1px solid var(--border);background:${isMin?'rgba(21,128,61,.1)':''};">
+                        <input type="number" min="0" step="0.01" placeholder="0.00"
+                          value="${val}"
+                          data-line-item-id="${li.id}" data-supplier-id="${s.id}"
+                          style="width:90px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);font-size:12px;"
+                          onchange="rfqSaveQuoteCell(${id},this)">
                       </td>`;
-                    } else {
-                      return `<td class="${isSel?'quote-selected':''}" style="${bg}">
-                        ${q ? `<div style="font-weight:${isSel?'700':'400'};font-size:13px;">$${Number(q.unit_price).toFixed(2)}</div>
-                               ${isSel ? '<div style="font-size:10px;color:#15803d;">✓ Selected</div>' : ''}
-                               ${isMin&&!isSel ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 6px;" onclick="selectQuote(${id},${li.id},${s.id})">Select</button>` : ''}` : '<span style="color:var(--gray-400);font-size:11px;">—</span>'}
-                      </td>`;
-                    }
-                  }).join('')}
-                  ${!isQuoted ? `<td><button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectLowestQuote(${id},${li.id})">Auto-Select Low</button></td>` : ''}
-                </tr>`;
-              }).join('')}
-              ${isQuoted ? `<tr style="font-weight:700;background:var(--surface);">
-                <td colspan="2">Supplier Total</td>
-                ${rfq_suppliers.map(s => {
-                  let total = 0;
-                  line_items.forEach(li => {
-                    const q = quoteMap[li.id]?.[s.id];
-                    if (q && q.is_selected) total += Number(q.unit_price) * Number(li.qty);
-                  });
-                  return `<td>$${total.toFixed(2)}</td>`;
+                    }).join('')}
+                    <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;color:#15803d;font-weight:700;">
+                      ${minPrice ? `$${minPrice.toFixed(2)}` : '—'}
+                    </td>
+                  </tr>`;
                 }).join('')}
-              </tr>` : ''}
-            </tbody>
-          </table>
-        </div>
-        ${!isQuoted ? `<div style="margin-top:10px;display:flex;gap:8px;">
-          <button class="btn btn-primary btn-sm" onclick="markRFQQuoted(${id})">Mark as Quoted</button>
-        </div>` : ''}
-      </div>`;
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+      } else if (rfq.status === 'QUOTED') {
+        // ── QUOTED: Comparison & select ──
+        html += `<div class="rfq-section">
+          <div class="rfq-section-title">Quote Comparison</div>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="rfqAutoSelect(${id})">★ Auto-Select Best Price</button>
+            <button class="btn btn-primary btn-sm" style="background:#f59e0b;border-color:#f59e0b;" onclick="rfqApprove(${id})">✓ Approve Quotes</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:var(--surface);">
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:36px;">#</th>
+                  <th style="padding:6px 8px;border:1px solid var(--border);">Description</th>
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:55px;">Qty</th>
+                  <th style="padding:6px 8px;border:1px solid var(--border);width:45px;">Unit</th>
+                  ${rfq_suppliers.map(s => `<th style="padding:6px 8px;border:1px solid var(--border);min-width:140px;">${esc(s.supplier_name)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${line_items.map(li => {
+                  const prices = rfq_suppliers.map(s => quoteMap[li.id]?.[s.id]).filter(q=>q&&q.unit_price>0).map(q=>Number(q.unit_price));
+                  const minPrice = prices.length ? Math.min(...prices) : null;
+                  return `<tr>
+                    <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;">${li.item_num}</td>
+                    <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.description)}</td>
+                    <td style="padding:5px 8px;border:1px solid var(--border);">${li.qty}</td>
+                    <td style="padding:5px 8px;border:1px solid var(--border);">${esc(li.unit)}</td>
+                    ${rfq_suppliers.map(s => {
+                      const q = quoteMap[li.id]?.[s.id];
+                      if (!q || !q.unit_price) return `<td style="padding:5px 8px;border:1px solid var(--border);color:var(--gray-400);text-align:center;">—</td>`;
+                      const isSel = !!q.is_selected;
+                      const isMin = minPrice && Number(q.unit_price)===minPrice;
+                      const ext = (Number(q.unit_price)*Number(li.qty)).toFixed(2);
+                      return `<td style="padding:5px 8px;border:1px solid var(--border);background:${isSel?'rgba(21,128,61,.15)':''};cursor:pointer;"
+                        onclick="rfqToggleSelect(${id},${li.id},${s.id})">
+                        <div style="display:flex;align-items:center;gap:4px;">
+                          ${isSel ? '<span style="color:#15803d;font-weight:700;">✓</span>' : '<span style="color:var(--gray-400);">○</span>'}
+                          <span style="font-weight:${isSel?'700':'400'};${isMin?'color:#15803d;':''}">$${Number(q.unit_price).toFixed(2)}</span>
+                          <span style="color:var(--gray-400);font-size:11px;">= $${ext}</span>
+                        </div>
+                        ${isMin&&!isSel ? '<div style="font-size:10px;color:#f59e0b;">★ Low</div>' : ''}
+                      </td>`;
+                    }).join('')}
+                  </tr>`;
+                }).join('')}
+                <tr style="font-weight:700;background:var(--surface);">
+                  <td colspan="4" style="padding:6px 8px;border:1px solid var(--border);">Selected Total</td>
+                  ${rfq_suppliers.map(s => {
+                    let total = 0;
+                    line_items.forEach(li => {
+                      const q = quoteMap[li.id]?.[s.id];
+                      if (q && q.is_selected) total += Number(q.unit_price) * Number(li.qty);
+                    });
+                    return `<td style="padding:6px 8px;border:1px solid var(--border);">$${total.toFixed(2)}</td>`;
+                  }).join('')}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--gray-400);">Click any cell to toggle selection for that line item.</div>
+        </div>`;
+      } else if (isApproved || isConverted) {
+        // ── APPROVED/CONVERTED: PO issuance summary ──
+        // Group selected quotes by supplier
+        const poGroups = {};
+        rfq_suppliers.forEach(s => { poGroups[s.id] = { supplier: s, items: [], total: 0 }; });
+        quotes.filter(q=>q.is_selected).forEach(q => {
+          const li = line_items.find(l=>l.id===q.rfq_line_item_id);
+          const s = rfq_suppliers.find(s=>s.id===q.rfq_supplier_id);
+          if (li && s && poGroups[s.id]) {
+            const ext = Number(q.unit_price)*Number(li.qty);
+            poGroups[s.id].items.push({ li, q, ext });
+            poGroups[s.id].total += ext;
+          }
+        });
+        const activeGroups = Object.values(poGroups).filter(g=>g.items.length>0);
+
+        html += `<div class="rfq-section">
+          <div class="rfq-section-title">Issue Purchase Orders</div>`;
+
+        if (isConverted) {
+          html += `<div style="margin-bottom:12px;padding:10px 14px;background:rgba(21,128,61,.1);border:1px solid rgba(21,128,61,.3);border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">
+            ✓ POs have been issued. RFQ is CONVERTED.
+          </div>`;
+        }
+
+        if (activeGroups.length) {
+          html += `<div style="display:grid;gap:12px;margin-bottom:14px;">
+            ${activeGroups.map(g => `
+              <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--surface);">
+                <div style="font-size:14px;font-weight:700;margin-bottom:8px;">${esc(g.supplier.supplier_name)} — ${g.items.length} item${g.items.length!==1?'s':''} — $${g.total.toFixed(2)}</div>
+                <div style="font-size:11px;color:var(--gray-400);">${g.items.map(i=>`#${i.li.item_num} ${esc(i.li.description)} × ${i.li.qty} ${esc(i.li.unit)} @ $${Number(i.q.unit_price).toFixed(2)}`).join(' | ')}</div>
+              </div>
+            `).join('')}
+          </div>
+          ${isApproved ? `<button class="btn btn-primary btn-sm" onclick="rfqIssuePOs(${id})">Issue All POs</button>` : ''}`;
+        } else {
+          html += `<div style="color:var(--gray-400);font-size:13px;">No quotes selected. Go back to QUOTED status to select quotes.</div>`;
+        }
+        html += `</div>`;
+      }
     }
 
     // Section 5: Change Order (APPROVED or CONVERTED)
@@ -8978,54 +9472,102 @@ async function renderRFQDetail(id) {
   }
 }
 
-async function saveQuoteCell(rfqId, input) {
-  const liId = parseInt(input.dataset.li);
-  const supId = parseInt(input.dataset.sup);
-  const price = parseFloat(input.value)||0;
+async function rfqSaveQuoteCell(rfqId, input) {
+  const liId = parseInt(input.dataset.lineItemId);
+  const supId = parseInt(input.dataset.supplierId);
+  const price = parseFloat(input.value) || 0;
   await fetch(`/api/rfqs/${rfqId}/quotes`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify([{ rfq_line_item_id: liId, rfq_supplier_id: supId, unit_price: price, lead_time:'', notes:'' }])
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([{ rfq_line_item_id: liId, rfq_supplier_id: supId, unit_price: price, lead_time: '', notes: '' }])
   });
 }
 
-async function selectQuote(rfqId, liId, supId) {
+// Legacy alias kept for any old references
+async function saveQuoteCell(rfqId, input) { return rfqSaveQuoteCell(rfqId, input); }
+
+async function rfqSaveQuotes(rfqId) {
+  const inputs = document.querySelectorAll(`input[data-line-item-id]`);
+  const quotes = [];
+  inputs.forEach(inp => {
+    quotes.push({
+      rfq_line_item_id: parseInt(inp.dataset.lineItemId),
+      rfq_supplier_id: parseInt(inp.dataset.supplierId),
+      unit_price: parseFloat(inp.value) || 0,
+      lead_time: '', notes: ''
+    });
+  });
+  if (!quotes.length) return;
+  await fetch(`/api/rfqs/${rfqId}/quotes`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(quotes)
+  });
+}
+
+async function rfqAutoSelect(rfqId) {
+  // Save any open inputs first
+  await rfqSaveQuotes(rfqId);
+  const res = await fetch(`/api/rfqs/${rfqId}/auto-select`, { method: 'POST' });
+  if (!res.ok) { const d = await res.json(); alert(d.error || 'Auto-select failed'); return; }
+  await renderRFQDetail(rfqId);
+}
+
+async function rfqMarkQuoted(rfqId) {
+  await rfqSaveQuotes(rfqId);
+  const res = await fetch(`/api/rfqs/${rfqId}/mark-quoted`, { method: 'POST' });
+  if (!res.ok) { const d = await res.json(); alert(d.error || 'Failed'); return; }
+  await renderRFQDetail(rfqId);
+  updateRFQBadge(rfqId, 'QUOTED');
+}
+
+async function rfqToggleSelect(rfqId, lineItemId, supplierId) {
   await fetch(`/api/rfqs/${rfqId}/select-quote`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ rfq_line_item_id: liId, rfq_supplier_id: supId })
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rfq_line_item_id: lineItemId, rfq_supplier_id: supplierId })
   });
   await renderRFQDetail(rfqId);
 }
 
+async function rfqApprove(rfqId) {
+  if (!confirm('Approve this RFQ and lock in the selected quotes?')) return;
+  const res = await fetch(`/api/rfqs/${rfqId}/approve`, { method: 'POST' });
+  if (!res.ok) { const d = await res.json(); alert(d.error || 'Failed'); return; }
+  await renderRFQDetail(rfqId);
+  updateRFQBadge(rfqId, 'APPROVED');
+}
+
+async function rfqIssuePOs(rfqId) {
+  if (!confirm('Issue Purchase Orders for all selected quotes? This will mark the RFQ as CONVERTED.')) return;
+  const res = await fetch(`/api/rfqs/${rfqId}/issue-pos`, { method: 'POST' });
+  const d = await res.json();
+  if (!res.ok) { alert(d.error || 'Failed to issue POs'); return; }
+  const poList = d.pos.map(p => `${p.po_number} — ${p.supplier_name}`).join('\n');
+  alert(`Purchase Orders created:\n\n${poList}`);
+  await renderRFQDetail(rfqId);
+  updateRFQBadge(rfqId, 'CONVERTED');
+}
+
+// Legacy functions kept for compatibility
+async function selectQuote(rfqId, liId, supId) { return rfqToggleSelect(rfqId, liId, supId); }
+
 async function selectLowestQuote(rfqId, liId) {
-  // Collect all cells for this line item and find min
   let minPrice = Infinity, minSupId = null;
-  document.querySelectorAll(`input[data-li="${liId}"]`).forEach(inp => {
+  document.querySelectorAll(`input[data-line-item-id="${liId}"]`).forEach(inp => {
     const v = parseFloat(inp.value);
-    if (v > 0 && v < minPrice) { minPrice = v; minSupId = parseInt(inp.dataset.sup); }
+    if (v > 0 && v < minPrice) { minPrice = v; minSupId = parseInt(inp.dataset.supplierId); }
   });
   if (!minSupId) return;
-  await selectQuote(rfqId, liId, minSupId);
+  await rfqToggleSelect(rfqId, liId, minSupId);
 }
 
 async function markRFQSent(id) {
-  await fetch(`/api/rfqs/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status:'SENT' }) });
+  await fetch(`/api/rfqs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'SENT' }) });
   await renderRFQDetail(id);
   updateRFQBadge(id, 'SENT');
 }
 
-async function markRFQQuoted(id) {
-  await fetch(`/api/rfqs/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status:'QUOTED' }) });
-  await renderRFQDetail(id);
-  updateRFQBadge(id, 'QUOTED');
-}
+async function markRFQQuoted(id) { return rfqMarkQuoted(id); }
 
-async function approveRFQ(id) {
-  if (!confirm('Approve this RFQ?')) return;
-  const res = await fetch(`/api/rfqs/${id}/approve`, { method:'POST' });
-  if (!res.ok) { const d=await res.json(); alert(d.error||'Failed'); return; }
-  await renderRFQDetail(id);
-  updateRFQBadge(id, 'APPROVED');
-}
+async function approveRFQ(id) { return rfqApprove(id); }
 
 function updateRFQBadge(id, status) {
   // Update card in list if visible

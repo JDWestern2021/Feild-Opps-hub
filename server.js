@@ -3648,9 +3648,10 @@ app.post('/api/sop/documents/:id/restore', requireAdmin, async (req, res) => {
 
 async function generateRFQNumber(client) {
   const year = new Date().getFullYear();
+  const yr2 = String(year).slice(-2);
   await client.query(`INSERT INTO rfq_sequence (year,last_seq) VALUES ($1,0) ON CONFLICT DO NOTHING`,[year]);
   const r = await client.query(`UPDATE rfq_sequence SET last_seq=last_seq+1 WHERE year=$1 RETURNING last_seq`,[year]);
-  return `JD-RFQ-${year}-${String(r.rows[0].last_seq).padStart(4,'0')}`;
+  return `JD-RFQ-${yr2}-${String(r.rows[0].last_seq).padStart(4,'0')}`;
 }
 
 // ── Suppliers ──
@@ -3703,8 +3704,13 @@ app.delete('/api/suppliers/:id', requireAdmin, async (req, res) => {
 // ── RFQs ──
 app.get('/api/rfqs', requireAuth, async (req, res) => {
   try {
-    let where = 'WHERE 1=1';
+    let where = 'WHERE r.deleted_at IS NULL';
     const params = [];
+    if (req.query.archived === '1') {
+      where = 'WHERE r.deleted_at IS NULL AND r.archived_at IS NOT NULL';
+    } else {
+      where += ' AND r.archived_at IS NULL';
+    }
     if (req.query.status) { params.push(req.query.status); where += ` AND r.status=$${params.length}`; }
     if (req.query.project_id) { params.push(req.query.project_id); where += ` AND r.project_id=$${params.length}`; }
     const { rows } = await pool.query(
@@ -3777,12 +3783,41 @@ app.patch('/api/rfqs/:id', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Archive
+app.post('/api/rfqs/:id/archive', requireAuth, async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const { rowCount } = await pool.query(
+      `UPDATE rfqs SET archived_at=$1, updated_at=$1 WHERE id=$2 AND deleted_at IS NULL`,
+      [now, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Restore from archive
+app.post('/api/rfqs/:id/restore', requireAuth, async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const { rowCount } = await pool.query(
+      `UPDATE rfqs SET archived_at=NULL, updated_at=$1 WHERE id=$2 AND deleted_at IS NULL`,
+      [now, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Soft delete (permanent removal — admin only)
 app.delete('/api/rfqs/:id', requireAdmin, async (req, res) => {
   try {
-    const { rows: [rfq] } = await pool.query('SELECT status FROM rfqs WHERE id=$1',[req.params.id]);
-    if (!rfq) return res.status(404).json({ error: 'Not found' });
-    if (rfq.status !== 'DRAFT') return res.status(409).json({ error: 'Only DRAFT RFQs can be deleted' });
-    await pool.query('DELETE FROM rfqs WHERE id=$1',[req.params.id]);
+    const now = new Date().toISOString();
+    const { rowCount } = await pool.query(
+      `UPDATE rfqs SET deleted_at=$1, updated_at=$1 WHERE id=$2`,
+      [now, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -3804,6 +3839,192 @@ app.delete('/api/rfqs/:id/suppliers/:rfqSupplierId', requireAdmin, async (req, r
     await pool.query('DELETE FROM rfq_suppliers WHERE id=$1 AND rfq_id=$2',[req.params.rfqSupplierId, req.params.id]);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/suppliers/:rfqSupplierId/send', requireAuth, async (req, res) => {
+  try {
+    // Logged-in user
+    const { rows: [sender] } = await pool.query('SELECT name,email FROM users WHERE id=$1', [req.session.userId]);
+    if (!sender) return res.status(401).json({ error: 'Not authenticated' });
+
+    // RFQ
+    const { rows: [rfq] } = await pool.query(
+      `SELECT r.*, p.name as proj_name FROM rfqs r LEFT JOIN projects p ON p.id=r.project_id WHERE r.id=$1`,
+      [req.params.id]
+    );
+    if (!rfq) return res.status(404).json({ error: 'RFQ not found' });
+
+    // Supplier on this RFQ
+    const { rows: [rs] } = await pool.query(
+      `SELECT rs.*, s.name as supplier_name, s.email as supplier_email, s.phone as supplier_phone, s.contact as supplier_contact
+       FROM rfq_suppliers rs JOIN suppliers s ON s.id=rs.supplier_id
+       WHERE rs.id=$1 AND rs.rfq_id=$2`,
+      [req.params.rfqSupplierId, req.params.id]
+    );
+    if (!rs) return res.status(404).json({ error: 'Supplier not found on this RFQ' });
+    if (!rs.supplier_email) return res.status(400).json({ error: 'Supplier has no email address on file' });
+
+    // Line items
+    const { rows: lineItems } = await pool.query(
+      `SELECT * FROM rfq_line_items WHERE rfq_id=$1 ORDER BY sort_order, item_num`,
+      [req.params.id]
+    );
+
+    // Build Excel attachment using ExcelJS
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'J&D Western Electric FieldHub';
+    const ws = wb.addWorksheet('RFQ', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true } });
+    ws.columns = [{width:6},{width:8},{width:8},{width:14},{width:10},{width:40},{width:14},{width:14}];
+
+    const BLACK='0C0C0C', ORANGE='FF6100', WHITE='FFFFFFFF', DARKGRAY='1c1e22', LIGHTGRAY='F3F4F6';
+    const fill = c => ({type:'pattern',pattern:'solid',fgColor:{argb:c.length===6?'FF'+c:c}});
+    const font = (c,bold=false,size=11) => ({name:'Calibri',color:{argb:c.length===6?'FF'+c:c},bold,size});
+    const bdr = () => ({top:{style:'thin',color:{argb:'FFD1D5DB'}},bottom:{style:'thin',color:{argb:'FFD1D5DB'}},left:{style:'thin',color:{argb:'FFD1D5DB'}},right:{style:'thin',color:{argb:'FFD1D5DB'}}});
+
+    ws.mergeCells('A1:F1'); ws.mergeCells('G1:H1'); ws.getRow(1).height=36;
+    const r1=ws.getCell('A1'); r1.value='J&D WESTERN ELECTRIC LTD.'; r1.font=font(WHITE,true,18); r1.fill=fill(BLACK); r1.alignment={vertical:'middle',horizontal:'left',indent:1};
+    const r1r=ws.getCell('G1'); r1r.value='8716 106 St., Grande Prairie, AB T8V 4C7\n587-343-4349 | jeremy@jdwesternelectric.ca'; r1r.font=font(WHITE,false,9); r1r.fill=fill(BLACK); r1r.alignment={vertical:'middle',horizontal:'right',wrapText:true};
+    ws.mergeCells('A2:H2'); ws.getRow(2).height=18;
+    const r2=ws.getCell('A2'); r2.value='POWER  •  PERFORMANCE  •  PEACE OF MIND'; r2.font=font(WHITE,true,10); r2.fill=fill(ORANGE); r2.alignment={vertical:'middle',horizontal:'left',indent:1};
+    ws.mergeCells('A3:H3'); ws.getRow(3).height=8; ws.getCell('A3').fill=fill('FFFFFF');
+    ws.mergeCells('A4:D4'); ws.mergeCells('E4:H4'); ws.getRow(4).height=28;
+    ws.getCell('A4').value='RFQ'; ws.getCell('A4').font=font(BLACK,true,20);
+    ws.getCell('E4').value='REF: '+rfq.rfq_number; ws.getCell('E4').font=font(ORANGE,true,12); ws.getCell('E4').alignment={vertical:'middle',horizontal:'right'};
+    ws.mergeCells('A5:H5'); ws.getRow(5).height=4; ws.getCell('A5').fill=fill(ORANGE);
+    ws.mergeCells('A6:H6'); ws.getRow(6).height=6;
+
+    const dueDate = rfq.due_date || '';
+    const today = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+    const infoRows=[
+      ['PROJECT:',rfq.proj_name||rfq.project_name||'—','','','REF:',rfq.rfq_number],
+      ['SUPPLIER:',rs.supplier_name||'','','','Date:',today],
+      ['EMAIL:',rs.supplier_email||'','','','Due Date:',dueDate],
+      ['PHONE:',rs.supplier_phone||'','','','',''],
+      ['ATTENTION:',rs.supplier_contact||'','','','',''],
+    ];
+    infoRows.forEach((row,i)=>{
+      const rn=7+i; ws.getRow(rn).height=18;
+      ws.mergeCells(`B${rn}:D${rn}`); ws.mergeCells(`G${rn}:H${rn}`);
+      ws.getCell(`A${rn}`).value=row[0]; ws.getCell(`A${rn}`).font=font(BLACK,true,10);
+      ws.getCell(`B${rn}`).value=row[1]; ws.getCell(`B${rn}`).font=font(BLACK,false,10);
+      ws.getCell(`E${rn}`).value=row[4]; ws.getCell(`E${rn}`).font=font(BLACK,true,10);
+      ws.getCell(`G${rn}`).value=row[5]; ws.getCell(`G${rn}`).font=font(BLACK,false,10);
+    });
+    ws.getRow(12).height=8;
+
+    ws.getRow(13).height=22;
+    ['Item','Qty','Units','P/N','Size','Description','Unit Cost','Total Cost'].forEach((h,i)=>{
+      const col=String.fromCharCode(65+i), cell=ws.getCell(`${col}13`);
+      cell.value=h; cell.font=font(WHITE,true,10); cell.fill=fill(DARKGRAY);
+      cell.alignment={vertical:'middle',horizontal:i===5?'left':'center'}; cell.border=bdr();
+    });
+
+    lineItems.forEach((item,i)=>{
+      const rn=14+i; ws.getRow(rn).height=18;
+      const rowFill=fill(i%2===0?'FFFFFF':LIGHTGRAY);
+      [item.item_num||i+1,item.qty,item.unit,item.part_number,item.size,item.description,'',''].forEach((v,ci)=>{
+        const col=String.fromCharCode(65+ci), cell=ws.getCell(`${col}${rn}`);
+        cell.value=v||''; cell.font=font(BLACK,false,10); cell.fill=rowFill; cell.border=bdr();
+        cell.alignment={vertical:'middle',horizontal:ci===5?'left':'center',wrapText:ci===5};
+      });
+    });
+
+    // Blank padding rows (min 12 total)
+    const blankCount = Math.max(0, 12 - lineItems.length);
+    for(let i=0;i<blankCount;i++){
+      const rn=14+lineItems.length+i; ws.getRow(rn).height=18;
+      for(let ci=0;ci<8;ci++){
+        const cell=ws.getCell(`${String.fromCharCode(65+ci)}${rn}`);
+        cell.fill=fill(i%2===0?'FFFFFF':LIGHTGRAY); cell.border=bdr();
+      }
+    }
+
+    const lastRow=13+lineItems.length+blankCount;
+    const subRow=lastRow+2; ws.getRow(lastRow+1).height=6;
+    [['SUB TOTAL',false],['GST (5%)',false],['TOTAL',true]].forEach(([label,isTotal],i)=>{
+      const rn=subRow+i; ws.getRow(rn).height=20;
+      ws.mergeCells(`A${rn}:G${rn}`);
+      const lc=ws.getCell(`A${rn}`); lc.value=label; lc.font=font(isTotal?WHITE:BLACK,true,10);
+      lc.fill=isTotal?fill(ORANGE):fill('FFFFFF'); lc.alignment={vertical:'middle',horizontal:'right'};
+      const hc=ws.getCell(`H${rn}`); hc.value=''; hc.font=font(isTotal?WHITE:BLACK,true,10);
+      hc.fill=isTotal?fill(ORANGE):fill('FFFFFF'); hc.border=bdr();
+    });
+
+    const frRow=subRow+5; ws.getRow(frRow-1).height=4;
+    ws.mergeCells(`A${frRow-1}:H${frRow-1}`); ws.getCell(`A${frRow-1}`).fill=fill(ORANGE);
+    ws.mergeCells(`A${frRow}:D${frRow}`); ws.mergeCells(`E${frRow}:H${frRow}`); ws.getRow(frRow).height=28;
+    ws.getCell(`A${frRow}`).value=`${sender.name}\nJ&D Western Electric Ltd.`; ws.getCell(`A${frRow}`).font=font(BLACK,false,9); ws.getCell(`A${frRow}`).alignment={vertical:'middle',wrapText:true};
+    ws.getCell(`E${frRow}`).value='J&D Western Electric Ltd. • 587-343-4349 • jdwesternelectric.ca'; ws.getCell(`E${frRow}`).font=font('6B7280',false,8); ws.getCell(`E${frRow}`).alignment={vertical:'middle',horizontal:'right'};
+
+    const xlsxBuffer = await wb.xlsx.writeBuffer();
+
+    // SMTP
+    const smtpHost = await getSetting('smtp_host');
+    if (!smtpHost) return res.status(500).json({ error: 'Email not configured. Set SMTP settings in admin panel.' });
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: parseInt(await getSetting('smtp_port','587')),
+      auth: { user: await getSetting('smtp_user'), pass: await getSetting('smtp_pass') }
+    });
+    const fromAddr = await getSetting('smtp_from','jeremy@jdwesternelectric.ca');
+    const projectName = rfq.proj_name || rfq.project_name || 'J&D Western Electric';
+    const subject = `RFQ ${rfq.rfq_number} — ${projectName}${dueDate ? ' — Due ' + dueDate : ''}`;
+
+    await transporter.sendMail({
+      from: `"J&D Western Electric" <${fromAddr}>`,
+      replyTo: `"${sender.name}" <${sender.email}>`,
+      to: rs.supplier_email,
+      subject,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:#0C0C0C;padding:20px 24px;">
+            <div style="color:#fff;font-size:20px;font-weight:700;">J&D WESTERN ELECTRIC LTD.</div>
+            <div style="color:#FF6100;font-size:11px;font-weight:700;letter-spacing:0.1em;margin-top:4px;">POWER • PERFORMANCE • PEACE OF MIND</div>
+          </div>
+          <div style="padding:28px 24px;background:#fff;border:1px solid #e5e7eb;">
+            <p style="margin:0 0 16px;font-size:15px;">Hi${rs.supplier_contact ? ' '+rs.supplier_contact : ''},</p>
+            <p style="margin:0 0 16px;font-size:14px;color:#374151;">
+              Please find attached our Request for Quotation <strong>${rfq.rfq_number}</strong> for the <strong>${projectName}</strong> project.
+            </p>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px;">
+              <tr><td style="padding:6px 0;color:#6b7280;width:120px;">RFQ Number</td><td style="padding:6px 0;font-weight:600;color:#FF6100;">${rfq.rfq_number}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;">Project</td><td style="padding:6px 0;font-weight:600;">${projectName}</td></tr>
+              ${dueDate ? `<tr><td style="padding:6px 0;color:#6b7280;">Due Date</td><td style="padding:6px 0;font-weight:700;color:#dc2626;">${dueDate}</td></tr>` : ''}
+              <tr><td style="padding:6px 0;color:#6b7280;">Line Items</td><td style="padding:6px 0;">${lineItems.length} item${lineItems.length!==1?'s':''}</td></tr>
+            </table>
+            <p style="margin:0 0 16px;font-size:14px;color:#374151;">
+              Please review the attached Excel file and return your quotation at your earliest convenience${dueDate ? ' by <strong>'+dueDate+'</strong>' : ''}.
+            </p>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">If you have any questions, please reply to this email or contact us directly.</p>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;padding:16px 24px;">
+            <div style="font-size:13px;font-weight:600;color:#111;">${sender.name}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">J&D Western Electric Ltd.</div>
+            <div style="font-size:12px;color:#6b7280;">587-343-4349 | jdwesternelectric.ca</div>
+          </div>
+          <div style="padding:12px 24px;font-size:11px;color:#9ca3af;text-align:center;">
+            This email was sent by ${sender.name} via the J&D Western Electric Field Operations Hub.<br>
+            Replies will go directly to ${sender.email}.
+          </div>
+        </div>`,
+      attachments: [{
+        filename: `JD-RFQ-${rfq.rfq_number}-${(rs.supplier_name||'supplier').replace(/[^a-z0-9]/gi,'_')}.xlsx`,
+        content: xlsxBuffer,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }]
+    });
+
+    // Mark supplier as sent
+    await pool.query(`UPDATE rfq_suppliers SET sent_at=$1 WHERE id=$2`, [new Date().toISOString(), rs.id]);
+    // Update RFQ status to SENT if still DRAFT
+    await pool.query(`UPDATE rfqs SET status=CASE WHEN status='DRAFT' THEN 'SENT' ELSE status END, updated_at=$1 WHERE id=$2`, [new Date().toISOString(), req.params.id]);
+
+    res.json({ ok: true, to: rs.supplier_email });
+  } catch(e) {
+    console.error('RFQ send error:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/rfqs/:id/quotes', requireAuth, async (req, res) => {
@@ -3839,11 +4060,155 @@ app.post('/api/rfqs/:id/approve', requireAdmin, async (req, res) => {
         approved_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS'),
         updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
        WHERE id=$2 RETURNING *`,
-      [req.session.userName||'Admin', req.params.id]
+      [req.session.userName||req.user?.name||'Admin', req.params.id]
     );
     if (!rfq) return res.status(404).json({ error: 'Not found' });
     res.json(rfq);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/mark-quoted', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE rfqs SET status='QUOTED', updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+       WHERE id=$1 AND status='SENT'`,
+      [req.params.id]
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/auto-select', requireAuth, async (req, res) => {
+  try {
+    // For each line item, find the quote with lowest unit_price > 0, select it
+    const { rows: lineItems } = await pool.query(
+      `SELECT DISTINCT rfq_line_item_id FROM rfq_quotes WHERE rfq_id=$1 AND unit_price > 0`,
+      [req.params.id]
+    );
+    for (const { rfq_line_item_id } of lineItems) {
+      const { rows: best } = await pool.query(
+        `SELECT id FROM rfq_quotes WHERE rfq_id=$1 AND rfq_line_item_id=$2 AND unit_price > 0
+         ORDER BY unit_price ASC LIMIT 1`,
+        [req.params.id, rfq_line_item_id]
+      );
+      if (!best.length) continue;
+      await pool.query(
+        `UPDATE rfq_quotes SET is_selected=0 WHERE rfq_id=$1 AND rfq_line_item_id=$2`,
+        [req.params.id, rfq_line_item_id]
+      );
+      await pool.query(
+        `UPDATE rfq_quotes SET is_selected=1 WHERE id=$1`,
+        [best[0].id]
+      );
+    }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/issue-pos', requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const rfqId = req.params.id;
+
+    // Get RFQ info
+    const { rows: [rfq] } = await client.query(`SELECT * FROM rfqs WHERE id=$1`, [rfqId]);
+    if (!rfq) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'RFQ not found' }); }
+
+    // Get line items
+    const { rows: lineItems } = await client.query(
+      `SELECT * FROM rfq_line_items WHERE rfq_id=$1 ORDER BY sort_order, item_num`, [rfqId]
+    );
+
+    // Get selected quotes with supplier info
+    const { rows: selectedQuotes } = await client.query(
+      `SELECT q.*, rs.supplier_id, s.name as supplier_name, s.id as sup_id
+       FROM rfq_quotes q
+       JOIN rfq_suppliers rs ON rs.id = q.rfq_supplier_id
+       JOIN suppliers s ON s.id = rs.supplier_id
+       WHERE q.rfq_id=$1 AND q.is_selected=1`,
+      [rfqId]
+    );
+
+    if (!selectedQuotes.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'No quotes selected. Please select at least one quote before issuing POs.' });
+    }
+
+    // Group by rfq_supplier_id
+    const bySupplier = {};
+    for (const q of selectedQuotes) {
+      if (!bySupplier[q.rfq_supplier_id]) {
+        bySupplier[q.rfq_supplier_id] = { supplier_name: q.supplier_name, supplier_id: q.supplier_id, quotes: [] };
+      }
+      bySupplier[q.rfq_supplier_id].quotes.push(q);
+    }
+
+    const createdPOs = [];
+    const date = new Date().toISOString().slice(0, 10);
+    const createdAt = new Date().toISOString();
+    const userName = req.user?.name || req.session?.userName || 'System';
+    const userId = req.user?.id || null;
+
+    for (const [rfqSupplierId, group] of Object.entries(bySupplier)) {
+      const po_number = await generatePONumber(client);
+
+      // Calculate totals
+      let subtotal = 0;
+      for (const q of group.quotes) {
+        const li = lineItems.find(l => l.id === q.rfq_line_item_id);
+        if (li) subtotal += Number(q.unit_price) * Number(li.qty);
+      }
+
+      // Build description listing items
+      const itemDescs = group.quotes.map(q => {
+        const li = lineItems.find(l => l.id === q.rfq_line_item_id);
+        return li ? `${li.item_num}. ${li.description} (${li.qty} ${li.unit} @ $${Number(q.unit_price).toFixed(2)})` : '';
+      }).filter(Boolean).join('; ');
+
+      // Insert PO
+      const { rows: [po] } = await client.query(
+        `INSERT INTO purchase_orders
+           (po_number, date, generated_by_id, generated_by_name, jobber_job_number, job_name,
+            supplier, description, estimated_amount, needs_reimbursement, status, created_at, project_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'Open',$10,$11) RETURNING id`,
+        [
+          po_number, date, userId, userName,
+          rfq.rfq_number,
+          rfq.project_name || rfq.title || rfq.rfq_number,
+          group.supplier_name,
+          `Auto-generated from RFQ ${rfq.rfq_number}: ${itemDescs}`,
+          subtotal,
+          createdAt,
+          rfq.project_id || null
+        ]
+      );
+
+      // Insert rfq_pos record
+      await client.query(
+        `INSERT INTO rfq_pos (rfq_id, po_id, po_number, rfq_supplier_id, supplier_name, subtotal, gst, total)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [rfqId, po.id, po_number, parseInt(rfqSupplierId), group.supplier_name, subtotal, 0, subtotal]
+      );
+
+      createdPOs.push({ po_number, supplier_name: group.supplier_name, po_id: po.id });
+    }
+
+    // Mark RFQ as CONVERTED
+    await client.query(
+      `UPDATE rfqs SET status='CONVERTED', updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS') WHERE id=$1`,
+      [rfqId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ok: true, pos: createdPOs });
+  } catch(e) {
+    await client.query('ROLLBACK');
+    console.error('issue-pos error:', e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
 });
 
 const ExcelJS = require('exceljs');
@@ -3876,14 +4241,14 @@ app.get('/api/rfqs/:id/export', requireAuth, async (req, res) => {
     const ws = wb.addWorksheet('RFQ', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true } });
 
     ws.columns = [
-      {width:6},  // A - Item
-      {width:8},  // B - Qty
-      {width:8},  // C - Units
-      {width:14}, // D - P/N
-      {width:10}, // E - Size
-      {width:40}, // F - Description
-      {width:14}, // G - Unit Cost
-      {width:14}, // H - Total Cost
+      {width:7},   // A - Item
+      {width:9},   // B - Qty
+      {width:9},   // C - Units
+      {width:18},  // D - P/N
+      {width:12},  // E - Size
+      {width:44},  // F - Description
+      {width:16},  // G - Unit Cost
+      {width:16},  // H - Total Cost
     ];
 
     const BLACK = '0C0C0C';
@@ -3930,13 +4295,9 @@ app.get('/api/rfqs/:id/export', requireAuth, async (req, res) => {
     ws.mergeCells('E4:H4');
     ws.getRow(4).height = 28;
     const r4title = ws.getCell('A4');
-    r4title.value = 'REQUEST FOR QUOTATION';
-    r4title.font = font(BLACK, true, 16);
+    r4title.value = 'RFQ';
+    r4title.font = font(BLACK, true, 22);
     r4title.alignment = {vertical:'middle'};
-    const r4ref = ws.getCell('E4');
-    r4ref.value = 'REF: ' + rfq.rfq_number;
-    r4ref.font = font(ORANGE, true, 12);
-    r4ref.alignment = {vertical:'middle', horizontal:'right'};
 
     // Row 5 — thin orange underline
     ws.mergeCells('A5:H5');
@@ -3947,27 +4308,34 @@ app.get('/api/rfqs/:id/export', requireAuth, async (req, res) => {
     ws.mergeCells('A6:H6');
     ws.getRow(6).height = 6;
 
-    // Rows 7-11 — Header info block
+    // Rows 7-11 — Header info block (no timestamp — due date only)
     const infoRows = [
-      ['PROJECT:', rfq.proj_name || rfq.project_name || '—', '', '', 'Date:', new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})],
-      ['SUPPLIER:', supplier?.name || '', '', '', 'Due Date:', rfq.due_date || ''],
-      ['EMAIL:', supplier?.email || '', '', '', '', ''],
-      ['PHONE:', supplier?.phone || '', '', '', '', ''],
-      ['ATTENTION:', rfq.attention || '', '', '', '', ''],
+      ['PROJECT:',   rfq.proj_name || rfq.project_name || '—', 'REF:',      rfq.rfq_number || ''],
+      ['SUPPLIER:',  supplier?.name  || '',                     'Due Date:', rfq.due_date   || ''],
+      ['EMAIL:',     supplier?.email || '',                     '',          ''],
+      ['PHONE:',     supplier?.phone || '',                     '',          ''],
+      ['ATTENTION:', rfq.attention   || '',                     '',          ''],
     ];
     infoRows.forEach((row, i) => {
       const rn = 7 + i;
-      ws.getRow(rn).height = 18;
+      ws.getRow(rn).height = 20;
       ws.mergeCells(`B${rn}:D${rn}`);
       ws.mergeCells(`G${rn}:H${rn}`);
       ws.getCell(`A${rn}`).value = row[0];
-      ws.getCell(`A${rn}`).font = font(BLACK, true, 10);
+      ws.getCell(`A${rn}`).font = font(BLACK, true, 11);
       ws.getCell(`B${rn}`).value = row[1];
-      ws.getCell(`B${rn}`).font = font(BLACK, false, 10);
-      ws.getCell(`E${rn}`).value = row[4];
-      ws.getCell(`E${rn}`).font = font(BLACK, true, 10);
-      ws.getCell(`G${rn}`).value = row[5];
-      ws.getCell(`G${rn}`).font = font(BLACK, false, 10);
+      // Supplier name row gets larger bold font
+      ws.getCell(`B${rn}`).font = i === 1
+        ? font(BLACK, true, 13)
+        : font(BLACK, false, 11);
+      ws.getCell(`B${rn}`).alignment = {vertical:'middle', wrapText: false};
+      ws.getCell(`E${rn}`).value = row[2];
+      ws.getCell(`E${rn}`).font = font(BLACK, true, 11);
+      ws.getCell(`G${rn}`).value = row[3];
+      ws.getCell(`G${rn}`).font = i === 1
+        ? font('DC2626', true, 11)   // Due date in red so it stands out
+        : font(ORANGE, true, 11);
+      ws.getCell(`G${rn}`).alignment = {vertical:'middle', horizontal:'right'};
     });
 
     // Row 12 blank
@@ -3989,7 +4357,9 @@ app.get('/api/rfqs/:id/export', requireAuth, async (req, res) => {
     const items = lineItems.rows;
     items.forEach((item, i) => {
       const rn = 14 + i;
-      ws.getRow(rn).height = 18;
+      // Taller rows so wrapped descriptions aren't cut off
+      const descLen = (item.description || '').length;
+      ws.getRow(rn).height = descLen > 50 ? 36 : 20;
       const rowFill = fill(i % 2 === 0 ? 'FFFFFF' : LIGHTGRAY);
       const vals = [item.item_num||i+1, item.qty, item.unit, item.part_number, item.size, item.description, '', ''];
       vals.forEach((v, ci) => {
@@ -4202,7 +4572,7 @@ app.get('/api/change-orders/:id/export', requireAuth, async (req, res) => {
 
 const rfqImportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10*1024*1024 } });
 
-app.post('/api/rfqs/import-preview', requireAuth, rfqImportUpload.single('file'), async (req, res) => {
+app.post('/api/rfqs-import', requireAuth, rfqImportUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({error:'No file uploaded'});
     const wb = new ExcelJS.Workbook();
@@ -4244,12 +4614,14 @@ app.post('/api/rfqs/import-preview', requireAuth, rfqImportUpload.single('file')
       const pnCol = colIdx(['p/n','part','part no','pn','catalog']);
       const sizeCol = colIdx(['size','dim']);
 
+      const skipPatterns = ['total','subtotal','sub total','gst','delivery','shipping','materials','western electric','vanderveen','vanderveen','project manager','cell:','587-','780-','@jdwestern','quotation due','shop drawing','please specify','please supply'];
       let itemNum = 1;
       for (let i=headerRow+1; i<rows.length; i++) {
         const r = rows[i].vals;
         const desc = descCol>=0 ? String(r[descCol]||'').trim() : r.filter(v=>String(v).length>5)[0]||'';
         if (!desc) continue;
-        if (String(desc).toLowerCase().includes('total') || String(desc).toLowerCase().includes('subtotal')) continue;
+        const descLower = desc.toLowerCase();
+        if (skipPatterns.some(p => descLower.includes(p))) continue;
         results.push({
           item_num: itemNum++,
           qty: qtyCol>=0 ? r[qtyCol]||1 : 1,
