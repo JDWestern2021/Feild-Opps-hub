@@ -624,6 +624,20 @@ async function initSchema() {
     created_at      TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
   )`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS rfq_po_items (
+    id                  SERIAL PRIMARY KEY,
+    rfq_id              INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE CASCADE,
+    rfq_pos_id          INTEGER REFERENCES rfq_pos(id) ON DELETE CASCADE,
+    po_id               INTEGER REFERENCES purchase_orders(id) ON DELETE SET NULL,
+    po_number           TEXT NOT NULL DEFAULT '',
+    rfq_line_item_id    INTEGER REFERENCES rfq_line_items(id) ON DELETE CASCADE,
+    rfq_supplier_id     INTEGER REFERENCES rfq_suppliers(id) ON DELETE SET NULL,
+    supplier_name       TEXT NOT NULL DEFAULT '',
+    unit_price          NUMERIC(12,2) NOT NULL DEFAULT 0,
+    qty                 NUMERIC(10,3) NOT NULL DEFAULT 0,
+    created_at          TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS')
+  )`);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS rfq_change_orders (
     id              SERIAL PRIMARY KEY,
     rfq_id          INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE RESTRICT,

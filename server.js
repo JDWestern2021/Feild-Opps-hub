@@ -3720,7 +3720,16 @@ app.get('/api/rfqs', requireAuth, async (req, res) => {
     } else {
       where += ' AND r.archived_at IS NULL';
     }
-    if (req.query.status) { params.push(req.query.status); where += ` AND r.status=$${params.length}`; }
+    // ?status=SENT means "SENT or beyond" (cumulative tab filter)
+    const statusOrder = ['DRAFT','SENT','QUOTED','APPROVED','CONVERTED'];
+    if (req.query.status && req.query.status !== 'ARCHIVED') {
+      const idx = statusOrder.indexOf(req.query.status);
+      if (idx >= 0) {
+        const eligible = statusOrder.slice(idx);
+        params.push(eligible);
+        where += ` AND r.status = ANY($${params.length})`;
+      }
+    }
     if (req.query.project_id) { params.push(req.query.project_id); where += ` AND r.project_id=$${params.length}`; }
     const { rows } = await pool.query(
       `SELECT r.*,
@@ -3770,7 +3779,18 @@ app.get('/api/rfqs/:id', requireAuth, async (req, res) => {
       [req.params.id]
     );
     const { rows: quotes } = await pool.query('SELECT * FROM rfq_quotes WHERE rfq_id=$1',[req.params.id]);
-    res.json({ rfq, line_items, rfq_suppliers, quotes });
+    // Which line items already have a PO issued (for ORDERED badge)
+    const { rows: orderedItems } = await pool.query(
+      'SELECT DISTINCT rfq_line_item_id, po_number, supplier_name FROM rfq_po_items WHERE rfq_id=$1',
+      [req.params.id]
+    );
+    // First date any supplier was sent this RFQ
+    const { rows: [sentRow] } = await pool.query(
+      `SELECT MIN(sent_at) AS first_sent_at FROM rfq_suppliers WHERE rfq_id=$1 AND sent_at IS NOT NULL`,
+      [req.params.id]
+    );
+    rfq.first_sent_at = sentRow?.first_sent_at || null;
+    res.json({ rfq, line_items, rfq_suppliers, quotes, ordered_items: orderedItems });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3893,9 +3913,14 @@ app.post('/api/rfqs/:id/suppliers/:rfqSupplierId/send', requireAuth, async (req,
     const font = (c,bold=false,size=11) => ({name:'Calibri',color:{argb:c.length===6?'FF'+c:c},bold,size});
     const bdr = () => ({top:{style:'thin',color:{argb:'FFD1D5DB'}},bottom:{style:'thin',color:{argb:'FFD1D5DB'}},left:{style:'thin',color:{argb:'FFD1D5DB'}},right:{style:'thin',color:{argb:'FFD1D5DB'}}});
 
-    ws.mergeCells('A1:F1'); ws.mergeCells('G1:H1'); ws.getRow(1).height=36;
-    const r1=ws.getCell('A1'); r1.value='J&D WESTERN ELECTRIC LTD.'; r1.font=font(WHITE,true,18); r1.fill=fill(BLACK); r1.alignment={vertical:'middle',horizontal:'left',indent:1};
+    ws.mergeCells('A1:F1'); ws.mergeCells('G1:H1'); ws.getRow(1).height=48;
+    const r1=ws.getCell('A1'); r1.value='J&D WESTERN ELECTRIC LTD.'; r1.font=font(WHITE,true,18); r1.fill=fill(BLACK); r1.alignment={vertical:'middle',horizontal:'left',indent:7};
     const r1r=ws.getCell('G1'); r1r.value='8716 106 St., Grande Prairie, AB T8V 4C7\n587-343-4349 | jeremy@jdwesternelectric.ca'; r1r.font=font(WHITE,false,9); r1r.fill=fill(BLACK); r1r.alignment={vertical:'middle',horizontal:'right',wrapText:true};
+    try {
+      const logoPath = path.join(__dirname,'public','logo-bolt.png');
+      const logoId = wb.addImage({ buffer: fs.readFileSync(logoPath), extension:'png' });
+      ws.addImage(logoId, { tl:{col:0.08,row:0.08}, br:{col:1.75,row:0.92}, editAs:'oneCell' });
+    } catch(e) { /* logo optional */ }
     ws.mergeCells('A2:H2'); ws.getRow(2).height=18;
     const r2=ws.getCell('A2'); r2.value='POWER  •  PERFORMANCE  •  PEACE OF MIND'; r2.font=font(WHITE,true,10); r2.fill=fill(ORANGE); r2.alignment={vertical:'middle',horizontal:'left',indent:1};
     ws.mergeCells('A3:H3'); ws.getRow(3).height=8; ws.getCell('A3').fill=fill('FFFFFF');
@@ -4004,10 +4029,32 @@ app.post('/api/rfqs/:id/suppliers/:rfqSupplierId/send', requireAuth, async (req,
               ${dueDate ? `<tr><td style="padding:6px 0;color:#6b7280;">Due Date</td><td style="padding:6px 0;font-weight:700;color:#dc2626;">${dueDate}</td></tr>` : ''}
               <tr><td style="padding:6px 0;color:#6b7280;">Line Items</td><td style="padding:6px 0;">${lineItems.length} item${lineItems.length!==1?'s':''}</td></tr>
             </table>
-            <p style="margin:0 0 16px;font-size:14px;color:#374151;">
-              Please review the attached Excel file and return your quotation at your earliest convenience${dueDate ? ' by <strong>'+dueDate+'</strong>' : ''}.
-            </p>
-            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">If you have any questions, please reply to this email or contact us directly.</p>
+            <p style="margin:0 0 12px;font-size:14px;color:#374151;">Please find our RFQ details below and also attached as an Excel file for your records.</p>
+            <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:13px;font-family:Arial,sans-serif;width:100%;max-width:800px;margin-bottom:20px;">
+              <thead style="background:#0C0C0C;color:#fff;">
+                <tr>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">#</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Qty</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Unit</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">P/N</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Size</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Description</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Unit Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${lineItems.map((li,i) => `<tr style="background:${i%2===0?'#fff':'#f9f9f9'};">
+                  <td style="padding:5px 10px;border:1px solid #e5e7eb;text-align:center;">${li.item_num}</td>
+                  <td style="padding:5px 10px;border:1px solid #e5e7eb;text-align:center;">${li.qty}</td>
+                  <td style="padding:5px 10px;border:1px solid #e5e7eb;">${li.unit||''}</td>
+                  <td style="padding:5px 10px;border:1px solid #e5e7eb;">${li.part_number||''}</td>
+                  <td style="padding:5px 10px;border:1px solid #e5e7eb;">${li.size||''}</td>
+                  <td style="padding:5px 10px;border:1px solid #e5e7eb;">${li.description||''}</td>
+                  <td style="padding:5px 10px;border:1px solid #e5e7eb;"></td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Please reply to this email with your quote, or contact us directly.</p>
           </div>
           <div style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;padding:16px 24px;">
             <div style="font-size:13px;font-weight:600;color:#111;">${sender.name}</div>
@@ -4138,11 +4185,22 @@ app.post('/api/rfqs/:id/revert', requireAuth, async (req, res) => {
 
 app.post('/api/rfqs/:id/auto-select', requireAuth, async (req, res) => {
   try {
-    // For each line item, find the quote with lowest unit_price > 0, select it
-    const { rows: lineItems } = await pool.query(
-      `SELECT DISTINCT rfq_line_item_id FROM rfq_quotes WHERE rfq_id=$1 AND unit_price > 0`,
-      [req.params.id]
-    );
+    const { line_item_ids } = req.body || {};
+    // If specific line items provided, only auto-select those; otherwise all with quotes
+    let lineItems;
+    if (Array.isArray(line_item_ids) && line_item_ids.length) {
+      const { rows } = await pool.query(
+        `SELECT DISTINCT rfq_line_item_id FROM rfq_quotes WHERE rfq_id=$1 AND unit_price > 0 AND rfq_line_item_id = ANY($2)`,
+        [req.params.id, line_item_ids]
+      );
+      lineItems = rows;
+    } else {
+      const { rows } = await pool.query(
+        `SELECT DISTINCT rfq_line_item_id FROM rfq_quotes WHERE rfq_id=$1 AND unit_price > 0`,
+        [req.params.id]
+      );
+      lineItems = rows;
+    }
     for (const { rfq_line_item_id } of lineItems) {
       const { rows: best } = await pool.query(
         `SELECT id FROM rfq_quotes WHERE rfq_id=$1 AND rfq_line_item_id=$2 AND unit_price > 0
@@ -4150,14 +4208,8 @@ app.post('/api/rfqs/:id/auto-select', requireAuth, async (req, res) => {
         [req.params.id, rfq_line_item_id]
       );
       if (!best.length) continue;
-      await pool.query(
-        `UPDATE rfq_quotes SET is_selected=0 WHERE rfq_id=$1 AND rfq_line_item_id=$2`,
-        [req.params.id, rfq_line_item_id]
-      );
-      await pool.query(
-        `UPDATE rfq_quotes SET is_selected=1 WHERE id=$1`,
-        [best[0].id]
-      );
+      await pool.query(`UPDATE rfq_quotes SET is_selected=0 WHERE rfq_id=$1 AND rfq_line_item_id=$2`, [req.params.id, rfq_line_item_id]);
+      await pool.query(`UPDATE rfq_quotes SET is_selected=1 WHERE id=$1`, [best[0].id]);
     }
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -4168,6 +4220,7 @@ app.post('/api/rfqs/:id/issue-pos', requireAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
     const rfqId = req.params.id;
+    const { jobber_job_number = '', job_name = '', project_id_override = null } = req.body;
 
     // Get RFQ info
     const { rows: [rfq] } = await client.query(`SELECT * FROM rfqs WHERE id=$1`, [rfqId]);
@@ -4232,27 +4285,38 @@ app.post('/api/rfqs/:id/issue-pos', requireAdmin, async (req, res) => {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'Draft',$10,$11) RETURNING id`,
         [
           po_number, date, userId, userName,
-          rfq.rfq_number,
-          rfq.project_name || rfq.title || rfq.rfq_number,
+          jobber_job_number,
+          job_name,
           group.supplier_name,
           `Auto-generated from RFQ ${rfq.rfq_number}: ${itemDescs}`,
           subtotal,
           createdAt,
-          rfq.project_id || null
+          rfq.project_id || project_id_override || null
         ]
       );
 
       // Insert rfq_pos record
-      await client.query(
+      const { rows: [rfqPos] } = await client.query(
         `INSERT INTO rfq_pos (rfq_id, po_id, po_number, rfq_supplier_id, supplier_name, subtotal, gst, total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
         [rfqId, po.id, po_number, parseInt(rfqSupplierId), group.supplier_name, subtotal, 0, subtotal]
       );
+
+      // Track per-line-item so we can show ORDERED badge later
+      for (const q of group.quotes) {
+        const li = lineItems.find(l => l.id === q.rfq_line_item_id);
+        if (!li) continue;
+        await client.query(
+          `INSERT INTO rfq_po_items (rfq_id, rfq_pos_id, po_id, po_number, rfq_line_item_id, rfq_supplier_id, supplier_name, unit_price, qty)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [rfqId, rfqPos.id, po.id, po_number, li.id, parseInt(rfqSupplierId), group.supplier_name, q.unit_price, li.qty]
+        );
+      }
 
       createdPOs.push({ po_number, supplier_name: group.supplier_name, po_id: po.id });
     }
 
-    // Mark RFQ as CONVERTED
+    // Mark RFQ as CONVERTED (only if not already — allows supplemental POs)
     await client.query(
       `UPDATE rfqs SET status='CONVERTED', updated_at=to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS') WHERE id=$1`,
       [rfqId]
@@ -4267,6 +4331,129 @@ app.post('/api/rfqs/:id/issue-pos', requireAdmin, async (req, res) => {
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
+  }
+});
+
+app.get('/api/rfqs/:id/pos', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT rp.*, po.status AS po_status, po.jobber_job_number, po.job_name, po.project_id
+       FROM rfq_pos rp
+       JOIN purchase_orders po ON po.id = rp.po_id
+       WHERE rp.rfq_id = $1
+       ORDER BY rp.id ASC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rfqs/:id/pos/:rfqPosId/send', requireAuth, async (req, res) => {
+  try {
+    const { rows: [rfqPos] } = await pool.query(
+      `SELECT rp.*, po.jobber_job_number, po.job_name, po.status AS po_status
+       FROM rfq_pos rp
+       JOIN purchase_orders po ON po.id = rp.po_id
+       WHERE rp.id = $1 AND rp.rfq_id = $2`,
+      [req.params.rfqPosId, req.params.id]
+    );
+    if (!rfqPos) return res.status(404).json({ error: 'PO record not found' });
+
+    const { rows: [rs] } = await pool.query(
+      `SELECT rs.supplier_email, rs.supplier_name FROM rfq_suppliers rs WHERE rs.id = $1`,
+      [rfqPos.rfq_supplier_id]
+    );
+    if (!rs || !rs.supplier_email) return res.status(400).json({ error: 'Supplier has no email on file' });
+
+    const { rows: lineItems } = await pool.query(
+      `SELECT rli.*, rq.unit_price
+       FROM rfq_line_items rli
+       LEFT JOIN rfq_quotes rq ON rq.rfq_line_item_id = rli.id AND rq.rfq_supplier_id = $2 AND rq.is_selected = 1
+       WHERE rli.rfq_id = $1
+       ORDER BY rli.sort_order, rli.item_num`,
+      [req.params.id, rfqPos.rfq_supplier_id]
+    );
+
+    const { rows: [sender] } = await pool.query('SELECT name,email FROM users WHERE id=$1', [req.session.userId]);
+    const smtpHost = await getSetting('smtp_host');
+    if (!smtpHost) return res.status(500).json({ error: 'Email not configured' });
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: parseInt(await getSetting('smtp_port','587')),
+      auth: { user: await getSetting('smtp_user'), pass: await getSetting('smtp_pass') }
+    });
+    const fromAddr = await getSetting('smtp_from','jeremy@jdwesternelectric.ca');
+
+    const itemRows = lineItems.filter(li => li.unit_price > 0).map((li, i) => {
+      const ext = (Number(li.unit_price) * Number(li.qty)).toFixed(2);
+      return `<tr style="background:${i%2===0?'#fff':'#f9f9f9'};">
+        <td style="padding:5px 10px;border:1px solid #e5e7eb;text-align:center;">${li.item_num}</td>
+        <td style="padding:5px 10px;border:1px solid #e5e7eb;text-align:center;">${li.qty}</td>
+        <td style="padding:5px 10px;border:1px solid #e5e7eb;">${li.unit||''}</td>
+        <td style="padding:5px 10px;border:1px solid #e5e7eb;">${li.description||''}</td>
+        <td style="padding:5px 10px;border:1px solid #e5e7eb;text-align:right;">$${Number(li.unit_price).toFixed(2)}</td>
+        <td style="padding:5px 10px;border:1px solid #e5e7eb;text-align:right;">$${ext}</td>
+      </tr>`;
+    }).join('');
+
+    const total = lineItems.reduce((sum, li) => sum + (li.unit_price > 0 ? Number(li.unit_price) * Number(li.qty) : 0), 0);
+
+    await transporter.sendMail({
+      from: `"J&D Western Electric" <${fromAddr}>`,
+      replyTo: sender ? `"${sender.name}" <${sender.email}>` : fromAddr,
+      to: rs.supplier_email,
+      subject: `Purchase Order ${rfqPos.po_number} — J&D Western Electric`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
+          <div style="background:#0C0C0C;padding:20px 24px;">
+            <div style="color:#fff;font-size:20px;font-weight:700;">J&D WESTERN ELECTRIC LTD.</div>
+            <div style="color:#FF6100;font-size:11px;font-weight:700;letter-spacing:0.1em;margin-top:4px;">POWER • PERFORMANCE • PEACE OF MIND</div>
+          </div>
+          <div style="padding:28px 24px;background:#fff;border:1px solid #e5e7eb;">
+            <p style="margin:0 0 16px;font-size:15px;">Hi ${rs.supplier_name},</p>
+            <p style="margin:0 0 12px;font-size:14px;color:#374151;">Please find below our Purchase Order <strong style="color:#FF6100;">${rfqPos.po_number}</strong>.</p>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px;">
+              <tr><td style="padding:6px 0;color:#6b7280;width:140px;">PO Number</td><td style="padding:6px 0;font-weight:700;color:#FF6100;">${rfqPos.po_number}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;">Job Name</td><td style="padding:6px 0;font-weight:600;">${rfqPos.job_name||'—'}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;">Jobber Job #</td><td style="padding:6px 0;">${rfqPos.jobber_job_number||'—'}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;">Supplier</td><td style="padding:6px 0;">${rfqPos.supplier_name}</td></tr>
+            </table>
+            <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:13px;width:100%;margin-bottom:20px;">
+              <thead style="background:#0C0C0C;color:#fff;">
+                <tr>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">#</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Qty</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Unit</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Description</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Unit Price</th>
+                  <th style="padding:6px 10px;border:1px solid #ccc;">Extended</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemRows || '<tr><td colspan="6" style="padding:8px;text-align:center;color:#6b7280;">No items</td></tr>'}
+              </tbody>
+              <tfoot>
+                <tr style="background:#f3f4f6;font-weight:700;">
+                  <td colspan="5" style="padding:6px 10px;border:1px solid #e5e7eb;text-align:right;">Total</td>
+                  <td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:right;">$${total.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Please reply to this email to confirm receipt or if you have any questions.</p>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;padding:16px 24px;">
+            <div style="font-size:13px;font-weight:600;color:#111;">${sender ? sender.name : 'J&D Western Electric'}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">J&D Western Electric Ltd.</div>
+            <div style="font-size:12px;color:#6b7280;">587-343-4349 | jdwesternelectric.ca</div>
+          </div>
+        </div>`
+    });
+
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('send-po error:', e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -4320,20 +4507,25 @@ app.get('/api/rfqs/:id/export', requireAuth, async (req, res) => {
     const font = (color, bold=false, size=11) => ({ name:'Calibri', color:{argb: color.length===6 ? 'FF'+color : color}, bold, size });
     const border = () => ({ top:{style:'thin',color:{argb:'FFD1D5DB'}}, bottom:{style:'thin',color:{argb:'FFD1D5DB'}}, left:{style:'thin',color:{argb:'FFD1D5DB'}}, right:{style:'thin',color:{argb:'FFD1D5DB'}} });
 
-    // Row 1 — Black header band
+    // Row 1 — Black header band with logo
     ws.mergeCells('A1:F1');
     ws.mergeCells('G1:H1');
-    ws.getRow(1).height = 36;
+    ws.getRow(1).height = 48;
     const r1left = ws.getCell('A1');
     r1left.value = 'J&D WESTERN ELECTRIC LTD.';
     r1left.font = font(WHITE, true, 18);
     r1left.fill = fill(BLACK);
-    r1left.alignment = {vertical:'middle', horizontal:'left', indent:1};
+    r1left.alignment = {vertical:'middle', horizontal:'left', indent:7};
     const r1right = ws.getCell('G1');
     r1right.value = '8716 106 St., Grande Prairie, AB T8V 4C7\n587-343-4349 | jeremy@jdwesternelectric.ca';
     r1right.font = font(WHITE, false, 9);
     r1right.fill = fill(BLACK);
     r1right.alignment = {vertical:'middle', horizontal:'right', wrapText:true};
+    try {
+      const logoPath = path.join(__dirname, 'public', 'logo-bolt.png');
+      const logoId = wb.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
+      ws.addImage(logoId, { tl:{col:0.08, row:0.08}, br:{col:1.75, row:0.92}, editAs:'oneCell' });
+    } catch(e) { /* logo optional — never break the export */ }
 
     // Row 2 — Orange tagline
     ws.mergeCells('A2:H2');
@@ -4644,7 +4836,14 @@ app.post('/api/rfqs-import', requireAuth, rfqImportUpload.single('file'), async 
       ws.eachRow((row, rowNum) => {
         const vals = [];
         row.eachCell({includeEmpty:true}, (cell) => {
-          vals.push(cell.text || cell.value || '');
+          // Date cells come in as JS Date objects — convert to YYYY-MM-DD string
+          // so the dateOnlyRe can catch and skip them
+          const v = cell.value;
+          if (v instanceof Date) {
+            vals.push(v.toISOString().slice(0,10));
+          } else {
+            vals.push(cell.text || v || '');
+          }
         });
         rows.push({rowNum, vals});
       });
@@ -4673,14 +4872,23 @@ app.post('/api/rfqs-import', requireAuth, rfqImportUpload.single('file'), async 
       const pnCol = colIdx(['p/n','part','part no','pn','catalog']);
       const sizeCol = colIdx(['size','dim']);
 
-      const skipPatterns = ['total','subtotal','sub total','gst','delivery','shipping','materials','western electric','vanderveen','vanderveen','project manager','cell:','587-','780-','@jdwestern','quotation due','shop drawing','please specify','please supply'];
+      const skipPatterns = ['total','subtotal','sub total','gst','delivery','shipping','materials','western electric','vanderveen','project manager','cell:','587-','780-','@jdwestern','quotation due','shop drawing','please specify','please supply','date:','sent:','prepared by','note:','notes:','terms:','valid until','payment'];
+      const dateOnlyRe = /^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}([ T]\d{2}:\d{2}(:\d{2})?)?$|^\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}$|^\w{3,9} \d{1,2},?\s*\d{4}$|^\d{1,2} \w{3,9},?\s*\d{4}$/i;
       let itemNum = 1;
       for (let i=headerRow+1; i<rows.length; i++) {
         const r = rows[i].vals;
-        const desc = descCol>=0 ? String(r[descCol]||'').trim() : r.filter(v=>String(v).length>5)[0]||'';
+        let desc = descCol>=0 ? String(r[descCol]||'').trim() : r.filter(v=>String(v).length>5)[0]||'';
         if (!desc) continue;
         const descLower = desc.toLowerCase();
         if (skipPatterns.some(p => descLower.includes(p))) continue;
+        if (dateOnlyRe.test(desc.trim())) continue;
+        // Strip trailing date/timestamp patterns that sometimes appear at end of description cells
+        desc = desc
+          .replace(/\s+\d{4}[-\/]\d{1,2}[-\/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/i, '')
+          .replace(/\s+\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}(\s+\d{1,2}:\d{2}(:\d{2})?(\s*[AP]M)?)?$/i, '')
+          .replace(/\s+\w{3,9}\s+\d{1,2},?\s*\d{4}$/i, '')
+          .trim();
+        if (!desc) continue;
         results.push({
           item_num: itemNum++,
           qty: qtyCol>=0 ? r[qtyCol]||1 : 1,
