@@ -2529,6 +2529,30 @@ function ticketStatusBadge(s) {
   const st = s || 'Pending';
   return `<span class="spill ${map[st]||'spill-pending'}">${st}</span>`;
 }
+
+function returnsConfirmPopup() {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML = `
+      <div style="background:#ffffff;border-radius:14px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;">
+        <div style="background:#dc2626;padding:18px 22px;color:#fff;">
+          <div style="font-size:20px;font-weight:700;margin-bottom:4px;">↩ Returns Pending</div>
+          <div style="opacity:.9;font-size:13px;">This ticket was flagged as having returns.</div>
+        </div>
+        <div style="padding:20px 22px;">
+          <p style="font-size:14px;color:#111827;margin:0 0 20px;">Have the returns been taken care of?</p>
+          <div style="display:flex;gap:10px;">
+            <button id="rc-no"  style="flex:1;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-weight:600;background:#fff;color:#374151;cursor:pointer;">No — Go Back</button>
+            <button id="rc-yes" style="flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;font-weight:700;background:#16a34a;color:#fff;cursor:pointer;">Yes — Continue</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#rc-yes').onclick = () => { document.body.removeChild(overlay); resolve(true); };
+    overlay.querySelector('#rc-no').onclick  = () => { document.body.removeChild(overlay); resolve(false); };
+  });
+}
 function poStatusBadge(s) {
   const map = { Open:'spill-open', Entered:'spill-po-entered', Archived:'spill-archived' };
   const st = s || 'Open';
@@ -2616,6 +2640,10 @@ async function openDetail(id, isArchived = false) {
         <button class="inline-save-btn" id="modal-ts-save" style="padding:4px 10px;">Save Status</button>`;
       $('modal-ts-save').onclick = async () => {
         const ns = $('modal-ts-select').value;
+        if ((currentTicketData?.has_returns===1||currentTicketData?.has_returns==='1')) {
+          const confirmed = await returnsConfirmPopup();
+          if (!confirmed) return;
+        }
         const res = await fetch('/api/tickets/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket_status:ns})});
         const data = await res.json();
         if (data.auto_archived) {
@@ -2689,9 +2717,17 @@ async function openDetail(id, isArchived = false) {
       </table>
       </div>
 
-      ${(totalOT > 0 || (t.has_duplicate === 1 || t.has_duplicate === '1') || t.employees.some(e=>(e.regular_hours||0)>8)) ? `
+      ${(totalOT > 0 || (t.has_duplicate === 1 || t.has_duplicate === '1') || t.employees.some(e=>(e.regular_hours||0)>8) || t.has_returns === 1 || t.has_returns === '1') ? `
       <div class="divider"></div>
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--orange);margin-bottom:10px;">⚠ Flags &amp; Approvals</div>
+      ${(t.has_returns===1||t.has_returns==='1') ? `
+        <div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">↩</span>
+          <div>
+            <div style="font-weight:700;font-size:13px;color:#b91c1c;">Returns</div>
+            <div style="font-size:12px;color:#991b1b;margin-top:2px;">This ticket has returns that need to be processed.</div>
+          </div>
+        </div>` : ''}
       ${totalOT > 0 ? `
         <div style="background:${t.ot_approved===0||t.ot_approved==='0'?'#fef2f2':'#fff7ed'};border:1px solid ${t.ot_approved===0||t.ot_approved==='0'?'#fca5a5':'#fed7aa'};border-radius:8px;padding:12px 14px;margin-bottom:10px;">
           <div style="font-weight:700;font-size:13px;color:${t.ot_approved===0||t.ot_approved==='0'?'#b91c1c':'#c2410c'};margin-bottom:8px;">
@@ -3807,6 +3843,11 @@ function updateProjectOutstandingSummary() {
 // ── Inline status saves ──
 async function saveTicketStatus(id, newStatus, row) {
   try {
+    const ticketObj = currentProjectData?.tickets?.find(x=>x.id==id);
+    if (ticketObj?.has_returns===1||ticketObj?.has_returns==='1') {
+      const confirmed = await returnsConfirmPopup();
+      if (!confirmed) return;
+    }
     const res = await fetch('/api/tickets/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket_status:newStatus})});
     if(!res.ok) throw new Error();
     const data = await res.json();

@@ -585,7 +585,7 @@ app.get('/api/dashboard/overview', requireAdmin, async (req, res) => {
 
 app.post('/api/tickets', requireAuth, async (req, res) => {
   const { date, job_name, job_number, supervisor, work_description, equipment_used, notes, employees, project_id,
-          ot_approved, ot_approved_by, submitted_with_duplicate, vendor_signoff } = req.body;
+          ot_approved, ot_approved_by, submitted_with_duplicate, vendor_signoff, has_returns } = req.body;
   if (!date||!job_name||!supervisor||!work_description) return res.status(400).json({ error: 'Missing required fields' });
   if (!employees?.length) return res.status(400).json({ error: 'At least one employee required' });
   const ticket_number = generateTicketNumber();
@@ -600,10 +600,10 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name,submitted_by_id,ot_approved,ot_approved_by,ot_approval_ts,vendor_signoff)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+      `INSERT INTO daily_tickets (ticket_number,date,job_name,job_number,supervisor,work_description,equipment_used,notes,submitted_at,project_id,submitted_by_name,submitted_by_id,ot_approved,ot_approved_by,ot_approval_ts,vendor_signoff,has_returns)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
       [ticket_number,date,job_name,job_number||null,supervisor,work_description,equipment_used||null,notes||null,submitted_at,resolvedPid,req.user?.name||null,req.user?.id||null,otApprovedVal,otApprovedBy,otApprovalTs,
-       vendor_signoff ? JSON.stringify(vendor_signoff) : null]
+       vendor_signoff ? JSON.stringify(vendor_signoff) : null, has_returns ? 1 : 0]
     );
     const tid = rows[0].id;
     for (const e of employees) {
