@@ -455,19 +455,20 @@
       </div>
 
       <!-- Returns -->
-      <div style="margin-bottom:16px;padding:14px 16px;border:1.5px solid #d1d5db;border-radius:10px;background:#f9fafb;">
-        <div style="font-weight:700;font-size:14px;color:#374151;margin-bottom:10px;">Is there any material returns?</div>
-        <div style="display:flex;gap:10px;">
+      <div class="form-section" id="returns-section">
+        <div class="section-label" style="margin-bottom:10px;">Material Returns</div>
+        <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:12px;">Is there any material returns?</div>
+        <div style="display:flex;gap:12px;">
           <button type="button" id="returns-yes" onclick="setReturns(true)"
-            style="flex:1;padding:9px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-weight:600;background:#fff;color:#374151;cursor:pointer;">
+            style="flex:1;min-height:48px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;font-weight:700;background:#fff;color:#374151;cursor:pointer;-webkit-tap-highlight-color:transparent;">
             Yes
           </button>
           <button type="button" id="returns-no" onclick="setReturns(false)"
-            style="flex:1;padding:9px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-weight:600;background:#fff;color:#374151;cursor:pointer;">
+            style="flex:1;min-height:48px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;font-weight:700;background:#fff;color:#374151;cursor:pointer;-webkit-tap-highlight-color:transparent;">
             No
           </button>
         </div>
-        <div id="returns-instructions" style="display:none;margin-top:12px;padding:10px 12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:13px;color:#7f1d1d;line-height:1.5;">
+        <div id="returns-instructions" style="display:none;margin-top:14px;padding:12px 14px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;font-size:14px;color:#7f1d1d;line-height:1.6;">
           Thank you. Please put all returned material inside the square box in the shop and notify the office. Please keep all material together.
         </div>
       </div>
