@@ -467,6 +467,9 @@
             No
           </button>
         </div>
+        <div id="returns-instructions" style="display:none;margin-top:12px;padding:10px 12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:13px;color:#7f1d1d;line-height:1.5;">
+          Thank you. Please put all returned material inside the square box in the shop and notify the office. Please keep all material together.
+        </div>
       </div>
 
       <div class="submit-section">
@@ -812,12 +815,15 @@
     window._hasReturns = val;
     const yesBtn = document.getElementById('returns-yes');
     const noBtn  = document.getElementById('returns-no');
+    const msg    = document.getElementById('returns-instructions');
     if (val) {
       yesBtn.style.background = '#dc2626'; yesBtn.style.color = '#fff'; yesBtn.style.borderColor = '#dc2626';
       noBtn.style.background  = '#fff';    noBtn.style.color  = '#374151'; noBtn.style.borderColor = '#d1d5db';
+      msg.style.display = 'block';
     } else {
       noBtn.style.background  = '#16a34a'; noBtn.style.color  = '#fff'; noBtn.style.borderColor = '#16a34a';
       yesBtn.style.background = '#fff';    yesBtn.style.color = '#374151'; yesBtn.style.borderColor = '#d1d5db';
+      msg.style.display = 'none';
     }
   }
 
