@@ -9040,16 +9040,49 @@ function openSuppliersModal() {
 async function renderSuppliersTable() {
   await loadAllSuppliers();
   $('suppliers-tbody').innerHTML = _allSuppliers.length
-    ? _allSuppliers.map(s => `<tr>
+    ? _allSuppliers.map(s => `<tr id="sup-row-${s.id}">
         <td style="padding:8px;border:1px solid var(--border);">${esc(s.name)}</td>
         <td style="padding:8px;border:1px solid var(--border);">${esc(s.contact)}</td>
         <td style="padding:8px;border:1px solid var(--border);">${esc(s.email)}</td>
         <td style="padding:8px;border:1px solid var(--border);">${esc(s.phone)}</td>
-        <td style="padding:8px;border:1px solid var(--border);text-align:center;">
+        <td style="padding:8px;border:1px solid var(--border);text-align:center;white-space:nowrap;">
+          <button class="btn btn-ghost btn-sm" onclick="openEditSupplier(${s.id})">Edit</button>
           <button class="btn btn-ghost btn-sm" style="color:#dc2626;" onclick="deleteSupplier(${s.id},'${esc(s.name)}')">Delete</button>
         </td>
       </tr>`).join('')
     : `<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--gray-400);">No suppliers yet.</td></tr>`;
+}
+
+function openEditSupplier(id) {
+  const s = _allSuppliers.find(x => x.id === id);
+  if (!s) return;
+  const row = $(`sup-row-${id}`);
+  row.innerHTML = `
+    <td style="padding:6px;border:1px solid var(--border);"><input id="esup-name-${id}" class="form-control form-control-sm" value="${esc(s.name)}"></td>
+    <td style="padding:6px;border:1px solid var(--border);"><input id="esup-contact-${id}" class="form-control form-control-sm" value="${esc(s.contact||'')}"></td>
+    <td style="padding:6px;border:1px solid var(--border);"><input id="esup-email-${id}" class="form-control form-control-sm" type="email" value="${esc(s.email||'')}"></td>
+    <td style="padding:6px;border:1px solid var(--border);"><input id="esup-phone-${id}" class="form-control form-control-sm" type="tel" value="${esc(s.phone||'')}"></td>
+    <td style="padding:6px;border:1px solid var(--border);text-align:center;white-space:nowrap;">
+      <button class="btn btn-sm" style="background:var(--orange);color:#fff;" onclick="saveEditSupplier(${id})">Save</button>
+      <button class="btn btn-ghost btn-sm" onclick="renderSuppliersTable()">Cancel</button>
+    </td>`;
+}
+
+async function saveEditSupplier(id) {
+  const payload = {
+    name:    $(`esup-name-${id}`).value.trim(),
+    contact: $(`esup-contact-${id}`).value.trim(),
+    email:   $(`esup-email-${id}`).value.trim(),
+    phone:   $(`esup-phone-${id}`).value.trim(),
+  };
+  if (!payload.name) { alert('Supplier name is required.'); return; }
+  const res = await fetch(`/api/suppliers/${id}`, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'Failed to update supplier'); return; }
+  await renderSuppliersTable();
+  showToast('Supplier updated', 'success');
 }
 
 function openAddSupplierForm() {
