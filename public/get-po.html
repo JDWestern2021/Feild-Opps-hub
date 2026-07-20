@@ -63,25 +63,22 @@
       z-index: 1000;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 32px 24px;
+      justify-content: flex-start;
+      padding: 40px 24px 48px;
       text-align: center;
       overflow-y: auto;
-      overflow-x: hidden;
     }
     #confirm-screen.show { display: flex; }
 
-    /* Diagonal slash panels (inside confirm-screen) */
-    #confirm-screen::before {
-      content: '';
-      position: fixed; top: -10%; right: -5%; width: 55%; height: 130%;
+    /* Slash panel — right side */
+    .cs-slash-1 {
+      position: fixed; top: 0; right: 0; width: 55%; height: 100%;
       background: linear-gradient(135deg, #3a4456 0%, #2d3748 60%, transparent 100%);
       clip-path: polygon(25% 0%, 100% 0%, 100% 100%, 0% 100%);
       pointer-events: none; z-index: 0;
     }
-    #confirm-screen::after {
-      content: '';
-      position: fixed; top: -10%; right: 0; width: 38%; height: 130%;
+    .cs-slash-2 {
+      position: fixed; top: 0; right: 0; width: 38%; height: 100%;
       background: linear-gradient(160deg, #F47920 0%, #c1380a 50%, #8c2a08 100%);
       clip-path: polygon(45% 0%, 100% 0%, 100% 100%, 10% 100%);
       opacity: 0.22; pointer-events: none; z-index: 0;
@@ -93,6 +90,7 @@
       background-image: radial-gradient(circle, rgba(244,121,32,.5) 1px, transparent 1px);
       background-size: 14px 14px;
       mask-image: linear-gradient(135deg, black 30%, transparent 100%);
+      -webkit-mask-image: linear-gradient(135deg, black 30%, transparent 100%);
     }
     .cs-dot-br {
       position: fixed; bottom: 20px; right: 20px; width: 120px; height: 80px;
@@ -100,8 +98,9 @@
       background-image: radial-gradient(circle, rgba(244,121,32,.45) 1px, transparent 1px);
       background-size: 14px 14px;
       mask-image: linear-gradient(315deg, black 30%, transparent 100%);
+      -webkit-mask-image: linear-gradient(315deg, black 30%, transparent 100%);
     }
-    /* Content sits above the decorations */
+    /* All direct children above decorations */
     #confirm-screen > * { position: relative; z-index: 2; }
 
     .confirm-logo {
@@ -332,6 +331,8 @@
 
 <!-- ── Confirmation Screen ── -->
 <div id="confirm-screen">
+  <div class="cs-slash-1"></div>
+  <div class="cs-slash-2"></div>
   <div class="cs-dot-tl"></div>
   <div class="cs-dot-br"></div>
   <img class="confirm-logo" src="logo-bolt.png" alt="J&D Western Electric"/>
