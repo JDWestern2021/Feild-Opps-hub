@@ -59,109 +59,119 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: var(--black);
+      background: #374151;
       z-index: 1000;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 32px 24px;
       text-align: center;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
     #confirm-screen.show { display: flex; }
 
+    /* Diagonal slash panels (inside confirm-screen) */
+    #confirm-screen::before {
+      content: '';
+      position: fixed; top: -10%; right: -5%; width: 55%; height: 130%;
+      background: linear-gradient(135deg, #3a4456 0%, #2d3748 60%, transparent 100%);
+      clip-path: polygon(25% 0%, 100% 0%, 100% 100%, 0% 100%);
+      pointer-events: none; z-index: 0;
+    }
+    #confirm-screen::after {
+      content: '';
+      position: fixed; top: -10%; right: 0; width: 38%; height: 130%;
+      background: linear-gradient(160deg, #F47920 0%, #c1380a 50%, #8c2a08 100%);
+      clip-path: polygon(45% 0%, 100% 0%, 100% 100%, 10% 100%);
+      opacity: 0.22; pointer-events: none; z-index: 0;
+    }
+    /* Dot grids */
+    .cs-dot-tl {
+      position: fixed; top: 20px; left: 20px; width: 120px; height: 80px;
+      pointer-events: none; z-index: 1;
+      background-image: radial-gradient(circle, rgba(244,121,32,.5) 1px, transparent 1px);
+      background-size: 14px 14px;
+      mask-image: linear-gradient(135deg, black 30%, transparent 100%);
+    }
+    .cs-dot-br {
+      position: fixed; bottom: 20px; right: 20px; width: 120px; height: 80px;
+      pointer-events: none; z-index: 1;
+      background-image: radial-gradient(circle, rgba(244,121,32,.45) 1px, transparent 1px);
+      background-size: 14px 14px;
+      mask-image: linear-gradient(315deg, black 30%, transparent 100%);
+    }
+    /* Content sits above the decorations */
+    #confirm-screen > * { position: relative; z-index: 2; }
+
+    .confirm-logo {
+      width: 72px; height: 72px; object-fit: contain;
+      background: #fff; border-radius: 16px; padding: 8px;
+      box-shadow: 0 8px 40px rgba(244,121,32,.25), 0 0 0 1px rgba(244,121,32,.15);
+      margin-bottom: 16px;
+    }
+    .confirm-brand-name {
+      font-size: 22px; font-weight: 900; letter-spacing: -.01em;
+      color: #fff; text-transform: uppercase; line-height: 1.1;
+    }
+    .confirm-brand-name span { color: #F47920; }
+    .confirm-brand-ltd { font-size: 11px; font-weight: 700; letter-spacing: .18em; color: rgba(255,255,255,.4); text-transform: uppercase; margin-top: 2px; }
+    .confirm-orange-bar { width: 50px; height: 3px; background: linear-gradient(90deg, #F47920, #c1380a); border-radius: 2px; margin: 14px auto; }
+
     .confirm-instruction {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      color: rgba(255,255,255,.45);
-      margin-bottom: 20px;
+      font-size: 12px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: rgba(255,255,255,.45);
+      margin-bottom: 16px;
     }
     .po-number-display {
-      font-size: clamp(36px, 10vw, 64px);
-      font-weight: 900;
-      color: var(--orange);
-      letter-spacing: .04em;
-      line-height: 1;
-      padding: 24px 32px;
-      background: #111;
-      border: 2px solid rgba(244,121,32,.3);
-      border-radius: 16px;
-      margin: 0 0 28px;
-      width: 100%;
-      max-width: 500px;
-      word-break: break-all;
+      font-size: clamp(28px, 8vw, 54px);
+      font-weight: 900; color: #F47920; letter-spacing: .04em; line-height: 1;
+      padding: 20px 28px;
+      background: rgba(255,255,255,.06);
+      border: 1.5px solid rgba(244,121,32,.35);
+      border-radius: 16px; margin: 0 0 20px;
+      width: 100%; max-width: 500px; word-break: break-all;
+      backdrop-filter: blur(4px);
     }
     .po-details {
-      width: 100%;
-      max-width: 500px;
-      text-align: left;
-      background: #111;
-      border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 32px;
+      width: 100%; max-width: 500px; text-align: left;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px; padding: 16px 20px; margin-bottom: 28px;
+      backdrop-filter: blur(4px);
     }
     .po-detail-row {
-      display: flex;
-      gap: 12px;
-      padding: 6px 0;
-      border-bottom: 1px solid #1a1a1a;
-      font-size: 14px;
+      display: flex; gap: 12px; padding: 7px 0;
+      border-bottom: 1px solid rgba(255,255,255,.07); font-size: 14px;
     }
     .po-detail-row:last-child { border-bottom: none; }
-    .po-detail-row .dl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: rgba(255,255,255,.3); min-width: 90px; padding-top: 1px; }
+    .po-detail-row .dl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.35); min-width: 90px; padding-top: 2px; }
     .po-detail-row .dv { color: #fff; font-weight: 600; }
 
-    .confirm-actions { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 500px; }
+    .confirm-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 500px; }
     .btn-confirm-another {
-      flex: 1;
-      padding: 16px 24px;
-      background: var(--orange);
-      color: #000;
-      font-size: 15px;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      min-width: 160px;
+      flex: 1; padding: 14px 20px;
+      background: #F47920; color: #fff;
+      font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+      border: none; border-radius: 10px; cursor: pointer; min-width: 150px;
     }
+    .btn-confirm-another:hover { background: #c1380a; }
     .btn-confirm-home {
-      flex: 1;
-      padding: 16px 24px;
-      background: #1a1a1a;
-      color: rgba(255,255,255,.7);
-      font-size: 15px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      border: 1px solid #2a2a2a;
-      border-radius: 10px;
-      cursor: pointer;
-      min-width: 160px;
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      flex: 1; padding: 14px 20px;
+      background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+      font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      border: 1px solid rgba(255,255,255,.15); border-radius: 10px; cursor: pointer;
+      min-width: 120px; text-decoration: none;
+      display: flex; align-items: center; justify-content: center;
     }
-    .confirm-logo { width: 48px; height: 48px; object-fit: contain; background: white; border-radius: 10px; padding: 4px; margin-bottom: 20px; }
-
+    .btn-confirm-home:hover { background: rgba(255,255,255,.14); }
     .btn-confirm-print {
-      flex: 1;
-      padding: 16px 24px;
-      background: #1c1c1e;
-      color: rgba(255,255,255,.8);
-      font-size: 15px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      border: 1px solid #333;
-      border-radius: 10px;
-      cursor: pointer;
-      min-width: 140px;
+      flex: 1; padding: 14px 20px;
+      background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+      font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      border: 1px solid rgba(255,255,255,.15); border-radius: 10px; cursor: pointer; min-width: 140px;
     }
-    .btn-confirm-print:hover { background: #2a2a2a; }
+    .btn-confirm-print:hover { background: rgba(255,255,255,.14); }
 
     @media (max-width: 480px) {
       .form-section { padding: 16px 18px; }
@@ -322,7 +332,12 @@
 
 <!-- ── Confirmation Screen ── -->
 <div id="confirm-screen">
-  <img class="confirm-logo" src="logo-bolt.png" alt=""/>
+  <div class="cs-dot-tl"></div>
+  <div class="cs-dot-br"></div>
+  <img class="confirm-logo" src="logo-bolt.png" alt="J&D Western Electric"/>
+  <div class="confirm-brand-name">J<span>&amp;</span>D Western Electric</div>
+  <div class="confirm-brand-ltd">Ltd.</div>
+  <div class="confirm-orange-bar"></div>
   <div class="confirm-instruction">Show this screen to the supplier or read them your PO number</div>
   <div class="po-number-display" id="conf-po-number">JD-PO-2026-0001</div>
   <div class="po-details" id="conf-details"></div>
