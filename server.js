@@ -854,6 +854,48 @@ app.patch('/api/tickets/:id/status', requireAdmin, async (req, res) => {
   res.json({ ok: true, auto_archived: autoArchive, auto_project_archived: autoProjectArchive });
 });
 
+app.patch('/api/tickets/:id/flag', requireAdmin, async (req, res) => {
+  const { reason, assigned_to_name, assigned_to_id } = req.body;
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const now = new Date().toISOString();
+  await pool.query(
+    `UPDATE daily_tickets SET flag_status='pending', flag_reason=$1, flag_assigned_to_name=$2,
+     flag_assigned_to_id=$3, flag_assigned_at=$4, flag_resolved_at=NULL, flag_resolved_by=NULL, flag_resolved_note=NULL
+     WHERE id=$5`,
+    [reason||null, assigned_to_name||null, assigned_to_id||null, now, req.params.id]
+  );
+  logAction(req,'ticket_flagged',rows[0].id,rows[0].ticket_number,
+    `Flagged for review by ${req.user.name}${assigned_to_name?' → assigned to '+assigned_to_name:''}${reason?' | '+reason:''}`);
+  res.json({ ok: true });
+});
+
+app.patch('/api/tickets/:id/flag/resolve', requireAuth, async (req, res) => {
+  const { note } = req.body;
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const now = new Date().toISOString();
+  await pool.query(
+    `UPDATE daily_tickets SET flag_status='resolved', flag_resolved_at=$1, flag_resolved_by=$2, flag_resolved_note=$3 WHERE id=$4`,
+    [now, req.user.name, note||null, req.params.id]
+  );
+  logAction(req,'ticket_flag_resolved',rows[0].id,rows[0].ticket_number,
+    `Flag resolved by ${req.user.name}${note?' | '+note:''}`);
+  res.json({ ok: true });
+});
+
+app.get('/api/tickets/my-flags', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.id, t.ticket_number, t.date, t.job_name, t.job_number, t.supervisor,
+            t.flag_reason, t.flag_assigned_at, t.flag_assigned_to_name, t.flag_status
+     FROM daily_tickets t
+     WHERE t.flag_assigned_to_id=$1 AND t.flag_status='pending' AND COALESCE(t.archived,0)=0
+     ORDER BY t.flag_assigned_at DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
 app.patch('/api/tickets/:id/archive', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });

@@ -237,6 +237,15 @@ async function initSchema() {
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS submitted_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
   // Returns flag on daily_tickets
   await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS has_returns INTEGER DEFAULT 0`);
+  // Review flag on daily_tickets
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_status TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_reason TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_assigned_to_name TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_assigned_to_id INTEGER DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_assigned_at TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_resolved_at TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_resolved_by TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE daily_tickets ADD COLUMN IF NOT EXISTS flag_resolved_note TEXT DEFAULT NULL`);
   // Safety module
   await pool.query(`
     CREATE TABLE IF NOT EXISTS safety_forms (

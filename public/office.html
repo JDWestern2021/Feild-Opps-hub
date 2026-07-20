@@ -1828,6 +1828,7 @@
       <button class="btn btn-danger btn-sm" id="modal-delete">Delete</button>
       <button class="btn btn-sm" id="modal-archive" style="background:#6e6e6e;color:white;">Archive</button>
       <button class="btn btn-secondary btn-sm" id="modal-edit-btn">Edit</button>
+      <button class="btn btn-sm" id="modal-flag-btn" style="background:#7c3aed;color:white;">🚩 Flag</button>
       <button class="btn btn-sm" id="modal-print" style="background:#1c1c1e;color:white;">Print</button>
       <button class="btn btn-sm" id="modal-export" style="background:#1a6e35;color:white;">Export XLSX</button>
       <button class="btn btn-secondary btn-sm" id="modal-back-ts" style="display:none;">← Back to Timesheet</button>
@@ -1850,6 +1851,52 @@
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="confirm-yes">Yes, Delete Permanently</button>
       <button class="btn btn-secondary btn-sm" id="confirm-no">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- FLAG TICKET MODAL -->
+<div id="flag-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9100;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#ffffff;border-radius:14px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;">
+    <div style="background:#7c3aed;padding:20px 24px;color:#fff;">
+      <div style="font-size:18px;font-weight:800;margin-bottom:2px;">🚩 Flag for Review</div>
+      <div style="opacity:.85;font-size:13px;">Assign this ticket to a supervisor or employee for sign-off.</div>
+    </div>
+    <div style="padding:20px 24px;">
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Assign To</label>
+        <select id="flag-assign-select" class="form-control" style="font-size:14px;">
+          <option value="">— Select a person —</option>
+        </select>
+      </div>
+      <div style="margin-bottom:18px;">
+        <label style="display:block;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Reason / Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+        <textarea id="flag-reason-input" rows="3" class="form-control" placeholder="e.g. Hours don't add up — please confirm with supervisor" style="font-size:14px;resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="closeFlagModal()" class="btn btn-secondary btn-sm" style="flex:1;">Cancel</button>
+        <button onclick="submitFlag()" style="flex:2;padding:9px;border:none;border-radius:8px;font-size:14px;font-weight:700;background:#7c3aed;color:#fff;cursor:pointer;">🚩 Flag Ticket</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FLAG RESOLVE MODAL -->
+<div id="flag-resolve-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9100;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#ffffff;border-radius:14px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;">
+    <div style="background:#15803d;padding:20px 24px;color:#fff;">
+      <div style="font-size:18px;font-weight:800;margin-bottom:2px;">✓ Resolve Flag</div>
+      <div style="opacity:.85;font-size:13px;">Confirm the issue has been reviewed and resolved.</div>
+    </div>
+    <div style="padding:20px 24px;">
+      <div style="margin-bottom:18px;">
+        <label style="display:block;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Resolution Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+        <textarea id="flag-resolve-note" rows="3" class="form-control" placeholder="e.g. Confirmed with supervisor — hours are correct" style="font-size:14px;resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="closeFlagResolveModal()" class="btn btn-secondary btn-sm" style="flex:1;">Cancel</button>
+        <button onclick="submitFlagResolve()" style="flex:2;padding:9px;border:none;border-radius:8px;font-size:14px;font-weight:700;background:#15803d;color:#fff;cursor:pointer;">✓ Mark Resolved</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2362,6 +2409,11 @@ function renderTickets(tickets, isArchived = false, listId = 'ticket-list') {
     const dupBadge = (t.has_duplicate === 1 || t.has_duplicate === '1')
       ? `<span style="background:#fef9c3;color:#854d0e;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-left:4px;">Duplicate</span>`
       : '';
+    const flagBadge = t.flag_status === 'pending'
+      ? `<span style="background:#ede9fe;color:#6d28d9;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-left:4px;">🚩 Review</span>`
+      : t.flag_status === 'resolved'
+      ? `<span style="background:#d1fae5;color:#065f46;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-left:4px;">✓ Reviewed</span>`
+      : '';
     return `
     <div class="ticket-row${isArchived ? ' archived-row' : ''}" data-id="${t.id}" data-archived="${isArchived ? 1 : 0}" role="button" tabindex="0" style="${isArchived ? 'opacity:0.75;' : ''}">
       <div class="ticket-date">
@@ -2369,7 +2421,7 @@ function renderTickets(tickets, isArchived = false, listId = 'ticket-list') {
         <div class="day">${fmtDay(t.date)}</div>
       </div>
       <div class="ticket-job">
-        <div class="job-name">${esc(t.job_name)}${isArchived ? ' <span style="font-size:10px;background:#e0e0e0;color:#666;padding:1px 6px;border-radius:8px;font-weight:600;vertical-align:middle;">ARCHIVED</span>' : ''}${otBadge}${reg8Badge}${dupBadge}</div>
+        <div class="job-name">${esc(t.job_name)}${isArchived ? ' <span style="font-size:10px;background:#e0e0e0;color:#666;padding:1px 6px;border-radius:8px;font-weight:600;vertical-align:middle;">ARCHIVED</span>' : ''}${otBadge}${reg8Badge}${dupBadge}${flagBadge}</div>
         <div class="job-num">${t.job_number ? '#' + esc(t.job_number) : ''}&nbsp;<span style="color:var(--gray-300);">·</span>&nbsp;${t.employees.length} worker${t.employees.length !== 1 ? 's' : ''}</div>
         <div class="ticket-subhead">Project: ${t.project_name ? esc(t.project_name) : 'No Project Assigned'}<span class="sep">·</span>Job #: ${t.job_number ? esc(t.job_number) : '—'}${t.submitted_by_name ? `<span class="sep">·</span>By: ${esc(t.submitted_by_name)}` : ''}</div>
       </div>
@@ -2728,6 +2780,28 @@ async function openDetail(id, isArchived = false) {
             <div style="font-size:12px;color:#991b1b;margin-top:2px;">This ticket has returns that need to be processed.</div>
           </div>
         </div>` : ''}
+      ${t.flag_status === 'pending' ? `
+        <div style="background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:16px;">🚩</span>
+            <div style="font-weight:700;font-size:13px;color:#6d28d9;">Flagged for Review</div>
+            <span style="font-size:11px;color:#8b5cf6;margin-left:auto;">${fmtDateTime(t.flag_assigned_at)}</span>
+          </div>
+          ${t.flag_assigned_to_name ? `<div style="font-size:12px;color:#5b21b6;margin-bottom:4px;">Assigned to: <strong>${esc(t.flag_assigned_to_name)}</strong></div>` : ''}
+          ${t.flag_reason ? `<div style="font-size:12px;color:#374151;background:#ede9fe;border-radius:6px;padding:6px 10px;margin-top:6px;">${esc(t.flag_reason)}</div>` : ''}
+          <button onclick="resolveFlag(${t.id})" style="margin-top:10px;padding:5px 14px;background:#6d28d9;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✓ Mark Resolved</button>
+        </div>` : ''}
+      ${t.flag_status === 'resolved' ? `
+        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:16px;">✅</span>
+            <div style="font-weight:700;font-size:13px;color:#15803d;">Flag Resolved</div>
+            <span style="font-size:11px;color:#16a34a;margin-left:auto;">${fmtDateTime(t.flag_resolved_at)}</span>
+          </div>
+          <div style="font-size:12px;color:#166534;">Resolved by: <strong>${esc(t.flag_resolved_by||'')}</strong></div>
+          ${t.flag_reason ? `<div style="font-size:11px;color:#6b7280;margin-top:4px;">Original reason: ${esc(t.flag_reason)}</div>` : ''}
+          ${t.flag_resolved_note ? `<div style="font-size:12px;color:#374151;background:#dcfce7;border-radius:6px;padding:6px 10px;margin-top:6px;">${esc(t.flag_resolved_note)}</div>` : ''}
+        </div>` : ''}
       ${totalOT > 0 ? `
         <div style="background:${t.ot_approved===0||t.ot_approved==='0'?'#fef2f2':'#fff7ed'};border:1px solid ${t.ot_approved===0||t.ot_approved==='0'?'#fca5a5':'#fed7aa'};border-radius:8px;padding:12px 14px;margin-bottom:10px;">
           <div style="font-weight:700;font-size:13px;color:${t.ot_approved===0||t.ot_approved==='0'?'#b91c1c':'#c2410c'};margin-bottom:8px;">
@@ -2872,6 +2946,10 @@ $('modal-body').addEventListener('click', e => {
 });
 
 // ── Archive / Unarchive ──
+$('modal-flag-btn').addEventListener('click', () => {
+  if (activeTicketId) openFlagModal(activeTicketId);
+});
+
 $('modal-archive').addEventListener('click', async () => {
   const action = activeTicketArchived ? 'unarchive' : 'archive';
   try {
@@ -3747,6 +3825,77 @@ async function restoreSafetyInProject(id) {
   const res = await fetch(`/api/safety/${id}/project-archive`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive: false }) });
   if (res.ok) { openProject(currentProjectId); showToast('Safety form restored', 'success'); }
   else showToast('Failed to restore', 'error');
+}
+
+// ── Ticket Flag ──────────────────────────────────────────────────
+let _flagTicketId = null;
+let _flagResolveTicketId = null;
+
+async function openFlagModal(id) {
+  _flagTicketId = id;
+  $('flag-reason-input').value = '';
+  // Populate user list
+  const sel = $('flag-assign-select');
+  sel.innerHTML = '<option value="">— Select a person —</option>';
+  try {
+    const r = await fetch('/api/users');
+    if (r.ok) {
+      const users = await r.json();
+      users.filter(u => u.status !== 'inactive').forEach(u => {
+        const o = document.createElement('option');
+        o.value = u.id; o.dataset.name = u.name; o.textContent = `${u.name} (${u.role})`;
+        sel.appendChild(o);
+      });
+    }
+  } catch {}
+  $('flag-modal').style.display = 'flex';
+}
+
+function closeFlagModal() {
+  $('flag-modal').style.display = 'none';
+  _flagTicketId = null;
+}
+
+async function submitFlag() {
+  const sel = $('flag-assign-select');
+  const assigned_to_id   = sel.value ? parseInt(sel.value) : null;
+  const assigned_to_name = sel.value ? sel.options[sel.selectedIndex].dataset.name : null;
+  const reason = $('flag-reason-input').value.trim();
+  if (!assigned_to_id) { showToast('Please select someone to assign this flag to.', 'error'); return; }
+  const res = await fetch(`/api/tickets/${_flagTicketId}/flag`, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ reason, assigned_to_name, assigned_to_id })
+  });
+  if (!res.ok) { showToast('Failed to flag ticket', 'error'); return; }
+  closeFlagModal();
+  showToast(`Ticket flagged — assigned to ${assigned_to_name}`, 'success');
+  // Reload modal and list
+  if (currentTicketData) openDetail(currentTicketData.id, activeTicketArchived);
+  loadTickets(currentPage);
+}
+
+function resolveFlag(id) {
+  _flagResolveTicketId = id;
+  $('flag-resolve-note').value = '';
+  $('flag-resolve-modal').style.display = 'flex';
+}
+
+function closeFlagResolveModal() {
+  $('flag-resolve-modal').style.display = 'none';
+  _flagResolveTicketId = null;
+}
+
+async function submitFlagResolve() {
+  const note = $('flag-resolve-note').value.trim();
+  const res = await fetch(`/api/tickets/${_flagResolveTicketId}/flag/resolve`, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ note })
+  });
+  if (!res.ok) { showToast('Failed to resolve flag', 'error'); return; }
+  closeFlagResolveModal();
+  showToast('Flag marked as resolved', 'success');
+  if (currentTicketData) openDetail(currentTicketData.id, activeTicketArchived);
+  loadTickets(currentPage);
 }
 
 function updateProjBulk() {
@@ -8475,8 +8624,8 @@ async function renderProjectTools(projectId) {
 async function loadAuditLog(ticketId) {
   try {
     const logs = await fetch(`/api/tickets/${ticketId}/audit`).then(r=>r.json());
-    const dotClass = { ticket_submitted:'submitted', ticket_viewed:'viewed', ticket_archived:'archived', ticket_unarchived:'viewed', ticket_deleted:'deleted', ticket_exported:'exported', ticket_updated:'viewed' };
-    const actionLabel = { ticket_submitted:'Submitted', ticket_viewed:'Viewed', ticket_archived:'Archived', ticket_unarchived:'Unarchived', ticket_deleted:'Deleted', ticket_exported:'Exported', ticket_updated:'Updated' };
+    const dotClass = { ticket_submitted:'submitted', ticket_viewed:'viewed', ticket_archived:'archived', ticket_unarchived:'viewed', ticket_deleted:'deleted', ticket_exported:'exported', ticket_updated:'viewed', ticket_flagged:'deleted', ticket_flag_resolved:'submitted' };
+    const actionLabel = { ticket_submitted:'Submitted', ticket_viewed:'Viewed', ticket_archived:'Archived', ticket_unarchived:'Unarchived', ticket_deleted:'Deleted', ticket_exported:'Exported', ticket_updated:'Updated', ticket_flagged:'Flagged for Review', ticket_flag_resolved:'Flag Resolved' };
     $('audit-entries').innerHTML = logs.length === 0 ? '<span class="text-xs text-muted">No activity recorded yet.</span>' :
       logs.map(l => `<div class="audit-entry"><div class="audit-dot ${dotClass[l.action]||''}"></div><div class="audit-text"><strong>${actionLabel[l.action]||l.action}</strong> by <strong>${esc(l.user_name)}</strong> — ${fmtDateTime(l.created_at)}</div></div>`).join('');
   } catch { $('audit-entries').innerHTML = ''; }
