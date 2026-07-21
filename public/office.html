@@ -4679,15 +4679,12 @@ function renderWirePresetList() {
     <div style="padding:6px 16px 2px;font-size:10px;font-weight:800;color:var(--gray-400);text-transform:uppercase;letter-spacing:.08em;background:#f9fafb;border-bottom:1px solid #f3f4f6;">${esc(type)}</div>
     ${items.map(p => {
       const idx = WIRE_PRESETS.indexOf(p);
-      const needsColor = !p.color;
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
         <input type="checkbox" data-preset-idx="${idx}" style="width:16px;height:16px;accent-color:var(--orange);flex-shrink:0;">
-        <div style="flex:1;">
-          <div style="font-size:13px;font-weight:700;">${esc(p.gauge||'—')}${p.color?' <span style="color:var(--gray-400);font-weight:400;">· '+esc(p.color)+'</span>':''}</div>
-        </div>
-        ${needsColor ? `<select data-color-for="${idx}" onclick="event.stopPropagation()" style="font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;">
-          ${WIRE_COLORS.map(c=>`<option value="${c}">${c||'— color —'}</option>`).join('')}
-        </select>` : ''}
+        <div style="flex:1;font-size:13px;font-weight:700;">${esc(p.gauge||'—')}</div>
+        <select data-color-for="${idx}" onclick="event.stopPropagation()" style="font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;min-width:90px;">
+          ${WIRE_COLORS.map(c=>`<option value="${c}"${c===(p.color||'')?'selected':''}>${c||'— color —'}</option>`).join('')}
+        </select>
         ${p.kg_per_m > 0 ? `<div style="font-size:11px;font-weight:700;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:6px;white-space:nowrap;">${p.kg_per_m} kg/m</div>` : ''}
       </div>`;
     }).join('')}
