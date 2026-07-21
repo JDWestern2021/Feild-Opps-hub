@@ -4105,6 +4105,8 @@ $('psub-proj-archived').addEventListener('click', () => setProjectSubTab('proj-a
 $('psub-rfqs').addEventListener('click', () => setProjectSubTab('rfqs'));
 
 // ── Wire Tracking ─────────────────────────────────────────────────────────────
+const WIRE_COLORS = ['','Black','White','Red','Blue','Green','Yellow','Orange','Brown','Gray','Purple','Pink'];
+
 const WIRE_PRESETS = [
   { wire_type:'NMD', gauge:'10/3c', color:'Orange', kg_per_m:0.53 },
   { wire_type:'NMD', gauge:'12/2c', color:'Yellow', kg_per_m:0.22 },
@@ -4315,7 +4317,11 @@ function renderWireTable() {
         </td>
         <td style="padding:6px 8px;font-size:13px;font-weight:700;">${esc(w.wire_type)||'<span style="color:#9ca3af;">—</span>'}</td>
         <td style="padding:6px 8px;font-size:13px;">${esc(w.gauge)||'—'}</td>
-        <td style="padding:6px 8px;font-size:13px;">${esc(w.color)||'—'}</td>
+        <td style="padding:4px 6px;">
+          <select onchange="wireUpdateColor(${w.id},this.value)" style="font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;background:#fff;max-width:90px;">
+            ${WIRE_COLORS.map(c=>`<option value="${c}"${c===(w.color||'')?'selected':''}>${c||'— color —'}</option>`).join('')}
+          </select>
+        </td>
         <td style="padding:6px 8px;text-align:right;font-size:12px;color:var(--gray-500);">${kgpm > 0 ? kgpm + ' kg/m' : '—'}</td>
         <td style="padding:6px 10px;text-align:right;font-weight:700;color:#1d4ed8;border-left:2px solid #bfdbfe;">${sent > 0 ? wireFmt(sent) : '<span style="color:#9ca3af;">—</span>'}</td>
         <td style="padding:6px 8px;text-align:right;font-size:12px;color:#1d4ed8;">${wireFmtM(mSent)}</td>
@@ -4661,10 +4667,8 @@ window.wireDeleteType = async function(wireId) {
 
 function renderWirePresetList() {
   const q = ($('wire-preset-search')?.value||'').toLowerCase();
-  const used = new Set(_wireTypes.map(w => `${w.wire_type}|${w.gauge}|${w.color}`));
   const filtered = WIRE_PRESETS.filter(p =>
-    !used.has(`${p.wire_type}|${p.gauge}|${p.color}`) &&
-    (!q || `${p.wire_type} ${p.gauge} ${p.color}`.toLowerCase().includes(q))
+    !q || `${p.wire_type} ${p.gauge} ${p.color}`.toLowerCase().includes(q)
   );
   const list = $('wire-preset-list');
   if (!list) return;
@@ -4673,11 +4677,20 @@ function renderWirePresetList() {
   filtered.forEach(p => { (groups[p.wire_type] = groups[p.wire_type]||[]).push(p); });
   list.innerHTML = Object.entries(groups).map(([type, items]) => `
     <div style="padding:6px 16px 2px;font-size:10px;font-weight:800;color:var(--gray-400);text-transform:uppercase;letter-spacing:.08em;background:#f9fafb;border-bottom:1px solid #f3f4f6;">${esc(type)}</div>
-    ${items.map(p => `<label style="display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
-      <input type="checkbox" data-preset-idx="${WIRE_PRESETS.indexOf(p)}" style="width:16px;height:16px;accent-color:var(--orange);flex-shrink:0;">
-      <div style="flex:1;"><div style="font-size:13px;font-weight:700;">${esc(p.gauge||'—')}${p.color?' <span style="color:var(--gray-400);font-weight:400;">· '+esc(p.color)+'</span>':''}</div></div>
-      ${p.kg_per_m > 0 ? `<div style="font-size:11px;font-weight:700;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:6px;">${p.kg_per_m} kg/m</div>` : ''}
-    </label>`).join('')}
+    ${items.map(p => {
+      const idx = WIRE_PRESETS.indexOf(p);
+      const needsColor = !p.color;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
+        <input type="checkbox" data-preset-idx="${idx}" style="width:16px;height:16px;accent-color:var(--orange);flex-shrink:0;">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;">${esc(p.gauge||'—')}${p.color?' <span style="color:var(--gray-400);font-weight:400;">· '+esc(p.color)+'</span>':''}</div>
+        </div>
+        ${needsColor ? `<select data-color-for="${idx}" onclick="event.stopPropagation()" style="font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;">
+          ${WIRE_COLORS.map(c=>`<option value="${c}">${c||'— color —'}</option>`).join('')}
+        </select>` : ''}
+        ${p.kg_per_m > 0 ? `<div style="font-size:11px;font-weight:700;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:6px;white-space:nowrap;">${p.kg_per_m} kg/m</div>` : ''}
+      </div>`;
+    }).join('')}
   `).join('');
 }
 
@@ -4687,11 +4700,14 @@ async function addSelectedPresets() {
   const btn = $('wire-preset-add-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
   for (const cb of checked) {
-    const p = WIRE_PRESETS[parseInt(cb.dataset.presetIdx)];
+    const idx = parseInt(cb.dataset.presetIdx);
+    const p = WIRE_PRESETS[idx];
     if (!p) continue;
+    const colorSel = document.querySelector(`[data-color-for="${idx}"]`);
+    const color = colorSel ? colorSel.value : (p.color || '');
     const res = await fetch('/api/projects/' + currentProjectId + '/wire', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ wire_type:p.wire_type, gauge:p.gauge, color:p.color, kg_per_m:p.kg_per_m||0, notes:'' })
+      body: JSON.stringify({ wire_type:p.wire_type, gauge:p.gauge, color, kg_per_m:p.kg_per_m||0, notes:'' })
     });
     if (res.ok) _wireTypes.push(await res.json());
   }
@@ -4699,6 +4715,13 @@ async function addSelectedPresets() {
   $('wire-preset-modal').style.display = 'none';
   const empty = $('wire-empty'); if (empty) empty.remove();
   renderWireTable();
+}
+
+async function wireUpdateColor(id, value) {
+  await fetch('/api/projects/wire/' + id, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ color: value })
+  });
 }
 
 // Refresh the open project after a record changes (keeps archived labels current)
