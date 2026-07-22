@@ -697,16 +697,6 @@
   </div>
 
   <!-- HOME VIEW (default) -->
-  <!-- My Flagged Tickets notification — shown when the logged-in office user has flags assigned to them -->
-  <div id="office-flag-banner" style="display:none;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:12px;margin:0 0 18px 0;overflow:hidden;">
-    <div style="background:#7c3aed;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;">
-      <span style="font-size:18px;">🚩</span>
-      <span style="font-weight:700;font-size:14px;flex:1;">Tickets Flagged for Your Review</span>
-      <button onclick="document.getElementById('office-flag-banner').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;line-height:1;">×</button>
-    </div>
-    <div id="office-flag-list" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;"></div>
-  </div>
-
   <div id="home-view">
     <div class="home-cards" id="home-cards-grid">
       <div class="home-card">
@@ -10452,6 +10442,16 @@ function openNewRFQModalForProject(projectId) {
       </div>
     </div>
   </div>
+</div>
+
+<!-- Flag notification panel — fixed, visible on every tab -->
+<div id="office-flag-banner" style="display:none;position:fixed;bottom:24px;right:24px;z-index:8000;width:340px;max-width:calc(100vw - 32px);background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:12px;box-shadow:0 8px 32px rgba(109,40,217,.18);overflow:hidden;">
+  <div style="background:#7c3aed;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+    <span style="font-size:18px;">🚩</span>
+    <span style="font-weight:700;font-size:14px;flex:1;">Flagged for Your Review</span>
+    <button onclick="document.getElementById('office-flag-banner').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.7);font-size:22px;cursor:pointer;line-height:1;padding:0 2px;">×</button>
+  </div>
+  <div id="office-flag-list" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow-y:auto;"></div>
 </div>
 
 </body>
