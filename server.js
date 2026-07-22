@@ -870,6 +870,20 @@ app.patch('/api/tickets/:id/flag', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/tickets/:id/flag/clear', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query(
+    `UPDATE daily_tickets SET flag_status=NULL, flag_reason=NULL, flag_assigned_to_name=NULL,
+     flag_assigned_to_id=NULL, flag_assigned_at=NULL, flag_resolved_at=NULL,
+     flag_resolved_by=NULL, flag_resolved_note=NULL WHERE id=$1`,
+    [req.params.id]
+  );
+  logAction(req,'ticket_flag_resolved',rows[0].id,rows[0].ticket_number,
+    `Flag cleared by ${req.user.name}`);
+  res.json({ ok: true });
+});
+
 app.patch('/api/tickets/:id/flag/resolve', requireAuth, async (req, res) => {
   const { note } = req.body;
   const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);

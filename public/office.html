@@ -697,6 +697,16 @@
   </div>
 
   <!-- HOME VIEW (default) -->
+  <!-- My Flagged Tickets notification — shown when the logged-in office user has flags assigned to them -->
+  <div id="office-flag-banner" style="display:none;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:12px;margin:0 0 18px 0;overflow:hidden;">
+    <div style="background:#7c3aed;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:18px;">🚩</span>
+      <span style="font-weight:700;font-size:14px;flex:1;">Tickets Flagged for Your Review</span>
+      <button onclick="document.getElementById('office-flag-banner').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <div id="office-flag-list" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+
   <div id="home-view">
     <div class="home-cards" id="home-cards-grid">
       <div class="home-card">
@@ -2186,9 +2196,11 @@ function officeGoBack() {
   document.body.style.visibility = 'visible';
   showHomeView();               // Home is the default landing
   loadNavBadges();              // show outstanding counts immediately
+  loadOfficeFlagBanner();       // show flags assigned to this user
   setInterval(loadStats, 60000);
   setInterval(loadHomeOverview, 30000);
   setInterval(loadNavBadges, 30000); // refresh badges every 30s
+  setInterval(loadOfficeFlagBanner, 60000); // refresh flag banner every minute
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2789,7 +2801,10 @@ async function openDetail(id, isArchived = false) {
           </div>
           ${t.flag_assigned_to_name ? `<div style="font-size:12px;color:#5b21b6;margin-bottom:4px;">Assigned to: <strong>${esc(t.flag_assigned_to_name)}</strong></div>` : ''}
           ${t.flag_reason ? `<div style="font-size:12px;color:#374151;background:#ede9fe;border-radius:6px;padding:6px 10px;margin-top:6px;">${esc(t.flag_reason)}</div>` : ''}
-          <button onclick="resolveFlag(${t.id})" style="margin-top:10px;padding:5px 14px;background:#6d28d9;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✓ Mark Resolved</button>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button onclick="resolveFlag(${t.id})" style="padding:5px 14px;background:#6d28d9;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✓ Mark Resolved</button>
+            <button onclick="clearFlag(${t.id})" style="padding:5px 14px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✕ Turn Off Flag</button>
+          </div>
         </div>` : ''}
       ${t.flag_status === 'resolved' ? `
         <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:12px 14px;margin-bottom:10px;">
@@ -3896,6 +3911,42 @@ async function submitFlagResolve() {
   showToast('Flag marked as resolved', 'success');
   if (currentTicketData) openDetail(currentTicketData.id, activeTicketArchived);
   loadTickets(currentPage);
+  loadOfficeFlagBanner();
+}
+
+async function clearFlag(id) {
+  if (!confirm('Remove the flag from this ticket entirely?')) return;
+  const res = await fetch(`/api/tickets/${id}/flag/clear`, { method: 'PATCH' });
+  if (!res.ok) { showToast('Failed to clear flag', 'error'); return; }
+  showToast('Flag removed', 'success');
+  if (currentTicketData) openDetail(currentTicketData.id, activeTicketArchived);
+  loadTickets(currentPage);
+  loadOfficeFlagBanner();
+}
+
+async function loadOfficeFlagBanner() {
+  try {
+    const r = await fetch('/api/tickets/my-flags', { credentials: 'include' });
+    if (!r.ok) return;
+    const flags = await r.json();
+    const banner = $('office-flag-banner');
+    const list   = $('office-flag-list');
+    if (!flags.length) { banner.style.display = 'none'; return; }
+    list.innerHTML = flags.map(f => `
+      <div style="background:#fff;border:1px solid #c4b5fd;border-radius:8px;padding:10px 14px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:13px;color:#6d28d9;">${esc(f.ticket_number||'')}</span>
+          <span style="font-size:12px;color:#374151;">${esc(f.job_name||'')}${f.job_number?' · #'+esc(f.job_number):''}</span>
+          <span style="font-size:11px;color:#8b5cf6;margin-left:auto;">${f.flag_assigned_at ? new Date(f.flag_assigned_at).toLocaleDateString() : ''}</span>
+        </div>
+        ${f.flag_reason ? `<div style="font-size:12px;color:#374151;background:#ede9fe;border-radius:6px;padding:5px 9px;margin-top:6px;">${esc(f.flag_reason)}</div>` : ''}
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button onclick="resolveFlag(${f.id})" style="padding:5px 14px;background:#6d28d9;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✓ Mark Resolved</button>
+          <button onclick="clearFlag(${f.id})" style="padding:5px 14px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✕ Turn Off Flag</button>
+        </div>
+      </div>`).join('');
+    banner.style.display = 'block';
+  } catch(e) {}
 }
 
 function updateProjBulk() {
