@@ -337,7 +337,7 @@
 
   // ── Load projects ─────────────────────────────────────────
   try {
-    const r = await fetch('/api/projects');
+    const r = await fetch('/api/project-folders');
     if (r.ok) {
       const ps = await r.json();
       const sel = document.getElementById('f-project');
