@@ -10,6 +10,13 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "overrides": {
+    "uuid": "^11.1.1",
+    "brace-expansion": "5.0.8",
+    "minimatch": "^10.0.0",
+    "glob": "^10.4.0",
+    "rimraf": "^5.0.0"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
