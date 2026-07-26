@@ -59,8 +59,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
       // HTML always re-validates so users get fresh content
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     } else if (/\.(css|js)$/.test(filePath)) {
-      // CSS/JS cached for 1 hour
-      res.setHeader('Cache-Control', 'public, max-age=3600');
+      // No caching so deploys show immediately
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     } else if (/\.(png|jpg|jpeg|gif|webp|svg|ico)$/.test(filePath)) {
       // Images cached for 7 days
       res.setHeader('Cache-Control', 'public, max-age=604800');
