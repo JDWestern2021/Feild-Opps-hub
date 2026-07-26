@@ -14,7 +14,8 @@
   <link rel="stylesheet" href="theme.css"/>
   <link rel="stylesheet" href="safety-forms.css"/>
   <style>
-    body { background: var(--gray-100); display: flex; height: 100vh; overflow: hidden; }
+    body { background: var(--gray-100); margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+    .body-layout { display: flex; height: 100vh; overflow: hidden; }
 
     /* ── Sidebar ── */
     .sidebar {
@@ -81,14 +82,12 @@
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; }
 
     @media (max-width: 768px) {
-      .sidebar { position: fixed; left: -220px; top: 0; transition: left .25s; z-index: 100; height: 100vh; }
+      .body-layout { padding-top: 56px; }
+      .sidebar { position: fixed; left: -220px; top: 56px; height: calc(100vh - 56px); transition: left .25s; z-index: 100; }
       .sidebar.open { left: 0; }
       .sidebar-overlay.visible { display: block; }
       .sidebar-toggle { display: none; }
-      /* Topbar fixed so it's OUT of the flex row and spans full width */
-      .mobile-topbar { position: fixed !important; top: 0; left: 0; right: 0; width: 100%; z-index: 95 !important; }
-      /* Push main-content down below fixed topbar */
-      .main-content { padding-top: 56px; }
+      .mobile-topbar { position: fixed; top: 0; left: 0; right: 0; width: 100%; z-index: 110; }
     }
 
     /* ── Mobile top bar ─────────────────────────────────────────*/
@@ -549,6 +548,8 @@
 </nav>
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
+<!-- Flex layout wrapper: sidebar + main content only -->
+<div class="body-layout">
 <!-- LEFT SIDEBAR -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-brand">
@@ -607,10 +608,7 @@
       Back to Hub
     </a>
   </div>
-</aside>
-
-<!-- MAIN CONTENT -->
-<div class="main-content">
+</aside><div class="main-content">
 <div class="safety-content">
 
   <!-- ── Tab: Sign Required ─────────────────────────────────── -->
@@ -1155,6 +1153,7 @@
 
 </div><!-- /.safety-content -->
 </div><!-- /.main-content -->
+</div><!-- /.body-layout -->
 
 <div id="print-area"></div>
 
