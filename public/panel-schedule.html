@@ -815,11 +815,9 @@ function printSchedule(s, widthIn, heightIn) {
   @page { size:letter portrait; margin:0.3in 0.22in 0.2in 0.22in; }
   body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
 
-  /* The schedule fits within the printable area defined by @page margins */
+  /* The schedule expands to fit all circuits — overflow is allowed */
   .print-page {
     width:${w}in;
-    height:${h <= 11 ? (h - 0.5).toFixed(3) : (h - 0.5).toFixed(3)}in;
-    overflow:hidden;
     display:flex;
     flex-direction:column;
     margin-left:0;
@@ -846,9 +844,9 @@ function printSchedule(s, widthIn, heightIn) {
   .pi-value { font-size:9px; font-weight:700; color:#111; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .pi-meta  { font-size:6px; color:#bbb; padding:2px 4px; display:flex; justify-content:space-between; flex-shrink:0; }
 
-  /* Circuit table — fills all remaining height so rows stretch to fill the label */
-  .tbl-wrap { flex:1; overflow:hidden; }
-  .pt-table { width:100%; height:100%; border-collapse:collapse; font-size:8px; table-layout:fixed; }
+  /* Circuit table — expands to show all rows */
+  .tbl-wrap { flex:1; }
+  .pt-table { width:100%; border-collapse:collapse; font-size:8px; table-layout:fixed; }
   .pt-table col.desc-col { width:50%; }
   .pt-table col.pole-col { width:16px; }
   .pt-table col.amp-col  { width:22px; }

@@ -22,7 +22,39 @@
 .sf-form-page {
   max-width: 740px;
   margin: 0 auto;
-  padding: 16px 16px 80px;
+  padding: 16px 16px 100px;
+}
+
+/* ── Shared mobile form header ──────────────────────────────── */
+/* All safety form pages share .fp-header / .fp-header-inner pattern */
+@media (max-width: 600px) {
+  .fp-header-inner, .flha-header-inner {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px !important;
+  }
+  .fp-back, .flha-header-back {
+    order: -1;
+    width: 100%;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,.08) !important;
+    border: 1px solid rgba(255,255,255,.15) !important;
+    color: #F47920 !important;
+    font-weight: 700 !important;
+    min-height: 40px;
+  }
+  .fp-header h1, .flha-header h1 {
+    font-size: 1rem !important;
+    flex: 1;
+  }
+  .fp-form-num, .flha-form-num {
+    font-size: 11px !important;
+  }
 }
 .sf-form-header {
   display: flex;
