@@ -526,20 +526,22 @@ app.get('/api/employees', requireAdmin, async (req, res) => {
 
     if (!users.length) return res.json([]);
 
-    // CROSS JOIN users × active required catalog → LEFT JOIN held certs
-    // This guarantees every required cert appears per user even with zero records
+    // Resolution: user override → template default → not required
+    // Only rows where resolved requirement = TRUE feed the roll-up.
+    // is_held distinguishes "not uploaded" from "no-expiry cert".
     const { rows: certRows } = await pool.query(
       `SELECT u.id AS user_id,
-              c.id AS catalog_id,
               c.expires,
-              w.expiry_date
+              w.expiry_date,
+              (w.user_id IS NOT NULL) AS is_held
        FROM users u
        CROSS JOIN cert_catalog c
-       LEFT JOIN worker_certifications w
-              ON w.catalog_id = c.id AND w.user_id = u.id
+       LEFT JOIN user_cert_requirements ucr ON ucr.user_id = u.id AND ucr.catalog_id = c.id
+       LEFT JOIN template_cert_requirements tcr ON tcr.template_id = u.template_id AND tcr.catalog_id = c.id
+       LEFT JOIN worker_certifications w ON w.catalog_id = c.id AND w.user_id = u.id
        WHERE (u.archived = FALSE OR $1 = TRUE)
          AND c.active = TRUE
-         AND c.tier = 'required'`,
+         AND COALESCE(ucr.required, tcr.required, FALSE) = TRUE`,
       [includeArchived]
     );
 
@@ -548,10 +550,10 @@ app.get('/api/employees', requireAdmin, async (req, res) => {
     for (const r of certRows) {
       if (!rollup[r.user_id]) rollup[r.user_id] = { missing: 0, expired: 0, expiring: 0 };
       let s;
-      if (r.expires === false) {
-        s = 'valid'; // no-expiry cert: always valid if held (w.expiry_date irrelevant)
-      } else if (!r.expiry_date) {
+      if (!r.is_held) {
         s = 'missing';
+      } else if (r.expires === false) {
+        s = 'valid';
       } else if (r.expiry_date < today) {
         s = 'expired';
       } else if (r.expiry_date <= warnDate) {
@@ -586,26 +588,36 @@ app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
 
     const warningDays = parseInt(await getSetting('cert_expiry_warning_days') || '60');
 
-    const [userRes, certsRes, formsRes] = await Promise.all([
+    const [userRes, certsRes, formsRes, templatesRes] = await Promise.all([
       pool.query(
-        `SELECT id, name, email, role, status, archived, created_at, last_login
-         FROM users WHERE id = $1`,
+        `SELECT u.id, u.name, u.email, u.role, u.status, u.archived, u.template_id,
+                u.created_at, u.last_login, t.name AS template_name
+         FROM users u
+         LEFT JOIN cert_requirement_templates t ON t.id = u.template_id
+         WHERE u.id = $1`,
         [uid]
       ),
-      // LEFT JOIN from catalog to held certs — missing entries have null on right side
+      // Catalog × held certs with per-employee resolution
       pool.query(
         `SELECT c.id AS catalog_id, c.display_name, c.short_code, c.tier,
                 c.validity_months, c.expires, c.sort_order,
                 w.id AS cert_id, w.issued_date, w.expiry_date, w.notes,
-                w.photo_data IS NOT NULL AS has_photo, w.photo_type
+                w.photo_data IS NOT NULL AS has_photo,
+                ucr.required AS override_required,
+                tcr.required AS template_required,
+                COALESCE(ucr.required, tcr.required, FALSE) AS is_required,
+                CASE WHEN ucr.catalog_id IS NOT NULL THEN 'override'
+                     WHEN tcr.catalog_id IS NOT NULL THEN 'template'
+                     ELSE 'default' END AS requirement_source
          FROM cert_catalog c
-         LEFT JOIN worker_certifications w
-                ON w.catalog_id = c.id AND w.user_id = $1
+         LEFT JOIN worker_certifications w ON w.catalog_id = c.id AND w.user_id = $1
+         LEFT JOIN user_cert_requirements ucr ON ucr.user_id = $1 AND ucr.catalog_id = c.id
+         LEFT JOIN users u2 ON u2.id = $1
+         LEFT JOIN template_cert_requirements tcr ON tcr.template_id = u2.template_id AND tcr.catalog_id = c.id
          WHERE c.active = TRUE
-         ORDER BY c.tier, c.sort_order`,
+         ORDER BY c.sort_order`,
         [uid]
       ),
-      // Forms keyed on submitted_by_id — never the text field
       pool.query(
         `SELECT id, form_type, form_number, project_name, date, submitted_at,
                 status, psi_flag, wcb_flag, archived
@@ -614,6 +626,7 @@ app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
          ORDER BY submitted_at DESC`,
         [uid]
       ),
+      pool.query(`SELECT id, name FROM cert_requirement_templates WHERE active = TRUE ORDER BY name`),
     ]);
 
     if (!userRes.rows[0]) return res.status(404).json({ error: 'Employee not found' });
@@ -622,8 +635,125 @@ app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
       user: userRes.rows[0],
       certs: certsRes.rows,
       forms: formsRes.rows,
+      templates: templatesRes.rows,
       warning_days: warningDays,
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// REQUIREMENT TEMPLATES + OVERRIDES
+// ─────────────────────────────────────────────
+
+app.get('/api/cert-requirement-templates', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.id, t.name, t.active,
+              COALESCE(json_agg(json_build_object('catalog_id', tcr.catalog_id, 'required', tcr.required)
+                ORDER BY tcr.catalog_id) FILTER (WHERE tcr.catalog_id IS NOT NULL), '[]') AS requirements
+       FROM cert_requirement_templates t
+       LEFT JOIN template_cert_requirements tcr ON tcr.template_id = t.id
+       WHERE t.active = TRUE
+       GROUP BY t.id ORDER BY t.name`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Assign/clear template on one employee
+app.patch('/api/users/:id/template', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    const { template_id } = req.body;
+    await pool.query('UPDATE users SET template_id = $1 WHERE id = $2', [template_id || null, uid]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Set per-user cert override (writes or upserts a row)
+app.put('/api/users/:id/cert-requirements/:catalogId', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    const cid = parseInt(req.params.catalogId);
+    const { required } = req.body;
+    if (typeof required !== 'boolean') return res.status(400).json({ error: 'required must be boolean' });
+    await pool.query(
+      `INSERT INTO user_cert_requirements (user_id, catalog_id, required, updated_at)
+       VALUES ($1,$2,$3,NOW())
+       ON CONFLICT (user_id, catalog_id) DO UPDATE SET required=$3, updated_at=NOW()`,
+      [uid, cid, required]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Clear per-user override (inherit from template)
+app.delete('/api/users/:id/cert-requirements/:catalogId', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    const cid = parseInt(req.params.catalogId);
+    await pool.query('DELETE FROM user_cert_requirements WHERE user_id=$1 AND catalog_id=$2', [uid, cid]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Matrix view data — all employees × all catalog certs with resolved requirements
+app.get('/api/cert-requirements/matrix', requireAdmin, async (req, res) => {
+  try {
+    const [usersRes, catalogRes, overridesRes, templateReqsRes] = await Promise.all([
+      pool.query(`SELECT id, name, role, template_id FROM users WHERE archived = FALSE ORDER BY name`),
+      pool.query(`SELECT id, display_name, short_code, tier FROM cert_catalog WHERE active = TRUE ORDER BY sort_order`),
+      pool.query(`SELECT user_id, catalog_id, required FROM user_cert_requirements`),
+      pool.query(`SELECT template_id, catalog_id, required FROM template_cert_requirements`),
+    ]);
+    res.json({
+      users: usersRes.rows,
+      catalog: catalogRes.rows,
+      overrides: overridesRes.rows,
+      template_reqs: templateReqsRes.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk: assign template to multiple employees
+app.post('/api/cert-requirements/bulk/template', requireAdmin, async (req, res) => {
+  try {
+    const { user_ids, template_id } = req.body;
+    if (!Array.isArray(user_ids) || !user_ids.length) return res.status(400).json({ error: 'user_ids required' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const uid of user_ids) {
+        await client.query('UPDATE users SET template_id=$1 WHERE id=$2', [template_id || null, uid]);
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true, updated: user_ids.length });
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk: set one cert required/not-required across multiple employees
+app.post('/api/cert-requirements/bulk/cert', requireAdmin, async (req, res) => {
+  try {
+    const { user_ids, catalog_id, required } = req.body;
+    if (!Array.isArray(user_ids) || !user_ids.length || !catalog_id) return res.status(400).json({ error: 'user_ids and catalog_id required' });
+    if (typeof required !== 'boolean') return res.status(400).json({ error: 'required must be boolean' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const uid of user_ids) {
+        await client.query(
+          `INSERT INTO user_cert_requirements (user_id, catalog_id, required, updated_at)
+           VALUES ($1,$2,$3,NOW())
+           ON CONFLICT (user_id, catalog_id) DO UPDATE SET required=$3, updated_at=NOW()`,
+          [uid, catalog_id, required]
+        );
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true, updated: user_ids.length });
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

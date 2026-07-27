@@ -716,6 +716,10 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;opacity:.7;"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
           Team Tickets
         </button>
+        <button class="sf-asn-btn" data-asub="matrix" onclick="sfAdminSub('matrix',this)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;opacity:.7;"><path d="M3 3h4v4H3zm7 0h4v4h-4zm7 0h4v4h-4zM3 10h4v4H3zm7 0h4v4h-4zm7 0h4v4h-4zM3 17h4v4H3zm7 0h4v4h-4zm7 0h4v4h-4z"/></svg>
+          Cert Matrix
+        </button>
       </div>
 
       <!-- Right content area -->
@@ -791,6 +795,28 @@
           </div>
           <div id="sf-team-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
 
+        </div>
+
+        <!-- ── Cert Matrix ────────────────────────────────────────── -->
+        <div id="sf-asub-matrix" style="display:none;">
+          <!-- Bulk action bar (appears when rows selected) -->
+          <div id="sf-matrix-bulk" style="display:none;align-items:center;gap:10px;background:#1e293b;color:#fff;border-radius:8px;padding:8px 14px;margin-bottom:12px;flex-wrap:wrap;">
+            <span id="sf-matrix-bulk-count" style="font-size:13px;font-weight:700;flex:1;"></span>
+            <select id="sf-matrix-bulk-template" style="font-size:12px;border-radius:6px;padding:4px 8px;background:#334155;color:#fff;border:1px solid #475569;">
+              <option value="">Assign template…</option>
+            </select>
+            <button onclick="sfMatrixBulkTemplate()" style="font-size:12px;background:#F47920;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:700;">Apply Template</button>
+            <select id="sf-matrix-bulk-cert" style="font-size:12px;border-radius:6px;padding:4px 8px;background:#334155;color:#fff;border:1px solid #475569;">
+              <option value="">Select cert…</option>
+            </select>
+            <button onclick="sfMatrixBulkCertReq(true)"  style="font-size:12px;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-weight:700;">Set Required</button>
+            <button onclick="sfMatrixBulkCertReq(false)" style="font-size:12px;background:#9ca3af;color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-weight:700;">Set Not Required</button>
+            <button onclick="sfMatrixClearSelection()" style="font-size:12px;background:transparent;color:#9ca3af;border:none;cursor:pointer;">✕ Clear</button>
+          </div>
+          <!-- Scrollable matrix table -->
+          <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:10px;">
+            <div id="sf-matrix-table" style="min-width:600px;"></div>
+          </div>
         </div>
 
       </div><!-- /sf-admin-content -->
@@ -1212,22 +1238,28 @@
     document.querySelectorAll('.sf-asn-btn').forEach(b => b.classList.remove('active'));
     if (btnEl) btnEl.classList.add('active');
 
-    const subsEl = document.getElementById('sf-asub-submissions');
-    const teamEl = document.getElementById('sf-asub-team');
+    const subsEl   = document.getElementById('sf-asub-submissions');
+    const teamEl   = document.getElementById('sf-asub-team');
+    const matrixEl = document.getElementById('sf-asub-matrix');
     const refreshBtn = document.getElementById('sf-certs-refresh');
-    const titleEl = document.getElementById('sf-admin-content-title');
+    const titleEl  = document.getElementById('sf-admin-content-title');
+
+    if (subsEl)   subsEl.style.display   = 'none';
+    if (teamEl)   teamEl.style.display   = 'none';
+    if (matrixEl) matrixEl.style.display = 'none';
+    if (refreshBtn) refreshBtn.style.display = 'none';
 
     if (sub === 'team') {
-      if (subsEl) subsEl.style.display = 'none';
       if (teamEl) teamEl.style.display = 'block';
       if (refreshBtn) refreshBtn.style.display = '';
       if (titleEl) titleEl.textContent = 'Team';
       sfLoadTeamCompliance();
+    } else if (sub === 'matrix') {
+      if (matrixEl) matrixEl.style.display = 'block';
+      if (titleEl) titleEl.textContent = 'Certification Matrix';
+      sfLoadMatrix();
     } else {
       if (subsEl) subsEl.style.display = 'block';
-      if (teamEl) teamEl.style.display = 'none';
-      if (refreshBtn) refreshBtn.style.display = 'none';
-      // Update type filter and heading
       const typeFilter = document.getElementById('sf-admin-type');
       const isAll = sub === 'all';
       if (typeFilter) typeFilter.value = isAll ? '' : sub;
@@ -1237,6 +1269,169 @@
       }
       renderAdminForms();
     }
+  };
+
+  // ── Cert Matrix ───────────────────────────────────────────────
+  let _sfMatrixData = null;
+  let _sfMatrixSelected = new Set();
+
+  window.sfLoadMatrix = async function() {
+    const tableEl = document.getElementById('sf-matrix-table');
+    if (!tableEl) return;
+    tableEl.innerHTML = '<div style="padding:24px;color:#9ca3af;text-align:center;">Loading…</div>';
+    try {
+      const r = await fetch('/api/cert-requirements/matrix');
+      if (!r.ok) throw new Error(await r.text());
+      _sfMatrixData = await r.json();
+      _sfMatrixSelected.clear();
+      sfRenderMatrix();
+      // populate bulk template select
+      const tsel = document.getElementById('sf-matrix-bulk-template');
+      if (tsel) {
+        tsel.innerHTML = '<option value="">Assign template…</option>' +
+          (_sfMatrixData.templates||[]).map(t=>`<option value="${t.id}">${_sfEsc(t.name)}</option>`).join('');
+      }
+      // populate bulk cert select
+      const csel = document.getElementById('sf-matrix-bulk-cert');
+      if (csel) {
+        csel.innerHTML = '<option value="">Select cert…</option>' +
+          (_sfMatrixData.catalog||[]).map(c=>`<option value="${c.id}">${_sfEsc(c.short_code)}</option>`).join('');
+      }
+    } catch(e) {
+      tableEl.innerHTML = `<div style="padding:24px;color:#991b1b;">Failed to load matrix: ${_sfEsc(String(e))}</div>`;
+    }
+  };
+
+  window.sfRenderMatrix = function() {
+    const d = _sfMatrixData;
+    if (!d) return;
+    const tableEl = document.getElementById('sf-matrix-table');
+    if (!tableEl) return;
+    const { users, catalog, overrides, template_reqs } = d;
+
+    // Build lookup: override[user_id][catalog_id] = required|null
+    const ovMap = {};
+    (overrides||[]).forEach(o => { (ovMap[o.user_id]||(ovMap[o.user_id]={}))[o.catalog_id] = o.required; });
+    // Build template_req[template_id][catalog_id] = required
+    const trMap = {};
+    (template_reqs||[]).forEach(tr => { (trMap[tr.template_id]||(trMap[tr.template_id]={}))[tr.catalog_id] = tr.required; });
+
+    // Resolve: override → template → false
+    function resolve(user, catId) {
+      if (ovMap[user.id] && ovMap[user.id][catId] !== undefined) return { req: ovMap[user.id][catId], src: 'override' };
+      if (user.template_id && trMap[user.template_id] && trMap[user.template_id][catId] !== undefined) return { req: trMap[user.template_id][catId], src: 'template' };
+      return { req: false, src: 'default' };
+    }
+
+    const cols = catalog || [];
+    let html = `<table style="border-collapse:collapse;width:100%;font-size:12px;">
+      <thead><tr>
+        <th style="position:sticky;left:0;background:#f9fafb;z-index:2;padding:8px 10px;text-align:left;border-bottom:2px solid #e5e7eb;white-space:nowrap;min-width:160px;">
+          <input type="checkbox" id="sf-matrix-select-all" onchange="sfMatrixSelectAll(this.checked)" title="Select all">
+          <span style="margin-left:6px;font-weight:700;color:#374151;">Employee</span>
+        </th>`;
+    cols.forEach(c => {
+      html += `<th style="padding:6px 4px;text-align:center;border-bottom:2px solid #e5e7eb;border-left:1px solid #f3f4f6;min-width:52px;white-space:nowrap;" title="${_sfEsc(c.display_name)}">
+        <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:700;color:#6b7280;max-height:80px;overflow:hidden;">${_sfEsc(c.short_code)}</div>
+      </th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    (users||[]).forEach((u, ri) => {
+      const rowBg = ri % 2 === 0 ? '#fff' : '#fafafa';
+      const checked = _sfMatrixSelected.has(u.id) ? ' checked' : '';
+      html += `<tr>
+        <td style="position:sticky;left:0;background:${rowBg};z-index:1;padding:7px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap;">
+          <input type="checkbox" data-uid="${u.id}"${checked} onchange="sfMatrixRowCheck(${u.id},this.checked)" style="margin-right:6px;">
+          <span style="font-weight:600;color:#111827;">${_sfEsc(u.name)}</span>
+          ${u.template_name ? `<span style="font-size:10px;color:#9ca3af;margin-left:4px;">${_sfEsc(u.template_name)}</span>` : ''}
+        </td>`;
+      cols.forEach(c => {
+        const { req, src } = resolve(u, c.id);
+        let bg, title, icon;
+        if (src === 'override' && req)  { bg='#F47920'; icon='●'; title='Required (override)'; }
+        else if (src === 'override' && !req) { bg='#fff3e0'; icon='✕'; title='Not required (override)'; }
+        else if (src === 'template' && req)  { bg='#6b7280'; icon='●'; title='Required (template)'; }
+        else { bg='transparent'; icon=''; title='Not required'; }
+        const textClr = (src==='override'&&!req) ? '#e65100' : '#fff';
+        html += `<td style="text-align:center;border-bottom:1px solid #f3f4f6;border-left:1px solid #f3f4f6;padding:4px 2px;cursor:pointer;" title="${title}" onclick="sfMatrixCellClick(${u.id},${c.id})">
+          <div style="width:32px;height:28px;margin:auto;border-radius:5px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:${textClr};border:${bg==='transparent'?'1px dashed #d1d5db':'none'};">${icon}</div>
+        </td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    tableEl.innerHTML = html;
+    sfMatrixUpdateBulkBar();
+  };
+
+  window.sfMatrixCellClick = async function(userId, catalogId) {
+    if (!_sfMatrixData) return;
+    const u = (_sfMatrixData.users||[]).find(u=>u.id===userId);
+    const ovMap = {};
+    (_sfMatrixData.overrides||[]).forEach(o=>{(ovMap[o.user_id]||(ovMap[o.user_id]={}))[o.catalog_id]=o.required;});
+    const trMap = {};
+    (_sfMatrixData.template_reqs||[]).forEach(tr=>{(trMap[tr.template_id]||(trMap[tr.template_id]={}))[tr.catalog_id]=tr.required;});
+
+    const hasOverride = ovMap[userId] && ovMap[userId][catalogId] !== undefined;
+    const currentReq = hasOverride ? ovMap[userId][catalogId]
+      : (u?.template_id && trMap[u.template_id] && trMap[u.template_id][catalogId] !== undefined ? trMap[u.template_id][catalogId] : false);
+
+    if (hasOverride) {
+      // cycle: override-req → override-not-req → clear override
+      if (currentReq) {
+        await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({required:false})});
+      } else {
+        await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {method:'DELETE'});
+      }
+    } else {
+      // no override: set required override
+      await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({required:!currentReq})});
+    }
+    await sfLoadMatrix();
+  };
+
+  window.sfMatrixRowCheck = function(uid, checked) {
+    if (checked) _sfMatrixSelected.add(uid); else _sfMatrixSelected.delete(uid);
+    sfMatrixUpdateBulkBar();
+  };
+  window.sfMatrixSelectAll = function(checked) {
+    (_sfMatrixData?.users||[]).forEach(u => checked ? _sfMatrixSelected.add(u.id) : _sfMatrixSelected.delete(u.id));
+    sfRenderMatrix();
+  };
+  window.sfMatrixClearSelection = function() {
+    _sfMatrixSelected.clear();
+    sfRenderMatrix();
+  };
+  window.sfMatrixUpdateBulkBar = function() {
+    const bar = document.getElementById('sf-matrix-bulk');
+    const cnt = document.getElementById('sf-matrix-bulk-count');
+    if (!bar) return;
+    const n = _sfMatrixSelected.size;
+    if (n > 0) { bar.style.display='flex'; if(cnt) cnt.textContent = n+' employee'+(n>1?'s':'')+' selected'; }
+    else        { bar.style.display='none'; }
+  };
+
+  window.sfMatrixBulkTemplate = async function() {
+    const tsel = document.getElementById('sf-matrix-bulk-template');
+    const tid = tsel?.value;
+    if (!tid || !_sfMatrixSelected.size) { alert('Select employees and a template.'); return; }
+    await fetch('/api/cert-requirements/bulk/template', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ user_ids: [..._sfMatrixSelected], template_id: parseInt(tid) })
+    });
+    await sfLoadMatrix();
+  };
+
+  window.sfMatrixBulkCertReq = async function(required) {
+    const csel = document.getElementById('sf-matrix-bulk-cert');
+    const cid = csel?.value;
+    if (!cid || !_sfMatrixSelected.size) { alert('Select employees and a certification.'); return; }
+    await fetch('/api/cert-requirements/bulk/cert', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ user_ids: [..._sfMatrixSelected], catalog_id: parseInt(cid), required })
+    });
+    await sfLoadMatrix();
   };
 
   // sfTeamFilter removed — replaced by sfSetComplianceFilter
@@ -2524,7 +2719,10 @@
       return;
     }
 
-    const { user, certs, forms } = profile;
+    const { user, certs, forms, templates } = profile;
+    const warningDays = profile.warning_days || 60;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const warnMs = warningDays * 86400000;
     const FORM_LABELS = {
       hazard_assessment:'Hazard Assessment (FLHA)', fall_protection:'Fall Protection', aerial_lift:'Aerial / EWP',
       maint_vehicle:'Truck Inspection', safety_meeting:'Safety Meeting', erp:'Emergency Response Plan',
@@ -2532,42 +2730,69 @@
       ojt_record:'OJT Record', emergency_review:'Emergency Review'
     };
 
-    const required = (certs || []).filter(c => c.tier === 'required');
-    const tracked  = (certs || []).filter(c => c.tier === 'tracked');
-    const missing  = required.filter(c => !c.held_cert_id);
-    const expired  = required.filter(c => c.held_cert_id && c.status === 'expired');
-    const expiring = required.filter(c => c.held_cert_id && c.status === 'expiring');
-    const valid    = required.filter(c => c.held_cert_id && (c.status === 'valid' || c.status === 'no_expiry'));
-    const rollup   = (missing.length || expired.length) ? 'red' : expiring.length ? 'amber' : 'green';
-    const rollupIcon  = rollup === 'red' ? '🔴' : rollup === 'amber' ? '🟡' : '🟢';
-    const rollupLabel = rollup === 'red' ? 'Needs Attention' : rollup === 'amber' ? 'Expiring Soon' : 'Compliant';
-    const rollupColor = rollup === 'red' ? '#991b1b' : rollup === 'amber' ? '#854d0e' : '#166534';
-    const rollupBg    = rollup === 'red' ? '#fee2e2' : rollup === 'amber' ? '#fef9c3' : '#dcfce7';
+    // Required certs for this employee (resolved)
+    const reqCerts = (certs || []).filter(c => c.is_required);
+    let missingN = 0, expiredN = 0, expiringN = 0, validN = 0;
+    reqCerts.forEach(c => {
+      if (!c.cert_id) { missingN++; return; }
+      if (c.expires === false) { validN++; return; }
+      if (!c.expiry_date) { missingN++; return; }
+      const d = new Date(c.expiry_date + 'T00:00:00');
+      if (d < today) { expiredN++; return; }
+      if (d - today <= warnMs) { expiringN++; return; }
+      validN++;
+    });
+    const rollup = (missingN + expiredN > 0) ? 'red' : expiringN > 0 ? 'amber' : reqCerts.length ? 'green' : 'grey';
+    const rollupIcon  = rollup === 'red' ? '🔴' : rollup === 'amber' ? '🟡' : rollup === 'green' ? '🟢' : '⚪';
+    const rollupLabel = rollup === 'red' ? 'Needs Attention' : rollup === 'amber' ? 'Expiring Soon' : rollup === 'green' ? 'Compliant' : 'No Requirements Set';
+    const rollupColor = rollup === 'red' ? '#991b1b' : rollup === 'amber' ? '#854d0e' : rollup === 'green' ? '#166534' : '#6b7280';
+    const rollupBg    = rollup === 'red' ? '#fee2e2' : rollup === 'amber' ? '#fef9c3' : rollup === 'green' ? '#dcfce7' : '#f9fafb';
 
     const initials = (user.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
     const archBadge = user.archived ? ' <span style="background:#f3f4f6;color:#6b7280;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;">Archived</span>' : '';
 
+    function certStatusLabel(c) {
+      if (!c.cert_id) return { label:'Missing', bg:'#fee2e2', clr:'#991b1b' };
+      if (c.expires === false) return { label:'Valid (no expiry)', bg:'#dcfce7', clr:'#166534' };
+      if (!c.expiry_date) return { label:'Missing', bg:'#fee2e2', clr:'#991b1b' };
+      const d = new Date(c.expiry_date + 'T00:00:00');
+      if (d < today) return { label:'⚠ Expired '+new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA'), bg:'#fee2e2', clr:'#991b1b' };
+      if (d - today <= warnMs) return { label:'Expires '+new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA'), bg:'#fef9c3', clr:'#854d0e' };
+      return { label:'Valid — exp. '+new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA'), bg:'#dcfce7', clr:'#166534' };
+    }
+
+    function reqSourceBadge(c) {
+      if (c.requirement_source === 'override') return `<span style="font-size:10px;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;border-radius:6px;padding:1px 6px;font-weight:700;cursor:pointer;" onclick="empClearOverride(${userId},${c.catalog_id})" title="Override — click to inherit from template">Override ×</span>`;
+      if (c.requirement_source === 'template') return `<span style="font-size:10px;background:#f3f4f6;color:#6b7280;border-radius:6px;padding:1px 6px;">Template</span>`;
+      return `<span style="font-size:10px;background:#f3f4f6;color:#9ca3af;border-radius:6px;padding:1px 6px;">Default</span>`;
+    }
+
     function certRow(c) {
-      const sl = !c.held_cert_id ? { label:'Missing', bg:'#fee2e2', clr:'#991b1b' }
-        : c.status === 'expired'  ? { label:'⚠ Expired',      bg:'#fee2e2', clr:'#991b1b' }
-        : c.status === 'expiring' ? { label:`Expires ${new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA')}`, bg:'#fef9c3', clr:'#854d0e' }
-        : { label: c.expires === false ? 'Valid (no expiry)' : (c.expiry_date ? 'Valid — exp. '+new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA') : 'Valid'), bg:'#dcfce7', clr:'#166534' };
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;gap:8px;">
-        <div style="font-size:13px;font-weight:600;color:#111827;">${_sfEsc(c.display_name||c.cert_name||'')}</div>
-        <span style="font-size:11px;font-weight:700;border-radius:20px;padding:2px 10px;white-space:nowrap;background:${sl.bg};color:${sl.clr};">${sl.label}</span>
+      const sl = c.is_required ? certStatusLabel(c) : { label:'Not Required', bg:'#f3f4f6', clr:'#9ca3af' };
+      const toggleLabel = c.is_required ? 'Set Not Required' : 'Set Required';
+      const toggleFn = c.is_required
+        ? `empSetReq(${userId},${c.catalog_id},false)`
+        : `empSetReq(${userId},${c.catalog_id},true)`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f3f4f6;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#111827;">${_sfEsc(c.display_name||'')}</div>
+          <div style="margin-top:3px;">${reqSourceBadge(c)}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;border-radius:20px;padding:2px 10px;white-space:nowrap;background:${sl.bg};color:${sl.clr};flex-shrink:0;">${sl.label}</span>
+        <button onclick="${toggleFn}" style="flex-shrink:0;font-size:11px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 8px;cursor:pointer;color:#374151;">${toggleLabel}</button>
       </div>`;
     }
 
-    const requiredRows = required.length ? required.map(certRow).join('') : '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No required certifications configured.</div>';
-    const trackedRows  = tracked.length  ? tracked.map(certRow).join('')  : '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">None on file.</div>';
-    const formRows     = (forms||[]).map(f => {
+    const allCertRows = (certs || []).map(certRow).join('') || '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No certifications in catalog.</div>';
+
+    const formRows = (forms||[]).map(f => {
       const label = FORM_LABELS[f.form_type] || f.form_type;
       const date  = f.date ? new Date(f.date).toLocaleDateString('en-CA') : '—';
       const flags = [
         f.psi_flag ? '<span style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">PSI</span>' : '',
         f.wcb_flag ? '<span style="background:#fef9c3;color:#854d0e;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">WCB</span>' : ''
       ].filter(Boolean).join(' ');
-      return `<div style="padding:10px 0;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px;">
+      return `<div style="padding:9px 0;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px;">
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:600;color:#111827;">${_sfEsc(label)}</div>
           <div style="font-size:11px;color:#9ca3af;">${date}${f.project_name ? ' · '+_sfEsc(f.project_name) : ''}</div>
@@ -2576,14 +2801,10 @@
       </div>`;
     }).join('') || '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No forms submitted yet.</div>';
 
-    const rollupSub = [
-      missing.length  ? missing.length+' missing'       : '',
-      expired.length  ? expired.length+' expired'       : '',
-      expiring.length ? expiring.length+' expiring soon': '',
-      valid.length    ? valid.length+' valid'           : ''
-    ].filter(Boolean).join(' · ');
+    const rollupSub = [missingN?missingN+' missing':'', expiredN?expiredN+' expired':'', expiringN?expiringN+' expiring':'', validN?validN+' valid':''].filter(Boolean).join(' · ');
+    const templateOptions = (templates||[]).map(t => `<option value="${t.id}"${t.id===user.template_id?' selected':''}>${_sfEsc(t.name)}</option>`).join('');
 
-    modal.innerHTML = `<div style="background:#fff;border-radius:16px;width:100%;max-width:700px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    modal.innerHTML = `<div id="sf-emp-profile-inner" style="background:#fff;border-radius:16px;width:100%;max-width:720px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
       <div style="padding:22px 24px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:14px;">
         <div style="width:48px;height:48px;border-radius:50%;background:#F47920;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0;">${_sfEsc(initials)}</div>
         <div style="flex:1;min-width:0;">
@@ -2592,22 +2813,28 @@
         </div>
         <button onclick="document.getElementById('sf-emp-profile-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1;flex-shrink:0;">✕</button>
       </div>
-      <div style="padding:16px 24px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:16px;background:${rollupBg};">
-        <span style="font-size:28px;">${rollupIcon}</span>
+      <!-- Template assignment -->
+      <div style="padding:12px 24px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;background:#fafafa;">
+        <span style="font-size:12px;font-weight:700;color:#6b7280;">Template:</span>
+        <select id="sf-emp-template-sel" onchange="empSetTemplate(${userId},this.value)" style="font-size:12px;border:1px solid #e5e7eb;border-radius:6px;padding:4px 8px;background:#fff;cursor:pointer;">
+          <option value="">— None —</option>
+          ${templateOptions}
+        </select>
+        <span style="font-size:11px;color:#9ca3af;">Sets defaults for unoverridden certs</span>
+      </div>
+      <!-- Compliance Roll-up -->
+      <div style="padding:14px 24px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:16px;background:${rollupBg};">
+        <span style="font-size:26px;">${rollupIcon}</span>
         <div>
-          <div style="font-size:15px;font-weight:800;color:${rollupColor};">${rollupLabel}</div>
-          <div style="font-size:12px;color:${rollupColor};opacity:.8;">${rollupSub || 'No required certs configured'}</div>
+          <div style="font-size:14px;font-weight:800;color:${rollupColor};">${rollupLabel}</div>
+          <div style="font-size:12px;color:${rollupColor};opacity:.8;">${rollupSub || 'No required certs'}</div>
         </div>
       </div>
-      <div style="padding:20px 24px;max-height:65vh;overflow-y:auto;">
-        <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Required Certifications</div>
-        ${requiredRows}
-        <details style="margin-top:18px;">
-          <summary style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;user-select:none;">
-            ▶ Tracked Certifications (${tracked.length})
-          </summary>
-          <div style="margin-top:8px;">${trackedRows}</div>
-        </details>
+      <!-- Cert rows -->
+      <div style="padding:16px 24px;max-height:55vh;overflow-y:auto;">
+        <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">Certifications</div>
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:10px;">Toggle requirement per cert. Orange "Override ×" badges mean you've set it manually — click to revert to template.</div>
+        ${allCertRows}
         <div style="margin-top:20px;">
           <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Safety Forms (${(forms||[]).length})</div>
           ${formRows}
@@ -2615,6 +2842,33 @@
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  };
+
+  window.empSetTemplate = async function(userId, templateId) {
+    try {
+      await fetch(`/api/users/${userId}/template`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ template_id: templateId ? parseInt(templateId) : null })
+      });
+      openEmployeeProfile(userId);
+    } catch { alert('Failed to update template.'); }
+  };
+
+  window.empSetReq = async function(userId, catalogId, required) {
+    try {
+      await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ required })
+      });
+      openEmployeeProfile(userId);
+    } catch { alert('Failed to update requirement.'); }
+  };
+
+  window.empClearOverride = async function(userId, catalogId) {
+    try {
+      await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, { method:'DELETE' });
+      openEmployeeProfile(userId);
+    } catch { alert('Failed to clear override.'); }
   };
 
   // ── Wire up team search ───────────────────────────────────────
