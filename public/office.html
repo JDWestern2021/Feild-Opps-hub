@@ -3771,7 +3771,7 @@ function renderProjectPanels(schedules) {
     <td>${s.num_circuits}</td>
     <td>${esc(s.created_by)}</td>
     <td style="text-align:right;white-space:nowrap;">
-      <a href="panel-schedule.html" target="_blank" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);text-decoration:none;margin-right:4px;">Edit →</a>
+      <a href="panel-schedule.html?id=${s.id}" target="_blank" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);text-decoration:none;margin-right:4px;">Edit →</a>
       <button onclick="archivePanelInProject(${s.id})" style="font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--gray-300);border-radius:4px;cursor:pointer;color:var(--gray-600);">Archive</button>
     </td>
   </tr>`).join('');
@@ -6454,7 +6454,7 @@ function renderPanelArchiveTable() {
 }
 
 async function openPanelScheduleDetail(id) {
-  window.open('panel-schedule.html', '_blank');
+  window.open('panel-schedule.html?id=' + id, '_blank');
 }
 
 async function unarchivePanelSchedule(id) {
