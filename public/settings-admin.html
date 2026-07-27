@@ -168,6 +168,7 @@
     <button class="st-tab-pill active" data-panel="appearance" onclick="showPanel('appearance',this)">Appearance</button>
     <button class="st-tab-pill" data-panel="account" onclick="showPanel('account',this)">My Account</button>
     <button class="st-tab-pill" data-panel="email" onclick="showPanel('email',this)">Email / SMTP</button>
+    <button class="st-tab-pill" data-panel="certifications" onclick="showPanel('certifications',this)">Certifications</button>
   </div>
 </div>
 
@@ -191,6 +192,11 @@
       <button class="st-nav-btn" onclick="showPanel('email',null)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
         Email / SMTP
+      </button>
+
+      <button class="st-nav-btn" onclick="showPanel('certifications',null)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Certifications
       </button>
     </div>
   </aside>
@@ -409,7 +415,107 @@
       </div>
     </div>
 
+    <!-- ═══════════ CERTIFICATIONS ═══════════ -->
+    <div class="st-panel" id="panel-certifications">
+      <div class="st-panel-title">Certification Catalog</div>
+      <div class="st-panel-sub">Define the certifications tracked for your crew. Required certs flag as missing if an employee doesn't hold them. Tracked certs are visible but never cause a compliance failure. Retiring a cert hides it from new assignments without deleting any employee records.</div>
+
+      <!-- Expiry warning window -->
+      <div class="st-card" style="margin-bottom:16px;">
+        <div class="st-card-header">Compliance Settings</div>
+        <div class="st-row">
+          <div class="st-row-info">
+            <div class="st-row-label">Expiry Warning Window</div>
+            <div class="st-row-hint">How many days before a cert expires it shows as "Expiring Soon" (amber). Default: 60 days.</div>
+          </div>
+          <div class="st-row-control" style="gap:8px;">
+            <input type="number" class="st-input" id="cert-warning-days" min="7" max="365" style="width:80px;text-align:center;" value="60"/>
+            <span style="font-size:13px;color:#6b7280;">days</span>
+            <button class="btn-st-primary" id="btn-save-warning-days">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add new entry -->
+      <div class="st-card" style="margin-bottom:16px;">
+        <div class="st-card-header">Add Catalog Entry</div>
+        <div style="padding:18px;">
+          <div class="st-grid-2">
+            <div class="st-field">
+              <div class="st-label">Display Name</div>
+              <input type="text" class="st-input" id="cc-new-name" placeholder="e.g. Confined Space Entry"/>
+            </div>
+            <div class="st-field">
+              <div class="st-label">Short Code</div>
+              <input type="text" class="st-input" id="cc-new-code" placeholder="e.g. CSE" maxlength="10" style="text-transform:uppercase;"/>
+            </div>
+            <div class="st-field">
+              <div class="st-label">Tier</div>
+              <select class="st-input" id="cc-new-tier">
+                <option value="required">Required</option>
+                <option value="tracked">Tracked</option>
+              </select>
+            </div>
+            <div class="st-field">
+              <div class="st-label">Validity (months) — leave blank if no expiry</div>
+              <input type="number" class="st-input" id="cc-new-validity" min="1" placeholder="36"/>
+            </div>
+          </div>
+          <button class="btn-st-primary" id="btn-cc-add">Add to Catalog</button>
+        </div>
+      </div>
+
+      <!-- Catalog table -->
+      <div class="st-card">
+        <div class="st-card-header" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>Active Entries</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;">
+            <input type="checkbox" id="cc-show-retired" onchange="renderCatalog()"/> Show retired
+          </label>
+        </div>
+        <div id="cc-catalog-list" style="min-height:60px;"></div>
+      </div>
+    </div>
+
   </main>
+</div>
+
+<!-- Edit catalog entry modal -->
+<div id="cc-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:460px;margin:20px;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <div style="padding:20px 24px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:16px;font-weight:800;">Edit Catalog Entry</div>
+      <button onclick="closeCcEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">×</button>
+    </div>
+    <div style="padding:20px 24px;">
+      <input type="hidden" id="cc-edit-id"/>
+      <div class="st-field">
+        <div class="st-label">Display Name</div>
+        <input type="text" class="st-input" id="cc-edit-name"/>
+      </div>
+      <div class="st-field">
+        <div class="st-label">Short Code</div>
+        <input type="text" class="st-input" id="cc-edit-code" maxlength="10" style="text-transform:uppercase;"/>
+      </div>
+      <div class="st-grid-2">
+        <div class="st-field">
+          <div class="st-label">Tier</div>
+          <select class="st-input" id="cc-edit-tier">
+            <option value="required">Required</option>
+            <option value="tracked">Tracked</option>
+          </select>
+        </div>
+        <div class="st-field">
+          <div class="st-label">Validity (months)</div>
+          <input type="number" class="st-input" id="cc-edit-validity" min="1" placeholder="leave blank = no expiry"/>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn-st-primary" id="btn-cc-save-edit">Save Changes</button>
+        <button class="btn-st-secondary" onclick="closeCcEdit()">Cancel</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -630,6 +736,120 @@ $('btn-test-smtp').addEventListener('click', async () => {
 });
 
 function showWarn(id, msg) { const el=$(id); if (!el) return; el.textContent=msg; el.style.display='block'; }
+
+// ── Certification Catalog ──
+let _catalog = [];
+
+async function loadCatalog() {
+  const r = await fetch('/api/cert-catalog');
+  if (!r.ok) return;
+  _catalog = await r.json();
+  const s = await fetch('/api/settings').then(r=>r.json()).catch(()=>({}));
+  if (s.cert_expiry_warning_days) $('cert-warning-days').value = s.cert_expiry_warning_days;
+  renderCatalog();
+}
+
+function renderCatalog() {
+  const list = $('cc-catalog-list');
+  const showRetired = $('cc-show-retired')?.checked;
+  const entries = _catalog.filter(c => showRetired || c.active);
+  if (!entries.length) {
+    list.innerHTML = '<div style="padding:16px 18px;font-size:13px;color:#6b7280;">No catalog entries found.</div>';
+    return;
+  }
+  const TIER_COLOR = { required: '#fef3c7;color:#92400e', tracked: '#eff6ff;color:#1d4ed8' };
+  list.innerHTML = entries.map(c => {
+    const validity = c.expires === false || c.expires === 'false' ? 'No expiry' : (c.validity_months ? `${c.validity_months} months` : 'No expiry');
+    const tierStyle = TIER_COLOR[c.tier] || '';
+    const retiredBadge = !c.active ? '<span style="background:#f3f4f6;color:#6b7280;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;">Retired</span>' : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid #f3f4f6;${!c.active?'opacity:.55;':''}">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#111;">${esc(c.display_name)}${retiredBadge}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px;">${esc(c.short_code)} · ${validity}</div>
+      </div>
+      <span style="background:${tierStyle};border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;white-space:nowrap;">${c.tier.toUpperCase()}</span>
+      ${c.active ? `
+        <button class="btn-st-secondary" style="font-size:11px;padding:5px 10px;" onclick="openCcEdit(${c.id})">Edit</button>
+        <button class="btn-st-danger" style="font-size:11px;padding:5px 10px;" onclick="retireCc(${c.id},'${esc(c.display_name)}')">Retire</button>
+      ` : `
+        <button class="btn-st-secondary" style="font-size:11px;padding:5px 10px;" onclick="reactivateCc(${c.id})">Reactivate</button>
+      `}
+    </div>`;
+  }).join('');
+}
+
+$('btn-save-warning-days').addEventListener('click', async () => {
+  const days = parseInt($('cert-warning-days').value);
+  if (!days || days < 7) { showToast('Enter a valid number of days (min 7)', 'error'); return; }
+  const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cert_expiry_warning_days: String(days)})});
+  if (r.ok) showToast('Warning window saved', 'success');
+  else showToast('Failed to save', 'error');
+});
+
+$('btn-cc-add').addEventListener('click', async () => {
+  const name = $('cc-new-name').value.trim();
+  const code = $('cc-new-code').value.trim().toUpperCase();
+  const tier = $('cc-new-tier').value;
+  const validityRaw = $('cc-new-validity').value.trim();
+  const validity_months = validityRaw ? parseInt(validityRaw) : null;
+  const expires = validity_months !== null;
+  if (!name || !code) { showToast('Display name and short code are required', 'error'); return; }
+  const r = await fetch('/api/cert-catalog', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({display_name:name, short_code:code, tier, validity_months, expires})});
+  const d = await r.json();
+  if (!r.ok) { showToast(d.error || 'Failed to add', 'error'); return; }
+  showToast(`${name} added to catalog`, 'success');
+  $('cc-new-name').value = ''; $('cc-new-code').value = ''; $('cc-new-validity').value = '';
+  await loadCatalog();
+});
+
+function openCcEdit(id) {
+  const c = _catalog.find(x => x.id === id); if (!c) return;
+  $('cc-edit-id').value = c.id;
+  $('cc-edit-name').value = c.display_name;
+  $('cc-edit-code').value = c.short_code;
+  $('cc-edit-tier').value = c.tier;
+  $('cc-edit-validity').value = (c.expires === false || c.expires === 'false') ? '' : (c.validity_months || '');
+  $('cc-edit-overlay').style.display = 'flex';
+}
+function closeCcEdit() { $('cc-edit-overlay').style.display = 'none'; }
+
+$('btn-cc-save-edit').addEventListener('click', async () => {
+  const id = $('cc-edit-id').value;
+  const display_name = $('cc-edit-name').value.trim();
+  const short_code = $('cc-edit-code').value.trim().toUpperCase();
+  const tier = $('cc-edit-tier').value;
+  const validityRaw = $('cc-edit-validity').value.trim();
+  const validity_months = validityRaw ? parseInt(validityRaw) : null;
+  const expires = validity_months !== null;
+  if (!display_name || !short_code) { showToast('Name and code are required', 'error'); return; }
+  const r = await fetch(`/api/cert-catalog/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({display_name, short_code, tier, validity_months, expires})});
+  const d = await r.json();
+  if (!r.ok) { showToast(d.error || 'Failed to save', 'error'); return; }
+  showToast('Catalog entry updated', 'success');
+  closeCcEdit();
+  await loadCatalog();
+});
+
+async function retireCc(id, name) {
+  if (!confirm(`Retire "${name}"? It will be hidden from new assignments. All employee records holding this cert are preserved.`)) return;
+  const r = await fetch(`/api/cert-catalog/${id}/retire`, {method:'PATCH'});
+  if (r.ok) { showToast(`${name} retired`, 'success'); await loadCatalog(); }
+  else showToast('Failed to retire', 'error');
+}
+
+async function reactivateCc(id) {
+  const r = await fetch(`/api/cert-catalog/${id}/reactivate`, {method:'PATCH'});
+  const d = await r.json();
+  if (r.ok) { showToast(`${d.reactivated?.display_name || 'Entry'} reactivated`, 'success'); await loadCatalog(); }
+  else showToast('Failed to reactivate', 'error');
+}
+
+// Load catalog when panel is opened
+const _origShowPanel = showPanel;
+window.showPanel = function(id, tabEl) {
+  _origShowPanel(id, tabEl);
+  if (id === 'certifications') loadCatalog();
+};
 </script>
 </body>
 </html>

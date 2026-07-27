@@ -681,6 +681,47 @@ async function initSchema() {
   await pool.query(`ALTER TABLE rfqs ADD COLUMN IF NOT EXISTS archived_at TEXT`);
   await pool.query(`ALTER TABLE rfqs ADD COLUMN IF NOT EXISTS deleted_at TEXT`);
 
+  // ─── CERTIFICATION CATALOG ────────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cert_catalog (
+      id               SERIAL PRIMARY KEY,
+      display_name     TEXT NOT NULL,
+      short_code       TEXT NOT NULL UNIQUE,
+      tier             TEXT NOT NULL CHECK (tier IN ('required','tracked')),
+      validity_months  INTEGER,
+      expires          BOOLEAN NOT NULL DEFAULT TRUE,
+      active           BOOLEAN NOT NULL DEFAULT TRUE,
+      sort_order       INTEGER NOT NULL DEFAULT 0,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  // Seed catalog — ON CONFLICT DO NOTHING so re-runs are safe
+  await pool.query(`
+    INSERT INTO cert_catalog (display_name, short_code, tier, validity_months, expires, sort_order) VALUES
+      ('WHMIS 2015',                         'WHMIS',  'required', 12,   TRUE,  1),
+      ('TDG (Transportation of Dangerous Goods)', 'TDG', 'required', 36, TRUE,  2),
+      ('Standard First Aid / CPR',           'SFA',    'required', 36,   TRUE,  3),
+      ('Fall Protection (Fall Arrest)',       'FP',     'required', 36,   TRUE,  4),
+      ('Aerial Work Platform',               'AWP',    'required', 36,   TRUE,  5),
+      ('Ground Disturbance 201',             'GD201',  'required', 36,   TRUE,  6),
+      ('CSTS-2020',                          'CSTS',   'tracked',  36,   TRUE,  7),
+      ('Bear / Wildlife Awareness',          'BWA',    'tracked',  36,   TRUE,  8),
+      ('H2S Alive',                          'H2S',    'tracked',  36,   TRUE,  9),
+      ('Forklift',                           'FORK',   'tracked',  36,   TRUE,  10),
+      ('Skid Steer',                         'SKID',   'tracked',  36,   TRUE,  11),
+      ('Zoom Boom (Telehandler)',             'ZOOM',   'tracked',  36,   TRUE,  12),
+      ('Leadership for Safety Excellence',   'LSE',    'tracked',  NULL, FALSE, 13),
+      ('Supervisor Certification',           'SUPV',   'tracked',  NULL, FALSE, 14),
+      ('Project Management Certification',   'PMC',    'tracked',  NULL, FALSE, 15)
+    ON CONFLICT (short_code) DO NOTHING
+  `);
+  // Add catalog FK to worker_certifications (nullable — existing rows get mapped separately)
+  await pool.query(`ALTER TABLE worker_certifications ADD COLUMN IF NOT EXISTS catalog_id INTEGER REFERENCES cert_catalog(id)`);
+  // Soft-delete flag on users — replaces hard DELETE
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE`);
+  // Expiry warning window (days before expiry that cert shows as "expiring soon")
+  await pool.query(`INSERT INTO app_settings (key, value) VALUES ('cert_expiry_warning_days', '60') ON CONFLICT DO NOTHING`);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS rfq_activity (
     id          SERIAL PRIMARY KEY,
     rfq_id      INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE CASCADE,

@@ -253,6 +253,7 @@
     <button class="tm-tab-pill" onclick="setView('admin',this)">Office Admin</button>
     <button class="tm-tab-pill" onclick="setView('field',this)">Field Users</button>
     <button class="tm-tab-pill" onclick="setView('pending',this)">Pending</button>
+    <button class="tm-tab-pill" onclick="setView('archived',this)">Archived</button>
   </div>
 </div>
 
@@ -289,6 +290,11 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Pending Invites
         <span class="tm-sidebar-count" id="cnt-pending">—</span>
+      </button>
+      <button class="tm-nav-btn" id="nav-archived" onclick="setView('archived')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archived
+        <span class="tm-sidebar-count" id="cnt-archived">—</span>
       </button>
     </div>
   </aside>
@@ -432,14 +438,20 @@ $('logout-btn').addEventListener('click', async e => {
 });
 
 // ── Data ──
+let _showingArchived = false;
 async function loadUsers() {
-  const res = await fetch('/api/users');
+  const url = _showingArchived ? '/api/users?archived=1' : '/api/users';
+  const res = await fetch(url);
   allUsers = await res.json();
   updateCounts();
   renderCards();
 }
 
 function updateCounts() {
+  if (_showingArchived) {
+    $('cnt-archived').textContent = allUsers.length;
+    return;
+  }
   const admin = allUsers.filter(u=>u.role==='admin').length;
   const field = allUsers.filter(u=>u.role!=='admin').length;
   const pending = allUsers.filter(u=>u.status==='invited').length;
@@ -450,13 +462,15 @@ function updateCounts() {
 }
 
 // ── Views ──
-const VIEW_TITLES = { all: 'All Members', admin: 'Office Admins', field: 'Field Users', pending: 'Pending Invites' };
+const VIEW_TITLES = { all: 'All Members', admin: 'Office Admins', field: 'Field Users', pending: 'Pending Invites', archived: 'Archived Members' };
 function setView(v, tabEl) {
   currentView = v;
+  _showingArchived = (v === 'archived');
   // Sidebar buttons
-  ['all','admin','field','pending'].forEach(x => {
+  ['all','admin','field','pending','archived'].forEach(x => {
     const b = $('nav-'+x); if (b) b.classList.toggle('active', x===v);
   });
+  loadUsers();
   // Mobile tab pills
   document.querySelectorAll('.tm-tab-pill').forEach(p => p.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
@@ -654,10 +668,10 @@ function switchDTab(tab) {
       </div>
       <div class="action-item" style="border:1px solid #fecaca;background:#fef2f2;">
         <div class="action-item-info">
-          <div class="action-item-title" style="color:#dc2626;">Remove Member</div>
-          <div class="action-item-desc">Permanently delete this account — cannot be undone</div>
+          <div class="action-item-title" style="color:#dc2626;">${u.archived ? 'Restore Member' : 'Archive Member'}</div>
+          <div class="action-item-desc">${u.archived ? 'Restore access and move back to active members' : 'Remove from active lists — records and safety forms are preserved'}</div>
         </div>
-        <button class="action-btn action-btn-red" onclick="doRemove(${u.id},'${esc(u.name)}')">Remove</button>
+        <button class="action-btn ${u.archived ? 'action-btn-green' : 'action-btn-red'}" onclick="${u.archived ? `doRestore(${u.id},'${esc(u.name)}')` : `doArchive(${u.id},'${esc(u.name)}')`}">${u.archived ? 'Restore' : 'Archive'}</button>
       </div>` : `<div style="text-align:center;padding:24px;color:#6b7280;font-size:13px;">These actions are not available for your own account.</div>`}`;
     footer.innerHTML = '';
   }
@@ -675,10 +689,14 @@ async function doReactivate(id) {
   const r=await fetch(`/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'active'})});
   if (r.ok) { showToast('User reactivated','success'); await loadUsers(); switchDTab('actions'); }
 }
-async function doRemove(id,name) {
-  if (!confirm(`Permanently remove ${name}? This cannot be undone.`)) return;
+async function doArchive(id,name) {
+  if (!confirm(`Archive ${name}? Their account will be deactivated. All safety records and certifications are preserved.`)) return;
   const r=await fetch(`/api/users/${id}`,{method:'DELETE'});
-  if (r.ok) { showToast('User removed','success'); closeMemberDrawer(); await loadUsers(); }
+  if (r.ok) { showToast(`${name} archived`,'success'); closeMemberDrawer(); await loadUsers(); }
+}
+async function doRestore(id,name) {
+  const r=await fetch(`/api/users/${id}/restore`,{method:'POST'});
+  if (r.ok) { showToast(`${name} restored`,'success'); closeMemberDrawer(); await loadUsers(); }
 }
 async function doSendResetLink(id,name) {
   const res=await fetch(`/api/users/${id}/send-reset-link`,{method:'POST'});

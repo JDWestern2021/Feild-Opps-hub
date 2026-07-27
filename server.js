@@ -275,7 +275,14 @@ app.get('/api/team-members', requireAuth, async (req, res) => {
 });
 
 app.get('/api/users', requireAdmin, async (req, res) => {
-  const { rows } = await pool.query('SELECT id,name,email,role,status,permissions,created_at,last_login,time_off_color FROM users ORDER BY created_at DESC');
+  const showArchived = req.query.archived === '1';
+  const { rows } = await pool.query(
+    `SELECT id,name,email,role,status,permissions,created_at,last_login,time_off_color,archived
+     FROM users
+     WHERE archived = $1
+     ORDER BY name ASC`,
+    [showArchived]
+  );
   res.json(rows.map(u => ({
     ...u,
     permissions: u.role==='admin' ? 'time_ticket,get_po,office_dashboard' : (u.permissions||'time_ticket')
@@ -388,9 +395,110 @@ app.post('/api/users/:id/send-reset-link', requireAdmin, async (req, res) => {
 });
 
 app.delete('/api/users/:id', requireAdmin, async (req, res) => {
-  if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'Cannot delete your own account' });
-  await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
+  if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'Cannot archive your own account' });
+  // Soft delete — records (safety forms, certifications) must remain attributable per Alberta OHS
+  await pool.query(`UPDATE users SET archived = TRUE, status = 'inactive' WHERE id = $1`, [req.params.id]);
   res.json({ ok: true });
+});
+
+// Restore an archived user
+app.post('/api/users/:id/restore', requireAdmin, async (req, res) => {
+  await pool.query(`UPDATE users SET archived = FALSE, status = 'active' WHERE id = $1`, [req.params.id]);
+  res.json({ ok: true });
+});
+
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// CERTIFICATION CATALOG
+// ─────────────────────────────────────────────
+
+// All catalog entries (auth'd users need this to display their own cert status)
+app.get('/api/cert-catalog', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, display_name, short_code, tier, validity_months, expires, active, sort_order
+       FROM cert_catalog ORDER BY sort_order ASC, display_name ASC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add a catalog entry
+app.post('/api/cert-catalog', requireAdmin, async (req, res) => {
+  try {
+    const { display_name, short_code, tier, validity_months, expires, sort_order } = req.body;
+    if (!display_name || !short_code || !tier) return res.status(400).json({ error: 'display_name, short_code, and tier are required' });
+    if (!['required','tracked'].includes(tier)) return res.status(400).json({ error: 'tier must be required or tracked' });
+    const { rows } = await pool.query(
+      `INSERT INTO cert_catalog (display_name, short_code, tier, validity_months, expires, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [display_name.trim(), short_code.trim().toUpperCase(), tier,
+       validity_months ? parseInt(validity_months) : null,
+       expires !== false,
+       sort_order ? parseInt(sort_order) : 0]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'A catalog entry with that short code already exists' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Edit a catalog entry (display_name, tier, validity_months, expires, sort_order)
+// Renaming display_name has zero effect on cert holdings — they join on id, not name
+app.patch('/api/cert-catalog/:id', requireAdmin, async (req, res) => {
+  try {
+    const { display_name, short_code, tier, validity_months, expires, sort_order } = req.body;
+    if (tier && !['required','tracked'].includes(tier)) return res.status(400).json({ error: 'tier must be required or tracked' });
+    const { rows } = await pool.query(
+      `UPDATE cert_catalog
+       SET display_name    = COALESCE($1, display_name),
+           short_code      = COALESCE($2, short_code),
+           tier            = COALESCE($3, tier),
+           validity_months = CASE WHEN $4::text IS NOT NULL THEN $4::integer ELSE validity_months END,
+           expires         = COALESCE($5, expires),
+           sort_order      = COALESCE($6, sort_order)
+       WHERE id = $7 AND active = TRUE
+       RETURNING *`,
+      [display_name?.trim() || null,
+       short_code ? short_code.trim().toUpperCase() : null,
+       tier || null,
+       validity_months !== undefined ? (validity_months === null ? null : String(validity_months)) : null,
+       expires !== undefined ? expires : null,
+       sort_order !== undefined ? parseInt(sort_order) : null,
+       req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Catalog entry not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Short code already in use' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Retire a catalog entry — sets active = FALSE, never deletes
+// Employee records holding this cert are fully preserved
+app.patch('/api/cert-catalog/:id/retire', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE cert_catalog SET active = FALSE WHERE id = $1 RETURNING id, display_name`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Catalog entry not found' });
+    res.json({ ok: true, retired: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Reactivate a retired catalog entry
+app.patch('/api/cert-catalog/:id/reactivate', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE cert_catalog SET active = TRUE WHERE id = $1 RETURNING id, display_name`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Catalog entry not found' });
+    res.json({ ok: true, reactivated: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─────────────────────────────────────────────
@@ -2140,8 +2248,8 @@ app.get('/api/safety/pending-signatures', requireAuth, async (req, res) => {
 app.get('/api/safety/archived', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, form_type, form_number, project_name, job_number, submitted_by,
-              submitted_at, date, status
+      `SELECT id, form_type, form_number, project_name, job_number, submitted_by, submitted_by_id,
+              submitted_at, date, status, psi_flag, wcb_flag
        FROM safety_forms WHERE archived = 1 ORDER BY submitted_at DESC`
     );
     res.json(rows);
@@ -2157,8 +2265,8 @@ app.get('/api/safety', requireAuth, async (req, res) => {
     const isAdmin = req.user.role === 'admin';
     if (isAdmin) {
       const { rows } = await pool.query(
-        `SELECT id, form_type, form_number, project_name, job_number, submitted_by,
-                submitted_at, date, status, archived
+        `SELECT id, form_type, form_number, project_name, job_number, submitted_by, submitted_by_id,
+                submitted_at, date, status, archived, psi_flag, wcb_flag
          FROM safety_forms WHERE archived = 0
          ORDER BY submitted_at DESC LIMIT 500`
       );

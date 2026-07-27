@@ -2779,7 +2779,8 @@ ${certPages}
       const badge = psi  ? `<span style="background:#fee2e2;color:#991b1b;border-radius:10px;padding:2px 7px;font-size:10px;font-weight:700;">⚠ PSI×${psi}</span>` :
                     wcb  ? `<span style="background:#fef9c3;color:#854d0e;border-radius:10px;padding:2px 7px;font-size:10px;font-weight:700;">WCB×${wcb}</span>` : '';
       const initials = name.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
-      return `<div class="sf-worker-card" style="cursor:pointer;" onclick="sfOpenWorkerForms(${JSON.stringify(name)})">
+      // data-worker-name avoids JS-in-HTML-attribute quote collisions; delegated listener below
+      return `<div class="sf-worker-card" style="cursor:pointer;" data-worker-name="${_sfEsc(name)}">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
           <div style="width:40px;height:40px;border-radius:50%;background:#F47920;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;">${initials}</div>
           <div style="min-width:0;">
@@ -2788,9 +2789,14 @@ ${certPages}
           </div>
         </div>
         ${badge ? `<div style="margin-bottom:6px;">${badge}</div>` : ''}
-        <button class="btn btn-secondary btn-sm" style="font-size:11px;width:100%;" onclick="event.stopPropagation();sfOpenWorkerForms(${JSON.stringify(name)})">View Forms →</button>
+        <button class="btn btn-secondary btn-sm sf-view-forms-btn" style="font-size:11px;width:100%;">View Forms →</button>
       </div>`;
     }).join('');
+
+    // Delegated click handler — reads name from data attribute, no JS embedded in HTML
+    grid.querySelectorAll('[data-worker-name]').forEach(card => {
+      card.addEventListener('click', () => sfOpenWorkerForms(card.dataset.workerName));
+    });
   }
 
   window.sfOpenWorkerForms = function(workerName) {
