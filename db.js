@@ -795,6 +795,36 @@ async function initSchema() {
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  // ── Permit tracking ──
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_required TEXT NOT NULL DEFAULT 'unset'`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_number TEXT`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_stage TEXT NOT NULL DEFAULT 'not_started'`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_notes TEXT`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_updated_at TEXT`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS project_documents (
+    id           SERIAL PRIMARY KEY,
+    project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    category     TEXT NOT NULL,
+    file_name    TEXT NOT NULL,
+    mime_type    TEXT NOT NULL,
+    file_data    BYTEA NOT NULL,
+    uploaded_by  TEXT NOT NULL DEFAULT '',
+    uploaded_at  TEXT NOT NULL
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS project_inspections (
+    id               SERIAL PRIMARY KEY,
+    project_id       INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    inspection_type  TEXT NOT NULL,
+    status           TEXT NOT NULL DEFAULT 'requested',
+    requested_at     TEXT NOT NULL,
+    result_at        TEXT,
+    notes            TEXT,
+    created_by       TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL
+  )`);
+
   console.log('  ✓ Database schema ready');
 }
 
