@@ -744,7 +744,7 @@ async function openView(id) {
       `Schedule # ${s.schedule_number}  ·  Created by ${s.created_by}  ·  ${s.created_at ? s.created_at.slice(0,10) : ''}`;
     document.getElementById('view-tbody').innerHTML = buildViewRows(s);
     const isAdmin = currentUser && currentUser.role === 'admin';
-    document.getElementById('view-edit-btn').style.display    = isAdmin ? '' : 'none';
+    document.getElementById('view-edit-btn').style.display    = '';
     document.getElementById('view-archive-btn').style.display = isAdmin ? '' : 'none';
     document.getElementById('view-overlay').classList.remove('hidden');
   } catch { showToast('Failed to load panel schedule', 'error'); }
@@ -1228,7 +1228,10 @@ window.addEventListener('afterprint', () => {
   // All authenticated users can create panel schedules — use requireAuth endpoint, not requireAdmin
   const pr = await fetch('/api/project-folders');
   projects = pr.ok ? await pr.json() : [];
-  loadSchedules();
+  await loadSchedules();
+  // If opened with ?id=N, jump directly to that schedule
+  const urlId = new URLSearchParams(window.location.search).get('id');
+  if (urlId) openView(parseInt(urlId));
 })();
 
 // Re-render grid when any pole selector changes so multi-pole merging updates live.
