@@ -238,6 +238,161 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
   padding: 8px 14px;
   cursor: pointer;
 }
+
+/* ── Mobile panel schedule view ────────────────────────────────────────────── */
+@media (max-width:600px) {
+  /* Hide desktop page chrome and modals on mobile */
+  .page { display: none; }
+
+  #mobile-view {
+    display: block;
+    background: var(--gray-100);
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+
+  .mb-panel-header {
+    background: var(--gray-900);
+    color: #fff;
+    padding: 14px 16px 12px;
+  }
+  .mb-panel-header h2 { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .mb-panel-header .mb-meta { font-size: 12px; color: rgba(255,255,255,.6); }
+  .mb-header-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .mb-header-btn {
+    padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1);
+    color: #fff; cursor: pointer;
+  }
+
+  .mb-section-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--gray-500);
+    padding: 12px 16px 6px;
+  }
+
+  .mb-cct-row {
+    display: flex; align-items: center; gap: 12px;
+    background: #fff; padding: 12px 16px;
+    border-bottom: 1px solid var(--gray-100);
+    min-height: 52px; cursor: pointer;
+    -webkit-tap-highlight-color: rgba(244,121,32,.12);
+  }
+  .mb-cct-row:active { background: var(--gray-50); }
+  .mb-cct-row.mb-consumed { cursor: default; background: var(--gray-50); }
+  .mb-cct-num {
+    font-size: 13px; font-weight: 800; color: var(--gray-500);
+    min-width: 28px; text-align: center;
+  }
+  .mb-cct-info { flex: 1; min-width: 0; }
+  .mb-cct-desc { font-size: 14px; font-weight: 500; color: var(--gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mb-cct-desc.empty { color: var(--gray-300); }
+  .mb-cct-sub { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+  .mb-cct-chevron { font-size: 20px; color: var(--gray-300); flex-shrink: 0; }
+  .mb-cct-row.mb-consumed .mb-cct-desc { color: var(--gray-400); font-style: italic; }
+
+  /* Bottom sheet */
+  #mb-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 400;
+  }
+  #mb-backdrop.open { display: block; }
+
+  #mb-sheet {
+    display: flex; flex-direction: column;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 401;
+    background: #fff; border-radius: 16px 16px 0 0;
+    max-height: 88vh;
+    transform: translateY(100%);
+    transition: transform .28s cubic-bezier(.32,.72,0,1);
+  }
+  #mb-sheet.open { transform: translateY(0); }
+
+  #mb-sheet-handle {
+    width: 36px; height: 4px; background: var(--gray-200);
+    border-radius: 2px; margin: 10px auto 0;
+    flex-shrink: 0;
+  }
+  #mb-sheet-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px 10px;
+    border-bottom: 1px solid var(--gray-100);
+    flex-shrink: 0;
+  }
+  #mb-sheet-title { font-size: 15px; font-weight: 700; }
+  #mb-sheet-close {
+    background: none; border: none; font-size: 22px; color: var(--gray-400);
+    cursor: pointer; padding: 0 4px; line-height: 1;
+  }
+  #mb-sheet-body {
+    overflow-y: auto; flex: 1; padding: 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  #mb-sheet-footer {
+    padding: 12px 16px 20px; border-top: 1px solid var(--gray-100);
+    flex-shrink: 0;
+  }
+
+  .mb-field { margin-bottom: 16px; }
+  .mb-field label {
+    display: block; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    color: var(--gray-500); margin-bottom: 6px;
+  }
+  .mb-field input, .mb-field select {
+    width: 100%; padding: 10px 12px; font-size: 15px;
+    border: 1px solid var(--gray-300); border-radius: 8px;
+    background: #fff; color: var(--gray-800); min-height: 44px;
+  }
+  .mb-field input:focus, .mb-field select:focus {
+    outline: none; border-color: var(--orange);
+    box-shadow: 0 0 0 3px rgba(244,121,32,.12);
+  }
+  .mb-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  #mb-tandem-section {
+    margin-top: 16px; padding-top: 16px;
+    border-top: 1px dashed var(--gray-200);
+  }
+  .mb-tandem-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--gray-400); margin-bottom: 12px;
+  }
+
+  #mb-save-btn {
+    width: 100%; padding: 14px; font-size: 16px; font-weight: 700;
+    background: var(--orange); color: #fff; border: none;
+    border-radius: 10px; cursor: pointer; min-height: 52px;
+    transition: background .15s;
+  }
+  #mb-save-btn:disabled { opacity: .7; cursor: not-allowed; }
+  #mb-save-btn.state-saved { background: #166534; }
+  #mb-save-btn.state-failed { background: #991b1b; }
+
+  /* Panel info sheet */
+  #mb-info-section {
+    margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid var(--gray-200);
+  }
+
+  /* Back button row */
+  .mb-back-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; background: #fff;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .mb-back-btn {
+    background: none; border: none; font-size: 22px; color: var(--orange);
+    cursor: pointer; padding: 0; line-height: 1; min-height: 44px; min-width: 44px;
+  }
+  .mb-back-label { font-size: 14px; color: var(--orange); font-weight: 600; cursor: pointer; }
+}
+/* Always hide mobile-view on desktop */
+@media (min-width:601px) {
+  #mobile-view { display: none !important; }
+  #mb-backdrop { display: none !important; }
+  #mb-sheet { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -511,6 +666,39 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
       <button class="btn btn-secondary" id="view-archive-btn" style="margin-right:auto;">Archive</button>
       <button class="btn btn-secondary" id="view-close-footer">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- ── Mobile view ─────────────────────────────────────────────────────────── -->
+<div id="mobile-view" style="display:none;">
+  <div class="mb-back-bar">
+    <button class="mb-back-btn" onclick="mbGoBack()">&#8249;</button>
+    <span class="mb-back-label" onclick="mbGoBack()">Schedules</span>
+  </div>
+  <div class="mb-panel-header" id="mb-panel-header">
+    <h2 id="mb-panel-name">—</h2>
+    <div class="mb-meta" id="mb-panel-meta"></div>
+    <div class="mb-header-actions">
+      <button class="mb-header-btn" id="mb-edit-info-btn" onclick="mbOpenInfoSheet()">Edit Panel Info</button>
+    </div>
+  </div>
+  <div class="mb-section-label">Circuits</div>
+  <div id="mb-circuit-list"></div>
+</div>
+
+<!-- Mobile bottom sheet + backdrop -->
+<div id="mb-backdrop" onclick="mbCloseSheet()"></div>
+<div id="mb-sheet">
+  <div id="mb-sheet-handle"></div>
+  <div id="mb-sheet-header">
+    <span id="mb-sheet-title">Circuit</span>
+    <button id="mb-sheet-close" onclick="mbCloseSheet()">&#215;</button>
+  </div>
+  <div id="mb-sheet-body">
+    <!-- Populated by mbOpenSheet() / mbOpenInfoSheet() -->
+  </div>
+  <div id="mb-sheet-footer">
+    <button id="mb-save-btn" onclick="mbSave()">Save</button>
   </div>
 </div>
 
@@ -1296,6 +1484,324 @@ document.getElementById('circuit-tbody').addEventListener('input',  _onPoleChang
     const input = e.target.closest('input[type="text"]');
     if (input && isMobile()) openPopover(input);
   });
+})();
+
+// ── Mobile panel-schedule editing ───────────────────────────────────────────
+(function () {
+  const MB_BP = 600;
+  function onMobile() { return window.innerWidth <= MB_BP; }
+
+  // Authoritative in-memory schedule for the open mobile view
+  let _mbSchedule   = null;
+  // Current sheet context: { slotIdx, side }  (side = 'left'|'right'|'info')
+  let _mbCtx        = null;
+  // Draft values being edited in the open sheet
+  let _mbDraft      = null;
+
+  // ── Intercept openView on mobile ──────────────────────────────────────────
+  const _desktopOpenView = window.openView;
+  window.openView = async function (id) {
+    if (!onMobile()) return _desktopOpenView(id);
+    await mbOpenView(id);
+  };
+
+  // ── Load and render the mobile view ───────────────────────────────────────
+  window.mbOpenView = async function (id) {
+    try {
+      const res = await fetch('/api/panel-schedules/' + id);
+      if (!res.ok) throw new Error();
+      _mbSchedule = await res.json();
+    } catch {
+      showToast('Failed to load panel schedule', 'error');
+      return;
+    }
+    const s = _mbSchedule;
+    document.getElementById('mb-panel-name').textContent = s.panel_name;
+    document.getElementById('mb-panel-meta').textContent =
+      [s.project_name, s.voltage ? s.voltage + 'V' : null,
+       s.main_breaker ? s.main_breaker + 'A main' : null]
+      .filter(Boolean).join(' · ');
+
+    mbRenderCircuitList();
+
+    // Show mobile view, hide desktop list
+    document.querySelector('.page').style.display = 'none';
+    document.getElementById('mobile-view').style.display = 'block';
+  };
+
+  window.mbGoBack = function () {
+    document.getElementById('mobile-view').style.display = 'none';
+    document.querySelector('.page').style.display = '';
+    _mbSchedule = null;
+  };
+
+  // ── Render the flat circuit list ──────────────────────────────────────────
+  function mbRenderCircuitList() {
+    const s       = _mbSchedule;
+    const slots   = s.num_circuits / 2;
+    const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
+    const grp     = computePoleGroups(circuits, slots);
+    const lG      = grp.left;
+    const rG      = grp.right;
+
+    let html = '';
+    for (let i = 0; i < slots; i++) {
+      const d   = circuits[i] || {};
+      const ls  = (i * 2) + 1;
+      const rs  = (i * 2) + 2;
+
+      // Left circuit (slot A)
+      html += mbCircuitRow(i, 'left', ls, d.la_desc, d.la_poles, d.la_amps, lG[2 * i]);
+      // Right circuit (slot A)
+      html += mbCircuitRow(i, 'right', rs, d.ra_desc, d.ra_poles, d.ra_amps, rG[2 * i]);
+    }
+    document.getElementById('mb-circuit-list').innerHTML = html;
+  }
+
+  function mbCircuitRow(slotIdx, side, cctNum, desc, poles, amps, groupCell) {
+    const consumed = groupCell !== null && groupCell.isLeader === false;
+    if (consumed) {
+      return `<div class="mb-cct-row mb-consumed">
+        <span class="mb-cct-num">${cctNum}</span>
+        <div class="mb-cct-info">
+          <div class="mb-cct-desc empty">&#8593; Multi-pole — see above</div>
+        </div>
+      </div>`;
+    }
+    const d    = desc  || '';
+    const p    = poles || '';
+    const a    = amps  || '';
+    const sub  = [p ? p + '-pole' : '', a ? a + 'A' : ''].filter(Boolean).join(' · ');
+    const onclick = `mbOpenSheet(${slotIdx},'${side}')`;
+    return `<div class="mb-cct-row" onclick="${onclick}">
+      <span class="mb-cct-num">${cctNum}</span>
+      <div class="mb-cct-info">
+        <div class="mb-cct-desc${d ? '' : ' empty'}">${d ? esc(d) : 'Empty circuit'}</div>
+        ${sub ? `<div class="mb-cct-sub">${sub}</div>` : ''}
+      </div>
+      <span class="mb-cct-chevron">›</span>
+    </div>`;
+  }
+
+  // ── Open circuit bottom sheet ─────────────────────────────────────────────
+  window.mbOpenSheet = function (slotIdx, side) {
+    _mbCtx   = { slotIdx, side };
+    const s  = _mbSchedule;
+    const d  = (Array.isArray(s.circuit_data) ? s.circuit_data[slotIdx] : null) || {};
+    const cctNum = (slotIdx * 2) + (side === 'left' ? 1 : 2);
+
+    // Build draft from current saved values (a/b fields)
+    const pfx = side === 'left' ? 'l' : 'r';
+    _mbDraft = {
+      a_desc: d[pfx + 'a_desc'] || '',
+      a_poles: d[pfx + 'a_poles'] || '',
+      a_amps:  d[pfx + 'a_amps']  || '',
+      b_desc: d[pfx + 'b_desc'] || '',
+      b_poles: d[pfx + 'b_poles'] || '',
+      b_amps:  d[pfx + 'b_amps']  || '',
+    };
+
+    document.getElementById('mb-sheet-title').textContent = 'Circuit ' + cctNum;
+    document.getElementById('mb-sheet-footer').style.display = '';
+    mbRenderSheetBody();
+    mbSetSaveState('idle');
+    mbShowSheet();
+  };
+
+  function mbRenderSheetBody() {
+    const draft = _mbDraft;
+    const ampOpts  = AMP_OPTIONS.map(v => `<option value="${v}"${draft.a_amps  === v ? ' selected' : ''}>${v || '—'}</option>`).join('');
+    const ampOptsB = AMP_OPTIONS.map(v => `<option value="${v}"${draft.b_amps  === v ? ' selected' : ''}>${v || '—'}</option>`).join('');
+    const poleOpts  = POLE_OPTIONS.map(v => `<option value="${v}"${draft.a_poles === v ? ' selected' : ''}>${v || '—'}</option>`).join('');
+    const poleOptsB = POLE_OPTIONS.map(v => `<option value="${v}"${draft.b_poles === v ? ' selected' : ''}>${v || '—'}</option>`).join('');
+    const showTandem = draft.a_poles === '1' || draft.a_poles === '';
+
+    document.getElementById('mb-sheet-body').innerHTML = `
+      <div class="mb-field">
+        <label>Description</label>
+        <input type="text" id="mb-a-desc" value="${esc(draft.a_desc)}" placeholder="e.g. Kitchen receptacles"
+          oninput="_mbDraft.a_desc=this.value">
+      </div>
+      <div class="mb-2col">
+        <div class="mb-field">
+          <label>Poles</label>
+          <select id="mb-a-poles" onchange="_mbDraft.a_poles=this.value;mbRenderSheetBody()">${poleOpts}</select>
+        </div>
+        <div class="mb-field">
+          <label>Amps</label>
+          <select id="mb-a-amps" onchange="_mbDraft.a_amps=this.value">${ampOpts}</select>
+        </div>
+      </div>
+      ${showTandem ? `
+      <div id="mb-tandem-section">
+        <div class="mb-tandem-label">Tandem B breaker (optional)</div>
+        <div class="mb-field">
+          <label>Description</label>
+          <input type="text" id="mb-b-desc" value="${esc(draft.b_desc)}" placeholder="e.g. Bathroom GFCI"
+            oninput="_mbDraft.b_desc=this.value">
+        </div>
+        <div class="mb-2col">
+          <div class="mb-field">
+            <label>Poles</label>
+            <select id="mb-b-poles" onchange="_mbDraft.b_poles=this.value">${poleOptsB}</select>
+          </div>
+          <div class="mb-field">
+            <label>Amps</label>
+            <select id="mb-b-amps" onchange="_mbDraft.b_amps=this.value">${ampOptsB}</select>
+          </div>
+        </div>
+      </div>` : ''}
+    `;
+  }
+
+  // ── Open panel info sheet ─────────────────────────────────────────────────
+  window.mbOpenInfoSheet = function () {
+    _mbCtx   = { side: 'info' };
+    const s  = _mbSchedule;
+    _mbDraft = {
+      panel_name:   s.panel_name   || '',
+      voltage:      s.voltage      || '',
+      main_breaker: s.main_breaker || '',
+      bus_rating:   s.bus_rating   || '',
+      enclosure_type: s.enclosure_type || '',
+    };
+    document.getElementById('mb-sheet-title').textContent = 'Panel Info';
+    document.getElementById('mb-sheet-footer').style.display = '';
+
+    const voltOpts = ['','120/240V 1Ø','120/208V 3Ø','347/600V 3Ø','600V 3Ø']
+      .map(v => `<option value="${v}"${_mbDraft.voltage === v ? ' selected' : ''}>${v || '—'}</option>`).join('');
+    const ampOpts = AMP_OPTIONS.map(v => `<option value="${v}"${_mbDraft.main_breaker === v ? ' selected' : ''}>${v || '—'}</option>`).join('');
+    const ampOptsB= AMP_OPTIONS.map(v => `<option value="${v}"${_mbDraft.bus_rating    === v ? ' selected' : ''}>${v || '—'}</option>`).join('');
+
+    document.getElementById('mb-sheet-body').innerHTML = `
+      <div class="mb-field">
+        <label>Panel Name</label>
+        <input type="text" id="mb-info-name" value="${esc(_mbDraft.panel_name)}"
+          oninput="_mbDraft.panel_name=this.value">
+      </div>
+      <div class="mb-field">
+        <label>Voltage</label>
+        <select onchange="_mbDraft.voltage=this.value">${voltOpts}</select>
+      </div>
+      <div class="mb-2col">
+        <div class="mb-field">
+          <label>Main Breaker (A)</label>
+          <select onchange="_mbDraft.main_breaker=this.value">${ampOpts}</select>
+        </div>
+        <div class="mb-field">
+          <label>Bus Rating (A)</label>
+          <select onchange="_mbDraft.bus_rating=this.value">${ampOptsB}</select>
+        </div>
+      </div>
+      <div class="mb-field">
+        <label>Enclosure Type</label>
+        <input type="text" id="mb-info-enc" value="${esc(_mbDraft.enclosure_type)}"
+          oninput="_mbDraft.enclosure_type=this.value">
+      </div>
+    `;
+    mbSetSaveState('idle');
+    mbShowSheet();
+  };
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  window.mbSave = async function () {
+    mbSetSaveState('saving');
+    try {
+      let res;
+      // Build full payload — PATCH overwrites all fields, so always send everything
+      const s = _mbSchedule;
+      const payload = {
+        panel_name:     s.panel_name,
+        voltage:        s.voltage,
+        main_breaker:   s.main_breaker,
+        bus_rating:     s.bus_rating,
+        enclosure_type: s.enclosure_type,
+        num_circuits:   s.num_circuits,
+        circuit_data:   Array.isArray(s.circuit_data) ? JSON.parse(JSON.stringify(s.circuit_data)) : [],
+        project_id:     s.project_id,
+        project_name:   s.project_name,
+        job_number:     s.job_number,
+      };
+
+      if (_mbCtx.side === 'info') {
+        Object.assign(payload, {
+          panel_name:     _mbDraft.panel_name,
+          voltage:        _mbDraft.voltage,
+          main_breaker:   _mbDraft.main_breaker,
+          bus_rating:     _mbDraft.bus_rating,
+          enclosure_type: _mbDraft.enclosure_type,
+        });
+      } else {
+        const { slotIdx, side } = _mbCtx;
+        while (payload.circuit_data.length <= slotIdx) payload.circuit_data.push({});
+        const pfx = side === 'left' ? 'l' : 'r';
+        payload.circuit_data[slotIdx][pfx + 'a_desc']  = _mbDraft.a_desc;
+        payload.circuit_data[slotIdx][pfx + 'a_poles'] = _mbDraft.a_poles;
+        payload.circuit_data[slotIdx][pfx + 'a_amps']  = _mbDraft.a_amps;
+        payload.circuit_data[slotIdx][pfx + 'b_desc']  = _mbDraft.b_desc;
+        payload.circuit_data[slotIdx][pfx + 'b_poles'] = _mbDraft.b_poles;
+        payload.circuit_data[slotIdx][pfx + 'b_amps']  = _mbDraft.b_amps;
+      }
+
+      res = await fetch('/api/panel-schedules/' + s.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error();
+
+      // Commit to authoritative memory
+      if (_mbCtx.side === 'info') {
+        Object.assign(_mbSchedule, _mbDraft);
+        document.getElementById('mb-panel-name').textContent = _mbSchedule.panel_name;
+        document.getElementById('mb-panel-meta').textContent =
+          [_mbSchedule.project_name, _mbSchedule.voltage ? _mbSchedule.voltage + 'V' : null,
+           _mbSchedule.main_breaker ? _mbSchedule.main_breaker + 'A main' : null]
+          .filter(Boolean).join(' · ');
+      } else {
+        const { slotIdx, side } = _mbCtx;
+        while (!Array.isArray(_mbSchedule.circuit_data)) _mbSchedule.circuit_data = [];
+        while (_mbSchedule.circuit_data.length <= slotIdx) _mbSchedule.circuit_data.push({});
+        const pfx = side === 'left' ? 'l' : 'r';
+        _mbSchedule.circuit_data[slotIdx][pfx + 'a_desc']  = _mbDraft.a_desc;
+        _mbSchedule.circuit_data[slotIdx][pfx + 'a_poles'] = _mbDraft.a_poles;
+        _mbSchedule.circuit_data[slotIdx][pfx + 'a_amps']  = _mbDraft.a_amps;
+        _mbSchedule.circuit_data[slotIdx][pfx + 'b_desc']  = _mbDraft.b_desc;
+        _mbSchedule.circuit_data[slotIdx][pfx + 'b_poles'] = _mbDraft.b_poles;
+        _mbSchedule.circuit_data[slotIdx][pfx + 'b_amps']  = _mbDraft.b_amps;
+        mbRenderCircuitList();
+      }
+
+      mbSetSaveState('saved');
+      setTimeout(() => mbCloseSheet(), 1500);
+    } catch {
+      mbSetSaveState('failed');
+    }
+  };
+
+  // ── Sheet state helpers ───────────────────────────────────────────────────
+  function mbShowSheet() {
+    document.getElementById('mb-backdrop').classList.add('open');
+    document.getElementById('mb-sheet').classList.add('open');
+  }
+
+  window.mbCloseSheet = function () {
+    document.getElementById('mb-backdrop').classList.remove('open');
+    document.getElementById('mb-sheet').classList.remove('open');
+    _mbCtx  = null;
+    _mbDraft = null;
+  };
+
+  function mbSetSaveState(state) {
+    const btn = document.getElementById('mb-save-btn');
+    btn.className = '';
+    btn.disabled  = false;
+    if (state === 'idle')   { btn.textContent = 'Save'; }
+    else if (state === 'saving') { btn.textContent = 'Saving…'; btn.disabled = true; }
+    else if (state === 'saved')  { btn.textContent = 'Saved ✓'; btn.classList.add('state-saved'); btn.disabled = true; }
+    else if (state === 'failed') { btn.textContent = 'Save failed — Retry'; btn.classList.add('state-failed'); }
+  }
 })();
 </script>
 </body>
