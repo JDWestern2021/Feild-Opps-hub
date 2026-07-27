@@ -502,6 +502,133 @@ app.patch('/api/cert-catalog/:id/reactivate', requireAdmin, async (req, res) => 
 });
 
 // ─────────────────────────────────────────────
+// EMPLOYEE LIST + PROFILE (admin)
+// ─────────────────────────────────────────────
+
+// Employee list with per-employee compliance roll-up.
+// Compliance is computed in JS so cert_expiry_warning_days can be read
+// at runtime from app_settings without embedding it in SQL.
+// A field user cannot reach this endpoint — requireAdmin gates it.
+app.get('/api/employees', requireAdmin, async (req, res) => {
+  try {
+    const includeArchived = req.query.include_archived === '1';
+    const warningDays = parseInt(await getSetting('cert_expiry_warning_days') || '60');
+    const today = new Date().toISOString().slice(0, 10);
+    const warnDate = new Date(Date.now() + warningDays * 86400000).toISOString().slice(0, 10);
+
+    const { rows: users } = await pool.query(
+      `SELECT id, name, email, role, status, archived, created_at, last_login
+       FROM users
+       WHERE role != 'admin' AND (archived = FALSE OR $1 = TRUE)
+       ORDER BY name ASC`,
+      [includeArchived]
+    );
+
+    if (!users.length) return res.json([]);
+
+    // CROSS JOIN users × active required catalog → LEFT JOIN held certs
+    // This guarantees every required cert appears per user even with zero records
+    const { rows: certRows } = await pool.query(
+      `SELECT u.id AS user_id,
+              c.id AS catalog_id,
+              c.expires,
+              w.expiry_date
+       FROM users u
+       CROSS JOIN cert_catalog c
+       LEFT JOIN worker_certifications w
+              ON w.catalog_id = c.id AND w.user_id = u.id
+       WHERE u.role != 'admin'
+         AND (u.archived = FALSE OR $1 = TRUE)
+         AND c.active = TRUE
+         AND c.tier = 'required'`,
+      [includeArchived]
+    );
+
+    // Roll up per user in JS
+    const rollup = {};
+    for (const r of certRows) {
+      if (!rollup[r.user_id]) rollup[r.user_id] = { missing: 0, expired: 0, expiring: 0 };
+      let s;
+      if (r.expires === false) {
+        s = 'valid'; // no-expiry cert: always valid if held (w.expiry_date irrelevant)
+      } else if (!r.expiry_date) {
+        s = 'missing';
+      } else if (r.expiry_date < today) {
+        s = 'expired';
+      } else if (r.expiry_date <= warnDate) {
+        s = 'expiring';
+      } else {
+        s = 'valid';
+      }
+      if (s === 'missing')  rollup[r.user_id].missing++;
+      if (s === 'expired')  rollup[r.user_id].expired++;
+      if (s === 'expiring') rollup[r.user_id].expiring++;
+    }
+
+    const result = users.map(u => {
+      const r = rollup[u.id] || { missing: 0, expired: 0, expiring: 0 };
+      const compliance = (r.missing + r.expired > 0) ? 'red'
+                       : r.expiring > 0              ? 'amber'
+                       : 'green';
+      return { ...u, compliance, ...r };
+    });
+
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Unified employee profile — identity + full cert compliance + submitted forms.
+// requireAdmin: a field user cannot reach another employee's profile.
+// The existing GET /api/safety/:id has its own field-user guard (own forms only).
+app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    if (isNaN(uid)) return res.status(400).json({ error: 'Invalid id' });
+
+    const warningDays = parseInt(await getSetting('cert_expiry_warning_days') || '60');
+
+    const [userRes, certsRes, formsRes] = await Promise.all([
+      pool.query(
+        `SELECT id, name, email, role, status, archived, created_at, last_login
+         FROM users WHERE id = $1`,
+        [uid]
+      ),
+      // LEFT JOIN from catalog to held certs — missing entries have null on right side
+      pool.query(
+        `SELECT c.id AS catalog_id, c.display_name, c.short_code, c.tier,
+                c.validity_months, c.expires, c.sort_order,
+                w.id AS cert_id, w.issued_date, w.expiry_date, w.notes,
+                w.photo_data IS NOT NULL AS has_photo, w.photo_type
+         FROM cert_catalog c
+         LEFT JOIN worker_certifications w
+                ON w.catalog_id = c.id AND w.user_id = $1
+         WHERE c.active = TRUE
+         ORDER BY c.tier, c.sort_order`,
+        [uid]
+      ),
+      // Forms keyed on submitted_by_id — never the text field
+      pool.query(
+        `SELECT id, form_type, form_number, project_name, date, submitted_at,
+                status, psi_flag, wcb_flag, archived
+         FROM safety_forms
+         WHERE submitted_by_id = $1
+         ORDER BY submitted_at DESC`,
+        [uid]
+      ),
+    ]);
+
+    if (!userRes.rows[0]) return res.status(404).json({ error: 'Employee not found' });
+
+    res.json({
+      user: userRes.rows[0],
+      certs: certsRes.rows,
+      forms: formsRes.rows,
+      warning_days: warningDays,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
 // WORKER CERTIFICATIONS
 // ─────────────────────────────────────────────
 
