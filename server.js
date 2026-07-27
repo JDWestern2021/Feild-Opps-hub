@@ -675,7 +675,7 @@ app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
 
     const warningDays = parseInt(await getSetting('cert_expiry_warning_days') || '60');
 
-    const [userRes, certsRes, formsRes, templatesRes] = await Promise.all([
+    const [userRes, certsRes, formsRes, templatesRes, uploadedCertsRes] = await Promise.all([
       pool.query(
         `SELECT u.id, u.name, u.email, u.role, u.status, u.archived, u.template_id,
                 u.created_at, u.last_login, t.name AS template_name
@@ -714,6 +714,12 @@ app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
         [uid]
       ),
       pool.query(`SELECT id, name FROM cert_requirement_templates WHERE active = TRUE ORDER BY name`),
+      // All uploaded certs for this user regardless of catalog linkage
+      pool.query(
+        `SELECT id, cert_name, cert_type, issued_date, expiry_date, notes, created_at, updated_at
+         FROM worker_certifications WHERE user_id=$1 ORDER BY cert_name ASC`,
+        [uid]
+      ),
     ]);
 
     if (!userRes.rows[0]) return res.status(404).json({ error: 'Employee not found' });
@@ -724,6 +730,7 @@ app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
       forms: formsRes.rows,
       templates: templatesRes.rows,
       warning_days: warningDays,
+      uploaded_certs: uploadedCertsRes.rows,
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -893,16 +900,18 @@ app.get('/api/certifications/:id/photo', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Add cert (own)
+// Add cert (own, or another user's if admin)
 app.post('/api/certifications', requireAuth, async (req, res) => {
   try {
-    const { cert_name, cert_type, issued_date, expiry_date, photo_data, photo_type, notes } = req.body;
+    const { cert_name, cert_type, issued_date, expiry_date, photo_data, photo_type, notes, user_id } = req.body;
     if (!cert_name) return res.status(400).json({ error: 'cert_name required' });
+    // Admin can add a cert for another user by passing user_id in the body
+    const targetUserId = (req.user.role === 'admin' && user_id) ? parseInt(user_id) : req.user.id;
     const now = new Date().toISOString();
     const { rows } = await pool.query(
       `INSERT INTO worker_certifications (user_id, cert_name, cert_type, issued_date, expiry_date, photo_data, photo_type, notes, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, cert_name, cert_type, issued_date, expiry_date, notes, created_at`,
-      [req.user.id, cert_name, cert_type || 'other', issued_date || null, expiry_date || null,
+      [targetUserId, cert_name, cert_type || 'other', issued_date || null, expiry_date || null,
        photo_data || null, photo_type || null, notes || null, now]
     );
     res.status(201).json(rows[0]);
