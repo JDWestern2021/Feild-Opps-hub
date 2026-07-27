@@ -519,7 +519,7 @@ app.get('/api/employees', requireAdmin, async (req, res) => {
     const { rows: users } = await pool.query(
       `SELECT id, name, email, role, status, archived, created_at, last_login
        FROM users
-       WHERE role != 'admin' AND (archived = FALSE OR $1 = TRUE)
+       WHERE (archived = FALSE OR $1 = TRUE)
        ORDER BY name ASC`,
       [includeArchived]
     );
@@ -537,8 +537,7 @@ app.get('/api/employees', requireAdmin, async (req, res) => {
        CROSS JOIN cert_catalog c
        LEFT JOIN worker_certifications w
               ON w.catalog_id = c.id AND w.user_id = u.id
-       WHERE u.role != 'admin'
-         AND (u.archived = FALSE OR $1 = TRUE)
+       WHERE (u.archived = FALSE OR $1 = TRUE)
          AND c.active = TRUE
          AND c.tier = 'required'`,
       [includeArchived]
