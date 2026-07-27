@@ -5,7 +5,14 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "dev:local": "node server.js",
+    "db:start": "docker compose up -d && docker compose ps",
+    "db:stop": "docker compose down",
+    "db:reset": "node scripts/db-reset.js",
+    "db:seed": "node scripts/seed.js",
+    "db:diff": "node scripts/db-diff.js",
+    "https:setup": "node scripts/setup-https.js"
   },
   "engines": {
     "node": ">=18.0.0"

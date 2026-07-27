@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fieldops-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fieldops_dev
+      POSTGRES_USER: fieldops
+      POSTGRES_PASSWORD: localdev
+    ports:
+      - "5433:5432"
+    volumes:
+      - fieldops_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fieldops -d fieldops_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  fieldops_pgdata:
