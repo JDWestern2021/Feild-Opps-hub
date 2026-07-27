@@ -2910,6 +2910,46 @@
           </summary>
           <div style="opacity:.7;">${notReqCertRows}</div>
         </details>` : ''}
+        <!-- Uploaded Certifications — all certs from worker_certifications, open by default -->
+        <details open style="margin-top:8px;">
+          <summary style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:6px;padding:8px 0;min-height:44px;">
+            <svg width="12" height="12" viewBox="0 0 12 12" class="sf-details-arrow"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            Uploaded Tickets &amp; Certifications (${(profile.uploaded_certs||[]).length})
+          </summary>
+          <div style="margin-bottom:8px;display:flex;justify-content:flex-end;">
+            <button onclick="adminAddCertForUser(${userId})" style="font-size:12px;background:#F47920;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">+ Add Ticket</button>
+          </div>
+          ${(profile.uploaded_certs||[]).length ? (profile.uploaded_certs||[]).map(c => {
+            const CERT_TYPE_LABELS = {
+              h2s:'H2S Alive', first_aid:'First Aid / CPR', whmis:'WHMIS',
+              fall_protection:'Fall Protection', ground_disturbance:'Ground Disturbance',
+              confined_space:'Confined Space', elevated_work:'Elevated Work Platform',
+              flagging:'Traffic Control / Flagging', ppe:'PPE / Safety Orientation',
+              electrical:'Electrical Safety', forklift:'Forklift / Skid Steer',
+              driver:"Driver's Abstract / License", other:'Other'
+            };
+            const typeLabel = CERT_TYPE_LABELS[c.cert_type] || c.cert_type || 'Other';
+            const expiry = c.expiry_date ? (() => {
+              const d = new Date(c.expiry_date + 'T00:00:00');
+              const expired = d < today;
+              const expiring = !expired && (d - today) <= warnMs;
+              const expStr = 'Exp: ' + d.toLocaleDateString('en-CA');
+              if (expired)  return `<span style="background:#fee2e2;color:#991b1b;border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">⚠ Expired ${d.toLocaleDateString('en-CA')}</span>`;
+              if (expiring) return `<span style="background:#fef9c3;color:#854d0e;border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">Expires ${d.toLocaleDateString('en-CA')}</span>`;
+              return `<span style="background:#dcfce7;color:#166534;border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">${expStr}</span>`;
+            })() : '<span style="background:#f3f4f6;color:#9ca3af;border-radius:20px;padding:2px 8px;font-size:11px;">No expiry</span>';
+            return `<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f3f4f6;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:600;color:#111827;">${_sfEsc(c.cert_name)}</div>
+                <div style="font-size:11px;color:#6b7280;margin-top:2px;">${_sfEsc(typeLabel)}${c.issued_date ? ' · Issued: '+c.issued_date : ''}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                ${expiry}
+                <button onclick="adminEditCert(${c.id},${userId})" style="font-size:11px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;cursor:pointer;color:#374151;white-space:nowrap;">Edit</button>
+              </div>
+            </div>`;
+          }).join('') : '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No certifications uploaded yet.</div>'}
+        </details>
         <!-- Safety Forms — collapsed by default -->
         <details style="margin-top:8px;">
           <summary style="font-size:12px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:6px;padding:8px 0;min-height:44px;">
@@ -2948,6 +2988,39 @@
       await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, { method:'DELETE' });
       openEmployeeProfile(userId);
     } catch { alert('Failed to clear override.'); }
+  };
+
+  // Open the cert edit modal for a specific cert (admin editing another user's cert)
+  window.adminEditCert = async function(certId, userId) {
+    try {
+      const res = await fetch(`/api/certifications?user_id=${userId}`);
+      const certs = await res.json();
+      const c = certs.find(x => x.id === certId);
+      if (!c) { alert('Cert not found.'); return; }
+      window._adminCertTargetUserId = userId;
+      // Populate the modal directly — openCertModal looks up _certs (own user), won't find this one
+      document.getElementById('sf-cert-modal-title').textContent = 'Edit Ticket';
+      document.getElementById('sf-cert-edit-id').value = certId;
+      document.getElementById('sf-cert-modal-delete').style.display = '';
+      document.getElementById('sf-cert-name').value    = c.cert_name || '';
+      document.getElementById('sf-cert-type').value    = c.cert_type || 'other';
+      document.getElementById('sf-cert-issued').value  = c.issued_date || '';
+      document.getElementById('sf-cert-expiry').value  = c.expiry_date || '';
+      document.getElementById('sf-cert-notes').value   = c.notes || '';
+      const prev = document.getElementById('sf-cert-photo-preview');
+      prev.src = `/api/certifications/${certId}/photo`;
+      prev.style.display = 'block';
+      document.getElementById('sf-cert-photo-prompt').style.display = 'none';
+      document.getElementById('sf-cert-photo-clear').style.display = '';
+      prev.onerror = () => { prev.style.display='none'; document.getElementById('sf-cert-photo-prompt').style.display=''; document.getElementById('sf-cert-photo-clear').style.display='none'; };
+      document.getElementById('sf-cert-modal').style.display = 'flex';
+    } catch { alert('Failed to load cert.'); }
+  };
+
+  // Open the cert add modal pre-set to save for another user (admin only)
+  window.adminAddCertForUser = function(userId) {
+    window._adminCertTargetUserId = userId;
+    openCertModal(null);
   };
 
   // ── Wire up team search ───────────────────────────────────────
@@ -3141,6 +3214,9 @@
       notes:       document.getElementById('sf-cert-notes').value.trim() || null,
     };
     if (_certPhotoDataUrl) { payload.photo_data = _certPhotoDataUrl; payload.photo_type = _certPhotoType; }
+    // If admin is adding/editing a cert on behalf of another user, include their user_id
+    const targetUserId = window._adminCertTargetUserId || null;
+    if (!editId && targetUserId) payload.user_id = targetUserId;
     const btn = document.getElementById('sf-cert-modal-save');
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -3151,7 +3227,13 @@
       });
       if (!res.ok) throw new Error();
       closeCertModal();
-      await window.loadMyCerts();
+      if (targetUserId) {
+        // Reload the employee profile to show the updated cert list
+        window._adminCertTargetUserId = null;
+        openEmployeeProfile(targetUserId);
+      } else {
+        await window.loadMyCerts();
+      }
     } catch { alert('Save failed — please try again.'); }
     finally { btn.disabled=false; btn.textContent='Save Ticket'; }
   };
@@ -3159,9 +3241,15 @@
   document.getElementById('sf-cert-modal-delete').onclick = async () => {
     const editId = document.getElementById('sf-cert-edit-id').value;
     if (!editId || !confirm('Delete this certification?')) return;
+    const targetUserId = window._adminCertTargetUserId || null;
     await fetch(`/api/certifications/${editId}`, {method:'DELETE'});
     closeCertModal();
-    await window.loadMyCerts();
+    if (targetUserId) {
+      window._adminCertTargetUserId = null;
+      openEmployeeProfile(targetUserId);
+    } else {
+      await window.loadMyCerts();
+    }
   };
 })();
 </script>
