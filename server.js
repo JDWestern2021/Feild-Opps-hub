@@ -68,6 +68,93 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+// ── Permit tracking constants ──
+const PERMIT_INSPECTION_STALE_DAYS = 5;
+const PERMIT_STAGE_STALE_DAYS      = 21;
+const PERMIT_ACTIVE_TICKET_DAYS    = 7;
+
+// ── getPermitStatus(project, documents, inspections, recentTicketCount) ──
+// Single source of truth for permit notifier state. Returns { notifier, label, action } or null.
+// Notifiers 0–11; null means permit complete or not applicable.
+function getPermitStatus(project, documents, inspections, recentTicketCount) {
+  const { permit_required, permit_stage, permit_updated_at } = project;
+
+  if (!permit_required || permit_required === 'unset') {
+    return { notifier: 0, label: 'Set permit status', action: 'set_permit_required' };
+  }
+  if (permit_required === 'no') return null;
+
+  // permit_required === 'yes' from here
+  const hasDocs = cat => documents.some(d => d.category === cat);
+  const latestInspection = type => {
+    const matches = inspections.filter(i => i.inspection_type === type)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return matches[0] || null;
+  };
+  const daysSince = dateStr => {
+    if (!dateStr) return Infinity;
+    return (Date.now() - new Date(dateStr).getTime()) / 86400000;
+  };
+
+  if (!hasDocs('permit')) {
+    return { notifier: 1, label: 'Upload permit application', action: 'upload_doc_permit' };
+  }
+
+  if (permit_stage === 'not_started') {
+    return { notifier: 2, label: 'Mark permit as submitted', action: 'set_stage_submitted' };
+  }
+
+  if (permit_stage === 'submitted') {
+    const stale = daysSince(permit_updated_at) > PERMIT_STAGE_STALE_DAYS;
+    if (stale) return { notifier: 4, label: 'Permit submission stale — follow up', action: 'set_stage_submitted' };
+    return { notifier: 3, label: 'Awaiting permit approval', action: 'set_stage_approved' };
+  }
+
+  if (permit_stage === 'approved') {
+    return { notifier: 5, label: 'Permit approved — begin rough-in', action: 'set_stage_rough_in' };
+  }
+
+  if (permit_stage === 'rough_in') {
+    const ri = latestInspection('rough_in');
+    if (!ri) {
+      return { notifier: 6, label: 'Request rough-in inspection', action: 'create_inspection_rough_in' };
+    }
+    if (ri.status === 'failed') {
+      return { notifier: 7, label: 'Rough-in inspection failed — address issues', action: 'create_inspection_rough_in' };
+    }
+    if (ri.status === 'requested') {
+      const stale = daysSince(ri.requested_at) > PERMIT_INSPECTION_STALE_DAYS;
+      if (stale) return { notifier: 8, label: 'Rough-in inspection overdue', action: 'update_inspection' };
+      return { notifier: 7, label: 'Rough-in inspection pending', action: 'update_inspection' };
+    }
+    if (ri.status === 'passed') {
+      if (!hasDocs('rough_in_inspection')) {
+        return { notifier: 9, label: 'Upload rough-in inspection approval', action: 'upload_doc_rough_in_inspection' };
+      }
+      if (recentTicketCount === 0) {
+        return { notifier: 10, label: 'No recent site activity — request final inspection?', action: 'create_inspection_final' };
+      }
+      return { notifier: 10, label: 'Rough-in complete — work in progress', action: null };
+    }
+  }
+
+  if (permit_stage === 'final') {
+    const fi = latestInspection('final');
+    if (!fi || fi.status === 'requested') {
+      return { notifier: 11, label: 'Final inspection pending', action: 'update_inspection' };
+    }
+    if (fi.status === 'failed') {
+      return { notifier: 11, label: 'Final inspection failed — address issues', action: 'create_inspection_final' };
+    }
+    if (fi.status === 'passed') {
+      return { notifier: 11, label: 'Final passed — close permit', action: 'set_stage_closed' };
+    }
+  }
+
+  if (permit_stage === 'closed') return null;
+  return null;
+}
+
 // ── Helpers ──
 async function getSetting(key, def = null) {
   // Check environment variables first (e.g. SMTP_HOST, SMTP_PORT, etc.)
@@ -498,6 +585,262 @@ app.patch('/api/cert-catalog/:id/reactivate', requireAdmin, async (req, res) => 
     );
     if (!rows[0]) return res.status(404).json({ error: 'Catalog entry not found' });
     res.json({ ok: true, reactivated: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// EMPLOYEE LIST + PROFILE (admin)
+// ─────────────────────────────────────────────
+
+// Employee list with per-employee compliance roll-up.
+// Compliance is computed in JS so cert_expiry_warning_days can be read
+// at runtime from app_settings without embedding it in SQL.
+// A field user cannot reach this endpoint — requireAdmin gates it.
+app.get('/api/employees', requireAdmin, async (req, res) => {
+  try {
+    const includeArchived = req.query.include_archived === '1';
+    const warningDays = parseInt(await getSetting('cert_expiry_warning_days') || '60');
+    const today = new Date().toISOString().slice(0, 10);
+    const warnDate = new Date(Date.now() + warningDays * 86400000).toISOString().slice(0, 10);
+
+    const { rows: users } = await pool.query(
+      `SELECT id, name, email, role, status, archived, created_at, last_login
+       FROM users
+       WHERE (archived = FALSE OR $1 = TRUE)
+       ORDER BY name ASC`,
+      [includeArchived]
+    );
+
+    if (!users.length) return res.json([]);
+
+    // Resolution: user override → template default → not required
+    // Only rows where resolved requirement = TRUE feed the roll-up.
+    // is_held distinguishes "not uploaded" from "no-expiry cert".
+    const { rows: certRows } = await pool.query(
+      `SELECT u.id AS user_id,
+              c.expires,
+              w.expiry_date,
+              (w.user_id IS NOT NULL) AS is_held
+       FROM users u
+       CROSS JOIN cert_catalog c
+       LEFT JOIN user_cert_requirements ucr ON ucr.user_id = u.id AND ucr.catalog_id = c.id
+       LEFT JOIN template_cert_requirements tcr ON tcr.template_id = u.template_id AND tcr.catalog_id = c.id
+       LEFT JOIN worker_certifications w ON w.catalog_id = c.id AND w.user_id = u.id
+       WHERE (u.archived = FALSE OR $1 = TRUE)
+         AND c.active = TRUE
+         AND COALESCE(ucr.required, tcr.required, FALSE) = TRUE`,
+      [includeArchived]
+    );
+
+    // Roll up per user in JS
+    const rollup = {};
+    for (const r of certRows) {
+      if (!rollup[r.user_id]) rollup[r.user_id] = { missing: 0, expired: 0, expiring: 0 };
+      let s;
+      if (!r.is_held) {
+        s = 'missing';
+      } else if (r.expires === false) {
+        s = 'valid';
+      } else if (r.expiry_date < today) {
+        s = 'expired';
+      } else if (r.expiry_date <= warnDate) {
+        s = 'expiring';
+      } else {
+        s = 'valid';
+      }
+      if (s === 'missing')  rollup[r.user_id].missing++;
+      if (s === 'expired')  rollup[r.user_id].expired++;
+      if (s === 'expiring') rollup[r.user_id].expiring++;
+    }
+
+    const result = users.map(u => {
+      const r = rollup[u.id] || { missing: 0, expired: 0, expiring: 0 };
+      const compliance = (r.missing + r.expired > 0) ? 'red'
+                       : r.expiring > 0              ? 'amber'
+                       : 'green';
+      return { ...u, compliance, ...r };
+    });
+
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Unified employee profile — identity + full cert compliance + submitted forms.
+// requireAdmin: a field user cannot reach another employee's profile.
+// The existing GET /api/safety/:id has its own field-user guard (own forms only).
+app.get('/api/employees/:id/profile', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    if (isNaN(uid)) return res.status(400).json({ error: 'Invalid id' });
+
+    const warningDays = parseInt(await getSetting('cert_expiry_warning_days') || '60');
+
+    const [userRes, certsRes, formsRes, templatesRes] = await Promise.all([
+      pool.query(
+        `SELECT u.id, u.name, u.email, u.role, u.status, u.archived, u.template_id,
+                u.created_at, u.last_login, t.name AS template_name
+         FROM users u
+         LEFT JOIN cert_requirement_templates t ON t.id = u.template_id
+         WHERE u.id = $1`,
+        [uid]
+      ),
+      // Catalog × held certs with per-employee resolution
+      pool.query(
+        `SELECT c.id AS catalog_id, c.display_name, c.short_code, c.tier,
+                c.validity_months, c.expires, c.sort_order,
+                w.id AS cert_id, w.issued_date, w.expiry_date, w.notes,
+                w.photo_data IS NOT NULL AS has_photo,
+                ucr.required AS override_required,
+                tcr.required AS template_required,
+                COALESCE(ucr.required, tcr.required, FALSE) AS is_required,
+                CASE WHEN ucr.catalog_id IS NOT NULL THEN 'override'
+                     WHEN tcr.catalog_id IS NOT NULL THEN 'template'
+                     ELSE 'default' END AS requirement_source
+         FROM cert_catalog c
+         LEFT JOIN worker_certifications w ON w.catalog_id = c.id AND w.user_id = $1
+         LEFT JOIN user_cert_requirements ucr ON ucr.user_id = $1 AND ucr.catalog_id = c.id
+         LEFT JOIN users u2 ON u2.id = $1
+         LEFT JOIN template_cert_requirements tcr ON tcr.template_id = u2.template_id AND tcr.catalog_id = c.id
+         WHERE c.active = TRUE
+         ORDER BY c.sort_order`,
+        [uid]
+      ),
+      pool.query(
+        `SELECT id, form_type, form_number, project_name, date, submitted_at,
+                status, psi_flag, wcb_flag, archived
+         FROM safety_forms
+         WHERE submitted_by_id = $1
+         ORDER BY submitted_at DESC`,
+        [uid]
+      ),
+      pool.query(`SELECT id, name FROM cert_requirement_templates WHERE active = TRUE ORDER BY name`),
+    ]);
+
+    if (!userRes.rows[0]) return res.status(404).json({ error: 'Employee not found' });
+
+    res.json({
+      user: userRes.rows[0],
+      certs: certsRes.rows,
+      forms: formsRes.rows,
+      templates: templatesRes.rows,
+      warning_days: warningDays,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────
+// REQUIREMENT TEMPLATES + OVERRIDES
+// ─────────────────────────────────────────────
+
+app.get('/api/cert-requirement-templates', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.id, t.name, t.active,
+              COALESCE(json_agg(json_build_object('catalog_id', tcr.catalog_id, 'required', tcr.required)
+                ORDER BY tcr.catalog_id) FILTER (WHERE tcr.catalog_id IS NOT NULL), '[]') AS requirements
+       FROM cert_requirement_templates t
+       LEFT JOIN template_cert_requirements tcr ON tcr.template_id = t.id
+       WHERE t.active = TRUE
+       GROUP BY t.id ORDER BY t.name`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Assign/clear template on one employee
+app.patch('/api/users/:id/template', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    const { template_id } = req.body;
+    await pool.query('UPDATE users SET template_id = $1 WHERE id = $2', [template_id || null, uid]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Set per-user cert override (writes or upserts a row)
+app.put('/api/users/:id/cert-requirements/:catalogId', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    const cid = parseInt(req.params.catalogId);
+    const { required } = req.body;
+    if (typeof required !== 'boolean') return res.status(400).json({ error: 'required must be boolean' });
+    await pool.query(
+      `INSERT INTO user_cert_requirements (user_id, catalog_id, required, updated_at)
+       VALUES ($1,$2,$3,NOW())
+       ON CONFLICT (user_id, catalog_id) DO UPDATE SET required=$3, updated_at=NOW()`,
+      [uid, cid, required]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Clear per-user override (inherit from template)
+app.delete('/api/users/:id/cert-requirements/:catalogId', requireAdmin, async (req, res) => {
+  try {
+    const uid = parseInt(req.params.id);
+    const cid = parseInt(req.params.catalogId);
+    await pool.query('DELETE FROM user_cert_requirements WHERE user_id=$1 AND catalog_id=$2', [uid, cid]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Matrix view data — all employees × all catalog certs with resolved requirements
+app.get('/api/cert-requirements/matrix', requireAdmin, async (req, res) => {
+  try {
+    const [usersRes, catalogRes, overridesRes, templateReqsRes] = await Promise.all([
+      pool.query(`SELECT id, name, role, template_id FROM users WHERE archived = FALSE ORDER BY name`),
+      pool.query(`SELECT id, display_name, short_code, tier FROM cert_catalog WHERE active = TRUE ORDER BY sort_order`),
+      pool.query(`SELECT user_id, catalog_id, required FROM user_cert_requirements`),
+      pool.query(`SELECT template_id, catalog_id, required FROM template_cert_requirements`),
+    ]);
+    res.json({
+      users: usersRes.rows,
+      catalog: catalogRes.rows,
+      overrides: overridesRes.rows,
+      template_reqs: templateReqsRes.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk: assign template to multiple employees
+app.post('/api/cert-requirements/bulk/template', requireAdmin, async (req, res) => {
+  try {
+    const { user_ids, template_id } = req.body;
+    if (!Array.isArray(user_ids) || !user_ids.length) return res.status(400).json({ error: 'user_ids required' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const uid of user_ids) {
+        await client.query('UPDATE users SET template_id=$1 WHERE id=$2', [template_id || null, uid]);
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true, updated: user_ids.length });
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk: set one cert required/not-required across multiple employees
+app.post('/api/cert-requirements/bulk/cert', requireAdmin, async (req, res) => {
+  try {
+    const { user_ids, catalog_id, required } = req.body;
+    if (!Array.isArray(user_ids) || !user_ids.length || !catalog_id) return res.status(400).json({ error: 'user_ids and catalog_id required' });
+    if (typeof required !== 'boolean') return res.status(400).json({ error: 'required must be boolean' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const uid of user_ids) {
+        await client.query(
+          `INSERT INTO user_cert_requirements (user_id, catalog_id, required, updated_at)
+           VALUES ($1,$2,$3,NOW())
+           ON CONFLICT (user_id, catalog_id) DO UPDATE SET required=$3, updated_at=NOW()`,
+          [uid, catalog_id, required]
+        );
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true, updated: user_ids.length });
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1296,16 +1639,37 @@ app.get('/api/project-folders', requireAuth, async (req, res) => {
 });
 
 app.get('/api/project-folders/all', requireAdmin, async (req, res) => {
-  const allowed=['active','complete','archived'];
-  const status = allowed.includes(req.query.status) ? req.query.status : 'active';
-  const { rows } = await pool.query(`
-    SELECT p.*,
-      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id) AS ticket_count,
-      (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id) AS po_count,
-      (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL OR t.ticket_status='Reviewed') AND (t.project_archived=0 OR t.project_archived IS NULL)) AS pending_tickets,
-      (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL)) AS open_pos
-    FROM projects p WHERE p.status=$1 ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC`, [status]);
-  res.json(rows);
+  try {
+    const allowed=['active','complete','archived'];
+    const status = allowed.includes(req.query.status) ? req.query.status : 'active';
+    const { rows } = await pool.query(`
+      SELECT p.*,
+        (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id) AS ticket_count,
+        (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id) AS po_count,
+        (SELECT COUNT(*) FROM daily_tickets t WHERE t.project_id=p.id AND (t.ticket_status='Pending' OR t.ticket_status IS NULL OR t.ticket_status='Reviewed') AND (t.project_archived=0 OR t.project_archived IS NULL)) AS pending_tickets,
+        (SELECT COUNT(*) FROM purchase_orders o WHERE o.project_id=p.id AND o.status='Open' AND (o.project_archived=0 OR o.project_archived IS NULL)) AS open_pos
+      FROM projects p WHERE p.status=$1 ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC`, [status]);
+
+    // Three-query aggregation for permit status across all projects
+    const ids = rows.map(p => p.id);
+    if (ids.length > 0) {
+      const [{ rows: allDocs }, { rows: allInsp }, { rows: allRecent }] = await Promise.all([
+        pool.query(`SELECT id, project_id, category FROM project_documents WHERE project_id = ANY($1)`, [ids]),
+        pool.query(`SELECT * FROM project_inspections WHERE project_id = ANY($1) ORDER BY created_at DESC`, [ids]),
+        pool.query(`SELECT project_id, COUNT(*) AS c FROM daily_tickets WHERE project_id = ANY($1) AND date >= to_char(NOW() - INTERVAL '${PERMIT_ACTIVE_TICKET_DAYS} days','YYYY-MM-DD') AND archived=0 GROUP BY project_id`, [ids]),
+      ]);
+      const docsByProject   = {};
+      const inspByProject   = {};
+      const recentByProject = {};
+      allDocs.forEach(d => { (docsByProject[d.project_id] = docsByProject[d.project_id] || []).push(d); });
+      allInsp.forEach(i => { (inspByProject[i.project_id] = inspByProject[i.project_id] || []).push(i); });
+      allRecent.forEach(r => { recentByProject[r.project_id] = parseInt(r.c); });
+      rows.forEach(p => {
+        p.permit_status = getPermitStatus(p, docsByProject[p.id] || [], inspByProject[p.id] || [], recentByProject[p.id] || 0);
+      });
+    }
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/project-folders', requireAdmin, async (req, res) => {
@@ -1342,6 +1706,20 @@ app.patch('/api/project-folders/:id/status', requireAdmin, async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
   const allowed=['active','complete','archived'];
   const status = allowed.includes(req.body.status) ? req.body.status : 'active';
+
+  // Permit archive guard — block archiving a project with an active permit notifier
+  if (status === 'archived' && rows[0].permit_required === 'yes') {
+    const [{ rows: docs }, { rows: inspections }, { rows: recent }] = await Promise.all([
+      pool.query('SELECT id, category FROM project_documents WHERE project_id=$1', [req.params.id]),
+      pool.query('SELECT * FROM project_inspections WHERE project_id=$1 ORDER BY created_at DESC', [req.params.id]),
+      pool.query(`SELECT COUNT(*) AS c FROM daily_tickets WHERE project_id=$1 AND date >= to_char(NOW() - INTERVAL '${PERMIT_ACTIVE_TICKET_DAYS} days','YYYY-MM-DD') AND archived=0`, [req.params.id]),
+    ]);
+    const permitStatus = getPermitStatus(rows[0], docs, inspections, parseInt(recent[0].c));
+    if (permitStatus !== null && permitStatus.notifier !== null) {
+      return res.status(400).json({ error: `Cannot archive: permit is still active (${permitStatus.label}). Close the permit before archiving.` });
+    }
+  }
+
   const now = new Date().toISOString();
   await pool.query('UPDATE projects SET status=$1,completed_at=$2,updated_at=$3 WHERE id=$4',
     [status, (status==='complete'||status==='archived')?now:null, now, req.params.id]);
@@ -1409,6 +1787,128 @@ app.delete('/api/project-folders/:id', requireAdmin, async (req, res) => {
   await pool.query('DELETE FROM projects WHERE id=$1',[req.params.id]);
   logAction(req,'project_deleted',null,null,`Project "${rows[0].name}" permanently deleted by ${req.user.name}`);
   res.json({ ok: true });
+});
+
+// ─────────────────────────────────────────────
+// PERMIT TRACKING
+// ─────────────────────────────────────────────
+
+const permitDocUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+// GET /api/projects/:id/permit — full permit state for a project
+app.get('/api/projects/:id/permit', requireAdmin, async (req, res) => {
+  try {
+    const { rows: pr } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    if (!pr[0]) return res.status(404).json({ error: 'Project not found' });
+    const [{ rows: docs }, { rows: inspections }, { rows: recent }] = await Promise.all([
+      pool.query('SELECT id, category, file_name, mime_type, uploaded_by, uploaded_at FROM project_documents WHERE project_id=$1 ORDER BY uploaded_at ASC', [req.params.id]),
+      pool.query('SELECT * FROM project_inspections WHERE project_id=$1 ORDER BY created_at DESC', [req.params.id]),
+      pool.query(`SELECT COUNT(*) AS c FROM daily_tickets WHERE project_id=$1 AND date >= to_char(NOW() - INTERVAL '${PERMIT_ACTIVE_TICKET_DAYS} days','YYYY-MM-DD') AND archived=0`, [req.params.id]),
+    ]);
+    const recentCount = parseInt(recent[0].c);
+    const status = getPermitStatus(pr[0], docs, inspections, recentCount);
+    res.json({ project: pr[0], documents: docs, inspections, permit_status: status });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/projects/:id/permit — update permit fields (required, number, stage, notes)
+app.patch('/api/projects/:id/permit', requireAdmin, async (req, res) => {
+  try {
+    const { rows: pr } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    if (!pr[0]) return res.status(404).json({ error: 'Project not found' });
+    const { permit_required, permit_number, permit_stage, permit_notes } = req.body;
+    const now = new Date().toISOString();
+    await pool.query(
+      `UPDATE projects SET
+        permit_required   = COALESCE($1, permit_required),
+        permit_number     = COALESCE($2, permit_number),
+        permit_stage      = COALESCE($3, permit_stage),
+        permit_notes      = COALESCE($4, permit_notes),
+        permit_updated_at = $5,
+        updated_at        = $5
+       WHERE id = $6`,
+      [permit_required ?? null, permit_number ?? null, permit_stage ?? null, permit_notes ?? null, now, req.params.id]
+    );
+    logAction(req, 'permit_updated', req.params.id, null, `Permit fields updated on project ${pr[0].name}`);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/projects/:id/permit/documents — upload a permit document (BYTEA)
+app.post('/api/projects/:id/permit/documents', requireAdmin, permitDocUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const allowed = ['permit', 'site_plan', 'rough_in_inspection'];
+    const category = req.body.category;
+    if (!allowed.includes(category)) return res.status(400).json({ error: 'Invalid document category' });
+    const now = new Date().toISOString();
+    const { rows } = await pool.query(
+      `INSERT INTO project_documents (project_id, category, file_name, mime_type, file_data, uploaded_by, uploaded_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, category, file_name, mime_type, uploaded_by, uploaded_at`,
+      [req.params.id, category, req.file.originalname, req.file.mimetype, req.file.buffer, req.user.name, now]
+    );
+    logAction(req, 'permit_doc_uploaded', req.params.id, null, `${category} document uploaded: ${req.file.originalname}`);
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/projects/permit/documents/:docId — serve a document file
+app.get('/api/projects/permit/documents/:docId', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT file_name, mime_type, file_data FROM project_documents WHERE id=$1', [req.params.docId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Document not found' });
+    const { file_name, mime_type, file_data } = rows[0];
+    res.setHeader('Content-Type', mime_type);
+    res.setHeader('Content-Disposition', `inline; filename="${file_name.replace(/"/g, '')}"`);
+    res.send(file_data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/projects/permit/documents/:docId — remove a document
+app.delete('/api/projects/permit/documents/:docId', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM project_documents WHERE id=$1 RETURNING id, project_id, category, file_name', [req.params.docId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Document not found' });
+    logAction(req, 'permit_doc_deleted', rows[0].project_id, null, `${rows[0].category} document deleted: ${rows[0].file_name}`);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/projects/:id/permit/inspections — log a new inspection record
+app.post('/api/projects/:id/permit/inspections', requireAdmin, async (req, res) => {
+  try {
+    const { inspection_type, status, notes } = req.body;
+    const allowedTypes   = ['rough_in', 'final'];
+    const allowedStatuses = ['requested', 'passed', 'failed', 'cancelled'];
+    if (!allowedTypes.includes(inspection_type))    return res.status(400).json({ error: 'Invalid inspection_type' });
+    if (!allowedStatuses.includes(status || 'requested')) return res.status(400).json({ error: 'Invalid status' });
+    const now = new Date().toISOString();
+    const { rows } = await pool.query(
+      `INSERT INTO project_inspections (project_id, inspection_type, status, requested_at, notes, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $4) RETURNING *`,
+      [req.params.id, inspection_type, status || 'requested', now, notes || null, req.user.name]
+    );
+    logAction(req, 'permit_inspection_created', req.params.id, null, `${inspection_type} inspection ${status || 'requested'}`);
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/projects/permit/inspections/:inspId — update inspection result
+app.patch('/api/projects/permit/inspections/:inspId', requireAdmin, async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    const allowedStatuses = ['requested', 'passed', 'failed', 'cancelled'];
+    if (!allowedStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const now = new Date().toISOString();
+    const { rows } = await pool.query(
+      `UPDATE project_inspections SET status=$1, result_at=$2, notes=COALESCE($3, notes)
+       WHERE id=$4 RETURNING *, project_id`,
+      [status, now, notes || null, req.params.inspId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Inspection not found' });
+    logAction(req, 'permit_inspection_updated', rows[0].project_id, null, `Inspection ${req.params.inspId} → ${status}`);
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/projects', requireAuth, async (req, res) => {

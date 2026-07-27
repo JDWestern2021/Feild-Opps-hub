@@ -176,6 +176,19 @@
       .safety-content { padding: 12px 12px 80px; }
     }
 
+    /* ── Employee profile modal — mobile bottom sheet ─────────── */
+    @media (max-width: 600px) {
+      .sf-emp-profile-backdrop {
+        align-items: flex-end !important;
+        padding: 0 !important;
+      }
+      #sf-emp-profile-inner {
+        border-radius: 20px 20px 0 0 !important;
+        max-height: 92vh !important;
+        width: 100% !important;
+      }
+    }
+
     /* ── Mobile card list (replaces table on small screens) ─── */
     @media (max-width: 600px) {
       .sf-table-wrap { overflow-x: visible; }
@@ -522,7 +535,7 @@
   <div class="mobile-bottom-nav-inner">
     <button class="mbn-tab active" id="mbn-submissions" onclick="mbnSwitch('submissions')">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z"/></svg>
-      My Forms
+      Forms
     </button>
     <button class="mbn-tab" id="mbn-drafts" onclick="mbnSwitch('drafts')">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -532,7 +545,11 @@
       <div class="mbn-new-icon">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
       </div>
-      New Form
+      New
+    </button>
+    <button class="mbn-tab" id="mbn-certs" onclick="mbnSwitch('certs')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+      Tickets
     </button>
     <button class="mbn-tab" id="mbn-sign" onclick="mbnSwitch('sign')" style="display:none;">
       <span style="position:relative;">
@@ -716,6 +733,10 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;opacity:.7;"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
           Team Tickets
         </button>
+        <button class="sf-asn-btn" data-asub="matrix" onclick="sfAdminSub('matrix',this)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;opacity:.7;"><path d="M3 3h4v4H3zm7 0h4v4h-4zm7 0h4v4h-4zM3 10h4v4H3zm7 0h4v4h-4zm7 0h4v4h-4zM3 17h4v4H3zm7 0h4v4h-4zm7 0h4v4h-4z"/></svg>
+          Cert Matrix
+        </button>
       </div>
 
       <!-- Right content area -->
@@ -724,7 +745,7 @@
         <!-- Heading (updates per selection) -->
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
           <div id="sf-admin-content-title" style="font-size:16px;font-weight:800;color:#111827;">All Submissions</div>
-          <button class="btn btn-secondary btn-sm" id="sf-certs-refresh" style="font-size:12px;display:none;" onclick="sfLoadAllCerts()">↻ Refresh</button>
+          <button class="btn btn-secondary btn-sm" id="sf-certs-refresh" style="font-size:12px;display:none;" onclick="sfLoadTeamCompliance()">↻ Refresh</button>
         </div>
 
         <!-- Submissions view -->
@@ -775,41 +796,46 @@
         <!-- Team Tickets view -->
         <div id="sf-asub-team" style="display:none;">
 
-          <!-- Team sub-tabs: Safety Forms / Certifications -->
-          <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:16px;">
-            <button id="sf-team-subtab-forms" onclick="sfTeamSubTab('forms')" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid #F47920;color:#F47920;margin-bottom:-2px;">Safety Forms</button>
-            <button id="sf-team-subtab-certs" onclick="sfTeamSubTab('certs')" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#6b7280;margin-bottom:-2px;">Certifications</button>
-          </div>
-
-          <!-- Safety Forms sub-panel -->
-          <div id="sf-team-panel-forms">
-            <input type="text" id="sf-team-forms-search" placeholder="Search worker name…" oninput="sfRenderTeamForms()" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:14px;"/>
-            <div id="sf-team-forms-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;"></div>
-          </div>
-
-          <!-- Certifications sub-panel (existing) -->
-          <div id="sf-team-panel-certs" style="display:none;">
-            <div id="sf-team-summary" style="font-size:12px;color:#6b7280;margin-bottom:14px;"></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-              <button class="sf-cert-pill active" data-status="" onclick="sfTeamFilter('',this)">All Workers</button>
-              <button class="sf-cert-pill" data-status="expired" onclick="sfTeamFilter('expired',this)" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">⚠ Expired</button>
-              <button class="sf-cert-pill" data-status="soon" onclick="sfTeamFilter('soon',this)" style="background:#fef9c3;color:#854d0e;border-color:#fde047;">⏰ Expiring Soon</button>
-              <button class="sf-cert-pill" data-status="ok" onclick="sfTeamFilter('ok',this)" style="background:#f0fdf4;color:#166534;border-color:#86efac;">✅ All Valid</button>
+          <!-- Team compliance list header — sticky on mobile -->
+          <div id="sf-team-header" style="position:sticky;top:0;z-index:10;background:#fff;padding-bottom:10px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+              <input type="text" id="sf-team-search" placeholder="Search by name…"
+                style="flex:1;min-width:160px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;box-sizing:border-box;min-height:44px;"/>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;white-space:nowrap;">
+                <input type="checkbox" id="sf-team-show-archived" onchange="sfLoadTeamCompliance()"/> Archived
+              </label>
             </div>
-            <input type="text" id="sf-team-search" placeholder="Search worker name…" oninput="sfRenderCertsAdmin()" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:14px;"/>
-            <div id="sf-certs-worker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
-            <div id="sf-certs-table-wrap" style="display:none;">
-              <div class="sf-table-wrap">
-                <table class="sf-table">
-                  <thead><tr><th>Worker</th><th>Certification</th><th>Type</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr></thead>
-                  <tbody id="sf-certs-tbody"><tr><td colspan="7" class="sf-empty">Loading…</td></tr></tbody>
-                </table>
-              </div>
+            <div style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;">
+              <button class="sf-cert-pill active" data-compliance="" onclick="sfSetComplianceFilter('',this)" style="flex-shrink:0;min-height:40px;padding:0 16px;">All</button>
+              <button class="sf-cert-pill" data-compliance="red" onclick="sfSetComplianceFilter('red',this)" style="flex-shrink:0;min-height:40px;padding:0 14px;background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔴 Attention</button>
+              <button class="sf-cert-pill" data-compliance="amber" onclick="sfSetComplianceFilter('amber',this)" style="flex-shrink:0;min-height:40px;padding:0 14px;background:#fef9c3;color:#854d0e;border-color:#fde047;">🟡 Expiring</button>
+              <button class="sf-cert-pill" data-compliance="green" onclick="sfSetComplianceFilter('green',this)" style="flex-shrink:0;min-height:40px;padding:0 14px;background:#f0fdf4;color:#166534;border-color:#86efac;">🟢 All Good</button>
             </div>
-            <select id="sf-certs-filter-worker" style="display:none;"><option value="">All Workers</option></select>
-            <select id="sf-certs-filter-status" style="display:none;"><option value="">All Statuses</option><option value="expired">Expired</option><option value="soon">Expiring ≤ 90 days</option><option value="ok">Valid</option></select>
           </div>
+          <div id="sf-team-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;"></div>
 
+        </div>
+
+        <!-- ── Cert Matrix ────────────────────────────────────────── -->
+        <div id="sf-asub-matrix" style="display:none;">
+          <!-- Bulk action bar (appears when rows selected) -->
+          <div id="sf-matrix-bulk" style="display:none;align-items:center;gap:10px;background:#1e293b;color:#fff;border-radius:8px;padding:8px 14px;margin-bottom:12px;flex-wrap:wrap;">
+            <span id="sf-matrix-bulk-count" style="font-size:13px;font-weight:700;flex:1;"></span>
+            <select id="sf-matrix-bulk-template" style="font-size:12px;border-radius:6px;padding:4px 8px;background:#334155;color:#fff;border:1px solid #475569;">
+              <option value="">Assign template…</option>
+            </select>
+            <button onclick="sfMatrixBulkTemplate()" style="font-size:12px;background:#F47920;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:700;">Apply Template</button>
+            <select id="sf-matrix-bulk-cert" style="font-size:12px;border-radius:6px;padding:4px 8px;background:#334155;color:#fff;border:1px solid #475569;">
+              <option value="">Select cert…</option>
+            </select>
+            <button onclick="sfMatrixBulkCertReq(true)"  style="font-size:12px;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-weight:700;">Set Required</button>
+            <button onclick="sfMatrixBulkCertReq(false)" style="font-size:12px;background:#9ca3af;color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-weight:700;">Set Not Required</button>
+            <button onclick="sfMatrixClearSelection()" style="font-size:12px;background:transparent;color:#9ca3af;border:none;cursor:pointer;">✕ Clear</button>
+          </div>
+          <!-- Scrollable matrix table -->
+          <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:10px;">
+            <div id="sf-matrix-table" style="min-width:600px;"></div>
+          </div>
         </div>
 
       </div><!-- /sf-admin-content -->
@@ -1221,37 +1247,51 @@
     if (tab === 'drafts')  renderDrafts();
     if (tab === 'actions') loadActions();
     if (tab === 'certs')   loadMyCerts();
+    if (tab === 'admin') {
+      // Activate first admin sub-nav item if nothing is selected
+      const activeAsn = document.querySelector('.sf-asn-btn.active');
+      if (!activeAsn) {
+        const firstBtn = document.querySelector('.sf-asn-btn');
+        if (firstBtn) sfAdminSub(firstBtn.dataset.asub, firstBtn);
+      } else {
+        const sub = activeAsn.dataset.asub;
+        if (sub === 'team') sfLoadTeamCompliance();
+        else if (sub === 'matrix') sfLoadMatrix();
+        else renderAdminForms();
+      }
+    }
     // Update bottom nav active state
     document.querySelectorAll('.mbn-tab').forEach(b => b.classList.remove('active'));
     document.getElementById('mbn-' + tab)?.classList.add('active');
   };
 
   // ── Admin sub-nav switcher ────────────────────────────────
-  let _sfAdminCertsLoaded = false;
   window.sfAdminSub = function(sub, btnEl) {
-    // Highlight active sub-nav button
     document.querySelectorAll('.sf-asn-btn').forEach(b => b.classList.remove('active'));
     if (btnEl) btnEl.classList.add('active');
 
-    // Show/hide content areas
-    const subsEl = document.getElementById('sf-asub-submissions');
-    const teamEl = document.getElementById('sf-asub-team');
+    const subsEl   = document.getElementById('sf-asub-submissions');
+    const teamEl   = document.getElementById('sf-asub-team');
+    const matrixEl = document.getElementById('sf-asub-matrix');
     const refreshBtn = document.getElementById('sf-certs-refresh');
-    const titleEl = document.getElementById('sf-admin-content-title');
+    const titleEl  = document.getElementById('sf-admin-content-title');
+
+    if (subsEl)   subsEl.style.display   = 'none';
+    if (teamEl)   teamEl.style.display   = 'none';
+    if (matrixEl) matrixEl.style.display = 'none';
+    if (refreshBtn) refreshBtn.style.display = 'none';
 
     if (sub === 'team') {
-      if (subsEl) subsEl.style.display = 'none';
       if (teamEl) teamEl.style.display = 'block';
       if (refreshBtn) refreshBtn.style.display = '';
-      if (titleEl) titleEl.textContent = 'Team Safety Tickets';
-      if (!_sfAdminCertsLoaded) { _sfAdminCertsLoaded = true; sfLoadAllCerts(); }
-      // Default to Safety Forms sub-tab
-      sfTeamSubTab('forms');
+      if (titleEl) titleEl.textContent = 'Team';
+      sfLoadTeamCompliance();
+    } else if (sub === 'matrix') {
+      if (matrixEl) matrixEl.style.display = 'block';
+      if (titleEl) titleEl.textContent = 'Certification Matrix';
+      sfLoadMatrix();
     } else {
       if (subsEl) subsEl.style.display = 'block';
-      if (teamEl) teamEl.style.display = 'none';
-      if (refreshBtn) refreshBtn.style.display = 'none';
-      // Update type filter and heading
       const typeFilter = document.getElementById('sf-admin-type');
       const isAll = sub === 'all';
       if (typeFilter) typeFilter.value = isAll ? '' : sub;
@@ -1263,17 +1303,170 @@
     }
   };
 
-  // ── Team Tickets filter pills ─────────────────────────────
-  let _sfTeamStatusFilter = '';
-  window.sfTeamFilter = function(status, btnEl) {
-    _sfTeamStatusFilter = status;
-    document.querySelectorAll('.sf-cert-pill').forEach(b => b.classList.remove('active'));
-    if (btnEl) btnEl.classList.add('active');
-    // sync hidden select for compatibility
-    const sel = document.getElementById('sf-certs-filter-status');
-    if (sel) sel.value = status;
-    sfRenderCertsAdmin();
+  // ── Cert Matrix ───────────────────────────────────────────────
+  let _sfMatrixData = null;
+  let _sfMatrixSelected = new Set();
+
+  window.sfLoadMatrix = async function() {
+    const tableEl = document.getElementById('sf-matrix-table');
+    if (!tableEl) return;
+    tableEl.innerHTML = '<div style="padding:24px;color:#9ca3af;text-align:center;">Loading…</div>';
+    try {
+      const r = await fetch('/api/cert-requirements/matrix');
+      if (!r.ok) throw new Error(await r.text());
+      _sfMatrixData = await r.json();
+      _sfMatrixSelected.clear();
+      sfRenderMatrix();
+      // populate bulk template select
+      const tsel = document.getElementById('sf-matrix-bulk-template');
+      if (tsel) {
+        tsel.innerHTML = '<option value="">Assign template…</option>' +
+          (_sfMatrixData.templates||[]).map(t=>`<option value="${t.id}">${_sfEsc(t.name)}</option>`).join('');
+      }
+      // populate bulk cert select
+      const csel = document.getElementById('sf-matrix-bulk-cert');
+      if (csel) {
+        csel.innerHTML = '<option value="">Select cert…</option>' +
+          (_sfMatrixData.catalog||[]).map(c=>`<option value="${c.id}">${_sfEsc(c.short_code)}</option>`).join('');
+      }
+    } catch(e) {
+      tableEl.innerHTML = `<div style="padding:24px;color:#991b1b;">Failed to load matrix: ${_sfEsc(String(e))}</div>`;
+    }
   };
+
+  window.sfRenderMatrix = function() {
+    const d = _sfMatrixData;
+    if (!d) return;
+    const tableEl = document.getElementById('sf-matrix-table');
+    if (!tableEl) return;
+    const { users, catalog, overrides, template_reqs } = d;
+
+    // Build lookup: override[user_id][catalog_id] = required|null
+    const ovMap = {};
+    (overrides||[]).forEach(o => { (ovMap[o.user_id]||(ovMap[o.user_id]={}))[o.catalog_id] = o.required; });
+    // Build template_req[template_id][catalog_id] = required
+    const trMap = {};
+    (template_reqs||[]).forEach(tr => { (trMap[tr.template_id]||(trMap[tr.template_id]={}))[tr.catalog_id] = tr.required; });
+
+    // Resolve: override → template → false
+    function resolve(user, catId) {
+      if (ovMap[user.id] && ovMap[user.id][catId] !== undefined) return { req: ovMap[user.id][catId], src: 'override' };
+      if (user.template_id && trMap[user.template_id] && trMap[user.template_id][catId] !== undefined) return { req: trMap[user.template_id][catId], src: 'template' };
+      return { req: false, src: 'default' };
+    }
+
+    const cols = catalog || [];
+    let html = `<table style="border-collapse:collapse;width:100%;font-size:12px;">
+      <thead><tr>
+        <th style="position:sticky;left:0;background:#f9fafb;z-index:2;padding:8px 10px;text-align:left;border-bottom:2px solid #e5e7eb;white-space:nowrap;min-width:160px;">
+          <input type="checkbox" id="sf-matrix-select-all" onchange="sfMatrixSelectAll(this.checked)" title="Select all">
+          <span style="margin-left:6px;font-weight:700;color:#374151;">Employee</span>
+        </th>`;
+    cols.forEach(c => {
+      html += `<th style="padding:6px 4px;text-align:center;border-bottom:2px solid #e5e7eb;border-left:1px solid #f3f4f6;min-width:52px;white-space:nowrap;" title="${_sfEsc(c.display_name)}">
+        <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:700;color:#6b7280;max-height:80px;overflow:hidden;">${_sfEsc(c.short_code)}</div>
+      </th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    (users||[]).forEach((u, ri) => {
+      const rowBg = ri % 2 === 0 ? '#fff' : '#fafafa';
+      const checked = _sfMatrixSelected.has(u.id) ? ' checked' : '';
+      html += `<tr>
+        <td style="position:sticky;left:0;background:${rowBg};z-index:1;padding:7px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap;">
+          <input type="checkbox" data-uid="${u.id}"${checked} onchange="sfMatrixRowCheck(${u.id},this.checked)" style="margin-right:6px;">
+          <span style="font-weight:600;color:#111827;">${_sfEsc(u.name)}</span>
+          ${u.template_name ? `<span style="font-size:10px;color:#9ca3af;margin-left:4px;">${_sfEsc(u.template_name)}</span>` : ''}
+        </td>`;
+      cols.forEach(c => {
+        const { req, src } = resolve(u, c.id);
+        let bg, title, icon;
+        if (src === 'override' && req)  { bg='#F47920'; icon='●'; title='Required (override)'; }
+        else if (src === 'override' && !req) { bg='#fff3e0'; icon='✕'; title='Not required (override)'; }
+        else if (src === 'template' && req)  { bg='#6b7280'; icon='●'; title='Required (template)'; }
+        else { bg='transparent'; icon=''; title='Not required'; }
+        const textClr = (src==='override'&&!req) ? '#e65100' : '#fff';
+        html += `<td style="text-align:center;border-bottom:1px solid #f3f4f6;border-left:1px solid #f3f4f6;padding:4px 2px;cursor:pointer;" title="${title}" onclick="sfMatrixCellClick(${u.id},${c.id})">
+          <div style="width:32px;height:28px;margin:auto;border-radius:5px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:${textClr};border:${bg==='transparent'?'1px dashed #d1d5db':'none'};">${icon}</div>
+        </td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    tableEl.innerHTML = html;
+    sfMatrixUpdateBulkBar();
+  };
+
+  window.sfMatrixCellClick = async function(userId, catalogId) {
+    if (!_sfMatrixData) return;
+    const u = (_sfMatrixData.users||[]).find(u=>u.id===userId);
+    const ovMap = {};
+    (_sfMatrixData.overrides||[]).forEach(o=>{(ovMap[o.user_id]||(ovMap[o.user_id]={}))[o.catalog_id]=o.required;});
+    const trMap = {};
+    (_sfMatrixData.template_reqs||[]).forEach(tr=>{(trMap[tr.template_id]||(trMap[tr.template_id]={}))[tr.catalog_id]=tr.required;});
+
+    const hasOverride = ovMap[userId] && ovMap[userId][catalogId] !== undefined;
+    const currentReq = hasOverride ? ovMap[userId][catalogId]
+      : (u?.template_id && trMap[u.template_id] && trMap[u.template_id][catalogId] !== undefined ? trMap[u.template_id][catalogId] : false);
+
+    if (hasOverride) {
+      // cycle: override-req → override-not-req → clear override
+      if (currentReq) {
+        await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({required:false})});
+      } else {
+        await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {method:'DELETE'});
+      }
+    } else {
+      // no override: set required override
+      await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({required:!currentReq})});
+    }
+    await sfLoadMatrix();
+  };
+
+  window.sfMatrixRowCheck = function(uid, checked) {
+    if (checked) _sfMatrixSelected.add(uid); else _sfMatrixSelected.delete(uid);
+    sfMatrixUpdateBulkBar();
+  };
+  window.sfMatrixSelectAll = function(checked) {
+    (_sfMatrixData?.users||[]).forEach(u => checked ? _sfMatrixSelected.add(u.id) : _sfMatrixSelected.delete(u.id));
+    sfRenderMatrix();
+  };
+  window.sfMatrixClearSelection = function() {
+    _sfMatrixSelected.clear();
+    sfRenderMatrix();
+  };
+  window.sfMatrixUpdateBulkBar = function() {
+    const bar = document.getElementById('sf-matrix-bulk');
+    const cnt = document.getElementById('sf-matrix-bulk-count');
+    if (!bar) return;
+    const n = _sfMatrixSelected.size;
+    if (n > 0) { bar.style.display='flex'; if(cnt) cnt.textContent = n+' employee'+(n>1?'s':'')+' selected'; }
+    else        { bar.style.display='none'; }
+  };
+
+  window.sfMatrixBulkTemplate = async function() {
+    const tsel = document.getElementById('sf-matrix-bulk-template');
+    const tid = tsel?.value;
+    if (!tid || !_sfMatrixSelected.size) { alert('Select employees and a template.'); return; }
+    await fetch('/api/cert-requirements/bulk/template', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ user_ids: [..._sfMatrixSelected], template_id: parseInt(tid) })
+    });
+    await sfLoadMatrix();
+  };
+
+  window.sfMatrixBulkCertReq = async function(required) {
+    const csel = document.getElementById('sf-matrix-bulk-cert');
+    const cid = csel?.value;
+    if (!cid || !_sfMatrixSelected.size) { alert('Select employees and a certification.'); return; }
+    await fetch('/api/cert-requirements/bulk/cert', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ user_ids: [..._sfMatrixSelected], catalog_id: parseInt(cid), required })
+    });
+    await sfLoadMatrix();
+  };
+
+  // sfTeamFilter removed — replaced by sfSetComplianceFilter
 
   // ── Form-type sidebar filter ───────────────────────────────
   window.filterByFormType = function(type, btnEl) {
@@ -1591,7 +1784,10 @@
         <td>${Safety.fmtDate(r.date)}</td>
         <td style="font-size:.8rem;">${r.project_name || '—'}</td>
         <td><span class="sf-chip ${r.status === 'Draft' ? 'sf-chip-draft' : 'sf-chip-submitted'}">${r.status}</span></td>
-        <td style="font-size:.8rem;">${r.psi_flag ? '🔴 PSI' : ''}${r.wcb_flag ? '⚠️ WCB' : ''}</td>
+        <td onclick="event.stopPropagation()" style="white-space:nowrap;">
+          <button onclick="sfToggleFlag(${r.id},'psi',${!r.psi_flag})" title="Toggle PSI flag" style="font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;border:none;cursor:pointer;min-height:36px;${r.psi_flag ? 'background:#fee2e2;color:#991b1b;' : 'background:#f3f4f6;color:#9ca3af;'}">🔴 PSI</button>
+          <button onclick="sfToggleFlag(${r.id},'wcb',${!r.wcb_flag})" title="Toggle WCB flag" style="font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;border:none;cursor:pointer;min-height:36px;margin-left:4px;${r.wcb_flag ? 'background:#fef9c3;color:#854d0e;' : 'background:#f3f4f6;color:#9ca3af;'}">⚠️ WCB</button>
+        </td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;" onclick="event.stopPropagation()">
           ${url ? `<a href="${url}" class="sf-link-btn">Open ↗</a>` : '<span style="font-size:11px;color:#9ca3af;">No form</span>'}
           <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="sfAdminArchiveOne(${r.id})">📦</button>
@@ -1601,6 +1797,18 @@
     }).join('');
     sfUpdateBulkBar();
   }
+
+  window.sfToggleFlag = async function(id, flag, value) {
+    try {
+      await fetch(`/api/safety/${id}/flags`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(flag === 'psi' ? { psi_flag: value } : { wcb_flag: value })
+      });
+      const rec = _adminForms.find(f => f.id === id);
+      if (rec) { if (flag === 'psi') rec.psi_flag = value; else rec.wcb_flag = value; }
+      renderAdminForms();
+    } catch { Safety.toast('Failed to update flag','error'); }
+  };
 
   // ── Bulk select helpers ──────────────────────────────────────
   function sfGetCheckedIds() {
@@ -2473,334 +2681,107 @@
 
   function sfFmtDate(d) { if (!d) return '—'; return new Date(d+'T00:00:00').toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'}); }
 
-  async function sfLoadAllCerts() {
-    const grid = document.getElementById('sf-certs-worker-grid');
-    if (grid) grid.innerHTML = '<div style="grid-column:1/-1;color:#9ca3af;font-size:13px;padding:32px 0;text-align:center;">Loading…</div>';
+  let _sfComplianceFilter = '';
+  let _sfTeamEmployees = [];
+
+  async function sfLoadTeamCompliance() {
+    const list = document.getElementById('sf-team-list');
+    if (!list) return;
+    list.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:32px 0;text-align:center;grid-column:1/-1;">Loading…</p>';
     try {
-      const _r = await fetch('/api/certifications/all');
-      if (!_r.ok) throw new Error('Server returned ' + _r.status);
-      _sfAllCerts = await _r.json();
-      if (!Array.isArray(_sfAllCerts)) throw new Error('Unexpected response');
-      const workers = [...new Map(_sfAllCerts.map(c => [c.user_id, c.user_name])).entries()];
-      const sel = document.getElementById('sf-certs-filter-worker');
-      if (sel) sel.innerHTML = '<option value="">All Workers</option>' + workers.map(([id,name]) => `<option value="${id}">${_sfEsc(name)}</option>`).join('');
-      sfRenderCertsAdmin();
-    } catch { if (grid) grid.innerHTML = '<div style="grid-column:1/-1;color:#dc2626;font-size:13px;padding:32px 0;text-align:center;">Failed to load certifications.</div>'; }
+      const showArchived = (document.getElementById('sf-team-show-archived')||{}).checked ? '1' : '0';
+      const data = await fetch(`/api/employees?include_archived=${showArchived}`).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+      sfRenderTeamList(Array.isArray(data) ? data : (data.employees || []));
+    } catch {
+      if (list) list.innerHTML = '<p style="color:#dc2626;font-size:13px;grid-column:1/-1;">Failed to load team.</p>';
+    }
   }
 
-  function sfRenderCertsAdmin() {
-    const statusF = _sfTeamStatusFilter || (document.getElementById('sf-certs-filter-status')||{}).value || '';
-    const searchQ = (document.getElementById('sf-team-search')||{}).value?.toLowerCase() || '';
-    const grid = document.getElementById('sf-certs-worker-grid');
-    const tableWrap = document.getElementById('sf-certs-table-wrap');
-    if (!grid) return;
-
-    // Build per-worker map
-    const byWorker = new Map();
-    _sfAllCerts.forEach(c => {
-      if (!byWorker.has(c.user_id)) byWorker.set(c.user_id, { name: c.user_name, certs: [] });
-      byWorker.get(c.user_id).certs.push(c);
-    });
-
-    // Update summary line
-    const totalWorkers = byWorker.size;
-    const workersWithExpired = [...byWorker.values()].filter(w => w.certs.some(c => sfCertStatus(c.expiry_date).key === 'expired')).length;
-    const workersWithSoon   = [...byWorker.values()].filter(w => w.certs.some(c => sfCertStatus(c.expiry_date).key === 'soon') && !w.certs.some(c => sfCertStatus(c.expiry_date).key === 'expired')).length;
-    const sumEl = document.getElementById('sf-team-summary');
-    if (sumEl) {
-      sumEl.innerHTML = `${totalWorkers} worker${totalWorkers!==1?'s':''} · `
-        + (workersWithExpired ? `<span style="color:#991b1b;font-weight:700;">⚠ ${workersWithExpired} with expired tickets</span> · ` : '')
-        + (workersWithSoon ? `<span style="color:#854d0e;font-weight:700;">⏰ ${workersWithSoon} expiring soon</span> · ` : '')
-        + `<span style="color:#166534;font-weight:700;">${totalWorkers - workersWithExpired - workersWithSoon} all valid</span>`;
-    }
-
-    // Filter by status pill and search
-    let entries = [...byWorker.entries()];
-    if (searchQ) entries = entries.filter(([, w]) => w.name?.toLowerCase().includes(searchQ));
-    if (statusF) {
-      entries = entries.filter(([, w]) => {
-        const statuses = w.certs.map(c => sfCertStatus(c.expiry_date).key);
-        if (statusF === 'expired') return statuses.includes('expired');
-        if (statusF === 'soon')    return !statuses.includes('expired') && statuses.includes('soon');
-        if (statusF === 'ok')      return !statuses.includes('expired') && !statuses.includes('soon');
-        return true;
-      });
-    }
-
-    if (!entries.length) {
-      grid.innerHTML = `<div style="grid-column:1/-1;color:#9ca3af;font-size:13px;padding:32px 0;text-align:center;">${searchQ || statusF ? 'No workers match the current filter.' : 'No certifications uploaded yet.'}</div>`;
-      grid.style.display = 'grid';
-      if (tableWrap) tableWrap.style.display = 'none';
+  function sfRenderTeamList(employees) {
+    _sfTeamEmployees = employees;
+    const list = document.getElementById('sf-team-list');
+    if (!list) return;
+    const q = ((document.getElementById('sf-team-search')||{}).value || '').toLowerCase();
+    let rows = employees;
+    if (_sfComplianceFilter) rows = rows.filter(e => e.compliance === _sfComplianceFilter);
+    if (q) rows = rows.filter(e => (e.name||'').toLowerCase().includes(q) || (e.email||'').toLowerCase().includes(q));
+    if (!rows.length) {
+      list.innerHTML = '<p style="color:#9ca3af;font-size:13px;grid-column:1/-1;padding:32px 0;text-align:center;">No employees match this filter.</p>';
       return;
     }
-
-    // Sort: expired first, then soon, then ok
-    entries.sort(([,a],[,b]) => {
-      const rank = w => w.certs.some(c=>sfCertStatus(c.expiry_date).key==='expired') ? 0 : w.certs.some(c=>sfCertStatus(c.expiry_date).key==='soon') ? 1 : 2;
-      return rank(a) - rank(b);
-    });
-
-    grid.innerHTML = entries.map(([uid, w]) => {
-      const expN  = w.certs.filter(c => sfCertStatus(c.expiry_date).key === 'expired').length;
-      const soonN = w.certs.filter(c => sfCertStatus(c.expiry_date).key === 'soon').length;
-      const statusClass = expN ? 'status-expired' : soonN ? 'status-soon' : 'status-ok';
-      const statusBadge = expN
-        ? `<span style="font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;padding:3px 9px;border-radius:20px;">⚠ ${expN} expired</span>`
-        : soonN
-        ? `<span style="font-size:11px;font-weight:700;background:#fef9c3;color:#854d0e;padding:3px 9px;border-radius:20px;">⏰ ${soonN} expiring soon</span>`
-        : `<span style="font-size:11px;font-weight:700;background:#dcfce7;color:#166534;padding:3px 9px;border-radius:20px;">✅ All valid</span>`;
-      const initials = (w.name||'?').split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
-      const avatarBg = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'][uid % 7];
-      return `<div class="sf-worker-card ${statusClass}" onclick="sfOpenWorkerProfile(${uid})">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <div style="width:38px;height:38px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;">${initials}</div>
-          <div style="min-width:0;">
-            <div style="font-size:14px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_sfEsc(w.name||'')}</div>
-            <div style="font-size:11px;color:#9ca3af;">${w.certs.length} ticket${w.certs.length!==1?'s':''}</div>
+    const COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
+    list.innerHTML = rows.map(e => {
+      const initials = (e.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
+      const avatarBg = COLORS[e.id % COLORS.length];
+      // Color + shape so it's readable in sunlight, not colour alone
+      const badge = e.compliance === 'red'
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#991b1b;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:800;"><svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,1 9,9 1,9" fill="#991b1b"/></svg>Attention</span>'
+        : e.compliance === 'amber'
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;background:#fef9c3;color:#854d0e;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:800;"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="2" fill="#854d0e"/></svg>Expiring</span>'
+        : e.compliance === 'green'
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:800;"><svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#166534"/></svg>Compliant</span>'
+        : '<span style="display:inline-flex;align-items:center;gap:4px;background:#f3f4f6;color:#9ca3af;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;">No reqs</span>';
+      const archBadge = e.archived ? '<span style="font-size:10px;background:#f3f4f6;color:#6b7280;border-radius:8px;padding:1px 6px;font-weight:700;">Archived</span>' : '';
+      const missing = e.missing || 0;
+      const missingStr = missing > 0 ? `<span style="font-size:11px;color:#991b1b;font-weight:700;">${missing} cert${missing>1?'s':''} missing</span>` : '';
+      return `<div class="sf-worker-card" style="cursor:pointer;" data-emp-id="${e.id}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0;">${_sfEsc(initials)}</div>
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:15px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_sfEsc(e.name||'')}</div>
+            <div style="font-size:11px;color:#9ca3af;">${_sfEsc(e.role||'Field User')}</div>
           </div>
         </div>
-        ${statusBadge}
-        <div style="margin-top:10px;">
-          <button class="btn btn-secondary btn-sm" style="font-size:11px;width:100%;" onclick="event.stopPropagation();sfOpenWorkerProfile(${uid})">View Tickets →</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+          ${badge}
+          ${missingStr}
+          ${archBadge}
         </div>
+        <button class="btn btn-secondary btn-sm" style="font-size:13px;width:100%;min-height:44px;">View Profile →</button>
       </div>`;
     }).join('');
-    grid.style.display = 'grid';
-    if (tableWrap) tableWrap.style.display = 'none';
+    list.querySelectorAll('[data-emp-id]').forEach(card => {
+      card.addEventListener('click', () => openEmployeeProfile(Number(card.dataset.empId)));
+    });
   }
 
-  async function sfDeleteCert(certId, userId) {
-    if (!confirm('Delete this certification? This cannot be undone.')) return;
-    try {
-      const res = await fetch(`/api/certifications/${certId}`, { method:'DELETE' });
-      if (!res.ok) throw new Error();
-      _sfAllCerts = _sfAllCerts.filter(c => c.id !== certId);
-      sfRenderCertsAdmin();
-    } catch { alert('Delete failed — please try again.'); }
-  }
+  window.sfSetComplianceFilter = function(state, btn) {
+    _sfComplianceFilter = state;
+    document.querySelectorAll('.sf-cert-pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    sfRenderTeamList(_sfTeamEmployees);
+  };
 
-  window.sfOpenWorkerProfile = function sfOpenWorkerProfile(userId) {
-    const certs = _sfAllCerts.filter(c => c.user_id === userId);
-    if (!certs.length) return;
-    const workerName = certs[0].user_name;
-
-    const existing = document.getElementById('sf-worker-profile-modal');
+  // ── Employee Profile Modal ────────────────────────────────────
+  window.openEmployeeProfile = async function(userId) {
+    const existing = document.getElementById('sf-emp-profile-modal');
     if (existing) existing.remove();
 
     const modal = document.createElement('div');
-    modal.id = 'sf-worker-profile-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
-
-    const expiredN = certs.filter(c => sfCertStatus(c.expiry_date).key === 'expired').length;
-    const soonN    = certs.filter(c => sfCertStatus(c.expiry_date).key === 'soon').length;
-    const summary  = [certs.length+' ticket'+(certs.length!==1?'s':''), expiredN?expiredN+' expired':'', soonN?soonN+' expiring soon':''].filter(Boolean).join(' · ');
-
-    function certCard(c) {
-      const st = sfCertStatus(c.expiry_date);
-      return `<label id="sf-wpm-label-${c.id}" style="display:flex;align-items:flex-start;gap:10px;padding:11px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;cursor:pointer;background:#fff;">
-        <input type="checkbox" class="sf-wpm-cb" data-id="${c.id}" checked style="width:15px;height:15px;margin-top:3px;accent-color:#F47920;flex-shrink:0;" onchange="sfWpmUpdateCount()"/>
-        <div style="font-size:20px;flex-shrink:0;">${SF_CERT_ICONS[c.cert_type]||'📋'}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:700;color:#111827;">${_sfEsc(c.cert_name||'')}</div>
-          <div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;margin-top:1px;">${SF_CERT_TYPE_LABELS[c.cert_type]||c.cert_type}</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:3px;">
-            ${c.issued_date?'Issued: <strong>'+sfFmtDate(c.issued_date)+'</strong>':''}
-            ${c.issued_date&&c.expiry_date?' · ':''}
-            ${c.expiry_date?'Expires: <strong>'+sfFmtDate(c.expiry_date)+'</strong>':''}
-          </div>
-          <span style="display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:2px 8px;margin-top:3px;${st.cls}">${st.label}</span>
-          <button onclick="event.preventDefault();event.stopPropagation();sfDeleteCertFromProfile(${c.id},${userId})" style="display:block;margin-top:6px;background:none;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700;cursor:pointer;">🗑 Delete</button>
-        </div>
-      </label>`;
-    }
-
-    modal.innerHTML = `<div style="background:#fff;border-radius:14px;width:100%;max-width:600px;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:auto;">
-      <div style="padding:16px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-        <div>
-          <div style="font-size:16px;font-weight:800;color:#111827;">${_sfEsc(workerName)}</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:2px;">${summary}</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-          <button id="sf-wpm-export-btn" class="btn btn-primary btn-sm" style="background:#F47920;">⬇ Export PDF</button>
-          <button onclick="document.getElementById('sf-worker-profile-modal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1;">✕</button>
-        </div>
-      </div>
-      <div style="padding:10px 18px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
-          <input type="checkbox" id="sf-wpm-select-all" checked style="width:14px;height:14px;accent-color:#F47920;"/> Select All
-        </label>
-        <span id="sf-wpm-sel-count" style="font-size:12px;color:#6b7280;">${certs.length} of ${certs.length} selected</span>
-      </div>
-      <div style="padding:12px 18px;max-height:60vh;overflow-y:auto;" id="sf-wpm-cert-list">
-        ${certs.map(certCard).join('')}
-      </div>
-    </div>`;
-
+    modal.id = 'sf-emp-profile-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;overflow:hidden;';
+    modal.className = 'sf-emp-profile-backdrop';
+    modal.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:700px;margin:auto;padding:40px;text-align:center;color:#9ca3af;font-size:14px;">Loading profile…</div>';
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
 
-    document.getElementById('sf-wpm-select-all').onchange = function() {
-      document.querySelectorAll('.sf-wpm-cb').forEach(cb => cb.checked = this.checked);
-      sfWpmUpdateCount();
-    };
-    document.getElementById('sf-wpm-export-btn').onclick = () => sfExportWorkerPDF(userId, workerName);
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  };
-
-  window.sfWpmUpdateCount = function() {
-    const all = document.querySelectorAll('.sf-wpm-cb');
-    const sel = document.querySelectorAll('.sf-wpm-cb:checked');
-    const countEl = document.getElementById('sf-wpm-sel-count');
-    const allCb = document.getElementById('sf-wpm-select-all');
-    if (countEl) countEl.textContent = `${sel.length} of ${all.length} selected`;
-    if (allCb) { allCb.checked = sel.length === all.length; allCb.indeterminate = sel.length > 0 && sel.length < all.length; }
-  };
-
-  window.sfDeleteCertFromProfile = async function(certId, userId) {
-    if (!confirm('Delete this certification? This cannot be undone.')) return;
+    let profile;
     try {
-      const res = await fetch(`/api/certifications/${certId}`, { method:'DELETE' });
-      if (!res.ok) throw new Error();
-      _sfAllCerts = _sfAllCerts.filter(c => c.id !== certId);
-      const remaining = _sfAllCerts.filter(c => c.user_id === userId);
-      const modal = document.getElementById('sf-worker-profile-modal');
-      if (modal) modal.remove();
-      sfRenderCertsAdmin();
-      if (remaining.length) sfOpenWorkerProfile(userId);
-    } catch { alert('Delete failed — please try again.'); }
-  };
-
-  async function sfExportWorkerPDF(userId, workerName) {
-    const selectedIds = new Set([...document.querySelectorAll('.sf-wpm-cb:checked')].map(cb => Number(cb.dataset.id)));
-    if (!selectedIds.size) { alert('Select at least one ticket to export.'); return; }
-    const certs = _sfAllCerts.filter(c => c.user_id === userId && selectedIds.has(c.id));
-    const btn = document.getElementById('sf-wpm-export-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
-
-    const photoMap = {};
-    await Promise.all(certs.map(async c => {
-      try {
-        const res = await fetch(`/api/certifications/${c.id}/photo`);
-        if (res.ok) { const blob = await res.blob(); photoMap[c.id] = await new Promise(resolve => { const r=new FileReader(); r.onload=e=>resolve(e.target.result); r.readAsDataURL(blob); }); }
-      } catch {}
-    }));
-
-    if (btn) { btn.disabled = false; btn.textContent = '⬇ Export PDF'; }
-
-    const today = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
-    const certPages = certs.map(c => {
-      const st = sfCertStatus(c.expiry_date);
-      const statusColor = st.key==='expired'?'#991b1b':st.key==='soon'?'#854d0e':'#166534';
-      const statusBg    = st.key==='expired'?'#fee2e2':st.key==='soon'?'#fef9c3':'#dcfce7';
-      const photo = photoMap[c.id] ? `<div style="text-align:center;margin:18px 0;"><img src="${photoMap[c.id]}" style="max-width:100%;max-height:300px;border-radius:8px;border:1px solid #e5e7eb;object-fit:contain;" alt=""/></div>` : '<div style="text-align:center;padding:36px;color:#9ca3af;border:2px dashed #e5e7eb;border-radius:8px;margin:18px 0;font-size:13px;">No photo on file</div>';
-      return `<div class="cert-page">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-          <div style="font-size:36px;">${SF_CERT_ICONS[c.cert_type]||'📋'}</div>
-          <div>
-            <div style="font-size:20px;font-weight:800;color:#111827;">${_sfEsc(c.cert_name||'')}</div>
-            <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">${SF_CERT_TYPE_LABELS[c.cert_type]||c.cert_type}</div>
-          </div>
-          <div style="margin-left:auto;background:${statusBg};color:${statusColor};font-size:12px;font-weight:800;padding:5px 12px;border-radius:20px;">${st.label}</div>
-        </div>
-        ${photo}
-        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;">
-          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;width:120px;">Holder</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(workerName)}</td></tr>
-          ${c.issued_date?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Issued</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${sfFmtDate(c.issued_date)}</td></tr>`:''}
-          ${c.expiry_date?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Expires</td><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;color:${statusColor};">${sfFmtDate(c.expiry_date)}</td></tr>`:''}
-          ${c.notes?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Notes</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(c.notes)}</td></tr>`:''}
-        </table>
-      </div>`;
-    }).join('');
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${_sfEsc(workerName)} — Safety Tickets</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;background:#fff;color:#111827;}.cover{padding:40px 36px 28px;border-bottom:3px solid #F47920;}.cert-page{padding:28px 36px;border-bottom:2px dashed #e5e7eb;page-break-inside:avoid;}.cert-page:last-child{border-bottom:none;}@media print{.cert-page{page-break-after:always;}.cert-page:last-child{page-break-after:avoid;}.no-print{display:none!important;}}.print-btn{position:fixed;bottom:20px;right:20px;background:#F47920;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);}</style>
-</head><body>
-<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
-<div class="cover"><div style="font-size:12px;color:#F47920;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">J&amp;D Western Electric — Safety Certifications</div><div style="font-size:24px;font-weight:900;color:#111827;margin-bottom:4px;">${_sfEsc(workerName)}</div><div style="font-size:13px;color:#6b7280;">${certs.length} ticket${certs.length!==1?'s':''} · Generated ${today}</div></div>
-${certPages}
-</body></html>`;
-
-    const win = window.open('','_blank');
-    win.document.write(html);
-    win.document.close();
-  }
-
-  // ── Team Tickets: sub-tab switcher ────────────────────────────
-  window.sfTeamSubTab = function(tab) {
-    const formsPanel = document.getElementById('sf-team-panel-forms');
-    const certsPanel = document.getElementById('sf-team-panel-certs');
-    const formsBtn   = document.getElementById('sf-team-subtab-forms');
-    const certsBtn   = document.getElementById('sf-team-subtab-certs');
-    if (!formsPanel) return;
-    if (tab === 'forms') {
-      formsPanel.style.display = '';
-      certsPanel.style.display = 'none';
-      formsBtn.style.borderBottomColor = '#F47920';
-      formsBtn.style.color = '#F47920';
-      certsBtn.style.borderBottomColor = 'transparent';
-      certsBtn.style.color = '#6b7280';
-      sfRenderTeamForms();
-    } else {
-      formsPanel.style.display = 'none';
-      certsPanel.style.display = '';
-      certsBtn.style.borderBottomColor = '#F47920';
-      certsBtn.style.color = '#F47920';
-      formsBtn.style.borderBottomColor = 'transparent';
-      formsBtn.style.color = '#6b7280';
-      sfRenderCertsAdmin();
-    }
-  };
-
-  // ── Team Tickets: safety forms by worker ──────────────────────
-  function sfRenderTeamForms() {
-    const grid = document.getElementById('sf-team-forms-grid');
-    if (!grid) return;
-    const q = (document.getElementById('sf-team-forms-search')?.value || '').toLowerCase();
-
-    // Group _adminForms by submitted_by name
-    const byWorker = {};
-    (_adminForms || []).forEach(f => {
-      const name = f.submitted_by || 'Unknown';
-      if (!byWorker[name]) byWorker[name] = [];
-      byWorker[name].push(f);
-    });
-
-    let workers = Object.entries(byWorker);
-    if (q) workers = workers.filter(([name]) => name.toLowerCase().includes(q));
-    workers.sort((a, b) => a[0].localeCompare(b[0]));
-
-    if (!workers.length) {
-      grid.innerHTML = '<p style="color:#6b7280;font-size:13px;">No safety form submissions found.</p>';
+      const res = await fetch(`/api/employees/${userId}/profile`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      profile = await res.json();
+    } catch(err) {
+      modal.querySelector('div').innerHTML = `<div style="color:#dc2626;font-size:14px;margin-bottom:16px;">Failed to load profile. ${_sfEsc(err.message)}</div><button onclick="document.getElementById('sf-emp-profile-modal').remove()" style="background:#f3f4f6;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px;">Close</button>`;
       return;
     }
 
-    grid.innerHTML = workers.map(([name, forms]) => {
-      const psi  = forms.filter(f => f.psi_flag).length;
-      const wcb  = forms.filter(f => f.wcb_flag).length;
-      const badge = psi  ? `<span style="background:#fee2e2;color:#991b1b;border-radius:10px;padding:2px 7px;font-size:10px;font-weight:700;">⚠ PSI×${psi}</span>` :
-                    wcb  ? `<span style="background:#fef9c3;color:#854d0e;border-radius:10px;padding:2px 7px;font-size:10px;font-weight:700;">WCB×${wcb}</span>` : '';
-      const initials = name.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
-      // data-worker-name avoids JS-in-HTML-attribute quote collisions; delegated listener below
-      return `<div class="sf-worker-card" style="cursor:pointer;" data-worker-name="${_sfEsc(name)}">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <div style="width:40px;height:40px;border-radius:50%;background:#F47920;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;">${initials}</div>
-          <div style="min-width:0;">
-            <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_sfEsc(name)}</div>
-            <div style="font-size:12px;color:#6b7280;">${forms.length} form${forms.length!==1?'s':''} submitted</div>
-          </div>
-        </div>
-        ${badge ? `<div style="margin-bottom:6px;">${badge}</div>` : ''}
-        <button class="btn btn-secondary btn-sm sf-view-forms-btn" style="font-size:11px;width:100%;">View Forms →</button>
-      </div>`;
-    }).join('');
-
-    // Delegated click handler — reads name from data attribute, no JS embedded in HTML
-    grid.querySelectorAll('[data-worker-name]').forEach(card => {
-      card.addEventListener('click', () => sfOpenWorkerForms(card.dataset.workerName));
-    });
-  }
-
-  window.sfOpenWorkerForms = function(workerName) {
-    const forms = (_adminForms || []).filter(f => (f.submitted_by || 'Unknown') === workerName);
+    const { user, certs, forms, templates } = profile;
+    const warningDays = profile.warning_days || 60;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const warnMs = warningDays * 86400000;
     const FORM_LABELS = {
       hazard_assessment:'Hazard Assessment (FLHA)', fall_protection:'Fall Protection', aerial_lift:'Aerial / EWP',
       maint_vehicle:'Truck Inspection', safety_meeting:'Safety Meeting', erp:'Emergency Response Plan',
@@ -2808,130 +2789,171 @@ ${certPages}
       ojt_record:'OJT Record', emergency_review:'Emergency Review'
     };
 
-    const initials = workerName.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
-    const rows = forms.map((f,i) => {
+    // Required certs for this employee (resolved)
+    const reqCerts = (certs || []).filter(c => c.is_required);
+    let missingN = 0, expiredN = 0, expiringN = 0, validN = 0;
+    reqCerts.forEach(c => {
+      if (!c.cert_id) { missingN++; return; }
+      if (c.expires === false) { validN++; return; }
+      if (!c.expiry_date) { missingN++; return; }
+      const d = new Date(c.expiry_date + 'T00:00:00');
+      if (d < today) { expiredN++; return; }
+      if (d - today <= warnMs) { expiringN++; return; }
+      validN++;
+    });
+    const rollup = (missingN + expiredN > 0) ? 'red' : expiringN > 0 ? 'amber' : reqCerts.length ? 'green' : 'grey';
+    const rollupIcon  = rollup === 'red' ? '🔴' : rollup === 'amber' ? '🟡' : rollup === 'green' ? '🟢' : '⚪';
+    const rollupLabel = rollup === 'red' ? 'Needs Attention' : rollup === 'amber' ? 'Expiring Soon' : rollup === 'green' ? 'Compliant' : 'No Requirements Set';
+    const rollupColor = rollup === 'red' ? '#991b1b' : rollup === 'amber' ? '#854d0e' : rollup === 'green' ? '#166534' : '#6b7280';
+    const rollupBg    = rollup === 'red' ? '#fee2e2' : rollup === 'amber' ? '#fef9c3' : rollup === 'green' ? '#dcfce7' : '#f9fafb';
+
+    const initials = (user.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
+    const archBadge = user.archived ? ' <span style="background:#f3f4f6;color:#6b7280;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;">Archived</span>' : '';
+
+    function certStatusLabel(c) {
+      if (!c.cert_id) return { label:'Missing', bg:'#fee2e2', clr:'#991b1b' };
+      if (c.expires === false) return { label:'Valid (no expiry)', bg:'#dcfce7', clr:'#166534' };
+      if (!c.expiry_date) return { label:'Missing', bg:'#fee2e2', clr:'#991b1b' };
+      const d = new Date(c.expiry_date + 'T00:00:00');
+      if (d < today) return { label:'⚠ Expired '+new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA'), bg:'#fee2e2', clr:'#991b1b' };
+      if (d - today <= warnMs) return { label:'Expires '+new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA'), bg:'#fef9c3', clr:'#854d0e' };
+      return { label:'Valid — exp. '+new Date(c.expiry_date+'T00:00:00').toLocaleDateString('en-CA'), bg:'#dcfce7', clr:'#166534' };
+    }
+
+    function reqSourceBadge(c) {
+      if (c.requirement_source === 'override') return `<span style="font-size:10px;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;border-radius:6px;padding:1px 6px;font-weight:700;cursor:pointer;" onclick="empClearOverride(${userId},${c.catalog_id})" title="Override — click to inherit from template">Override ×</span>`;
+      if (c.requirement_source === 'template') return `<span style="font-size:10px;background:#f3f4f6;color:#6b7280;border-radius:6px;padding:1px 6px;">Template</span>`;
+      return `<span style="font-size:10px;background:#f3f4f6;color:#9ca3af;border-radius:6px;padding:1px 6px;">Default</span>`;
+    }
+
+    function certRow(c) {
+      const sl = c.is_required ? certStatusLabel(c) : { label:'Not Required', bg:'#f3f4f6', clr:'#9ca3af' };
+      const toggleLabel = c.is_required ? 'Set Not Required' : 'Set Required';
+      const toggleFn = c.is_required
+        ? `empSetReq(${userId},${c.catalog_id},false)`
+        : `empSetReq(${userId},${c.catalog_id},true)`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f3f4f6;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#111827;">${_sfEsc(c.display_name||'')}</div>
+          <div style="margin-top:3px;">${reqSourceBadge(c)}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;border-radius:20px;padding:2px 10px;white-space:nowrap;background:${sl.bg};color:${sl.clr};flex-shrink:0;">${sl.label}</span>
+        <button onclick="${toggleFn}" style="flex-shrink:0;font-size:11px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 8px;cursor:pointer;color:#374151;">${toggleLabel}</button>
+      </div>`;
+    }
+
+    const allCertRows = (certs || []).map(certRow).join('') || '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No certifications in catalog.</div>';
+
+    const formRows = (forms||[]).map(f => {
       const label = FORM_LABELS[f.form_type] || f.form_type;
       const date  = f.date ? new Date(f.date).toLocaleDateString('en-CA') : '—';
-      const psiWcb = [f.psi_flag?'<span style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">PSI</span>':'',
-                      f.wcb_flag?'<span style="background:#fef9c3;color:#854d0e;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">WCB</span>':''].filter(Boolean).join(' ');
-      return `<tr>
-        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;"><input type="checkbox" class="sf-wf-cb" data-idx="${i}" checked></td>
-        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:13px;">${_sfEsc(label)}</td>
-        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;">${f.form_number||'—'}</td>
-        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;">${date}</td>
-        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;">${_sfEsc(f.project_name||'—')}</td>
-        <td style="padding:8px 6px;border-bottom:1px solid #f3f4f6;">${psiWcb}</td>
-      </tr>`;
-    }).join('');
-
-    const existing = document.getElementById('sf-worker-forms-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'sf-worker-forms-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
-    modal.innerHTML = `<div style="background:#fff;border-radius:16px;width:100%;max-width:760px;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto;">
-      <div style="padding:22px 24px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:14px;">
-        <div style="width:46px;height:46px;border-radius:50%;background:#F47920;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex-shrink:0;">${initials}</div>
-        <div>
-          <div style="font-size:18px;font-weight:800;color:#111827;">${_sfEsc(workerName)}</div>
-          <div style="font-size:12px;color:#6b7280;">${forms.length} form${forms.length!==1?'s':''} on file</div>
+      const flags = [
+        f.psi_flag ? '<span style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">PSI</span>' : '',
+        f.wcb_flag ? '<span style="background:#fef9c3;color:#854d0e;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">WCB</span>' : ''
+      ].filter(Boolean).join(' ');
+      return `<div style="padding:9px 0;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#111827;">${_sfEsc(label)}</div>
+          <div style="font-size:11px;color:#9ca3af;">${date}${f.project_name ? ' · '+_sfEsc(f.project_name) : ''}</div>
         </div>
-        <button onclick="document.getElementById('sf-worker-forms-modal').remove()" style="margin-left:auto;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1;">×</button>
+        <div style="display:flex;gap:4px;flex-shrink:0;">${flags}</div>
+      </div>`;
+    }).join('') || '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No forms submitted yet.</div>';
+
+    const rollupSub = [missingN?missingN+' missing':'', expiredN?expiredN+' expired':'', expiringN?expiringN+' expiring':'', validN?validN+' valid':''].filter(Boolean).join(' · ');
+    const templateOptions = (templates||[]).map(t => `<option value="${t.id}"${t.id===user.template_id?' selected':''}>${_sfEsc(t.name)}</option>`).join('');
+
+    // Split certs into required vs not-required for collapsible sections
+    const reqCertRows    = (certs||[]).filter(c=>c.is_required).map(certRow).join('') || '<div style="color:#9ca3af;font-size:13px;padding:12px 0;">No required certifications.</div>';
+    const notReqCertRows = (certs||[]).filter(c=>!c.is_required).map(certRow).join('') || '';
+
+    modal.innerHTML = `<div id="sf-emp-profile-inner" style="background:#fff;border-radius:16px;width:100%;max-width:720px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column;max-height:90vh;">
+      <!-- Header (fixed) -->
+      <div style="padding:16px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <div style="width:44px;height:44px;border-radius:50%;background:#F47920;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0;">${_sfEsc(initials)}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:16px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_sfEsc(user.name||'')}${archBadge}</div>
+          <div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_sfEsc(user.email||'')}${user.role ? ' · '+_sfEsc(user.role) : ''}</div>
+        </div>
+        <button onclick="document.getElementById('sf-emp-profile-modal').remove()" style="background:none;border:none;font-size:28px;cursor:pointer;color:#9ca3af;line-height:1;flex-shrink:0;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;">✕</button>
       </div>
-      <div style="padding:18px 24px;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-            <input type="checkbox" id="sf-wf-select-all" checked onchange="document.querySelectorAll('.sf-wf-cb').forEach(cb=>cb.checked=this.checked)"> Select All
-          </label>
-          <span style="flex:1;"></span>
-          <button id="sf-wf-export-btn" onclick="sfExportWorkerFormsPDF(${JSON.stringify(workerName)})" style="background:#F47920;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Export PDF</button>
+      <!-- Compliance roll-up — pinned, always visible (fixed) -->
+      <div style="padding:12px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:14px;background:${rollupBg};flex-shrink:0;">
+        <span style="font-size:24px;">${rollupIcon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:800;color:${rollupColor};">${rollupLabel}</div>
+          <div style="font-size:12px;color:${rollupColor};opacity:.8;">${rollupSub || 'No required certs'}</div>
         </div>
-        ${forms.length ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">
-          <thead><tr style="background:#f9fafb;">
-            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;"></th>
-            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">FORM TYPE</th>
-            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">#</th>
-            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">DATE</th>
-            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">PROJECT</th>
-            <th style="padding:8px 6px;text-align:left;font-size:11px;color:#6b7280;font-weight:700;">FLAGS</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table></div>` : '<p style="color:#6b7280;font-size:13px;padding:20px 0;">No forms submitted yet.</p>'}
+        <div style="flex-shrink:0;">
+          <select id="sf-emp-template-sel" onchange="empSetTemplate(${userId},this.value)" style="font-size:12px;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;background:#fff;cursor:pointer;max-width:130px;" title="Compliance template">
+            <option value="">— No template —</option>
+            ${templateOptions}
+          </select>
+        </div>
+      </div>
+      <!-- Scrollable content -->
+      <div style="overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding:0 18px 24px;">
+        <!-- Required certs — open by default -->
+        <details open style="margin-top:14px;">
+          <summary style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:6px;padding:8px 0;min-height:44px;">
+            <svg width="12" height="12" viewBox="0 0 12 12" style="transition:transform .2s;" class="sf-details-arrow"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            Required Certifications (${(certs||[]).filter(c=>c.is_required).length})
+          </summary>
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">Orange "Override ×" = you've set this manually — click to revert to template.</div>
+          ${reqCertRows}
+        </details>
+        <!-- Not-required certs — collapsed by default, visually quiet -->
+        ${notReqCertRows ? `<details style="margin-top:8px;">
+          <summary style="font-size:12px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:6px;padding:8px 0;min-height:44px;">
+            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            Not Required (${(certs||[]).filter(c=>!c.is_required).length})
+          </summary>
+          <div style="opacity:.7;">${notReqCertRows}</div>
+        </details>` : ''}
+        <!-- Safety Forms — collapsed by default -->
+        <details style="margin-top:8px;">
+          <summary style="font-size:12px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:6px;padding:8px 0;min-height:44px;">
+            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            Safety Forms (${(forms||[]).length})
+          </summary>
+          ${formRows}
+        </details>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
+  };
 
-    // Keep Select All in sync
-    modal.querySelectorAll('.sf-wf-cb').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const all = [...modal.querySelectorAll('.sf-wf-cb')];
-        document.getElementById('sf-wf-select-all').checked = all.every(c=>c.checked);
+  window.empSetTemplate = async function(userId, templateId) {
+    try {
+      await fetch(`/api/users/${userId}/template`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ template_id: templateId ? parseInt(templateId) : null })
       });
-    });
+      openEmployeeProfile(userId);
+    } catch { alert('Failed to update template.'); }
   };
 
-  window.sfExportWorkerFormsPDF = function(workerName) {
-    const modal = document.getElementById('sf-worker-forms-modal');
-    const checked = modal ? [...modal.querySelectorAll('.sf-wf-cb:checked')].map(cb => Number(cb.dataset.idx)) : [];
-    if (!checked.length) { alert('Select at least one form to export.'); return; }
-
-    const forms = (_adminForms || []).filter(f => (f.submitted_by || 'Unknown') === workerName);
-    const selected = checked.map(i => forms[i]).filter(Boolean);
-
-    const FORM_LABELS = {
-      hazard_assessment:'Hazard Assessment (FLHA)', fall_protection:'Fall Protection', aerial_lift:'Aerial / EWP',
-      maint_vehicle:'Truck Inspection', safety_meeting:'Safety Meeting', erp:'Emergency Response Plan',
-      near_miss:'Near Miss', incident_report:'Incident Report', corrective_action:'Corrective Action',
-      ojt_record:'OJT Record', emergency_review:'Emergency Review'
-    };
-
-    const today = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
-    const pages = selected.map(f => {
-      const label = FORM_LABELS[f.form_type] || f.form_type;
-      const date  = f.date ? new Date(f.date).toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}) : '—';
-      const flags = [f.psi_flag?'⚠ PSI Reportable':'', f.wcb_flag?'⚠ WCB Reportable':''].filter(Boolean).join(' · ') || 'None';
-      const formUrl = Safety.formUrl ? Safety.formUrl(f.form_type) : null;
-      const viewLink = formUrl ? `<div style="margin-top:10px;"><a href="${formUrl}?id=${f.id}" style="color:#F47920;font-size:12px;font-weight:600;">View full form online ↗</a></div>` : '';
-      const statusStyle = f.status==='approved'?'background:#dcfce7;color:#166534':f.status==='rejected'?'background:#fee2e2;color:#991b1b':'background:#f3f4f6;color:#374151';
-      return `<div class="form-page">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:18px;font-weight:800;color:#111827;">${_sfEsc(label)}</div>
-          <span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;${statusStyle}">${f.status||'pending'}</span>
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;width:140px;">Worker</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(workerName)}</td></tr>
-          ${f.form_number?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Form #</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(f.form_number)}</td></tr>`:''}
-          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Date</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${date}</td></tr>
-          ${f.project_name?`<tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Project</td><td style="padding:7px 10px;border:1px solid #e5e7eb;">${_sfEsc(f.project_name)}</td></tr>`:''}
-          <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:700;background:#f9fafb;">Flags</td><td style="padding:7px 10px;border:1px solid #e5e7eb;color:${flags==='None'?'#6b7280':'#991b1b'};font-weight:${flags==='None'?'400':'700'};">${flags}</td></tr>
-        </table>
-        ${viewLink}
-      </div>`;
-    }).join('');
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${_sfEsc(workerName)} — Safety Forms</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;background:#fff;color:#111827;}.cover{padding:40px 36px 28px;border-bottom:3px solid #F47920;}.form-page{padding:28px 36px;border-bottom:2px dashed #e5e7eb;page-break-inside:avoid;}.form-page:last-child{border-bottom:none;}@media print{.form-page{page-break-after:always;}.form-page:last-child{page-break-after:avoid;}.no-print{display:none!important;}}.print-btn{position:fixed;bottom:20px;right:20px;background:#F47920;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);}</style>
-</head><body>
-<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
-<div class="cover"><div style="font-size:12px;color:#F47920;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">J&amp;D Western Electric — Safety Forms</div><div style="font-size:24px;font-weight:900;color:#111827;margin-bottom:4px;">${_sfEsc(workerName)}</div><div style="font-size:13px;color:#6b7280;">${selected.length} form${selected.length!==1?'s':''} · Generated ${today}</div></div>
-${pages}
-</body></html>`;
-
-    const win = window.open('','_blank');
-    win.document.write(html);
-    win.document.close();
+  window.empSetReq = async function(userId, catalogId, required) {
+    try {
+      await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ required })
+      });
+      openEmployeeProfile(userId);
+    } catch { alert('Failed to update requirement.'); }
   };
 
-  // ── Wire up new admin filter/refresh controls ─────────────────
-  const sfCertsFilterWorker = document.getElementById('sf-certs-filter-worker');
-  const sfCertsFilterStatus = document.getElementById('sf-certs-filter-status');
-  if (sfCertsFilterWorker) sfCertsFilterWorker.addEventListener('change', sfRenderCertsAdmin);
-  if (sfCertsFilterStatus) sfCertsFilterStatus.addEventListener('change', sfRenderCertsAdmin);
-  const sfCertsRefresh = document.getElementById('sf-certs-refresh');
-  if (sfCertsRefresh) sfCertsRefresh.addEventListener('click', sfLoadAllCerts);
-  // sf-fleet-maint-refresh removed — replaced by sf-fleet-profile-refresh in loadVehicleProfiles
+  window.empClearOverride = async function(userId, catalogId) {
+    try {
+      await fetch(`/api/users/${userId}/cert-requirements/${catalogId}`, { method:'DELETE' });
+      openEmployeeProfile(userId);
+    } catch { alert('Failed to clear override.'); }
+  };
+
+  // ── Wire up team search ───────────────────────────────────────
+  const sfTeamSearchEl = document.getElementById('sf-team-search');
+  if (sfTeamSearchEl) sfTeamSearchEl.addEventListener('input', () => sfRenderTeamList(_sfTeamEmployees));
+  // sf-admin-refresh wired in sfAdminSub when team tab is shown
 
   } catch(err) {
     console.error('Safety page error:', err);

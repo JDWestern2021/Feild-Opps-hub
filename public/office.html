@@ -1254,6 +1254,7 @@
             <button class="proj-subtab" id="psub-wire" data-tab="wire">Wire Log</button>
             <button class="proj-subtab" id="psub-proj-archived" data-tab="proj-archived">Archived <span class="proj-subcount" id="psub-archived-count">0</span></button>
             <button class="proj-subtab" id="psub-rfqs" data-tab="rfqs">RFQs <span class="proj-subcount" id="psub-rfqs-count">0</span></button>
+            <button class="proj-subtab" id="psub-permit" data-tab="permit">Permit <span id="psub-permit-badge" style="display:none;background:var(--orange);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px;">!</span></button>
           </div>
           <div id="ptab-panel-tickets"></div>
           <div id="ptab-panel-pos" style="display:none;"></div>
@@ -1263,6 +1264,7 @@
           <div id="ptab-panel-wire" style="display:none;"></div>
           <div id="ptab-panel-proj-archived" style="display:none;"></div>
           <div id="ptab-panel-rfqs" style="display:none;"></div>
+          <div id="ptab-panel-permit" style="display:none;padding:16px 0;"></div>
         </div>
       </div>
     </div>
@@ -2108,6 +2110,14 @@
         <label class="form-label" for="project-jobs-input">Associated Job Numbers <span style="font-weight:400;color:var(--gray-500);">(optional)</span></label>
         <input type="text" id="project-jobs-input" class="form-control" placeholder="e.g. 1042, 1043, 1044" autocomplete="off"/>
         <span class="form-hint" style="display:block;margin-top:6px;">Reference tags only — separate multiple job numbers with commas.</span>
+      </div>
+      <div class="form-group" style="margin-top:14px;" id="project-modal-permit-row">
+        <label class="form-label">Does this project require an electrical permit?</label>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="project-permit-required" value="yes"> Yes</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="project-permit-required" value="no"> No</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="project-permit-required" value="unset" checked> Not sure yet</label>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3398,6 +3408,9 @@ async function loadProjects() {
         ? `<span class="outstanding-badge">${outstanding} outstanding</span>`
         : (p.ticket_count + p.po_count > 0 ? `<span class="all-ok-badge">✓ All up to date</span>` : '');
       const cb = showCb ? `<input type="checkbox" class="po-cb proj-archive-cb" data-proj-id="${p.id}" data-proj-name="${esc(p.name)}" style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0;margin-top:2px;" onchange="updateProjBulkBar()"/>` : '';
+      const ps = p.permit_status;
+      const permitBadge = ps ? `<span style="display:inline-block;margin-top:6px;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;">🪪 ${esc(ps.label)}</span>` :
+        (p.permit_required === 'yes' ? `<span style="display:inline-block;margin-top:6px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;">🪪 Permit complete</span>` : '');
       return `
       <div class="project-card" data-id="${p.id}" style="cursor:pointer;${showCb?'padding-left:10px;':''}">
         <div style="display:flex;align-items:flex-start;gap:8px;" onclick="${showCb?`event.stopPropagation();this.closest('.project-card').querySelector('.proj-archive-cb').click()`:''}">
@@ -3408,6 +3421,7 @@ async function loadProjects() {
               ${badge}
             </div>
             ${p.job_numbers ? `<div class="job-tags">${jobTags(p.job_numbers)}</div>` : ''}
+            ${permitBadge}
             <div class="meta">
               <span><strong>${p.ticket_count}</strong> ticket${parseInt(p.ticket_count) !== 1 ? 's' : ''}</span>
               <span><strong>${p.po_count}</strong> PO${parseInt(p.po_count) !== 1 ? 's' : ''}</span>
@@ -3499,9 +3513,25 @@ async function openProject(id) {
     $('psub-archived-count').textContent = (data.archived_tickets||[]).length + (data.archived_pos||[]).length + (data.archived_safety||[]).length + (data.archived_panels||[]).length;
     $('psub-rfqs-count').textContent = (data.rfqs||[]).length;
     updateProjectOutstandingSummary();
+    // Permit badge on sub-tab button
+    loadProjectPermitBadge(id);
   } catch {
     $('ptab-panel-tickets').innerHTML = `<div class="empty-state"><h3>Error loading project</h3></div>`;
   }
+}
+
+async function loadProjectPermitBadge(id) {
+  try {
+    const res = await fetch('/api/projects/' + id + '/permit');
+    if (!res.ok) return;
+    const data = await res.json();
+    const badge = $('psub-permit-badge');
+    if (data.permit_status && data.permit_status.notifier !== null) {
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch {}
 }
 
 // ── Project sub-tab rendering helpers ──
@@ -4125,6 +4155,7 @@ function setProjectSubTab(tab) {
   $('psub-wire').classList.toggle('active', tab === 'wire');
   $('psub-proj-archived').classList.toggle('active', tab === 'proj-archived');
   $('psub-rfqs').classList.toggle('active', tab === 'rfqs');
+  $('psub-permit').classList.toggle('active', tab === 'permit');
   $('ptab-panel-tickets').style.display = tab === 'tickets' ? 'block' : 'none';
   $('ptab-panel-pos').style.display = tab === 'pos' ? 'block' : 'none';
   $('ptab-panel-safety').style.display = tab === 'safety' ? 'block' : 'none';
@@ -4133,8 +4164,10 @@ function setProjectSubTab(tab) {
   $('ptab-panel-wire').style.display = tab === 'wire' ? 'block' : 'none';
   $('ptab-panel-proj-archived').style.display = tab === 'proj-archived' ? 'block' : 'none';
   $('ptab-panel-rfqs').style.display = tab === 'rfqs' ? 'block' : 'none';
+  $('ptab-panel-permit').style.display = tab === 'permit' ? 'block' : 'none';
   if (tab === 'proj-tools' && currentProjectId) renderProjectTools(currentProjectId);
   if (tab === 'wire' && currentProjectId) renderProjectWire(currentProjectId);
+  if (tab === 'permit' && currentProjectId) loadProjectPermit(currentProjectId);
 }
 $('psub-tickets').addEventListener('click', () => setProjectSubTab('tickets'));
 $('psub-pos').addEventListener('click', () => setProjectSubTab('pos'));
@@ -4144,6 +4177,239 @@ $('psub-proj-tools').addEventListener('click', () => setProjectSubTab('proj-tool
 $('psub-wire').addEventListener('click', () => setProjectSubTab('wire'));
 $('psub-proj-archived').addEventListener('click', () => setProjectSubTab('proj-archived'));
 $('psub-rfqs').addEventListener('click', () => setProjectSubTab('rfqs'));
+$('psub-permit').addEventListener('click', () => setProjectSubTab('permit'));
+
+// ── Permit Tracking ────────────────────────────────────────────────────────────
+
+const PERMIT_STAGE_LABELS = {
+  not_started: 'Not Started',
+  submitted:   'Submitted',
+  approved:    'Approved',
+  rough_in:    'Rough-In',
+  final:       'Final Inspection',
+  closed:      'Closed'
+};
+const PERMIT_DOC_LABELS = { permit: 'Permit Application', site_plan: 'Site Plan', rough_in_inspection: 'Rough-In Inspection Approval' };
+const INSP_STATUS_LABELS = { requested: 'Pending', passed: 'Passed', failed: 'Failed', cancelled: 'Cancelled' };
+const INSP_STATUS_COLORS = { requested: '#92400e', passed: '#166534', failed: '#991b1b', cancelled: '#6b7280' };
+const INSP_STATUS_BG    = { requested: '#fef3c7', passed: '#dcfce7', failed: '#fee2e2', cancelled: '#f3f4f6' };
+
+let _permitData = null;
+
+async function loadProjectPermit(id) {
+  const panel = $('ptab-panel-permit');
+  panel.innerHTML = '<div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div>';
+  try {
+    const res = await fetch('/api/projects/' + id + '/permit');
+    if (!res.ok) throw new Error();
+    _permitData = await res.json();
+    renderPermitPanel(_permitData);
+  } catch { panel.innerHTML = '<div class="empty-state"><h3>Error loading permit data</h3></div>'; }
+}
+
+function renderPermitPanel(data) {
+  const { project, documents, inspections, permit_status } = data;
+  const panel = $('ptab-panel-permit');
+  const pr = project.permit_required;
+  const stage = project.permit_stage || 'not_started';
+
+  const notifierHtml = permit_status
+    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">🪪</span>
+        <div style="flex:1;">
+          <div style="font-weight:700;color:#c2410c;font-size:13px;">${esc(permit_status.label)}</div>
+          ${permit_status.action ? permitActionButton(permit_status.action, project, inspections) : ''}
+        </div>
+       </div>`
+    : (pr === 'yes' ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#166534;font-weight:600;font-size:13px;">✓ Permit complete</div>` : '');
+
+  const docRows = ['permit','site_plan','rough_in_inspection'].map(cat => {
+    const catDocs = documents.filter(d => d.category === cat);
+    return `<div style="margin-bottom:12px;">
+      <div style="font-weight:600;font-size:12px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">${PERMIT_DOC_LABELS[cat]}</div>
+      ${catDocs.length ? catDocs.map(d => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-100);">
+          <span style="font-size:13px;">📄</span>
+          <a href="/api/projects/permit/documents/${d.id}" target="_blank" style="flex:1;font-size:13px;color:var(--orange);text-decoration:none;">${esc(d.file_name)}</a>
+          <span style="font-size:11px;color:var(--gray-400);">${fmtDate(d.uploaded_at ? d.uploaded_at.slice(0,10) : '')}</span>
+          <button onclick="deletePermitDoc(${d.id})" style="background:none;border:none;color:#b91c1c;cursor:pointer;font-size:14px;padding:0 4px;" title="Remove">✕</button>
+        </div>`).join('')
+      : `<div style="font-size:12px;color:var(--gray-400);padding:4px 0;">No document uploaded</div>`}
+      <label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:12px;color:var(--orange);font-weight:600;">
+        <input type="file" style="display:none;" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="uploadPermitDoc(this,'${cat}')"> + Upload
+      </label>
+    </div>`;
+  }).join('');
+
+  const inspRows = inspections.length ? inspections.map(i => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);">
+      <span style="font-size:12px;font-weight:700;min-width:80px;color:var(--gray-600);">${i.inspection_type === 'rough_in' ? 'Rough-In' : 'Final'}</span>
+      <span style="background:${INSP_STATUS_BG[i.status]};color:${INSP_STATUS_COLORS[i.status]};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">${INSP_STATUS_LABELS[i.status]||i.status}</span>
+      <span style="font-size:12px;color:var(--gray-400);flex:1;">${i.notes ? esc(i.notes) : ''}</span>
+      <span style="font-size:11px;color:var(--gray-400);">${fmtDate(i.created_at ? i.created_at.slice(0,10) : '')}</span>
+      ${i.status === 'requested' ? `
+        <button onclick="updatePermitInspection(${i.id},'passed')" style="background:#dcfce7;color:#166534;border:none;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;cursor:pointer;">Passed</button>
+        <button onclick="updatePermitInspection(${i.id},'failed')" style="background:#fee2e2;color:#991b1b;border:none;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;cursor:pointer;">Failed</button>` : ''}
+    </div>`).join('')
+    : '<div style="font-size:12px;color:var(--gray-400);padding:4px 0;">No inspections logged</div>';
+
+  panel.innerHTML = `
+    <div style="max-width:700px;">
+      ${notifierHtml}
+
+      <!-- Permit Required & Stage -->
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:16px;margin-bottom:16px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:12px;">Permit Settings</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px;">Permit Required</label>
+            <select id="permit-required-sel" onchange="savePermitField('permit_required',this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;">
+              <option value="unset" ${pr==='unset'?'selected':''}>Not set</option>
+              <option value="yes"   ${pr==='yes'?'selected':''}>Yes</option>
+              <option value="no"    ${pr==='no'?'selected':''}>No</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px;">Stage</label>
+            <select id="permit-stage-sel" onchange="savePermitField('permit_stage',this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;" ${pr !== 'yes' ? 'disabled' : ''}>
+              ${Object.entries(PERMIT_STAGE_LABELS).map(([v,l])=>`<option value="${v}" ${stage===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px;">Permit Number</label>
+          <div style="display:flex;gap:8px;">
+            <input id="permit-number-inp" type="text" value="${esc(project.permit_number||'')}" placeholder="e.g. E-2026-1234" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;" ${pr !== 'yes' ? 'disabled' : ''}/>
+            <button onclick="savePermitField('permit_number',$('permit-number-inp').value)" style="background:var(--orange);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;">Save</button>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px;">Notes</label>
+          <div style="display:flex;gap:8px;">
+            <textarea id="permit-notes-inp" rows="2" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;resize:vertical;" ${pr !== 'yes' ? 'disabled' : ''}>${esc(project.permit_notes||'')}</textarea>
+            <button onclick="savePermitField('permit_notes',$('permit-notes-inp').value)" style="background:var(--orange);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-start;">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Documents -->
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:16px;margin-bottom:16px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:12px;">Documents</div>
+        ${docRows}
+      </div>
+
+      <!-- Inspections -->
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-weight:700;font-size:13px;">Inspections</div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="logPermitInspection('rough_in')" style="background:var(--orange);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;">+ Rough-In</button>
+            <button onclick="logPermitInspection('final')" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;">+ Final</button>
+          </div>
+        </div>
+        ${inspRows}
+      </div>
+    </div>`;
+}
+
+function permitActionButton(action, project, inspections) {
+  const latestRoughIn = inspections.filter(i=>i.inspection_type==='rough_in').sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
+  const latestFinal   = inspections.filter(i=>i.inspection_type==='final').sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
+  const map = {
+    set_permit_required:          `<button onclick="document.getElementById('permit-required-sel')?.scrollIntoView({behavior:'smooth'})" style="${_paBtnStyle('orange')}">Set Permit Status →</button>`,
+    upload_doc_permit:            `<button onclick="triggerPermitDocUpload('permit')" style="${_paBtnStyle('orange')}">Upload Application →</button>`,
+    set_stage_submitted:          `<button onclick="savePermitField('permit_stage','submitted')" style="${_paBtnStyle('orange')}">Mark Submitted →</button>`,
+    set_stage_approved:           `<button onclick="savePermitField('permit_stage','approved')" style="${_paBtnStyle('green')}">Mark Approved →</button>`,
+    set_stage_rough_in:           `<button onclick="savePermitField('permit_stage','rough_in')" style="${_paBtnStyle('orange')}">Begin Rough-In →</button>`,
+    create_inspection_rough_in:   `<button onclick="logPermitInspection('rough_in')" style="${_paBtnStyle('orange')}">Log Rough-In Inspection →</button>`,
+    update_inspection:            latestRoughIn ? `<button onclick="updatePermitInspection(${latestRoughIn.id},'passed')" style="${_paBtnStyle('green')}">Mark Passed →</button>` : '',
+    upload_doc_rough_in_inspection: `<button onclick="triggerPermitDocUpload('rough_in_inspection')" style="${_paBtnStyle('orange')}">Upload Inspection Approval →</button>`,
+    create_inspection_final:      `<button onclick="logPermitInspection('final')" style="${_paBtnStyle('blue')}">Log Final Inspection →</button>`,
+    set_stage_closed:             `<button onclick="savePermitField('permit_stage','closed')" style="${_paBtnStyle('green')}">Close Permit →</button>`,
+  };
+  return map[action] || '';
+}
+function _paBtnStyle(color) {
+  const c = color==='green'?'#166534':color==='blue'?'#1d4ed8':'#c2410c';
+  const bg = color==='green'?'#dcfce7':color==='blue'?'#dbeafe':'#fff7ed';
+  return `background:${bg};color:${c};border:1px solid currentColor;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-top:6px;`;
+}
+
+async function savePermitField(field, value) {
+  if (!currentProjectId) return;
+  try {
+    const res = await fetch('/api/projects/' + currentProjectId + '/permit', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ [field]: value })
+    });
+    if (!res.ok) throw new Error();
+    showToast('Saved', 'success');
+    loadProjectPermit(currentProjectId);
+    loadProjectPermitBadge(currentProjectId);
+  } catch { showToast('Save failed', 'error'); }
+}
+
+async function uploadPermitDoc(input, category) {
+  if (!input.files[0] || !currentProjectId) return;
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  fd.append('category', category);
+  try {
+    const res = await fetch('/api/projects/' + currentProjectId + '/permit/documents', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error();
+    showToast('Document uploaded', 'success');
+    loadProjectPermit(currentProjectId);
+    loadProjectPermitBadge(currentProjectId);
+  } catch { showToast('Upload failed', 'error'); }
+  input.value = '';
+}
+
+function triggerPermitDocUpload(category) {
+  const input = document.querySelector(`input[type="file"][onchange="uploadPermitDoc(this,'${category}')"]`);
+  if (input) input.click();
+}
+
+async function deletePermitDoc(docId) {
+  if (!confirm('Remove this document?')) return;
+  try {
+    const res = await fetch('/api/projects/permit/documents/' + docId, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    showToast('Document removed', 'success');
+    loadProjectPermit(currentProjectId);
+    loadProjectPermitBadge(currentProjectId);
+  } catch { showToast('Remove failed', 'error'); }
+}
+
+async function logPermitInspection(type) {
+  if (!currentProjectId) return;
+  const notes = prompt(`Notes for ${type === 'rough_in' ? 'rough-in' : 'final'} inspection request (optional):`);
+  if (notes === null) return;
+  try {
+    const res = await fetch('/api/projects/' + currentProjectId + '/permit/inspections', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ inspection_type: type, status: 'requested', notes: notes || null })
+    });
+    if (!res.ok) throw new Error();
+    showToast('Inspection logged', 'success');
+    loadProjectPermit(currentProjectId);
+    loadProjectPermitBadge(currentProjectId);
+  } catch { showToast('Failed', 'error'); }
+}
+
+async function updatePermitInspection(inspId, status) {
+  const notes = prompt(`Notes for this result (optional):`);
+  if (notes === null) return;
+  try {
+    const res = await fetch('/api/projects/permit/inspections/' + inspId, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status, notes: notes || null })
+    });
+    if (!res.ok) throw new Error();
+    showToast('Inspection updated', 'success');
+    loadProjectPermit(currentProjectId);
+    loadProjectPermitBadge(currentProjectId);
+  } catch { showToast('Failed', 'error'); }
+}
 
 // ── Wire Tracking ─────────────────────────────────────────────────────────────
 const WIRE_COLORS = ['','Black','White','Red','Blue','Green','Yellow','Orange','Brown','Gray','Purple','Pink'];
@@ -4785,6 +5051,14 @@ function openProjectModal(project) {
   $('project-modal-title').textContent = project ? 'Edit Project' : 'New Project';
   $('project-name-input').value = project ? project.name : '';
   $('project-jobs-input').value = project ? (project.job_numbers || '') : '';
+  // Permit radio only shown on new project creation; edit uses Permits tab
+  const permitRow = $('project-modal-permit-row');
+  if (!project) {
+    permitRow.style.display = '';
+    document.querySelectorAll('input[name="project-permit-required"]').forEach(r => { r.checked = r.value === 'unset'; });
+  } else {
+    permitRow.style.display = 'none';
+  }
   $('project-modal').classList.add('open');
   setTimeout(() => $('project-name-input').focus(), 50);
 }
@@ -4809,11 +5083,19 @@ $('project-save-btn').addEventListener('click', async () => {
   const job_numbers = $('project-jobs-input').value.trim();
   if (!name) { showToast('Project name is required', 'error'); return; }
   const wasEditing = !!editingProjectId;
+  const permit_required = document.querySelector('input[name="project-permit-required"]:checked')?.value || 'unset';
   try {
     const res = wasEditing
       ? await fetch('/api/project-folders/' + editingProjectId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers }) })
       : await fetch('/api/project-folders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers }) });
     if (!res.ok) throw new Error();
+    const newProj = await res.json();
+    if (!wasEditing && permit_required !== 'unset') {
+      await fetch('/api/projects/' + newProj.id + '/permit', {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ permit_required })
+      });
+    }
     closeProjectModal();
     showToast(wasEditing ? 'Project updated' : 'Project created', 'success');
     if (wasEditing && currentProjectId && $('project-detail').style.display !== 'none') openProject(currentProjectId);
@@ -4875,7 +5157,7 @@ $('btn-archive-project').addEventListener('click', async () => {
       method: 'PATCH', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ status: 'archived' })
     });
-    if (!res.ok) throw new Error();
+    if (!res.ok) { const d = await res.json(); showToast(d.error || 'Action failed', 'error'); return; }
     showToast('Project archived', 'success');
     $('project-detail').style.display = 'none';
     $('project-list-wrap').style.display = 'block';

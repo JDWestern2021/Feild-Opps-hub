@@ -722,6 +722,70 @@ async function initSchema() {
   // Expiry warning window (days before expiry that cert shows as "expiring soon")
   await pool.query(`INSERT INTO app_settings (key, value) VALUES ('cert_expiry_warning_days', '60') ON CONFLICT DO NOTHING`);
 
+  // ── Per-employee requirement templates ──────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cert_requirement_templates (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      active     BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS template_cert_requirements (
+      template_id INTEGER NOT NULL REFERENCES cert_requirement_templates(id) ON DELETE CASCADE,
+      catalog_id  INTEGER NOT NULL REFERENCES cert_catalog(id) ON DELETE CASCADE,
+      required    BOOLEAN NOT NULL DEFAULT TRUE,
+      PRIMARY KEY (template_id, catalog_id)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_cert_requirements (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      catalog_id INTEGER NOT NULL REFERENCES cert_catalog(id) ON DELETE CASCADE,
+      required   BOOLEAN NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, catalog_id)
+    )
+  `);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS template_id INTEGER REFERENCES cert_requirement_templates(id)`);
+
+  // Seed Field Staff template (WHMIS, TDG, SFA, Fall Protection, AWP, Ground Disturbance)
+  await pool.query(`
+    WITH ins AS (
+      INSERT INTO cert_requirement_templates (name)
+      SELECT 'Field Staff'
+      WHERE NOT EXISTS (SELECT 1 FROM cert_requirement_templates WHERE name = 'Field Staff')
+      RETURNING id
+    )
+    INSERT INTO template_cert_requirements (template_id, catalog_id)
+    SELECT ins.id, c.id FROM ins CROSS JOIN cert_catalog c
+    WHERE c.short_code IN ('WHMIS','TDG','SFA','FP','AWP','GD201')
+  `);
+
+  // Seed Office Staff template (WHMIS, SFA only)
+  await pool.query(`
+    WITH ins AS (
+      INSERT INTO cert_requirement_templates (name)
+      SELECT 'Office Staff'
+      WHERE NOT EXISTS (SELECT 1 FROM cert_requirement_templates WHERE name = 'Office Staff')
+      RETURNING id
+    )
+    INSERT INTO template_cert_requirements (template_id, catalog_id)
+    SELECT ins.id, c.id FROM ins CROSS JOIN cert_catalog c
+    WHERE c.short_code IN ('WHMIS','SFA')
+  `);
+
+  // Auto-assign templates to existing users that have none yet
+  await pool.query(`
+    UPDATE users SET template_id = (SELECT id FROM cert_requirement_templates WHERE name = 'Field Staff')
+    WHERE role = 'field' AND template_id IS NULL
+  `);
+  await pool.query(`
+    UPDATE users SET template_id = (SELECT id FROM cert_requirement_templates WHERE name = 'Office Staff')
+    WHERE role != 'field' AND template_id IS NULL
+  `);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS rfq_activity (
     id          SERIAL PRIMARY KEY,
     rfq_id      INTEGER NOT NULL REFERENCES rfqs(id) ON DELETE CASCADE,
@@ -729,6 +793,36 @@ async function initSchema() {
     action      TEXT NOT NULL DEFAULT '',
     details     TEXT NOT NULL DEFAULT '',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // ── Permit tracking ──
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_required TEXT NOT NULL DEFAULT 'unset'`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_number TEXT`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_stage TEXT NOT NULL DEFAULT 'not_started'`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_notes TEXT`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS permit_updated_at TEXT`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS project_documents (
+    id           SERIAL PRIMARY KEY,
+    project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    category     TEXT NOT NULL,
+    file_name    TEXT NOT NULL,
+    mime_type    TEXT NOT NULL,
+    file_data    BYTEA NOT NULL,
+    uploaded_by  TEXT NOT NULL DEFAULT '',
+    uploaded_at  TEXT NOT NULL
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS project_inspections (
+    id               SERIAL PRIMARY KEY,
+    project_id       INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    inspection_type  TEXT NOT NULL,
+    status           TEXT NOT NULL DEFAULT 'requested',
+    requested_at     TEXT NOT NULL,
+    result_at        TEXT,
+    notes            TEXT,
+    created_by       TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL
   )`);
 
   console.log('  ✓ Database schema ready');
