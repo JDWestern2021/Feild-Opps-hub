@@ -9,6 +9,7 @@ require('./db-guard');
 
 const { pool } = require('../db');
 const bcrypt   = require('bcryptjs');
+const { addSpace, bulkSpaces, duplicateSubtree, typeId } = require('./spaces-service');
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const hash = pwd => bcrypt.hashSync(pwd, 10);
@@ -138,6 +139,10 @@ async function seed() {
     `, [field2Id, date(14), date(18), now()]);
 
     await client.query('COMMIT');
+
+    // ── Worksites space trees (run after COMMIT — uses pool, not client) ──────
+    console.log('▸ Seeding worksite spaces...');
+    await seedSpaces(p1.id, p2.id, slId);
     console.log('');
     console.log('✓ Seed complete.');
     console.log('');
@@ -156,6 +161,161 @@ async function seed() {
     client.release();
     await pool.end();
   }
+}
+
+async function seedSpaces(p1Id, p2Id, slId) {
+  // Idempotent: skip if spaces already exist for the project
+  async function hasSpaces(projectId) {
+    const { rows } = await pool.query('SELECT 1 FROM spaces WHERE project_id=$1 LIMIT 1', [projectId]);
+    return rows.length > 0;
+  }
+
+  // Space type ids — throws loudly if schema wasn't seeded
+  const T = {
+    building:   await typeId('Building'),
+    floor:      await typeId('Floor'),
+    suite:      await typeId('Suite'),
+    stairwell:  await typeId('Stairwell'),
+    parkade:    await typeId('Parkade'),
+    elec:       await typeId('Electrical Room'),
+    mech:       await typeId('Mechanical Room'),
+    lobby:      await typeId('Lobby'),
+    common:     await typeId('Common Area'),
+    storage:    await typeId('Storage Room'),
+    exterior:   await typeId('Exterior'),
+    elevator:   await typeId('Elevator'),
+    shaft:      await typeId('Mechanical Shaft'),
+  };
+
+  // ── Henderson Commercial — one General space ────────────────────────────
+  if (!await hasSpaces(p1Id)) {
+    await addSpace({ project_id: p1Id, identifier: 'General', space_type_id: T.common });
+    console.log('  ✓ Henderson Commercial: 1 space');
+  } else { console.log('  · Henderson Commercial: already seeded, skipping'); }
+
+  // ── Riverside Reno — one General space ─────────────────────────────────
+  if (!await hasSpaces(p2Id)) {
+    await addSpace({ project_id: p2Id, identifier: 'General', space_type_id: T.common });
+    console.log('  ✓ Riverside Reno: 1 space');
+  } else { console.log('  · Riverside Reno: already seeded, skipping'); }
+
+  // ── Smith's Landing ─────────────────────────────────────────────────────
+  if (await hasSpaces(slId)) {
+    console.log("  · Smith's Landing: already seeded, skipping");
+    return;
+  }
+
+  // Project-level Parking Lot
+  await addSpace({ project_id: slId, identifier: 'Parking Lot', space_type_id: T.parkade, sort_order: 0 });
+
+  // ── Plan type assignment map (last 2 digits of suite identifier → type code) ─
+  // Verified against drawing E105. Same pattern on every floor of both buildings.
+  const SUFFIX_TYPE = {
+    '01':'C','02':'C','03':'B','04':'B','05':'B','06':'B','07':'B',
+    '08':'F','09':'E','10':'E','11':'D','12':'D','13':'D','14':'D',
+    '15':'B','16':'B','17':'B','18':'B','19':'C','20':'A',
+  };
+
+  // Helper: build one full building tree, return the building space
+  async function buildBuilding(name, sortOrder) {
+    const bldg = await addSpace({ project_id: slId, identifier: name, space_type_id: T.building, sort_order: sortOrder });
+
+    // Building-level verticals (run through the full building, not per-floor)
+    await addSpace({ project_id: slId, parent_id: bldg.id, identifier: 'Stair 1',    space_type_id: T.stairwell, sort_order: 0 });
+    await addSpace({ project_id: slId, parent_id: bldg.id, identifier: 'Stair 2',    space_type_id: T.stairwell, sort_order: 1 });
+    await addSpace({ project_id: slId, parent_id: bldg.id, identifier: 'Elevator',   space_type_id: T.elevator,  sort_order: 2 });
+    await addSpace({ project_id: slId, parent_id: bldg.id, identifier: 'Mech Shaft', space_type_id: T.shaft,     sort_order: 3 });
+
+    // Parkade level
+    const parkade = await addSpace({ project_id: slId, parent_id: bldg.id, identifier: 'Parkade', space_type_id: T.parkade, sort_order: 4 });
+    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Electrical Room', space_type_id: T.elec,  sort_order: 0 });
+    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Mechanical Room', space_type_id: T.mech,  sort_order: 1 });
+    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Lobby',           space_type_id: T.lobby, sort_order: 2 });
+
+    // Floor builder — rooms named per drawing numbering (floorNum e.g. 1,2,3,4)
+    async function buildFloor(floorNum, sortOrder) {
+      const n   = floorNum;                         // 1, 2, 3, 4
+      const pre = n * 100;                          // 100, 200, 300, 400
+      const floor = await addSpace({
+        project_id: slId, parent_id: bldg.id,
+        identifier: `Floor ${n}`, space_type_id: T.floor, sort_order: sortOrder,
+      });
+      await bulkSpaces({ project_id: slId, parent_id: floor.id, space_type_id: T.suite, prefix: 'Suite ', start: pre + 1, end: pre + 20, pad: false });
+      await addSpace({ project_id: slId, parent_id: floor.id, identifier: `Elec ${pre + 21}`,    space_type_id: T.elec,    sort_order: 100 });
+      await addSpace({ project_id: slId, parent_id: floor.id, identifier: `Lobby ${pre}a`,        space_type_id: T.lobby,   sort_order: 101 });
+      if (n === 1) {
+        await addSpace({ project_id: slId, parent_id: floor.id, identifier: 'Bike Storage',        space_type_id: T.storage, sort_order: 102 });
+      } else if (n <= 3) {
+        await addSpace({ project_id: slId, parent_id: floor.id, identifier: `Tenant Storage ${pre + 22}`, space_type_id: T.storage, sort_order: 102 });
+      } else {
+        await addSpace({ project_id: slId, parent_id: floor.id, identifier: `Mech Room ${pre + 22}`,      space_type_id: T.mech,    sort_order: 102 });
+      }
+      await addSpace({ project_id: slId, parent_id: floor.id, identifier: `Corridor ${pre}`,      space_type_id: T.common,  sort_order: 103 });
+      return floor;
+    }
+
+    await buildFloor(1, 5);
+    await buildFloor(2, 6);
+    await buildFloor(3, 7);
+    await buildFloor(4, 8);
+
+    return bldg;
+  }
+
+  // ── Build Building 1 ────────────────────────────────────────────────────────
+  const bldg1 = await buildBuilding('Building 1', 1);
+
+  // ── Create plan types A–F for Smith's Landing ───────────────────────────────
+  const planTypeCodes = ['A','B','C','D','E','F'];
+  for (const code of planTypeCodes) {
+    await pool.query(
+      `INSERT INTO plan_types (project_id, code) VALUES ($1, $2) ON CONFLICT (project_id, code) DO NOTHING`,
+      [slId, code]
+    );
+  }
+  const { rows: ptRows } = await pool.query(
+    `SELECT id, code FROM plan_types WHERE project_id=$1`, [slId]
+  );
+  const PT = Object.fromEntries(ptRows.map(r => [r.code, r.id])); // { A: id, B: id, ... }
+
+  // ── Assign plan types to Building 1 suites ──────────────────────────────────
+  // Match last 2 digits of identifier (e.g. "Suite 103" → "03" → type B)
+  const { rows: bldg1Suites } = await pool.query(`
+    SELECT s.id, s.identifier
+    FROM spaces s
+    JOIN space_types st ON st.id = s.space_type_id
+    WHERE s.project_id = $1 AND st.name = 'Suite'
+      AND s.archived_at IS NULL
+      AND s.id IN (
+        SELECT id FROM spaces WHERE parent_id IN (
+          SELECT id FROM spaces WHERE parent_id = $2 AND archived_at IS NULL
+        ) AND archived_at IS NULL
+      )
+  `, [slId, bldg1.id]);
+
+  for (const suite of bldg1Suites) {
+    const suffix = suite.identifier.replace(/\D/g, '').slice(-2);
+    const code   = SUFFIX_TYPE[suffix];
+    if (code && PT[code]) {
+      await pool.query('UPDATE spaces SET plan_type_id=$1 WHERE id=$2', [PT[code], suite.id]);
+    }
+  }
+
+  // ── Duplicate Building 1 → Building 2 (copies plan_type_id) ─────────────────
+  await duplicateSubtree(bldg1.id, { new_identifier: 'Building 2', new_parent_id: null });
+
+  // ── Print counts for verification ───────────────────────────────────────────
+  const { rows: typeCounts } = await pool.query(`
+    SELECT pt.code, COUNT(s.id)::int AS cnt
+    FROM plan_types pt
+    LEFT JOIN spaces s ON s.plan_type_id = pt.id AND s.archived_at IS NULL
+    WHERE pt.project_id = $1
+    GROUP BY pt.code ORDER BY pt.code
+  `, [slId]);
+  const countLine = typeCounts.map(r => `Type ${r.code}: ${r.cnt}`).join('  ');
+  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) FROM spaces WHERE project_id=$1', [slId]);
+  console.log(`  ✓ Smith's Landing: ${count} spaces`);
+  console.log(`    Plan types — ${countLine}`);
 }
 
 seed().then(() => process.exit(0)).catch(err => {

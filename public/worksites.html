@@ -22,19 +22,16 @@
       transition: background .12s, color .12s;
     }
     .ws-header a:hover { background: rgba(255,255,255,.08); color: #fff; }
-    .ws-header-sep { color: rgba(255,255,255,.2); font-size: 16px; }
 
     /* ── Page wrap ── */
-    .page-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
-    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; }
-    .page-header h1 { font-size: 22px; font-weight: 800; color: var(--dark); margin: 0; }
+    .page-wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
 
     /* ── Two-panel layout ── */
-    .ws-layout { display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: start; }
+    .ws-layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
     @media (max-width: 900px) { .ws-layout { grid-template-columns: 1fr; } }
 
     /* ── Project list ── */
-    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); overflow: hidden; }
+    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); overflow: hidden; position: sticky; top: 72px; }
     .project-panel-header { padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); border-bottom: 1px solid var(--gray-100); }
     .project-list { list-style: none; margin: 0; padding: 6px; }
     .project-list li a {
@@ -46,39 +43,167 @@
     .project-list li a.active { background: rgba(244,121,32,.1); color: var(--orange); }
     .project-list li .proj-num { font-size: 11px; color: var(--gray-400); font-weight: 500; margin-top: 1px; }
 
-    /* ── Space tree ── */
+    /* ── Space panel ── */
     .space-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); }
     .space-panel-header {
-      padding: 12px 16px; border-bottom: 1px solid var(--gray-100);
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 14px; border-bottom: 1px solid var(--gray-100);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     }
-    .space-panel-title { font-size: 15px; font-weight: 700; color: var(--dark); }
-    .space-actions { display: flex; gap: 8px; }
+    .space-panel-title { font-size: 15px; font-weight: 700; color: var(--dark); flex: 1; min-width: 0; }
+    .space-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .space-actions .sa-sep { width: 1px; height: 18px; background: var(--gray-200); flex-shrink: 0; }
+
+    /* View-toggle pills (Spaces / Types) */
+    .view-pills { display: flex; gap: 2px; background: var(--gray-100); border-radius: 8px; padding: 3px; }
+    .view-pill {
+      padding: 4px 12px; border-radius: 6px; border: none; background: none; cursor: pointer;
+      font-size: 12px; font-weight: 600; color: var(--gray-500); font-family: inherit;
+      transition: background .1s, color .1s;
+    }
+    .view-pill.active { background: #fff; color: var(--dark); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+    .btn-ghost {
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      font-size: 12px; font-weight: 500; color: var(--gray-500);
+      padding: 5px 8px; border-radius: 6px; transition: background .1s, color .1s;
+    }
+    .btn-ghost:hover { background: var(--gray-100); color: var(--dark); }
+
     .space-empty { padding: 48px 24px; text-align: center; color: var(--gray-400); font-size: 14px; }
     .space-empty svg { width: 40px; height: 40px; margin: 0 auto 12px; display: block; opacity: .3; }
 
     /* ── Tree ── */
     .tree { padding: 8px; }
     .tree-node-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 7px 10px; border-radius: 8px; transition: background .1s;
+      display: flex; align-items: center; gap: 4px;
+      padding: 5px 6px 5px 4px; border-radius: 8px; transition: background .1s;
+      position: relative; cursor: default;
     }
     .tree-node-row:hover { background: var(--gray-50); }
-    .tree-indent-bar { width: 20px; flex-shrink: 0; display: flex; justify-content: center; }
-    .tree-indent-bar-line { width: 1px; min-height: 32px; background: var(--gray-200); }
-    .tree-icon { font-size: 15px; flex-shrink: 0; width: 22px; text-align: center; }
-    .tree-label { font-size: 13px; font-weight: 600; color: var(--dark); flex: 1; }
-    .tree-type { font-size: 11px; color: var(--gray-400); font-weight: 500; }
-    .tree-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .1s; }
-    .tree-node-row:hover .tree-actions { opacity: 1; }
-    .tree-btn {
-      border: none; background: none; cursor: pointer; padding: 3px 6px;
-      border-radius: 5px; font-size: 11px; color: var(--gray-500);
-      transition: background .1s, color .1s;
+    .tree-node-row.selected { background: rgba(244,121,32,.07); }
+
+    /* depth-based visual weight */
+    .tree-node-row.d0 { padding-top: 7px; padding-bottom: 7px; }
+    .tree-node-row.d0 .tree-label { font-size: 14px; font-weight: 700; color: var(--dark); }
+    .tree-node-row.d1 .tree-label { font-size: 13px; font-weight: 600; color: var(--dark); }
+    .tree-node-row.d2 .tree-label { font-size: 13px; font-weight: 400; color: var(--gray-700, #374151); }
+
+    .tree-guide { width: 20px; flex-shrink: 0; display: flex; justify-content: center; }
+    .tree-guide-line { width: 1px; min-height: 28px; background: var(--gray-200); }
+
+    .tree-toggle {
+      border: none; background: none; cursor: pointer;
+      width: 18px; height: 18px; padding: 0; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: var(--gray-400); border-radius: 4px;
+      transition: color .1s, background .1s; line-height: 1;
     }
-    .tree-btn:hover { background: var(--gray-100); color: var(--dark); }
-    .tree-btn.danger:hover { background: #fef2f2; color: var(--red); }
+    .tree-toggle:hover { color: var(--dark); background: var(--gray-100); }
+    .tree-toggle-spacer { width: 18px; flex-shrink: 0; }
+
+    /* Select-mode checkbox */
+    .tree-check {
+      width: 16px; height: 16px; flex-shrink: 0; cursor: pointer;
+      accent-color: var(--orange); margin: 0;
+    }
+    .tree-check-spacer { width: 16px; flex-shrink: 0; }
+
+    .tree-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .tree-type-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      color: var(--gray-400); white-space: nowrap; flex-shrink: 0;
+    }
+    /* Plan type code badge — slightly more prominent than space type */
+    .tree-plan-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      color: var(--orange); white-space: nowrap; flex-shrink: 0;
+      background: rgba(244,121,32,.1); border-radius: 4px; padding: 1px 5px;
+    }
+
+    /* ⋮ menu */
+    .tree-menu-wrap { position: relative; flex-shrink: 0; }
+    .tree-menu-btn {
+      border: none; background: none; cursor: pointer; padding: 0;
+      width: 24px; height: 24px; border-radius: 5px; font-size: 16px;
+      color: var(--gray-400); display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .1s, background .1s, color .1s;
+    }
+    .tree-node-row:hover .tree-menu-btn, .tree-menu-btn.active { opacity: 1; }
+    .tree-menu-btn:hover, .tree-menu-btn.active { background: var(--gray-100); color: var(--dark); }
+
+    .tree-menu {
+      display: none; position: absolute; right: 0; top: calc(100% + 2px);
+      background: #fff; border: 1px solid var(--gray-200);
+      border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.13);
+      min-width: 192px; z-index: 300; padding: 4px;
+    }
+    .tree-menu.open { display: block; }
+    .tree-menu button {
+      display: block; width: 100%; text-align: left; border: none; background: none;
+      padding: 8px 12px; font-size: 13px; color: var(--dark); font-family: inherit;
+      border-radius: 6px; cursor: pointer; transition: background .1s;
+    }
+    .tree-menu button:hover:not(:disabled) { background: var(--gray-50); }
+    .tree-menu button.danger { color: var(--red); }
+    .tree-menu button.danger:hover { background: #fef2f2; }
+    .tree-menu button:disabled { color: var(--gray-300); cursor: default; }
+    .tree-menu-divider { height: 1px; background: var(--gray-100); margin: 3px 0; }
+
     .tree-children { margin-left: 20px; }
+
+    /* ── Bulk-select bar (sticky at bottom of space panel) ── */
+    .select-bar {
+      display: none; position: sticky; bottom: 0;
+      background: #fff; border-top: 1px solid var(--gray-200);
+      padding: 10px 14px; border-radius: 0 0 12px 12px;
+      align-items: center; gap: 10px;
+    }
+    .select-bar.visible { display: flex; }
+    .select-bar-count { font-size: 13px; font-weight: 600; color: var(--dark); flex: 1; }
+    @media (max-width: 900px) { .select-controls { display: none !important; } }
+
+    /* ── Suite detail strip (temporary — will be replaced by full detail page) ── */
+    .suite-detail {
+      border-top: 1px solid var(--gray-100); padding: 16px;
+    }
+    .suite-detail-header {
+      font-size: 15px; font-weight: 700; color: var(--dark); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .suite-detail-section { margin-bottom: 12px; }
+    .suite-detail-section-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+      color: var(--gray-500); margin-bottom: 6px;
+    }
+    .suite-detail-close {
+      margin-left: auto; border: none; background: none; cursor: pointer;
+      font-size: 16px; color: var(--gray-400); border-radius: 5px;
+      width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    }
+    .suite-detail-close:hover { background: var(--gray-100); color: var(--dark); }
+
+    /* ── Types view ── */
+    .types-view { padding: 12px; }
+    .types-table { width: 100%; border-collapse: collapse; }
+    .types-table th {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+      color: var(--gray-500); text-align: left; padding: 6px 10px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .types-table td { padding: 10px 10px; border-bottom: 1px solid var(--gray-50); vertical-align: middle; }
+    .types-table tr:last-child td { border-bottom: none; }
+    .types-table tr:hover td { background: var(--gray-50); }
+    .type-code { font-size: 16px; font-weight: 800; color: var(--dark); }
+    .type-name-input {
+      border: none; background: none; font-size: 13px; color: var(--gray-600);
+      font-family: inherit; width: 100%; padding: 2px 4px; border-radius: 4px;
+      transition: background .1s;
+    }
+    .type-name-input:hover { background: var(--gray-100); }
+    .type-name-input:focus { background: var(--gray-100); outline: 1px solid var(--orange); }
+    .type-count { font-size: 12px; color: var(--gray-500); white-space: nowrap; }
+    .type-panel-actions { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
 
     /* ── Modals ── */
     .modal-backdrop {
@@ -94,38 +219,36 @@
     .modal h3 { font-size: 16px; font-weight: 800; color: var(--dark); margin: 0 0 16px; }
     .form-row { margin-bottom: 14px; }
     .form-row label { display: block; font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 5px; }
-    .form-row input, .form-row select {
+    .form-row input, .form-row select, .form-row textarea {
       width: 100%; box-sizing: border-box;
       border: 1.5px solid var(--gray-200); border-radius: 8px;
       padding: 9px 11px; font-size: 13px; color: var(--dark);
       background: #fff; outline: none; font-family: inherit;
       transition: border-color .15s;
     }
-    .form-row input:focus, .form-row select:focus { border-color: var(--orange); }
+    .form-row input:focus, .form-row select:focus, .form-row textarea:focus { border-color: var(--orange); }
     .form-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
     .modal-tabs { display: flex; border-bottom: 1px solid var(--gray-100); margin-bottom: 16px; }
     .modal-tab {
       padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
       border: none; background: none; color: var(--gray-400);
-      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit;
     }
     .modal-tab.active { color: var(--orange); border-bottom-color: var(--orange); }
   </style>
 </head>
 <body>
 
-<!-- Standalone header — back link + sign out, no office shell -->
 <header class="ws-header">
-  <img src="logo-bolt.png" alt="J&D Western Electric"/>
+  <a href="index.html"><img src="logo-bolt.png" alt="J&D Western Electric"/></a>
   <span class="ws-header-title">Worksites</span>
   <a href="index.html">← Field Hub</a>
-  <span class="ws-header-sep">|</span>
-  <a href="#" id="logout-btn">Sign Out</a>
 </header>
 
 <div class="page-wrap">
   <div class="ws-layout">
+
     <!-- Project list -->
     <div class="project-panel">
       <div class="project-panel-header">Projects</div>
@@ -134,18 +257,49 @@
       </ul>
     </div>
 
-    <!-- Space tree -->
+    <!-- Space / Types panel -->
     <div class="space-panel" id="space-panel">
       <div class="space-panel-header">
         <span class="space-panel-title" id="space-panel-title">Select a project</span>
         <div class="space-actions" id="space-actions" style="display:none;"></div>
       </div>
-      <div class="space-empty" id="space-empty">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
-        <p>Select a project on the left to view its spaces.</p>
+
+      <!-- Spaces view -->
+      <div id="view-spaces">
+        <div class="space-empty" id="space-empty">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
+          <p>Select a project on the left to view its spaces.</p>
+        </div>
+        <div class="tree" id="space-tree" style="display:none;"></div>
+        <!-- Temporary suite detail strip — will be replaced by full detail page -->
+        <div class="suite-detail" id="suite-detail" style="display:none;"></div>
+        <!-- Bulk-select bar -->
+        <div class="select-bar" id="select-bar">
+          <span class="select-bar-count" id="select-count">0 selected</span>
+          <button class="btn btn-sm btn-secondary" onclick="openAssignTypeModal()">Assign Type</button>
+          <button class="btn btn-sm btn-ghost" onclick="exitSelectMode()">Cancel</button>
+        </div>
       </div>
-      <div class="tree" id="space-tree" style="display:none;"></div>
+
+      <!-- Types view (hidden until "Types" tab clicked) -->
+      <div id="view-types" style="display:none;">
+        <div class="types-view">
+          <div id="types-empty" style="padding:32px 0;text-align:center;color:var(--gray-400);font-size:14px;">
+            No types defined for this project yet.
+          </div>
+          <table class="types-table" id="types-table" style="display:none;">
+            <thead>
+              <tr>
+                <th>Type</th><th>Name</th><th>Suites</th><th>Panel Schedule</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="types-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
+
   </div>
 </div>
 
@@ -193,10 +347,10 @@
   </div>
 </div>
 
-<!-- Edit Space Modal -->
+<!-- Rename Space Modal -->
 <div class="modal-backdrop" id="edit-modal">
   <div class="modal">
-    <h3>Edit Space</h3>
+    <h3>Rename Space</h3>
     <div class="form-row">
       <label>Type</label>
       <select id="edit-type"></select>
@@ -216,10 +370,10 @@
 <div class="modal-backdrop" id="dup-modal">
   <div class="modal">
     <h3>Duplicate Space</h3>
-    <p style="font-size:13px;color:var(--gray-500);margin:0 0 16px;">Copies this space and all its children.</p>
+    <p style="font-size:13px;color:var(--gray-500);margin:0 0 16px;">Copies this space and everything inside it.</p>
     <div class="form-row">
-      <label>New Identifier (e.g. "Floor 2")</label>
-      <input type="text" id="dup-identifier" placeholder="Floor 2"/>
+      <label>New Identifier (e.g. "Building 2")</label>
+      <input type="text" id="dup-identifier" placeholder="Building 2"/>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeDupModal()">Cancel</button>
@@ -228,7 +382,44 @@
   </div>
 </div>
 
-<!-- LOCAL banner: rendered here so it works on all standalone pages -->
+<!-- Assign Type Modal (bulk-select) -->
+<div class="modal-backdrop" id="assign-type-modal">
+  <div class="modal">
+    <h3>Assign Type</h3>
+    <p id="assign-type-subtitle" style="font-size:13px;color:var(--gray-500);margin:0 0 14px;"></p>
+    <div class="form-row">
+      <label>Plan Type</label>
+      <select id="assign-type-select">
+        <option value="">— Remove type —</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAssignTypeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAssignType()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Type Modal -->
+<div class="modal-backdrop" id="add-type-modal">
+  <div class="modal">
+    <h3>Add Plan Type</h3>
+    <div class="form-row">
+      <label>Code (e.g. "A", "B", "2BR")</label>
+      <input type="text" id="new-type-code" placeholder="A" style="text-transform:uppercase;"/>
+    </div>
+    <div class="form-row">
+      <label>Name (optional)</label>
+      <input type="text" id="new-type-name" placeholder="1BR Corner"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddTypeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddType()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOCAL banner -->
 <script>
 (function () {
   fetch('/api/env')
@@ -244,7 +435,6 @@
         'padding:4px 0','pointer-events:none','user-select:none',
       ].join(';');
       document.body.appendChild(b);
-      // Push header down so banner doesn't overlap it
       document.querySelector('.ws-header').style.top = '22px';
     })
     .catch(function () {});
@@ -254,14 +444,47 @@
 <script>
 'use strict';
 
-let _spaceTypes = [];
-let _spaces     = [];
-let _activeProjectId   = null;
-let _canEdit           = false;
-let _addParentId  = null;
-let _editSpaceId  = null;
-let _dupSpaceId   = null;
-let _activeTab    = 'single';
+// Space type name → short uppercase badge
+const ABBREV = {
+  'Building':         'BLDG',
+  'Floor':            'FLOOR',
+  'Suite':            'SUITE',
+  'Stairwell':        'STAIR',
+  'Parkade':          'PKDE',
+  'Electrical Room':  'ELEC RM',
+  'Mechanical Room':  'MECH RM',
+  'Lobby':            'LOBBY',
+  'Common Area':      'COMMON',
+  'Storage Room':     'STORAGE',
+  'Exterior':         'EXT',
+  'General':          'GEN',
+  'Roof':             'ROOF',
+  'Garage':           'GARAGE',
+  'Elevator':         'ELEV',
+  'Mechanical Shaft': 'MECH SHF',
+};
+
+let _spaceTypes      = [];
+let _planTypes       = [];      // plan types for active project
+let _spaces          = [];
+let _activeProjectId = null;
+let _canEdit         = false;
+let _currentView     = 'spaces'; // 'spaces' | 'types'
+
+// Tree state
+let _expanded        = new Set();
+let _openMenuId      = null;
+
+// Modal state
+let _addParentId     = null;
+let _editSpaceId     = null;
+let _dupSpaceId      = null;
+let _activeTab       = 'single';
+
+// Select mode
+let _selectMode      = false;
+let _selected        = new Set(); // space IDs
+let _detailSpaceId   = null;
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 
@@ -273,16 +496,12 @@ let _activeTab    = 'single';
   if (access === 'none') { location.href = '/index.html'; return; }
   _canEdit = access === 'edit';
 
-  document.getElementById('logout-btn').addEventListener('click', async e => {
-    e.preventDefault();
-    await fetch('/api/auth/logout', { method: 'POST' });
-    location.href = '/login.html';
-  });
-
   _spaceTypes = await fetch('/api/space-types').then(r => r.json()).catch(() => []);
   populateTypeSelects();
   loadProjects();
 })();
+
+document.addEventListener('click', () => closeMenu());
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
@@ -305,21 +524,102 @@ async function loadProjects() {
 
 function selectProject(id, name, el) {
   _activeProjectId = id;
+  _currentView = 'spaces';
+  exitSelectMode();
+  closeDetail();
   document.querySelectorAll('.project-list a').forEach(a => a.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('space-panel-title').textContent = name;
-
-  const actions = document.getElementById('space-actions');
-  if (_canEdit) {
-    actions.style.display = 'flex';
-    actions.innerHTML = `
-      <button class="btn btn-sm btn-secondary" onclick="openAddModal(null)">+ Add Space</button>
-      <button class="btn btn-sm btn-secondary" onclick="openAddModal(null,'bulk')">Bulk Generate</button>
-    `;
-  } else {
-    actions.style.display = 'none';
-  }
+  loadExpandedState();
+  renderPanelHeader();
   loadSpaces();
+  loadPlanTypes();
+}
+
+function renderPanelHeader() {
+  const actions = document.getElementById('space-actions');
+  actions.style.display = 'flex';
+
+  let html = `
+    <div class="view-pills">
+      <button class="view-pill ${_currentView === 'spaces' ? 'active' : ''}" onclick="switchView('spaces')">Spaces</button>
+      <button class="view-pill ${_currentView === 'types'  ? 'active' : ''}" onclick="switchView('types')">Types</button>
+    </div>
+  `;
+
+  if (_currentView === 'spaces') {
+    html += `
+      <button class="btn-ghost" onclick="expandAll()">Expand All</button>
+      <button class="btn-ghost" onclick="collapseAll()">Collapse All</button>
+    `;
+    if (_canEdit) {
+      html += `
+        <span class="sa-sep"></span>
+        <button class="btn btn-sm btn-secondary select-controls" onclick="enterSelectMode()">Select</button>
+        <button class="btn btn-sm btn-secondary" onclick="openAddModal(null)">+ Add Space</button>
+        <button class="btn btn-sm btn-secondary" onclick="openAddModal(null,'bulk')">Bulk Generate</button>
+      `;
+    }
+  } else {
+    if (_canEdit) {
+      html += `<button class="btn btn-sm btn-secondary" onclick="openAddTypeModal()">+ Add Type</button>`;
+    }
+  }
+
+  actions.innerHTML = html;
+}
+
+function switchView(view) {
+  _currentView = view;
+  exitSelectMode();
+  closeDetail();
+  renderPanelHeader();
+  document.getElementById('view-spaces').style.display = view === 'spaces' ? '' : 'none';
+  document.getElementById('view-types').style.display  = view === 'types'  ? '' : 'none';
+  if (view === 'types') renderTypesView();
+}
+
+// ── Expand / collapse state ──────────────────────────────────────────────────
+
+function expandedKey() { return 'ws_expanded_' + _activeProjectId; }
+
+function loadExpandedState() {
+  try {
+    const raw = localStorage.getItem(expandedKey());
+    _expanded = raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) { _expanded = new Set(); }
+}
+
+function saveExpandedState() {
+  try { localStorage.setItem(expandedKey(), JSON.stringify([..._expanded])); } catch (e) {}
+}
+
+function toggleNode(id) {
+  const childDiv = document.getElementById('ch-' + id);
+  const btn      = document.querySelector('[data-toggle="' + id + '"]');
+  if (!childDiv) return;
+  if (_expanded.has(id)) {
+    _expanded.delete(id);
+    childDiv.style.display = 'none';
+    if (btn) btn.textContent = '▸';
+  } else {
+    _expanded.add(id);
+    childDiv.style.display = '';
+    if (btn) btn.textContent = '▾';
+  }
+  saveExpandedState();
+}
+
+function expandAll() {
+  _spaces.filter(s => _spaces.some(c => c.parent_id === s.id)).forEach(s => _expanded.add(s.id));
+  saveExpandedState();
+  renderTree();
+}
+
+function collapseAll() {
+  _expanded.clear();
+  saveExpandedState();
+  renderTree();
 }
 
 // ── Spaces ───────────────────────────────────────────────────────────────────
@@ -353,29 +653,333 @@ function renderChildren(parentId, depth) {
 }
 
 function renderNode(s, depth) {
-  const bars = Array.from({ length: depth }, () =>
-    '<div class="tree-indent-bar"><div class="tree-indent-bar-line"></div></div>'
+  const hasKids  = _spaces.some(c => c.parent_id === s.id);
+  const isOpen   = _expanded.has(s.id);
+  const isSuite  = s.type_name === 'Suite';
+  const isSelected = _selected.has(s.id);
+  const isDetail = _detailSpaceId === s.id;
+
+  const guides = Array.from({ length: depth }, () =>
+    '<div class="tree-guide"><div class="tree-guide-line"></div></div>'
   ).join('');
-  const editBtns = _canEdit ? `
-    <div class="tree-actions">
-      <button class="tree-btn" onclick="openAddModal(${s.id})">+ Child</button>
-      <button class="tree-btn" onclick="openDupModal(${s.id})">Copy</button>
-      <button class="tree-btn" onclick="openEditModal(${s.id})">Edit</button>
-      <button class="tree-btn danger" onclick="deleteSpace(${s.id})">✕</button>
+
+  const toggle = hasKids
+    ? `<button class="tree-toggle" data-toggle="${s.id}" onclick="event.stopPropagation();toggleNode(${s.id})">${isOpen ? '▾' : '▸'}</button>`
+    : '<div class="tree-toggle-spacer"></div>';
+
+  // Checkbox — only for suites in select mode
+  let checkHtml = '';
+  if (_selectMode) {
+    checkHtml = isSuite
+      ? `<input type="checkbox" class="tree-check" ${isSelected ? 'checked' : ''}
+           onclick="event.stopPropagation();toggleSelect(${s.id})" />`
+      : '<div class="tree-check-spacer"></div>';
+  }
+
+  const badge = ABBREV[s.type_name] || (s.type_name ? s.type_name.toUpperCase() : '');
+  const planBadge = s.plan_type_code
+    ? `<span class="tree-plan-badge">${escHtml(s.plan_type_code)}</span>`
+    : '';
+
+  const dCls = depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'd2';
+  const selCls = isDetail ? ' selected' : '';
+
+  const menuHtml = _canEdit ? `
+    <div class="tree-menu-wrap">
+      <button class="tree-menu-btn" id="mbtn-${s.id}"
+        onclick="event.stopPropagation();openMenu(${s.id})">⋮</button>
+      <div class="tree-menu" id="menu-${s.id}">
+        <button onclick="closeMenu();openAddModal(${s.id})">Add Space Inside</button>
+        <button onclick="closeMenu();openEditModal(${s.id})">Rename</button>
+        <button onclick="closeMenu();openDupModal(${s.id})">Duplicate With Contents</button>
+        <div class="tree-menu-divider"></div>
+        <button disabled>Move</button>
+        <button class="danger" onclick="closeMenu();archiveSpace(${s.id})">Archive</button>
+      </div>
     </div>` : '';
-  const children = renderChildren(s.id, depth + 1);
+
+  // Suite row is clickable to open detail
+  const clickHandler = isSuite ? `onclick="openDetail(${s.id})"` : '';
+
+  const childrenHtml = hasKids
+    ? `<div class="tree-children" id="ch-${s.id}" style="${isOpen ? '' : 'display:none'}">${renderChildren(s.id, depth + 1)}</div>`
+    : '';
+
   return `
     <div class="tree-node">
-      <div class="tree-node-row">
-        ${bars}
-        <span class="tree-icon">${escHtml(s.type_icon || '📁')}</span>
+      <div class="tree-node-row ${dCls}${selCls}" ${clickHandler} style="${isSuite ? 'cursor:pointer' : ''}">
+        ${guides}
+        ${toggle}
+        ${checkHtml}
         <span class="tree-label">${escHtml(s.identifier)}</span>
-        <span class="tree-type">${escHtml(s.type_name || '')}</span>
-        ${editBtns}
+        ${planBadge}
+        ${badge ? `<span class="tree-type-badge">${badge}</span>` : ''}
+        ${menuHtml}
       </div>
-      ${children ? `<div class="tree-children">${children}</div>` : ''}
+      ${childrenHtml}
     </div>
   `;
+}
+
+// ── Suite detail strip ───────────────────────────────────────────────────────
+// TEMPORARY — this strip will be replaced by a full space detail page in a later chunk.
+// Keep it minimal: type header + panel link only.
+
+function openDetail(id) {
+  const s = _spaces.find(x => x.id === id);
+  if (!s || s.type_name !== 'Suite') return;
+
+  if (_detailSpaceId === id) { closeDetail(); return; }
+  _detailSpaceId = id;
+  renderTree(); // re-render to apply .selected class
+
+  const pt = _planTypes.find(t => t.id === s.plan_type_id);
+  const detail = document.getElementById('suite-detail');
+
+  const typeHeader = s.plan_type_code
+    ? `${escHtml(s.identifier)} <span class="tree-plan-badge">Type ${escHtml(s.plan_type_code)}</span>`
+    : `${escHtml(s.identifier)} <span style="font-size:12px;color:var(--gray-400);font-weight:500;">No type assigned</span>`;
+
+  let panelHtml = '';
+  if (pt && pt.has_panel) {
+    panelHtml = `
+      <div class="suite-detail-section">
+        <div class="suite-detail-section-label">Panel Schedule</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <a href="/api/plan-types/${pt.id}/panel" target="_blank" class="btn btn-sm btn-secondary">View Panel Schedule</a>
+          <span style="font-size:11px;color:var(--gray-400);">${escHtml(pt.panel_file_name || '')}</span>
+        </div>
+      </div>`;
+  } else if (pt) {
+    panelHtml = `
+      <div class="suite-detail-section">
+        <div class="suite-detail-section-label">Panel Schedule</div>
+        <div style="font-size:13px;color:var(--gray-400);">
+          No panel uploaded for Type ${escHtml(s.plan_type_code)}.
+          ${_canEdit ? `<a href="#" onclick="switchView('types');return false;" style="color:var(--orange);">Upload in Types</a>` : ''}
+        </div>
+      </div>`;
+  } else {
+    panelHtml = _canEdit ? `
+      <div class="suite-detail-section">
+        <div class="suite-detail-section-label">Plan Type</div>
+        <div style="font-size:13px;color:var(--gray-400);">
+          <a href="#" onclick="enterSelectModeForSuite(${s.id});return false;" style="color:var(--orange);">Assign a type</a>
+        </div>
+      </div>` : '';
+  }
+
+  detail.innerHTML = `
+    <div class="suite-detail-header">
+      ${typeHeader}
+      <button class="suite-detail-close" onclick="closeDetail()" title="Close">&#x2715;</button>
+    </div>
+    ${panelHtml}
+  `;
+  detail.style.display = '';
+}
+
+function closeDetail() {
+  _detailSpaceId = null;
+  document.getElementById('suite-detail').style.display = 'none';
+}
+
+// ── Select mode ──────────────────────────────────────────────────────────────
+
+function enterSelectMode() {
+  _selectMode = true;
+  _selected.clear();
+  closeDetail();
+  renderTree();
+  updateSelectBar();
+}
+
+function enterSelectModeForSuite(id) {
+  enterSelectMode();
+  toggleSelect(id);
+}
+
+function exitSelectMode() {
+  _selectMode = false;
+  _selected.clear();
+  document.getElementById('select-bar').classList.remove('visible');
+  renderTree();
+}
+
+function toggleSelect(id) {
+  if (_selected.has(id)) _selected.delete(id); else _selected.add(id);
+  const cb = document.querySelector(`[onclick*="toggleSelect(${id})"]`);
+  if (cb) cb.checked = _selected.has(id);
+  updateSelectBar();
+}
+
+function updateSelectBar() {
+  const bar = document.getElementById('select-bar');
+  const n = _selected.size;
+  document.getElementById('select-count').textContent = `${n} suite${n === 1 ? '' : 's'} selected`;
+  bar.classList.toggle('visible', _selectMode);
+}
+
+// ── Plan Types view ──────────────────────────────────────────────────────────
+
+async function loadPlanTypes() {
+  if (!_activeProjectId) return;
+  _planTypes = await fetch(`/api/projects/${_activeProjectId}/plan-types`).then(r => r.json()).catch(() => []);
+  if (_currentView === 'types') renderTypesView();
+  populateAssignTypeSelect();
+}
+
+function renderTypesView() {
+  const empty = document.getElementById('types-empty');
+  const table = document.getElementById('types-table');
+  const tbody = document.getElementById('types-tbody');
+
+  if (!_planTypes.length) {
+    empty.style.display = ''; table.style.display = 'none'; return;
+  }
+  empty.style.display = 'none'; table.style.display = '';
+
+  tbody.innerHTML = _planTypes.map(pt => `
+    <tr>
+      <td><span class="type-code">${escHtml(pt.code)}</span></td>
+      <td>
+        ${_canEdit
+          ? `<input class="type-name-input" value="${escHtml(pt.name || '')}" placeholder="—"
+               onblur="saveTypeName(${pt.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()"/>`
+          : `<span style="font-size:13px;color:var(--gray-600);">${escHtml(pt.name || '—')}</span>`
+        }
+      </td>
+      <td><span class="type-count">${pt.suite_count} suite${pt.suite_count === 1 ? '' : 's'}</span></td>
+      <td>
+        <div class="type-panel-actions">
+          ${pt.has_panel
+            ? `<a href="/api/plan-types/${pt.id}/panel" target="_blank" class="btn btn-sm btn-secondary">View</a>
+               ${_canEdit ? `<label class="btn btn-sm btn-ghost" style="cursor:pointer;">Replace<input type="file" accept=".pdf,image/*" style="display:none;" onchange="uploadPanel(${pt.id},this)"/></label>` : ''}
+               ${_canEdit ? `<button class="btn btn-sm btn-ghost" style="color:var(--red);" onclick="removePanel(${pt.id})">Remove</button>` : ''}`
+            : _canEdit
+              ? `<label class="btn btn-sm btn-secondary" style="cursor:pointer;">Upload<input type="file" accept=".pdf,image/*" style="display:none;" onchange="uploadPanel(${pt.id},this)"/></label>`
+              : '<span style="font-size:12px;color:var(--gray-400);">No panel</span>'
+          }
+        </div>
+      </td>
+      <td>
+        ${_canEdit && pt.suite_count === 0
+          ? `<button class="btn btn-sm btn-ghost" style="color:var(--red);" onclick="deleteType(${pt.id})">Delete</button>`
+          : ''
+        }
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function saveTypeName(typeId, rawName) {
+  const name = rawName.trim() || null;
+  const existing = _planTypes.find(t => t.id === typeId);
+  if (existing && existing.name === name) return; // no change
+  await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  await loadPlanTypes();
+}
+
+async function uploadPanel(typeId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append('panel', file);
+  const r = await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}/panel`, { method: 'POST', body: fd });
+  if (!r.ok) { alert('Upload failed.'); return; }
+  await loadPlanTypes();
+  // If a suite detail is open and it uses this type, refresh it
+  if (_detailSpaceId) {
+    const s = _spaces.find(x => x.id === _detailSpaceId);
+    if (s && s.plan_type_id === typeId) openDetail(_detailSpaceId);
+  }
+}
+
+async function removePanel(typeId) {
+  if (!confirm('Remove panel schedule?')) return;
+  await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}/panel`, { method: 'DELETE' });
+  await loadPlanTypes();
+}
+
+async function deleteType(typeId) {
+  const pt = _planTypes.find(t => t.id === typeId);
+  if (!confirm(`Delete Type ${pt?.code}?`)) return;
+  const r = await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json(); alert(e.error); return; }
+  await loadPlanTypes();
+}
+
+// ── Add Type Modal ───────────────────────────────────────────────────────────
+
+function openAddTypeModal() {
+  document.getElementById('new-type-code').value = '';
+  document.getElementById('new-type-name').value = '';
+  document.getElementById('add-type-modal').classList.add('open');
+  setTimeout(() => document.getElementById('new-type-code').focus(), 50);
+}
+function closeAddTypeModal() { document.getElementById('add-type-modal').classList.remove('open'); }
+
+async function submitAddType() {
+  const code = document.getElementById('new-type-code').value.trim().toUpperCase();
+  const name = document.getElementById('new-type-name').value.trim() || null;
+  if (!code) { alert('Code is required.'); return; }
+  const r = await fetch(`/api/projects/${_activeProjectId}/plan-types`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, name }),
+  });
+  if (!r.ok) { const e = await r.json(); alert(e.error); return; }
+  closeAddTypeModal();
+  await loadPlanTypes();
+  renderTypesView();
+}
+
+// ── Assign Type Modal ─────────────────────────────────────────────────────────
+
+function populateAssignTypeSelect() {
+  const sel = document.getElementById('assign-type-select');
+  sel.innerHTML = '<option value="">— Remove type —</option>' +
+    _planTypes.map(pt => `<option value="${pt.id}">${escHtml(pt.code)}${pt.name ? ' — ' + escHtml(pt.name) : ''}</option>`).join('');
+}
+
+function openAssignTypeModal() {
+  if (!_selected.size) return;
+  document.getElementById('assign-type-subtitle').textContent =
+    `Assigning to ${_selected.size} suite${_selected.size === 1 ? '' : 's'}`;
+  document.getElementById('assign-type-select').value = '';
+  document.getElementById('assign-type-modal').classList.add('open');
+}
+function closeAssignTypeModal() { document.getElementById('assign-type-modal').classList.remove('open'); }
+
+async function submitAssignType() {
+  const val = document.getElementById('assign-type-select').value;
+  const plan_type_id = val ? parseInt(val, 10) : null;
+  const r = await fetch(`/api/projects/${_activeProjectId}/spaces/bulk-assign-type`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ space_ids: [..._selected], plan_type_id }),
+  });
+  if (!r.ok) { const e = await r.json(); alert(e.error); return; }
+  closeAssignTypeModal();
+  exitSelectMode();
+  await loadSpaces();
+  await loadPlanTypes();
+}
+
+// ── Menu ─────────────────────────────────────────────────────────────────────
+
+function openMenu(id) {
+  if (_openMenuId === id) { closeMenu(); return; }
+  closeMenu();
+  _openMenuId = id;
+  document.getElementById('menu-' + id)?.classList.add('open');
+  document.getElementById('mbtn-' + id)?.classList.add('active');
+}
+function closeMenu() {
+  if (_openMenuId === null) return;
+  document.getElementById('menu-' + _openMenuId)?.classList.remove('open');
+  document.getElementById('mbtn-' + _openMenuId)?.classList.remove('active');
+  _openMenuId = null;
 }
 
 // ── Add Modal ────────────────────────────────────────────────────────────────
@@ -387,7 +991,6 @@ function openAddModal(parentId, tab) {
   document.getElementById('add-modal').classList.add('open');
   if (!tab || tab === 'single') setTimeout(() => document.getElementById('single-identifier').focus(), 50);
 }
-
 function closeAddModal() { document.getElementById('add-modal').classList.remove('open'); }
 
 function switchTab(tab) {
@@ -401,7 +1004,7 @@ function switchTab(tab) {
 
 async function submitAdd() {
   if (_activeTab === 'single') {
-    const identifier  = document.getElementById('single-identifier').value.trim();
+    const identifier    = document.getElementById('single-identifier').value.trim();
     const space_type_id = document.getElementById('single-type').value || null;
     if (!identifier) { alert('Please enter an identifier.'); return; }
     await fetch(`/api/projects/${_activeProjectId}/spaces`, {
@@ -409,10 +1012,10 @@ async function submitAdd() {
       body: JSON.stringify({ parent_id: _addParentId, space_type_id, identifier }),
     });
   } else {
-    const prefix    = document.getElementById('bulk-prefix').value;
-    const start     = parseInt(document.getElementById('bulk-start').value, 10);
-    const end       = parseInt(document.getElementById('bulk-end').value,   10);
-    const pad       = document.getElementById('bulk-pad').checked;
+    const prefix        = document.getElementById('bulk-prefix').value;
+    const start         = parseInt(document.getElementById('bulk-start').value, 10);
+    const end           = parseInt(document.getElementById('bulk-end').value, 10);
+    const pad           = document.getElementById('bulk-pad').checked;
     const space_type_id = document.getElementById('bulk-type').value || null;
     if (isNaN(start) || isNaN(end) || start > end) { alert('Invalid range.'); return; }
     if (end - start > 499) { alert('Maximum 500 spaces at once.'); return; }
@@ -425,7 +1028,7 @@ async function submitAdd() {
   loadSpaces();
 }
 
-// ── Edit Modal ───────────────────────────────────────────────────────────────
+// ── Rename Modal ─────────────────────────────────────────────────────────────
 
 function openEditModal(id) {
   _editSpaceId = id;
@@ -436,7 +1039,6 @@ function openEditModal(id) {
   document.getElementById('edit-modal').classList.add('open');
   setTimeout(() => document.getElementById('edit-identifier').focus(), 50);
 }
-
 function closeEditModal() { document.getElementById('edit-modal').classList.remove('open'); }
 
 async function submitEdit() {
@@ -460,7 +1062,6 @@ function openDupModal(id) {
   document.getElementById('dup-modal').classList.add('open');
   setTimeout(() => document.getElementById('dup-identifier').focus(), 50);
 }
-
 function closeDupModal() { document.getElementById('dup-modal').classList.remove('open'); }
 
 async function submitDuplicate() {
@@ -475,16 +1076,17 @@ async function submitDuplicate() {
   loadSpaces();
 }
 
-// ── Delete ───────────────────────────────────────────────────────────────────
+// ── Archive ──────────────────────────────────────────────────────────────────
 
-async function deleteSpace(id) {
+async function archiveSpace(id) {
   const s = _spaces.find(x => x.id === id);
-  const hasChildren = _spaces.some(x => x.parent_id === id);
-  const msg = hasChildren
-    ? `Archive "${s.identifier}"? It has children — they will be hidden but not deleted.`
-    : `Delete "${s.identifier}"?`;
+  const hasContents = _spaces.some(x => x.parent_id === id);
+  const msg = hasContents
+    ? `Archive "${s.identifier}"? Everything inside will be hidden.`
+    : `Archive "${s.identifier}"?`;
   if (!confirm(msg)) return;
   await fetch(`/api/spaces/${id}`, { method: 'DELETE' });
+  if (_detailSpaceId === id) closeDetail();
   loadSpaces();
 }
 
@@ -492,10 +1094,8 @@ async function deleteSpace(id) {
 
 function populateTypeSelects() {
   const blank = '<option value="">— No type —</option>';
-  const opts  = _spaceTypes.map(t =>
-    `<option value="${t.id}">${t.icon} ${escHtml(t.name)}</option>`
-  ).join('');
-  ['single-type','bulk-type','edit-type'].forEach(id => {
+  const opts  = _spaceTypes.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
+  ['single-type', 'bulk-type', 'edit-type'].forEach(id => {
     document.getElementById(id).innerHTML = blank + opts;
   });
 }

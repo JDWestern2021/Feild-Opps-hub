@@ -865,6 +865,36 @@ async function initSchema() {
     `);
   }
 
+  // ── Plan types (suite layout types, per-project) ───────────────────────────
+  // Panel schedules live here as BYTEA — six files max. See implementation
+  // notes: before deficiency photos, decide on file storage (BYTEA vs object
+  // storage) — thousands of photos as BYTEA inside Postgres is not the plan.
+  await pool.query(`CREATE TABLE IF NOT EXISTS plan_types (
+    id                SERIAL PRIMARY KEY,
+    project_id        INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    code              TEXT NOT NULL,
+    name              TEXT,
+    notes             TEXT,
+    panel_file_data   BYTEA,
+    panel_mime_type   TEXT,
+    panel_file_name   TEXT,
+    panel_file_size   INTEGER,
+    panel_uploaded_by TEXT,
+    panel_uploaded_at TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (project_id, code)
+  )`);
+
+  // plan_type_id — the only change to spaces; nullable so non-suite spaces stay null
+  await pool.query(`ALTER TABLE spaces ADD COLUMN IF NOT EXISTS plan_type_id INTEGER REFERENCES plan_types(id) ON DELETE SET NULL`);
+
+  // New space types for building-level verticals — idempotent, UNIQUE(name) exists
+  await pool.query(`
+    INSERT INTO space_types (name, icon, sort_order)
+    VALUES ('Elevator', '', 15), ('Mechanical Shaft', '', 16)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS user_module_permissions (
     id         SERIAL PRIMARY KEY,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
