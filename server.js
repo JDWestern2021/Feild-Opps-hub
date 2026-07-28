@@ -53,6 +53,13 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(sessionMiddleware());
+
+// Tells the frontend whether it's running locally so it can show the dev banner.
+// Never exposes credentials — just the environment flag.
+app.get('/api/env', (req, res) => {
+  res.json({ local: process.env.NODE_ENV !== 'production' });
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {
