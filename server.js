@@ -1,4 +1,5 @@
-require('dotenv').config(); // load .env in development
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config(); // .env.local wins (override:false means first file wins)
 const express      = require('express');
 const path         = require('path');
 const crypto       = require('crypto');
@@ -13,10 +14,18 @@ const { sessionMiddleware, requireAuth, requireAdmin, requirePermission, logActi
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// Prevent a single bad request from crashing the whole server
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection (request ignored):', err.message);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception (request ignored):', err.message);
+});
+
 // Hostinger (and most hosts) run Node behind a reverse proxy that terminates SSL.
 // Without this, Express doesn't know the original request was HTTPS and won't set
 // the Secure session cookie — causing login to silently fail (bounced back to login page).
-app.set('trust proxy', 1);
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
 // ── Uploads storage ──
 const upload = multer({
@@ -284,6 +293,41 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
 });
 
+// ── Module permission helpers ─────────────────────────────────────────────────
+
+async function getModuleAccess(userId, module, role) {
+  if (role === 'admin') return 'edit';
+  const { rows } = await pool.query(
+    'SELECT access FROM user_module_permissions WHERE user_id=$1 AND module=$2',
+    [userId, module]
+  );
+  return rows[0] ? rows[0].access : 'none'; // fail-closed: no row = none
+}
+
+async function getUserModuleMap(userId, role) {
+  if (role === 'admin') {
+    // admins get edit on all known modules
+    return { worksites: 'edit' };
+  }
+  const { rows } = await pool.query(
+    'SELECT module, access FROM user_module_permissions WHERE user_id=$1',
+    [userId]
+  );
+  const map = {};
+  for (const r of rows) map[r.module] = r.access;
+  return map;
+}
+
+function requireModuleAccess(module, minLevel) {
+  const levels = { none: 0, view: 1, edit: 2 };
+  return async (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const access = await getModuleAccess(req.user.id, module, req.user.role);
+    if (levels[access] >= levels[minLevel]) return next();
+    res.status(403).json({ error: 'Access denied' });
+  };
+}
+
 app.get('/api/auth/me', async (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Not authenticated' });
   const { rows } = await pool.query('SELECT id,name,email,role,status,permissions FROM users WHERE id=$1', [req.session.userId]);
@@ -291,6 +335,7 @@ app.get('/api/auth/me', async (req, res) => {
   if (!user || user.status !== 'active') return res.status(401).json({ error: 'Not authenticated' });
   if (user.role === 'admin') user.permissions = 'time_ticket,get_po,office_dashboard';
   else if (!user.permissions) user.permissions = 'time_ticket';
+  user.module_permissions = await getUserModuleMap(user.id, user.role);
   res.json(user);
 });
 
@@ -390,8 +435,16 @@ app.post('/api/users/invite', requireAdmin, async (req, res) => {
   if (existing.rows[0]) return res.status(409).json({ error: 'A user with this email already exists' });
   const token   = crypto.randomBytes(32).toString('hex');
   const expires = new Date(Date.now()+7*24*3600000).toISOString();
-  await pool.query('INSERT INTO users (name,email,role,status,invite_token,invite_expires,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-    [name, email.toLowerCase(), role, 'invited', token, expires, new Date().toISOString()]);
+  const { rows: [newUser] } = await pool.query(
+    'INSERT INTO users (name,email,role,status,invite_token,invite_expires,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+    [name, email.toLowerCase(), role, 'invited', token, expires, new Date().toISOString()]
+  );
+  if (role !== 'admin') {
+    await pool.query(
+      'INSERT INTO user_module_permissions (user_id, module, access) VALUES ($1, $2, $3) ON CONFLICT (user_id, module) DO NOTHING',
+      [newUser.id, 'worksites', 'view']
+    );
+  }
   const inviteUrl = `${req.protocol}://${req.get('host')}/accept-invite.html?token=${token}`;
   const smtpHost = await getSetting('smtp_host');
   let emailSent = false;
@@ -444,6 +497,33 @@ app.patch('/api/users/:id/permissions', requireAdmin, async (req, res) => {
   await pool.query('UPDATE users SET permissions=$1 WHERE id=$2', [cleaned, req.params.id]);
   logAction(req,'permissions_changed',null,null,`Permissions updated for ${user.name}: ${cleaned||'none'} by ${req.user.name}`);
   res.json({ ok: true, permissions: cleaned });
+});
+
+// GET /api/users/:id/module-permissions
+app.get('/api/users/:id/module-permissions', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT module, access FROM user_module_permissions WHERE user_id=$1 ORDER BY module',
+      [req.params.id]
+    );
+    const map = {};
+    for (const r of rows) map[r.module] = r.access;
+    res.json(map);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/users/:id/module-permissions/:module
+app.patch('/api/users/:id/module-permissions/:module', requireAdmin, async (req, res) => {
+  try {
+    const { access } = req.body;
+    if (!['none','view','edit'].includes(access)) return res.status(400).json({ error: 'access must be none, view, or edit' });
+    await pool.query(`
+      INSERT INTO user_module_permissions (user_id, module, access)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id, module) DO UPDATE SET access = EXCLUDED.access
+    `, [req.params.id, req.params.module, access]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.patch('/api/users/:id/color', requireAdmin, async (req, res) => {
@@ -1217,6 +1297,18 @@ app.get('/api/tickets/my-today', requireAuth, async (req, res) => {
   res.json(editable);
 });
 
+app.get('/api/tickets/my-flags', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.id, t.ticket_number, t.date, t.job_name, t.job_number, t.supervisor,
+            t.flag_reason, t.flag_assigned_at, t.flag_assigned_to_name, t.flag_status
+     FROM daily_tickets t
+     WHERE t.flag_assigned_to_id=$1 AND t.flag_status='pending' AND COALESCE(t.archived,0)=0
+     ORDER BY t.flag_assigned_at DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
 app.get('/api/tickets/:id', requireAuth, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Ticket not found' });
@@ -1365,17 +1457,6 @@ app.patch('/api/tickets/:id/flag/resolve', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/tickets/my-flags', requireAuth, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT t.id, t.ticket_number, t.date, t.job_name, t.job_number, t.supervisor,
-            t.flag_reason, t.flag_assigned_at, t.flag_assigned_to_name, t.flag_status
-     FROM daily_tickets t
-     WHERE t.flag_assigned_to_id=$1 AND t.flag_status='pending' AND COALESCE(t.archived,0)=0
-     ORDER BY t.flag_assigned_at DESC`,
-    [req.user.id]
-  );
-  res.json(rows);
-});
 
 app.patch('/api/tickets/:id/archive', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM daily_tickets WHERE id=$1', [req.params.id]);
@@ -5739,6 +5820,129 @@ app.get('/api/change-orders/:id/export', requireAuth, async (req, res) => {
     res.setHeader('Content-Disposition',`attachment; filename="CO-${co.co_number}.xlsx"`);
     res.send(buf);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────
+// WORKSITES — SPACE TYPES + SPACES
+// ─────────────────────────────────────────────
+
+// GET /api/space-types
+app.get('/api/space-types', requireAuth, requireModuleAccess('worksites', 'view'), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM space_types ORDER BY sort_order, name');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/spaces — full flat list, client builds the tree
+app.get('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites', 'view'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT s.*, st.name AS type_name, st.icon AS type_icon
+      FROM spaces s
+      LEFT JOIN space_types st ON st.id = s.space_type_id
+      WHERE s.project_id = $1 AND s.archived_at IS NULL
+      ORDER BY s.sort_order, s.id
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/projects/:id/spaces — add single space
+app.post('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+  try {
+    const { parent_id, space_type_id, identifier, sort_order } = req.body;
+    const { rows: [space] } = await pool.query(`
+      INSERT INTO spaces (project_id, parent_id, space_type_id, identifier, sort_order)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *
+    `, [req.params.id, parent_id || null, space_type_id || null, identifier, sort_order || 0]);
+    res.json(space);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/projects/:id/spaces/bulk — generate a numbered range
+app.post('/api/projects/:id/spaces/bulk', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+  try {
+    const { parent_id, space_type_id, prefix, start, end, pad } = req.body;
+    const from = parseInt(start, 10);
+    const to   = parseInt(end,   10);
+    if (isNaN(from) || isNaN(to) || from > to || to - from > 500) {
+      return res.status(400).json({ error: 'Invalid range (max 500)' });
+    }
+    const created = [];
+    for (let n = from; n <= to; n++) {
+      const num = pad ? String(n).padStart(String(to).length, '0') : String(n);
+      const identifier = prefix ? `${prefix}${num}` : num;
+      const { rows: [s] } = await pool.query(`
+        INSERT INTO spaces (project_id, parent_id, space_type_id, identifier, sort_order)
+        VALUES ($1, $2, $3, $4, $5) RETURNING *
+      `, [req.params.id, parent_id || null, space_type_id || null, identifier, n - from]);
+      created.push(s);
+    }
+    res.json(created);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/duplicate — deep-copy a space and all its descendants
+app.post('/api/spaces/:id/duplicate', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+  try {
+    const { new_identifier, new_parent_id } = req.body;
+    const { rows: [src] } = await pool.query('SELECT * FROM spaces WHERE id=$1', [req.params.id]);
+    if (!src) return res.status(404).json({ error: 'Space not found' });
+
+    // Recursive copy: returns new root id
+    async function copySubtree(sourceId, targetParentId) {
+      const { rows: [s] } = await pool.query('SELECT * FROM spaces WHERE id=$1', [sourceId]);
+      const label = (targetParentId === (new_parent_id ?? src.parent_id) && new_identifier)
+        ? new_identifier : s.identifier;
+      const { rows: [created] } = await pool.query(`
+        INSERT INTO spaces (project_id, parent_id, space_type_id, identifier, sort_order)
+        VALUES ($1, $2, $3, $4, $5) RETURNING *
+      `, [s.project_id, targetParentId, s.space_type_id, label, s.sort_order]);
+      const { rows: children } = await pool.query(
+        'SELECT id FROM spaces WHERE parent_id=$1 AND archived_at IS NULL ORDER BY sort_order, id', [sourceId]
+      );
+      for (const child of children) await copySubtree(child.id, created.id);
+      return created;
+    }
+
+    const newRoot = await copySubtree(src.id, new_parent_id ?? src.parent_id);
+    res.json(newRoot);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/spaces/:id — rename, retype, reparent, reorder
+app.patch('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+  try {
+    const fields = [];
+    const vals   = [];
+    let i = 1;
+    for (const col of ['identifier', 'space_type_id', 'parent_id', 'sort_order']) {
+      if (req.body[col] !== undefined) { fields.push(`${col} = $${i++}`); vals.push(req.body[col]); }
+    }
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+    vals.push(req.params.id);
+    const { rows: [s] } = await pool.query(
+      `UPDATE spaces SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`, vals
+    );
+    res.json(s);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/spaces/:id — archive (soft) or hard-delete if no children
+app.delete('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'SELECT 1 FROM spaces WHERE parent_id = $1 AND archived_at IS NULL LIMIT 1', [req.params.id]
+    );
+    if (rowCount > 0) {
+      await pool.query('UPDATE spaces SET archived_at = NOW() WHERE id = $1', [req.params.id]);
+      res.json({ archived: true });
+    } else {
+      await pool.query('DELETE FROM spaces WHERE id = $1', [req.params.id]);
+      res.json({ deleted: true });
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─────────────────────────────────────────────

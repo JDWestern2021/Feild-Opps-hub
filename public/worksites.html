@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Worksites — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { margin: 0; background: var(--gray-50); font-family: var(--font, system-ui, sans-serif); }
+
+    /* ── Standalone header ── */
+    .ws-header {
+      background: #0f172a; color: #fff;
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 20px; height: 52px; position: sticky; top: 0; z-index: 50;
+    }
+    .ws-header img { width: 30px; height: 30px; border-radius: 6px; }
+    .ws-header-title { font-size: 14px; font-weight: 700; flex: 1; }
+    .ws-header a {
+      font-size: 12px; font-weight: 600; color: rgba(255,255,255,.6);
+      text-decoration: none; padding: 6px 10px; border-radius: 6px;
+      transition: background .12s, color .12s;
+    }
+    .ws-header a:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .ws-header-sep { color: rgba(255,255,255,.2); font-size: 16px; }
+
+    /* ── Page wrap ── */
+    .page-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; }
+    .page-header h1 { font-size: 22px; font-weight: 800; color: var(--dark); margin: 0; }
+
+    /* ── Two-panel layout ── */
+    .ws-layout { display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 900px) { .ws-layout { grid-template-columns: 1fr; } }
+
+    /* ── Project list ── */
+    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); overflow: hidden; }
+    .project-panel-header { padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); border-bottom: 1px solid var(--gray-100); }
+    .project-list { list-style: none; margin: 0; padding: 6px; }
+    .project-list li a {
+      display: block; padding: 9px 12px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; color: var(--dark);
+      text-decoration: none; transition: background .12s;
+    }
+    .project-list li a:hover { background: var(--gray-50); }
+    .project-list li a.active { background: rgba(244,121,32,.1); color: var(--orange); }
+    .project-list li .proj-num { font-size: 11px; color: var(--gray-400); font-weight: 500; margin-top: 1px; }
+
+    /* ── Space tree ── */
+    .space-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); }
+    .space-panel-header {
+      padding: 12px 16px; border-bottom: 1px solid var(--gray-100);
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .space-panel-title { font-size: 15px; font-weight: 700; color: var(--dark); }
+    .space-actions { display: flex; gap: 8px; }
+    .space-empty { padding: 48px 24px; text-align: center; color: var(--gray-400); font-size: 14px; }
+    .space-empty svg { width: 40px; height: 40px; margin: 0 auto 12px; display: block; opacity: .3; }
+
+    /* ── Tree ── */
+    .tree { padding: 8px; }
+    .tree-node-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-radius: 8px; transition: background .1s;
+    }
+    .tree-node-row:hover { background: var(--gray-50); }
+    .tree-indent-bar { width: 20px; flex-shrink: 0; display: flex; justify-content: center; }
+    .tree-indent-bar-line { width: 1px; min-height: 32px; background: var(--gray-200); }
+    .tree-icon { font-size: 15px; flex-shrink: 0; width: 22px; text-align: center; }
+    .tree-label { font-size: 13px; font-weight: 600; color: var(--dark); flex: 1; }
+    .tree-type { font-size: 11px; color: var(--gray-400); font-weight: 500; }
+    .tree-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .1s; }
+    .tree-node-row:hover .tree-actions { opacity: 1; }
+    .tree-btn {
+      border: none; background: none; cursor: pointer; padding: 3px 6px;
+      border-radius: 5px; font-size: 11px; color: var(--gray-500);
+      transition: background .1s, color .1s;
+    }
+    .tree-btn:hover { background: var(--gray-100); color: var(--dark); }
+    .tree-btn.danger:hover { background: #fef2f2; color: var(--red); }
+    .tree-children { margin-left: 20px; }
+
+    /* ── Modals ── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 14px; padding: 24px;
+      width: 420px; max-width: calc(100vw - 32px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    .modal h3 { font-size: 16px; font-weight: 800; color: var(--dark); margin: 0 0 16px; }
+    .form-row { margin-bottom: 14px; }
+    .form-row label { display: block; font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 5px; }
+    .form-row input, .form-row select {
+      width: 100%; box-sizing: border-box;
+      border: 1.5px solid var(--gray-200); border-radius: 8px;
+      padding: 9px 11px; font-size: 13px; color: var(--dark);
+      background: #fff; outline: none; font-family: inherit;
+      transition: border-color .15s;
+    }
+    .form-row input:focus, .form-row select:focus { border-color: var(--orange); }
+    .form-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .modal-tabs { display: flex; border-bottom: 1px solid var(--gray-100); margin-bottom: 16px; }
+    .modal-tab {
+      padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+      border: none; background: none; color: var(--gray-400);
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .modal-tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+  </style>
+</head>
+<body>
+
+<!-- Standalone header — back link + sign out, no office shell -->
+<header class="ws-header">
+  <img src="logo-bolt.png" alt="J&D Western Electric"/>
+  <span class="ws-header-title">Worksites</span>
+  <a href="index.html">← Field Hub</a>
+  <span class="ws-header-sep">|</span>
+  <a href="#" id="logout-btn">Sign Out</a>
+</header>
+
+<div class="page-wrap">
+  <div class="ws-layout">
+    <!-- Project list -->
+    <div class="project-panel">
+      <div class="project-panel-header">Projects</div>
+      <ul class="project-list" id="project-list">
+        <li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">Loading…</li>
+      </ul>
+    </div>
+
+    <!-- Space tree -->
+    <div class="space-panel" id="space-panel">
+      <div class="space-panel-header">
+        <span class="space-panel-title" id="space-panel-title">Select a project</span>
+        <div class="space-actions" id="space-actions" style="display:none;"></div>
+      </div>
+      <div class="space-empty" id="space-empty">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
+        <p>Select a project on the left to view its spaces.</p>
+      </div>
+      <div class="tree" id="space-tree" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Space Modal -->
+<div class="modal-backdrop" id="add-modal">
+  <div class="modal">
+    <h3 id="add-modal-title">Add Space</h3>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-single" onclick="switchTab('single')">Single</button>
+      <button class="modal-tab" id="tab-bulk" onclick="switchTab('bulk')">Bulk Generate</button>
+    </div>
+    <div id="pane-single">
+      <div class="form-row">
+        <label>Type</label>
+        <select id="single-type"></select>
+      </div>
+      <div class="form-row">
+        <label>Identifier (e.g. "Unit 101", "Building A")</label>
+        <input type="text" id="single-identifier" placeholder="Unit 101"/>
+      </div>
+    </div>
+    <div id="pane-bulk" style="display:none;">
+      <div class="form-row">
+        <label>Type</label>
+        <select id="bulk-type"></select>
+      </div>
+      <div class="form-row">
+        <label>Prefix (optional, e.g. "Unit ")</label>
+        <input type="text" id="bulk-prefix" placeholder="Unit "/>
+      </div>
+      <div class="form-row form-inline">
+        <div><label>Start #</label><input type="number" id="bulk-start" value="101" min="1"/></div>
+        <div><label>End #</label><input type="number" id="bulk-end" value="110" min="1"/></div>
+      </div>
+      <div class="form-row">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="bulk-pad" checked style="width:auto;"/> Zero-pad numbers (101 not 1)
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAdd()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Space Modal -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Space</h3>
+    <div class="form-row">
+      <label>Type</label>
+      <select id="edit-type"></select>
+    </div>
+    <div class="form-row">
+      <label>Identifier</label>
+      <input type="text" id="edit-identifier"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate Space Modal -->
+<div class="modal-backdrop" id="dup-modal">
+  <div class="modal">
+    <h3>Duplicate Space</h3>
+    <p style="font-size:13px;color:var(--gray-500);margin:0 0 16px;">Copies this space and all its children.</p>
+    <div class="form-row">
+      <label>New Identifier (e.g. "Floor 2")</label>
+      <input type="text" id="dup-identifier" placeholder="Floor 2"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDupModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitDuplicate()">Duplicate</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOCAL banner: rendered here so it works on all standalone pages -->
+<script>
+(function () {
+  fetch('/api/env')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d.local) return;
+      var b = document.createElement('div');
+      b.textContent = 'LOCAL — TEST DATA';
+      b.style.cssText = [
+        'position:fixed','top:0','left:0','right:0','z-index:99999',
+        'background:#dc2626','color:#fff','text-align:center',
+        'font-size:11px','font-weight:800','letter-spacing:.1em',
+        'padding:4px 0','pointer-events:none','user-select:none',
+      ].join(';');
+      document.body.appendChild(b);
+      // Push header down so banner doesn't overlap it
+      document.querySelector('.ws-header').style.top = '22px';
+    })
+    .catch(function () {});
+})();
+</script>
+
+<script>
+'use strict';
+
+let _spaceTypes = [];
+let _spaces     = [];
+let _activeProjectId   = null;
+let _canEdit           = false;
+let _addParentId  = null;
+let _editSpaceId  = null;
+let _dupSpaceId   = null;
+let _activeTab    = 'single';
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+
+(async function init() {
+  const me = await fetch('/api/auth/me').then(r => r.json()).catch(() => null);
+  if (!me || !me.id) { location.href = '/login.html'; return; }
+
+  const access = (me.module_permissions || {}).worksites || 'none';
+  if (access === 'none') { location.href = '/index.html'; return; }
+  _canEdit = access === 'edit';
+
+  document.getElementById('logout-btn').addEventListener('click', async e => {
+    e.preventDefault();
+    await fetch('/api/auth/logout', { method: 'POST' });
+    location.href = '/login.html';
+  });
+
+  _spaceTypes = await fetch('/api/space-types').then(r => r.json()).catch(() => []);
+  populateTypeSelects();
+  loadProjects();
+})();
+
+// ── Projects ─────────────────────────────────────────────────────────────────
+
+async function loadProjects() {
+  const projects = await fetch('/api/project-folders').then(r => r.json()).catch(() => []);
+  const list = document.getElementById('project-list');
+  if (!projects.length) {
+    list.innerHTML = '<li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">No active projects.</li>';
+    return;
+  }
+  list.innerHTML = projects.map(p => `
+    <li>
+      <a href="#" onclick="selectProject(${p.id},${JSON.stringify(p.name).replace(/"/g,'&quot;')},this);return false;">
+        ${escHtml(p.name)}
+        <div class="proj-num">${escHtml(p.job_numbers || '')}</div>
+      </a>
+    </li>
+  `).join('');
+}
+
+function selectProject(id, name, el) {
+  _activeProjectId = id;
+  document.querySelectorAll('.project-list a').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('space-panel-title').textContent = name;
+
+  const actions = document.getElementById('space-actions');
+  if (_canEdit) {
+    actions.style.display = 'flex';
+    actions.innerHTML = `
+      <button class="btn btn-sm btn-secondary" onclick="openAddModal(null)">+ Add Space</button>
+      <button class="btn btn-sm btn-secondary" onclick="openAddModal(null,'bulk')">Bulk Generate</button>
+    `;
+  } else {
+    actions.style.display = 'none';
+  }
+  loadSpaces();
+}
+
+// ── Spaces ───────────────────────────────────────────────────────────────────
+
+async function loadSpaces() {
+  if (!_activeProjectId) return;
+  _spaces = await fetch(`/api/projects/${_activeProjectId}/spaces`).then(r => r.json()).catch(() => []);
+  renderTree();
+}
+
+function renderTree() {
+  const tree  = document.getElementById('space-tree');
+  const empty = document.getElementById('space-empty');
+  if (!_spaces.length) {
+    tree.style.display  = 'none';
+    empty.style.display = 'block';
+    empty.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
+      <p>${_canEdit ? 'No spaces yet. Use <strong>+ Add Space</strong> or <strong>Bulk Generate</strong> to get started.' : 'No spaces have been set up for this project yet.'}</p>`;
+    return;
+  }
+  empty.style.display = 'none';
+  tree.style.display  = 'block';
+  tree.innerHTML = renderChildren(null, 0);
+}
+
+function renderChildren(parentId, depth) {
+  return _spaces
+    .filter(s => s.parent_id == parentId)
+    .map(s => renderNode(s, depth))
+    .join('');
+}
+
+function renderNode(s, depth) {
+  const bars = Array.from({ length: depth }, () =>
+    '<div class="tree-indent-bar"><div class="tree-indent-bar-line"></div></div>'
+  ).join('');
+  const editBtns = _canEdit ? `
+    <div class="tree-actions">
+      <button class="tree-btn" onclick="openAddModal(${s.id})">+ Child</button>
+      <button class="tree-btn" onclick="openDupModal(${s.id})">Copy</button>
+      <button class="tree-btn" onclick="openEditModal(${s.id})">Edit</button>
+      <button class="tree-btn danger" onclick="deleteSpace(${s.id})">✕</button>
+    </div>` : '';
+  const children = renderChildren(s.id, depth + 1);
+  return `
+    <div class="tree-node">
+      <div class="tree-node-row">
+        ${bars}
+        <span class="tree-icon">${escHtml(s.type_icon || '📁')}</span>
+        <span class="tree-label">${escHtml(s.identifier)}</span>
+        <span class="tree-type">${escHtml(s.type_name || '')}</span>
+        ${editBtns}
+      </div>
+      ${children ? `<div class="tree-children">${children}</div>` : ''}
+    </div>
+  `;
+}
+
+// ── Add Modal ────────────────────────────────────────────────────────────────
+
+function openAddModal(parentId, tab) {
+  _addParentId = parentId;
+  switchTab(tab || 'single');
+  document.getElementById('single-identifier').value = '';
+  document.getElementById('add-modal').classList.add('open');
+  if (!tab || tab === 'single') setTimeout(() => document.getElementById('single-identifier').focus(), 50);
+}
+
+function closeAddModal() { document.getElementById('add-modal').classList.remove('open'); }
+
+function switchTab(tab) {
+  _activeTab = tab;
+  document.getElementById('tab-single').classList.toggle('active', tab === 'single');
+  document.getElementById('tab-bulk').classList.toggle('active',   tab === 'bulk');
+  document.getElementById('pane-single').style.display = tab === 'single' ? '' : 'none';
+  document.getElementById('pane-bulk').style.display   = tab === 'bulk'   ? '' : 'none';
+  document.getElementById('add-modal-title').textContent = tab === 'single' ? 'Add Space' : 'Bulk Generate';
+}
+
+async function submitAdd() {
+  if (_activeTab === 'single') {
+    const identifier  = document.getElementById('single-identifier').value.trim();
+    const space_type_id = document.getElementById('single-type').value || null;
+    if (!identifier) { alert('Please enter an identifier.'); return; }
+    await fetch(`/api/projects/${_activeProjectId}/spaces`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: _addParentId, space_type_id, identifier }),
+    });
+  } else {
+    const prefix    = document.getElementById('bulk-prefix').value;
+    const start     = parseInt(document.getElementById('bulk-start').value, 10);
+    const end       = parseInt(document.getElementById('bulk-end').value,   10);
+    const pad       = document.getElementById('bulk-pad').checked;
+    const space_type_id = document.getElementById('bulk-type').value || null;
+    if (isNaN(start) || isNaN(end) || start > end) { alert('Invalid range.'); return; }
+    if (end - start > 499) { alert('Maximum 500 spaces at once.'); return; }
+    await fetch(`/api/projects/${_activeProjectId}/spaces/bulk`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: _addParentId, space_type_id, prefix, start, end, pad }),
+    });
+  }
+  closeAddModal();
+  loadSpaces();
+}
+
+// ── Edit Modal ───────────────────────────────────────────────────────────────
+
+function openEditModal(id) {
+  _editSpaceId = id;
+  const s = _spaces.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('edit-identifier').value = s.identifier;
+  document.getElementById('edit-type').value = s.space_type_id || '';
+  document.getElementById('edit-modal').classList.add('open');
+  setTimeout(() => document.getElementById('edit-identifier').focus(), 50);
+}
+
+function closeEditModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+async function submitEdit() {
+  const identifier    = document.getElementById('edit-identifier').value.trim();
+  const space_type_id = document.getElementById('edit-type').value || null;
+  if (!identifier) { alert('Please enter an identifier.'); return; }
+  await fetch(`/api/spaces/${_editSpaceId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, space_type_id }),
+  });
+  closeEditModal();
+  loadSpaces();
+}
+
+// ── Duplicate Modal ───────────────────────────────────────────────────────────
+
+function openDupModal(id) {
+  _dupSpaceId = id;
+  const s = _spaces.find(x => x.id === id);
+  document.getElementById('dup-identifier').value = s ? s.identifier + ' (copy)' : '';
+  document.getElementById('dup-modal').classList.add('open');
+  setTimeout(() => document.getElementById('dup-identifier').focus(), 50);
+}
+
+function closeDupModal() { document.getElementById('dup-modal').classList.remove('open'); }
+
+async function submitDuplicate() {
+  const new_identifier = document.getElementById('dup-identifier').value.trim();
+  if (!new_identifier) { alert('Please enter an identifier for the copy.'); return; }
+  const r = await fetch(`/api/spaces/${_dupSpaceId}/duplicate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_identifier }),
+  });
+  if (!r.ok) { alert('Duplicate failed.'); return; }
+  closeDupModal();
+  loadSpaces();
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+
+async function deleteSpace(id) {
+  const s = _spaces.find(x => x.id === id);
+  const hasChildren = _spaces.some(x => x.parent_id === id);
+  const msg = hasChildren
+    ? `Archive "${s.identifier}"? It has children — they will be hidden but not deleted.`
+    : `Delete "${s.identifier}"?`;
+  if (!confirm(msg)) return;
+  await fetch(`/api/spaces/${id}`, { method: 'DELETE' });
+  loadSpaces();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function populateTypeSelects() {
+  const blank = '<option value="">— No type —</option>';
+  const opts  = _spaceTypes.map(t =>
+    `<option value="${t.id}">${t.icon} ${escHtml(t.name)}</option>`
+  ).join('');
+  ['single-type','bulk-type','edit-type'].forEach(id => {
+    document.getElementById(id).innerHTML = blank + opts;
+  });
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

@@ -414,6 +414,12 @@ const MODULE_LABELS = {
   safety_supervisor: 'Safety Supervisor (incident & near-miss reports)'
 };
 
+// Section-level module permissions (None / View / Edit)
+// Add entries here to expose new modules — no other UI code changes needed.
+const SECTION_MODULES = [
+  { key: 'worksites', label: 'Worksites' },
+];
+
 function showToast(msg, type='') { const t=$('toast'); t.textContent=msg; t.className=`show ${type}`; setTimeout(()=>t.className='',3200); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function initials(name) { return (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
@@ -639,6 +645,50 @@ function switchDTab(tab) {
       if (r.ok) { showToast('Permissions saved','success'); await loadUsers(); }
       else showToast('Failed to save permissions','error');
     });
+
+    // ── Section module permissions (None / View / Edit) ──
+    if (SECTION_MODULES.length) {
+      const modMap = isAdmin
+        ? Object.fromEntries(SECTION_MODULES.map(m => [m.key, 'edit']))
+        : await fetch(`/api/users/${u.id}/module-permissions`).then(r=>r.json()).catch(()=>({}));
+
+      const modSection = document.createElement('div');
+      modSection.style.cssText = 'margin-top:20px;';
+      modSection.innerHTML = `
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin:0 0 10px;">Section Access</p>
+        ${SECTION_MODULES.map(m => {
+          const val = modMap[m.key] || 'none';
+          const locked = isAdmin;
+          return `<div class="perm-row" style="margin-bottom:8px;">
+            <div class="perm-row-name">${m.label}</div>
+            <select class="mod-access-sel" data-module="${m.key}"
+              style="font-size:12px;padding:4px 8px;border:1.5px solid #e5e7eb;border-radius:6px;background:#fff;color:#111;"
+              ${locked ? 'disabled' : ''}>
+              <option value="none" ${val==='none'?'selected':''}>None</option>
+              <option value="view" ${val==='view'?'selected':''}>View</option>
+              <option value="edit" ${val==='edit'?'selected':''}>Edit</option>
+            </select>
+          </div>`;
+        }).join('')}
+        ${!isAdmin ? `<button class="btn-save-primary" id="md-save-modules" style="margin-top:8px;">Save Section Access</button>` : ''}
+      `;
+      body.appendChild(modSection);
+
+      if (!isAdmin) {
+        modSection.querySelector('#md-save-modules').addEventListener('click', async function() {
+          this.disabled=true; this.textContent='Saving…';
+          const saves = Array.from(modSection.querySelectorAll('.mod-access-sel')).map(sel =>
+            fetch(`/api/users/${u.id}/module-permissions/${sel.dataset.module}`, {
+              method:'PATCH', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ access: sel.value }),
+            })
+          );
+          await Promise.all(saves);
+          this.disabled=false; this.textContent='Save Section Access';
+          showToast('Section access saved','success');
+        });
+      }
+    }
   }
 
   if (tab === 'actions') {
@@ -826,6 +876,5 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') { closeMemberDr
     </a>
   </div>
 </nav>
-<script src="/local-banner.js"></script>
 </body>
 </html>

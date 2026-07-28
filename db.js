@@ -825,6 +825,66 @@ async function initSchema() {
     created_at       TEXT NOT NULL
   )`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_types (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    icon       TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS spaces (
+    id            SERIAL PRIMARY KEY,
+    project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    parent_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,
+    space_type_id INTEGER REFERENCES space_types(id),
+    identifier    TEXT NOT NULL,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    archived_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // Seed space_types once
+  const { rowCount: stCount } = await pool.query('SELECT 1 FROM space_types LIMIT 1');
+  if (stCount === 0) {
+    await pool.query(`
+      INSERT INTO space_types (name, icon, sort_order) VALUES
+        ('Building',          '🏢', 1),
+        ('Floor',             '📐', 2),
+        ('Unit',              '🚪', 3),
+        ('Suite',             '🏠', 4),
+        ('Common Area',       '🛋️', 5),
+        ('Lobby',             '🏛️', 6),
+        ('Parkade',           '🚗', 7),
+        ('Mechanical Room',   '⚙️', 8),
+        ('Electrical Room',   '⚡', 9),
+        ('Stairwell',         '🪜', 10),
+        ('Roof',              '🏗️', 11),
+        ('Exterior',          '🌿', 12),
+        ('Service Room',      '🔧', 13),
+        ('Storage Room',      '📦', 14)
+    `);
+  }
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS user_module_permissions (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    module     TEXT NOT NULL,
+    access     TEXT NOT NULL DEFAULT 'none' CHECK (access IN ('none','view','edit')),
+    UNIQUE (user_id, module)
+  )`);
+
+  // Backfill: any existing non-admin user gets 'view' on worksites if they have no row yet
+  await pool.query(`
+    INSERT INTO user_module_permissions (user_id, module, access)
+    SELECT u.id, 'worksites', 'view'
+    FROM users u
+    WHERE u.role <> 'admin'
+      AND NOT EXISTS (
+        SELECT 1 FROM user_module_permissions p
+        WHERE p.user_id = u.id AND p.module = 'worksites'
+      )
+  `);
+
   console.log('  ✓ Database schema ready');
 }
 
