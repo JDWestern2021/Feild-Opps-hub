@@ -27,14 +27,14 @@ async function seed() {
     // ── Users (one per role) ─────────────────────────────────────────────────
     console.log('▸ Seeding users...');
     const userRows = await client.query(`
-      INSERT INTO users (name, email, password_hash, role, active, created_at)
+      INSERT INTO users (name, email, password_hash, role, status, created_at)
       VALUES
-        ('Admin Office',   'admin@local.dev',      $1, 'admin',      1, $5),
-        ('Sarah Office',   'office@local.dev',     $2, 'office',     1, $5),
-        ('Jake Supervisor','supervisor@local.dev',  $3, 'supervisor', 1, $5),
-        ('Mike LeadHand',  'lead@local.dev',        $4, 'lead_hand',  1, $5),
-        ('Tom Field',      'field@local.dev',       $4, 'field',      1, $5),
-        ('Lisa Field',     'field2@local.dev',      $4, 'field',      1, $5)
+        ('Admin Office',   'admin@local.dev',      $1, 'admin',      'active', $5),
+        ('Sarah Office',   'office@local.dev',     $2, 'office',     'active', $5),
+        ('Jake Supervisor','supervisor@local.dev',  $3, 'supervisor', 'active', $5),
+        ('Mike LeadHand',  'lead@local.dev',        $4, 'lead_hand',  'active', $5),
+        ('Tom Field',      'field@local.dev',       $4, 'field',      'active', $5),
+        ('Lisa Field',     'field2@local.dev',      $4, 'field',      'active', $5)
       RETURNING id, name, role
     `, [hash('admin123'), hash('office123'), hash('super123'), hash('field123'), now()]);
 
@@ -49,38 +49,30 @@ async function seed() {
     // ── Small project 1 — Henderson Commercial ───────────────────────────────
     console.log('▸ Seeding small projects...');
     const { rows: [p1] } = await client.query(`
-      INSERT INTO projects (name, job_number, status, client_name, address,
-        permit_required, permit_stage, created_at)
-      VALUES ('Henderson Commercial', 'JOB-001', 'active',
-        'Henderson Holdings', '4422 - 50 Ave, Leduc, AB',
-        'yes', 'submitted', $1)
+      INSERT INTO projects (name, job_numbers, status, permit_required, permit_stage, created_at)
+      VALUES ('Henderson Commercial', 'JOB-001', 'active', 'yes', 'submitted', $1)
       RETURNING id
     `, [now()]);
 
     // Small project 2 — Riverside Reno
     const { rows: [p2] } = await client.query(`
-      INSERT INTO projects (name, job_number, status, client_name, address,
-        permit_required, created_at)
-      VALUES ('Riverside Reno', 'JOB-002', 'active',
-        'Riverside Properties', '889 River Rd, Drayton Valley, AB',
-        'no', $1)
+      INSERT INTO projects (name, job_numbers, status, permit_required, created_at)
+      VALUES ('Riverside Reno', 'JOB-002', 'active', 'no', $1)
       RETURNING id
     `, [now()]);
 
     // ── Smith's Landing — 2 buildings × 80 units ─────────────────────────────
     console.log("▸ Seeding Smith's Landing (160 units across 2 buildings)...");
     const { rows: [sl] } = await client.query(`
-      INSERT INTO projects (name, job_number, status, client_name, address,
-        permit_required, permit_number, permit_stage, created_at)
-      VALUES ("Smith's Landing", 'JOB-003', 'active',
-        "Smith's Landing Inc.", '5000 Gateway Blvd, Edmonton, AB',
-        'yes', 'E-2024-08871', 'rough_in_booked', $1)
+      INSERT INTO projects (name, job_numbers, status, permit_required, permit_number, permit_stage, created_at)
+      VALUES ('Smith''s Landing', 'JOB-003', 'active', 'yes', 'E-2024-08871', 'rough_in_booked', $1)
       RETURNING id
     `, [now()]);
 
     const slId = sl.id;
 
     // Panel schedules for Smith's Landing — one per building
+    let panelSeq = 1;
     for (const bldg of ['Building A', 'Building B']) {
       const circuits = [];
       const commonCircuits = [
@@ -106,14 +98,61 @@ async function seed() {
       }
       await client.query(`
         INSERT INTO panel_schedules
-          (panel_name, voltage, main_breaker, bus_rating, enclosure_type,
+          (schedule_number, panel_name, voltage, main_breaker, bus_rating, enclosure_type,
            num_circuits, circuit_data, project_id, project_name, job_number,
            created_by, created_at)
-        VALUES ($1, '120/240V 1-Ph', '200', '200', 'Indoor',
-                24, $2, $3, 'Smith''s Landing', 'JOB-003',
-                'Admin Office', $4)
-      `, [bldg + ' Main Panel', JSON.stringify(circuits), slId, now()]);
+        VALUES ($1, $2, '120/240V 1-Ph', '200', '200', 'Indoor',
+                24, $3, $4, 'Smith''s Landing', 'JOB-003',
+                'Admin Office', $5)
+      `, ['PS-' + String(panelSeq++).padStart(4, '0'), bldg + ' Main Panel', JSON.stringify(circuits), slId, now()]);
     }
+
+    // 42-circuit panel — seed for print/column-width regression testing.
+    // Uses three-character circuit numbers (A1A, A1B … B21A) to verify
+    // cct-col is wide enough after the desc-col width:auto fix.
+    const c42 = [];
+    const loads42 = [
+      { desc: 'Main switchboard feed', poles: '3', amps: '100' },
+      { desc: 'HVAC-1 rooftop unit', poles: '3', amps: '60' },
+      { desc: 'HVAC-2 rooftop unit', poles: '3', amps: '60' },
+      { desc: 'Elevator machine room', poles: '3', amps: '30' },
+      { desc: 'Fire alarm panel', poles: '2', amps: '20' },
+      { desc: 'Emergency lighting', poles: '2', amps: '20' },
+      { desc: 'Corridor lighting L1', poles: '1', amps: '15' },
+      { desc: 'Corridor lighting L2', poles: '1', amps: '15' },
+      { desc: 'Corridor lighting L3', poles: '1', amps: '15' },
+      { desc: 'Lobby receptacles', poles: '1', amps: '20' },
+      { desc: 'Lobby lighting', poles: '1', amps: '15' },
+      { desc: 'Security / access ctrl', poles: '1', amps: '15' },
+      { desc: 'Intercom system', poles: '1', amps: '15' },
+      { desc: 'Parkade lighting A', poles: '2', amps: '20' },
+      { desc: 'Parkade lighting B', poles: '2', amps: '20' },
+      { desc: 'Exterior receptacles N', poles: '1', amps: '20' },
+      { desc: 'Exterior receptacles S', poles: '1', amps: '20' },
+      { desc: 'Mechanical room', poles: '1', amps: '20' },
+      { desc: 'Electrical room', poles: '1', amps: '20' },
+      { desc: 'Utility room', poles: '1', amps: '20' },
+      { desc: 'Spare', poles: '', amps: '' },
+    ];
+    for (let i = 0; i < 21; i++) {
+      const l = loads42[i] || {};
+      const r = loads42[i + 1] || {};
+      c42.push({
+        la_desc: l.desc || '', la_poles: l.poles || '', la_amps: l.amps || '',
+        la_cct:  `A${i+1}A`,
+        ra_desc: r.desc || '', ra_poles: r.poles || '', ra_amps: r.amps || '',
+        ra_cct:  `B${i+1}A`,
+      });
+    }
+    await client.query(`
+      INSERT INTO panel_schedules
+        (schedule_number, panel_name, voltage, main_breaker, bus_rating, enclosure_type,
+         num_circuits, circuit_data, project_id, project_name, job_number,
+         created_by, created_at)
+      VALUES ($1, $2, '347/600V 3-Ph', '400', '400', 'Indoor',
+              42, $3, $4, 'Smith''s Landing', 'JOB-003',
+              'Admin Office', $5)
+    `, ['PS-' + String(panelSeq++).padStart(4, '0'), 'Building C Distribution Panel — 42 cct PRINT TEST', JSON.stringify(c42), slId, now()]);
 
     // Daily tickets for Smith's Landing
     const ticketNums = ['DT-2024-0042', 'DT-2024-0043', 'DT-2024-0044'];
@@ -142,8 +181,8 @@ async function seed() {
     // ── A time-off request ───────────────────────────────────────────────────
     await client.query(`
       INSERT INTO time_off_requests
-        (user_id, user_name, start_date, end_date, type, reason, status, submitted_at)
-      VALUES ($1, 'Lisa Field', $2, $3, 'vacation', 'Family trip', 'pending', $4)
+        (user_id, user_name, start_date, end_date, type, note, status, created_at)
+      VALUES ($1, 'Lisa Field', $2, $3, 'Vacation', 'Family trip', 'pending', $4)
     `, [field2Id, date(14), date(18), now()]);
 
     await client.query('COMMIT');

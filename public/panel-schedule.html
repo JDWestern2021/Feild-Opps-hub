@@ -849,6 +849,13 @@ function collectCircuitData() {
 }
 
 function openModal(schedule = null) {
+  // Guard: if a schedule object was passed it must have a valid id.
+  // Without this, a malformed API response opens a blank editor that,
+  // when saved, creates a new record instead of updating the existing one.
+  if (schedule !== null && !(schedule.id > 0)) {
+    showToast('Cannot open editor: schedule data is invalid', 'error');
+    return;
+  }
   editingId = schedule ? schedule.id : null;
   document.getElementById('modal-title').textContent = schedule ? 'Edit Panel Schedule' : 'New Panel Schedule';
   document.getElementById('f-panel-name').value   = schedule ? schedule.panel_name : '';
