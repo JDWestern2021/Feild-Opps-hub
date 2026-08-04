@@ -895,23 +895,164 @@ async function initSchema() {
     ON CONFLICT (name) DO NOTHING
   `);
 
+  // Parking Lot is a surface lot at project level — distinct from Parkade (underground level)
+  await pool.query(`
+    INSERT INTO space_types (name, icon, sort_order)
+    VALUES ('Parking Lot', '🅿️', 17)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS user_module_permissions (
     id         SERIAL PRIMARY KEY,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     module     TEXT NOT NULL,
-    access     TEXT NOT NULL DEFAULT 'none' CHECK (access IN ('none','view','edit')),
+    access     TEXT NOT NULL DEFAULT 'none' CHECK (access IN ('none','field','manage')),
     UNIQUE (user_id, module)
   )`);
 
-  // Backfill: any existing non-admin user gets 'view' on worksites if they have no row yet
+  // Rename levels: view→field, edit→manage. DROP before UPDATE so old values
+  // don't violate the new constraint; WHERE guard makes UPDATE a no-op on re-runs.
+  await pool.query(`
+    ALTER TABLE user_module_permissions
+      DROP CONSTRAINT IF EXISTS user_module_permissions_access_check
+  `);
+  await pool.query(`
+    UPDATE user_module_permissions
+      SET access = CASE access WHEN 'view' THEN 'field' WHEN 'edit' THEN 'manage' ELSE access END
+      WHERE access IN ('view', 'edit')
+  `);
+  await pool.query(`
+    ALTER TABLE user_module_permissions
+      ADD CONSTRAINT user_module_permissions_access_check CHECK (access IN ('none','field','manage'))
+  `);
+
+  // Backfill: any existing non-admin user gets 'field' on worksites if they have no row yet
   await pool.query(`
     INSERT INTO user_module_permissions (user_id, module, access)
-    SELECT u.id, 'worksites', 'view'
+    SELECT u.id, 'worksites', 'field'
     FROM users u
     WHERE u.role <> 'admin'
       AND NOT EXISTS (
         SELECT 1 FROM user_module_permissions p
         WHERE p.user_id = u.id AND p.module = 'worksites'
+      )
+  `);
+
+  // ── space_files ─────────────────────────────────────────────────────────────
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_files (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    file_data    BYTEA NOT NULL,
+    mime_type    TEXT NOT NULL,
+    file_name    TEXT NOT NULL,
+    caption      TEXT,
+    uploaded_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // ── deficiencies ────────────────────────────────────────────────────────────
+  await pool.query(`CREATE TABLE IF NOT EXISTS deficiencies (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    description  TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved')),
+    raised_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    raised_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    assigned_to  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    resolved_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    resolved_at  TIMESTAMPTZ
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS deficiency_photos (
+    id              SERIAL PRIMARY KEY,
+    deficiency_id   INTEGER NOT NULL REFERENCES deficiencies(id) ON DELETE CASCADE,
+    file_data       BYTEA NOT NULL,
+    mime_type       TEXT NOT NULL,
+    uploaded_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS plan_type_files (
+    id            SERIAL PRIMARY KEY,
+    plan_type_id  INTEGER NOT NULL REFERENCES plan_types(id) ON DELETE CASCADE,
+    file_data     BYTEA NOT NULL,
+    mime_type     TEXT NOT NULL,
+    file_name     TEXT NOT NULL,
+    caption       TEXT,
+    uploaded_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // ── Chunk 8: Lists & Notes ──────────────────────────────────────────────
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS list_types (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  await pool.query(`
+    INSERT INTO list_types (name, sort_order) VALUES ('Material', 1), ('Finishing', 2)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  // Exactly one of space_id / plan_type_id must be set (enforced by CHECK).
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_lists (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,
+    plan_type_id INTEGER REFERENCES plan_types(id) ON DELETE CASCADE,
+    list_type_id INTEGER NOT NULL REFERENCES list_types(id),
+    created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (
+      (space_id IS NOT NULL AND plan_type_id IS NULL) OR
+      (space_id IS NULL     AND plan_type_id IS NOT NULL)
+    )
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS list_items (
+    id          SERIAL PRIMARY KEY,
+    list_id     INTEGER NOT NULL REFERENCES space_lists(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    quantity    NUMERIC NOT NULL DEFAULT 1,
+    unit        TEXT,
+    status      TEXT NOT NULL DEFAULT 'needed'
+                  CHECK (status IN ('needed','ordered','received','installed')),
+    added_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes       TEXT
+  )`);
+
+  // Migrate list_items status from 4-value to 3-value set.
+  // Order: drop old constraint → migrate rows → add new constraint.
+  // All three steps are idempotent (IF EXISTS / WHERE covers already-migrated rows).
+  await pool.query(`ALTER TABLE list_items DROP CONSTRAINT IF EXISTS list_items_status_check`);
+  await pool.query(`UPDATE list_items SET status = 'delivered' WHERE status IN ('received','installed')`);
+  await pool.query(`ALTER TABLE list_items ADD CONSTRAINT list_items_status_check
+    CHECK (status IN ('needed','ordered','delivered'))`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_notes (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,
+    plan_type_id INTEGER REFERENCES plan_types(id) ON DELETE CASCADE,
+    body         TEXT NOT NULL,
+    author_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (
+      (space_id IS NOT NULL AND plan_type_id IS NULL) OR
+      (space_id IS NULL     AND plan_type_id IS NOT NULL)
+    )
+  )`);
+
+  // Migrate existing plan_types.notes (free-text textarea) to space_notes entries.
+  // Runs once per type that has notes and no space_notes row yet — idempotent.
+  await pool.query(`
+    INSERT INTO space_notes (plan_type_id, body, author_id, created_at)
+    SELECT pt.id, pt.notes, NULL, NOW()
+    FROM   plan_types pt
+    WHERE  pt.notes IS NOT NULL AND pt.notes != ''
+      AND  NOT EXISTS (
+        SELECT 1 FROM space_notes sn WHERE sn.plan_type_id = pt.id
       )
   `);
 

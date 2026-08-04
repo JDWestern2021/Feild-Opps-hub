@@ -297,7 +297,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 // ── Module permission helpers ─────────────────────────────────────────────────
 
 async function getModuleAccess(userId, module, role) {
-  if (role === 'admin') return 'edit';
+  if (role === 'admin') return 'manage';
   const { rows } = await pool.query(
     'SELECT access FROM user_module_permissions WHERE user_id=$1 AND module=$2',
     [userId, module]
@@ -308,7 +308,7 @@ async function getModuleAccess(userId, module, role) {
 async function getUserModuleMap(userId, role) {
   if (role === 'admin') {
     // admins get edit on all known modules
-    return { worksites: 'edit' };
+    return { worksites: 'manage' };
   }
   const { rows } = await pool.query(
     'SELECT module, access FROM user_module_permissions WHERE user_id=$1',
@@ -320,7 +320,7 @@ async function getUserModuleMap(userId, role) {
 }
 
 function requireModuleAccess(module, minLevel) {
-  const levels = { none: 0, view: 1, edit: 2 };
+  const levels = { none: 0, field: 1, manage: 2 };
   return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
     const access = await getModuleAccess(req.user.id, module, req.user.role);
@@ -443,7 +443,7 @@ app.post('/api/users/invite', requireAdmin, async (req, res) => {
   if (role !== 'admin') {
     await pool.query(
       'INSERT INTO user_module_permissions (user_id, module, access) VALUES ($1, $2, $3) ON CONFLICT (user_id, module) DO NOTHING',
-      [newUser.id, 'worksites', 'view']
+      [newUser.id, 'worksites', 'field']
     );
   }
   const inviteUrl = `${req.protocol}://${req.get('host')}/accept-invite.html?token=${token}`;
@@ -517,7 +517,7 @@ app.get('/api/users/:id/module-permissions', requireAdmin, async (req, res) => {
 app.patch('/api/users/:id/module-permissions/:module', requireAdmin, async (req, res) => {
   try {
     const { access } = req.body;
-    if (!['none','view','edit'].includes(access)) return res.status(400).json({ error: 'access must be none, view, or edit' });
+    if (!['none','field','manage'].includes(access)) return res.status(400).json({ error: 'access must be none, field, or manage' });
     await pool.query(`
       INSERT INTO user_module_permissions (user_id, module, access)
       VALUES ($1, $2, $3)
@@ -1732,7 +1732,23 @@ app.delete('/api/po/:id', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 
 app.get('/api/project-folders', requireAuth, async (req, res) => {
-  const { rows } = await pool.query("SELECT id,name,job_numbers FROM projects WHERE status='active' ORDER BY name");
+  const { rows } = await pool.query(`
+    SELECT p.id, p.name, p.job_numbers,
+      COALESCE(dc.open_count, 0)::int        AS def_open,
+      COALESCE(dc.in_progress_count, 0)::int AS def_in_progress
+    FROM projects p
+    LEFT JOIN (
+      SELECT s.project_id,
+        SUM(CASE WHEN d.status = 'open'        THEN 1 ELSE 0 END) AS open_count,
+        SUM(CASE WHEN d.status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_count
+      FROM deficiencies d
+      JOIN spaces s ON s.id = d.space_id
+      WHERE d.status != 'resolved'
+      GROUP BY s.project_id
+    ) dc ON dc.project_id = p.id
+    WHERE p.status = 'active'
+    ORDER BY p.name
+  `);
   res.json(rows);
 });
 
@@ -5828,7 +5844,7 @@ app.get('/api/change-orders/:id/export', requireAuth, async (req, res) => {
 // ─────────────────────────────────────────────
 
 // GET /api/space-types
-app.get('/api/space-types', requireAuth, requireModuleAccess('worksites', 'view'), async (req, res) => {
+app.get('/api/space-types', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM space_types ORDER BY sort_order, name');
     res.json(rows);
@@ -5836,7 +5852,7 @@ app.get('/api/space-types', requireAuth, requireModuleAccess('worksites', 'view'
 });
 
 // GET /api/projects/:id/spaces — full flat list, client builds the tree
-app.get('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites', 'view'), async (req, res) => {
+app.get('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT s.*, st.name AS type_name, st.icon AS type_icon,
@@ -5851,8 +5867,221 @@ app.get('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites'
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/projects/:id/deficiency-counts — unresolved deficiency totals for every space (subtree)
+// Returns one row per space that has open/in_progress deficiencies beneath it.
+// Uses the same recursive CTE pattern as the list rollup (chunk 8).
+app.get('/api/projects/:id/deficiency-counts', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      WITH RECURSIVE subtree AS (
+        -- Each space seeds its own subtree root
+        SELECT id AS space_id, id AS leaf_id
+        FROM spaces WHERE project_id = $1 AND archived_at IS NULL
+        UNION ALL
+        SELECT p.space_id, s.id
+        FROM spaces s
+        JOIN subtree p ON s.parent_id = p.leaf_id
+        WHERE s.archived_at IS NULL
+      ) CYCLE leaf_id SET is_cycle USING cycle_path
+      SELECT
+        st.space_id,
+        SUM(CASE WHEN d.status = 'open'        THEN 1 ELSE 0 END)::int AS open_count,
+        SUM(CASE WHEN d.status = 'in_progress' THEN 1 ELSE 0 END)::int AS in_progress_count
+      FROM subtree st
+      JOIN deficiencies d ON d.space_id = st.leaf_id
+      WHERE d.status != 'resolved' AND NOT st.is_cycle
+      GROUP BY st.space_id
+      HAVING SUM(CASE WHEN d.status != 'resolved' THEN 1 ELSE 0 END) > 0
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Chunk 9: Project-level review routes ────────────────────────────────────
+
+// Shared space-path CTE: builds "Building 1 / Floor 2 / Suite 214" for each space
+const SPACE_PATH_CTE = `
+  WITH RECURSIVE space_paths AS (
+    SELECT id, identifier, parent_id,
+           identifier AS path
+    FROM spaces
+    WHERE project_id = $1 AND parent_id IS NULL AND archived_at IS NULL
+    UNION ALL
+    SELECT s.id, s.identifier, s.parent_id,
+           sp.path || ' / ' || s.identifier
+    FROM spaces s
+    JOIN space_paths sp ON s.parent_id = sp.id
+    WHERE s.archived_at IS NULL
+  ) CYCLE id SET is_cycle USING cycle_path
+`;
+
+// GET /api/projects/:id/review/deficiencies?status=open,in_progress
+app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const validStatuses = ['open', 'in_progress', 'resolved'];
+    const statuses = req.query.status
+      ? req.query.status.split(',').filter(s => validStatuses.includes(s))
+      : ['open', 'in_progress'];
+    if (!statuses.length) return res.json([]);
+
+    const { rows } = await pool.query(`
+      ${SPACE_PATH_CTE}
+      SELECT d.id, d.space_id, d.description, d.status, d.raised_at, d.resolved_at,
+             ru.name AS raised_by_name,
+             rv.name AS resolved_by_name,
+             sp.path AS space_path
+      FROM deficiencies d
+      JOIN space_paths sp ON sp.id = d.space_id AND NOT sp.is_cycle
+      LEFT JOIN users ru ON ru.id = d.raised_by
+      LEFT JOIN users rv ON rv.id = d.resolved_by
+      WHERE d.status = ANY($2)
+      ORDER BY d.raised_at DESC
+    `, [req.params.id, statuses]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/projects/:id/review/deficiencies/:defId — inline status change from review list
+// PATCH /api/projects/:id/review/deficiencies/bulk — bulk status update (manage only)
+// Must be registered BEFORE /:defId so "bulk" is not matched as a defId.
+app.patch('/api/projects/:id/review/deficiencies/bulk', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    const projectId = parseInt(req.params.id);
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+    if (!['open','in_progress','resolved'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const intIds = ids.map(Number).filter(n => Number.isFinite(n) && n > 0);
+    if (!intIds.length) return res.status(400).json({ error: 'No valid ids' });
+
+    const { rows: owned } = await pool.query(`
+      SELECT d.id FROM deficiencies d
+      JOIN spaces s ON s.id = d.space_id
+      WHERE d.id = ANY($1) AND s.project_id = $2
+    `, [intIds, projectId]);
+    if (owned.length !== intIds.length)
+      return res.status(403).json({ error: 'One or more deficiencies do not belong to this project' });
+
+    const resolvedBy = status === 'resolved' ? req.user.id : null;
+    const resolvedAt = status === 'resolved' ? new Date() : null;
+    await pool.query(`
+      UPDATE deficiencies
+      SET status=$1,
+          resolved_by = CASE WHEN $1='resolved' THEN $3::int ELSE resolved_by END,
+          resolved_at = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE resolved_at END
+      WHERE id = ANY($2)
+    `, [status, intIds, resolvedBy, resolvedAt]);
+    res.json({ updated: intIds.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const valid = ['open', 'in_progress', 'resolved'];
+    if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const extra = status === 'resolved'
+      ? ', resolved_by = $3, resolved_at = NOW()'
+      : ', resolved_by = NULL, resolved_at = NULL';
+    const vals = status === 'resolved'
+      ? [status, req.params.defId, req.user.id]
+      : [status, req.params.defId];
+    const { rows: [d] } = await pool.query(
+      `UPDATE deficiencies SET status = $1${extra} WHERE id = $2 RETURNING id, status`, vals
+    );
+    if (!d) return res.status(404).json({ error: 'Not found' });
+    res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/review/notes
+app.get('/api/projects/:id/review/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      ${SPACE_PATH_CTE}
+      SELECT sn.id, sn.body, sn.created_at, u.name AS author_name,
+             sp.path AS space_path, sp.id AS space_id,
+             NULL::text AS plan_type_label
+      FROM space_notes sn
+      JOIN space_paths sp ON sp.id = sn.space_id AND NOT sp.is_cycle
+      LEFT JOIN users u ON u.id = sn.author_id
+      WHERE sn.space_id IS NOT NULL
+
+      UNION ALL
+
+      SELECT ptn.id, ptn.body, ptn.created_at, u.name AS author_name,
+             NULL AS space_path, NULL AS space_id,
+             'All ' || pt.name || ' suites' AS plan_type_label
+      FROM space_notes ptn
+      JOIN plan_types pt ON pt.id = ptn.plan_type_id
+      LEFT JOIN users u ON u.id = ptn.author_id
+      WHERE ptn.plan_type_id IS NOT NULL AND pt.project_id = $1
+
+      ORDER BY created_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/review/material?list_type=Material,Finishing&status=needed,ordered
+// Flat list of space-specific requests only (type-level items excluded intentionally).
+app.get('/api/projects/:id/review/material', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const validStatuses  = ['needed','ordered','delivered'];
+    const validListTypes = ['Material','Finishing'];
+    const statuses  = req.query.status
+      ? req.query.status.split(',').filter(s => validStatuses.includes(s))
+      : ['needed', 'ordered'];
+    const listTypes = req.query.list_type
+      ? req.query.list_type.split(',').filter(t => validListTypes.includes(t))
+      : validListTypes;
+    if (!statuses.length || !listTypes.length) return res.json([]);
+
+    const { rows } = await pool.query(`
+      ${SPACE_PATH_CTE}
+      SELECT li.id, li.description, li.quantity, li.unit, li.status,
+             lt.name AS list_type, sp.path AS space_path, sp.id AS space_id,
+             u.name  AS added_by_name, li.added_at
+      FROM space_paths sp
+      JOIN space_lists sl ON sl.space_id = sp.id
+      JOIN list_types  lt ON lt.id = sl.list_type_id
+      JOIN list_items  li ON li.list_id = sl.id
+      LEFT JOIN users   u  ON u.id = li.added_by
+      WHERE NOT sp.is_cycle
+        AND li.status = ANY($2)
+        AND lt.name   = ANY($3)
+      ORDER BY sp.path, lt.name, li.description
+    `, [req.params.id, statuses, listTypes]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/projects/:id/review/material/bulk — bulk status update (manage only)
+app.patch('/api/projects/:id/review/material/bulk', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    const projectId = parseInt(req.params.id);
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+    if (!['needed','ordered','delivered'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const intIds = ids.map(Number).filter(n => Number.isFinite(n) && n > 0);
+    if (!intIds.length) return res.status(400).json({ error: 'No valid ids' });
+
+    // Ownership check: all list_items must belong to a space within this project
+    const { rows: owned } = await pool.query(`
+      SELECT li.id FROM list_items li
+      JOIN space_lists sl ON sl.id = li.list_id
+      JOIN spaces s ON s.id = sl.space_id
+      WHERE li.id = ANY($1) AND s.project_id = $2
+    `, [intIds, projectId]);
+    if (owned.length !== intIds.length)
+      return res.status(403).json({ error: 'One or more items do not belong to this project' });
+
+    await pool.query(`UPDATE list_items SET status=$1 WHERE id = ANY($2)`, [status, intIds]);
+    res.json({ updated: intIds.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/projects/:id/spaces — add single space
-app.post('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.post('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { parent_id, space_type_id, identifier, sort_order } = req.body;
     const space = await addSpace({ project_id: req.params.id, parent_id, space_type_id, identifier, sort_order });
@@ -5861,7 +6090,7 @@ app.post('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites
 });
 
 // POST /api/projects/:id/spaces/bulk — generate a numbered range
-app.post('/api/projects/:id/spaces/bulk', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.post('/api/projects/:id/spaces/bulk', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { parent_id, space_type_id, prefix, start, end, pad } = req.body;
     const created = await bulkSpaces({ project_id: req.params.id, parent_id, space_type_id, prefix, start, end, pad });
@@ -5870,7 +6099,7 @@ app.post('/api/projects/:id/spaces/bulk', requireAuth, requireModuleAccess('work
 });
 
 // POST /api/spaces/:id/duplicate — deep-copy a space and all its descendants
-app.post('/api/spaces/:id/duplicate', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.post('/api/spaces/:id/duplicate', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { new_identifier, new_parent_id } = req.body;
     const newRoot = await duplicateSubtree(req.params.id, { new_identifier, new_parent_id });
@@ -5879,8 +6108,29 @@ app.post('/api/spaces/:id/duplicate', requireAuth, requireModuleAccess('worksite
 });
 
 // PATCH /api/spaces/:id — rename, retype, reparent, reorder
-app.patch('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.patch('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
+    const spaceId = parseInt(req.params.id);
+    // Guard: reject reparenting a space under itself or any of its descendants
+    if (req.body.parent_id !== undefined && req.body.parent_id !== null) {
+      const newParentId = parseInt(req.body.parent_id);
+      if (newParentId === spaceId) {
+        return res.status(400).json({ error: 'A space cannot be its own parent.' });
+      }
+      const { rows: [{ is_descendant }] } = await pool.query(`
+        WITH RECURSIVE descendants AS (
+          SELECT id FROM spaces WHERE id = $1
+          UNION ALL
+          SELECT s.id FROM spaces s JOIN descendants d ON s.parent_id = d.id
+        ) CYCLE id SET is_cycle USING cycle_path
+        SELECT EXISTS(
+          SELECT 1 FROM descendants WHERE id = $2 AND NOT is_cycle
+        ) AS is_descendant
+      `, [spaceId, newParentId]);
+      if (is_descendant) {
+        return res.status(400).json({ error: 'Cannot reparent a space under one of its own descendants.' });
+      }
+    }
     const fields = [];
     const vals   = [];
     let i = 1;
@@ -5888,7 +6138,7 @@ app.patch('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'edit
       if (req.body[col] !== undefined) { fields.push(`${col} = $${i++}`); vals.push(req.body[col]); }
     }
     if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
-    vals.push(req.params.id);
+    vals.push(spaceId);
     const { rows: [s] } = await pool.query(
       `UPDATE spaces SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`, vals
     );
@@ -5896,15 +6146,27 @@ app.patch('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'edit
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/spaces/:id — archive (soft) or hard-delete if no children
-app.delete('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+// Count real dependents of a space — children, files, deficiencies
+async function countSpaceDependents(spaceId) {
+  const [children, files, deficiencies] = await Promise.all([
+    pool.query('SELECT COUNT(*)::int AS n FROM spaces      WHERE parent_id=$1 AND archived_at IS NULL', [spaceId]),
+    pool.query('SELECT COUNT(*)::int AS n FROM space_files WHERE space_id=$1',                          [spaceId]),
+    pool.query('SELECT COUNT(*)::int AS n FROM deficiencies WHERE space_id=$1',                        [spaceId]),
+  ]);
+  return {
+    children:      children.rows[0].n,
+    files:         files.rows[0].n,
+    deficiencies:  deficiencies.rows[0].n,
+  };
+}
+
+// DELETE /api/spaces/:id — archive (soft) if dependents exist, hard-delete if clean
+app.delete('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
-    const { rowCount } = await pool.query(
-      'SELECT 1 FROM spaces WHERE parent_id = $1 AND archived_at IS NULL LIMIT 1', [req.params.id]
-    );
-    if (rowCount > 0) {
+    const deps = await countSpaceDependents(req.params.id);
+    if (deps.children > 0 || deps.files > 0 || deps.deficiencies > 0) {
       await pool.query('UPDATE spaces SET archived_at = NOW() WHERE id = $1', [req.params.id]);
-      res.json({ archived: true });
+      res.json({ archived: true, dependents: deps });
     } else {
       await pool.query('DELETE FROM spaces WHERE id = $1', [req.params.id]);
       res.json({ deleted: true });
@@ -5917,9 +6179,171 @@ app.delete('/api/spaces/:id', requireAuth, requireModuleAccess('worksites', 'edi
 // ─────────────────────────────────────────────
 
 const planPanelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const spaceFileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// ── SPACE FILES ──────────────────────────────────────────────────────────────
+
+// GET /api/spaces/:id/files — list metadata, never BYTEA
+app.get('/api/spaces/:id/files', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT f.id, f.space_id, f.mime_type, f.file_name, f.caption,
+             f.uploaded_at, u.name AS uploaded_by_name
+      FROM space_files f
+      LEFT JOIN users u ON u.id = f.uploaded_by
+      WHERE f.space_id = $1
+      ORDER BY f.uploaded_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/files — upload a file (field-level: anyone on site can add)
+app.post('/api/spaces/:id/files', requireAuth, requireModuleAccess('worksites', 'field'),
+  spaceFileUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    // Ownership check: space must belong to a project the user can access
+    const { rows: [space] } = await pool.query('SELECT project_id FROM spaces WHERE id=$1', [req.params.id]);
+    if (!space) return res.status(404).json({ error: 'Space not found' });
+    const { rows: [f] } = await pool.query(`
+      INSERT INTO space_files (space_id, file_data, mime_type, file_name, caption, uploaded_by)
+      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, space_id, mime_type, file_name, caption, uploaded_at
+    `, [req.params.id, req.file.buffer, req.file.mimetype, req.file.originalname, req.body.caption || null, req.user.id]);
+    res.json(f);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/spaces/:id/files/:fileId — manage-only
+app.delete('/api/spaces/:id/files/:fileId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM space_files WHERE id=$1 AND space_id=$2', [req.params.fileId, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'File not found' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/space-files/:fileId — serve bytes inline (images open in browser, PDFs too)
+app.get('/api/space-files/:fileId', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows: [f] } = await pool.query(
+      'SELECT file_data, mime_type, file_name FROM space_files WHERE id=$1', [req.params.fileId]
+    );
+    if (!f) return res.status(404).json({ error: 'File not found' });
+    res.set('Content-Type', f.mime_type);
+    res.set('Content-Disposition', `inline; filename="${f.file_name}"`);
+    res.send(f.file_data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DEFICIENCIES ─────────────────────────────────────────────────────────────
+
+const defPhotoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// GET /api/spaces/:id/deficiencies
+app.get('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT d.id, d.space_id, d.description, d.status,
+             d.raised_at, d.resolved_at,
+             ru.name AS raised_by_name,
+             au.name AS assigned_to_name,
+             rv.name AS resolved_by_name,
+             (SELECT json_agg(json_build_object('id', p.id, 'mime_type', p.mime_type, 'uploaded_at', p.uploaded_at))
+              FROM deficiency_photos p WHERE p.deficiency_id = d.id) AS photos
+      FROM deficiencies d
+      LEFT JOIN users ru ON ru.id = d.raised_by
+      LEFT JOIN users au ON au.id = d.assigned_to
+      LEFT JOIN users rv ON rv.id = d.resolved_by
+      WHERE d.space_id = $1
+      ORDER BY d.raised_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/deficiencies — raise (field-level)
+app.post('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!description?.trim()) return res.status(400).json({ error: 'Description required' });
+    const { rows: [space] } = await pool.query('SELECT id FROM spaces WHERE id=$1', [req.params.id]);
+    if (!space) return res.status(404).json({ error: 'Space not found' });
+    const { rows: [d] } = await pool.query(`
+      INSERT INTO deficiencies (space_id, description, raised_by)
+      VALUES ($1, $2, $3) RETURNING *
+    `, [req.params.id, description.trim(), req.user.id]);
+    res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/deficiencies/:id — update status/assign/resolve (manage-level)
+app.patch('/api/deficiencies/:id', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { status, assigned_to } = req.body;
+    const allowed = ['open', 'in_progress', 'resolved'];
+    if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const fields = [], vals = [];
+    let i = 1;
+    if (status !== undefined) {
+      fields.push(`status = $${i++}`); vals.push(status);
+      if (status === 'resolved') {
+        fields.push(`resolved_by = $${i++}`, `resolved_at = NOW()`);
+        vals.push(req.user.id);
+      }
+    }
+    if (assigned_to !== undefined) { fields.push(`assigned_to = $${i++}`); vals.push(assigned_to || null); }
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+    vals.push(req.params.id);
+    const { rows: [d] } = await pool.query(
+      `UPDATE deficiencies SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`, vals
+    );
+    if (!d) return res.status(404).json({ error: 'Not found' });
+    res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/deficiencies/:id — manage-only
+app.delete('/api/deficiencies/:id', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM deficiencies WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/deficiencies/:id/photos — add photo(s) (field-level)
+app.post('/api/deficiencies/:id/photos', requireAuth, requireModuleAccess('worksites', 'field'),
+  defPhotoUpload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
+    const { rows: [d] } = await pool.query('SELECT id FROM deficiencies WHERE id=$1', [req.params.id]);
+    if (!d) return res.status(404).json({ error: 'Deficiency not found' });
+    const { rows: [p] } = await pool.query(`
+      INSERT INTO deficiency_photos (deficiency_id, file_data, mime_type, uploaded_by)
+      VALUES ($1, $2, $3, $4) RETURNING id, deficiency_id, mime_type, uploaded_at
+    `, [req.params.id, req.file.buffer, req.file.mimetype, req.user.id]);
+    res.json(p);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/deficiency-photos/:id — serve bytes inline
+app.get('/api/deficiency-photos/:id', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows: [p] } = await pool.query(
+      'SELECT file_data, mime_type FROM deficiency_photos WHERE id=$1', [req.params.id]
+    );
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    res.set('Content-Type', p.mime_type);
+    res.set('Content-Disposition', 'inline');
+    res.send(p.file_data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // GET /api/projects/:id/plan-types — list with suite count + panel metadata (no BYTEA)
-app.get('/api/projects/:id/plan-types', requireAuth, requireModuleAccess('worksites', 'view'), async (req, res) => {
+app.get('/api/projects/:id/plan-types', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT pt.id, pt.project_id, pt.code, pt.name, pt.notes,
@@ -5936,7 +6360,7 @@ app.get('/api/projects/:id/plan-types', requireAuth, requireModuleAccess('worksi
 });
 
 // POST /api/projects/:id/plan-types — create type
-app.post('/api/projects/:id/plan-types', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.post('/api/projects/:id/plan-types', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { code, name, notes } = req.body;
     if (!code?.trim()) return res.status(400).json({ error: 'code is required' });
@@ -5951,7 +6375,7 @@ app.post('/api/projects/:id/plan-types', requireAuth, requireModuleAccess('works
 });
 
 // PATCH /api/projects/:id/plan-types/:typeId — update code/name/notes
-app.patch('/api/projects/:id/plan-types/:typeId', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.patch('/api/projects/:id/plan-types/:typeId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const fields = []; const vals = []; let i = 1;
     for (const col of ['code', 'name', 'notes']) {
@@ -5971,7 +6395,7 @@ app.patch('/api/projects/:id/plan-types/:typeId', requireAuth, requireModuleAcce
 });
 
 // DELETE /api/projects/:id/plan-types/:typeId — only if no suites assigned
-app.delete('/api/projects/:id/plan-types/:typeId', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.delete('/api/projects/:id/plan-types/:typeId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { rows: [{ cnt }] } = await pool.query(
       `SELECT COUNT(*)::int AS cnt FROM spaces WHERE plan_type_id=$1 AND archived_at IS NULL`, [req.params.typeId]
@@ -5987,7 +6411,7 @@ app.delete('/api/projects/:id/plan-types/:typeId', requireAuth, requireModuleAcc
 
 // POST /api/projects/:id/plan-types/:typeId/panel — upload panel schedule
 app.post('/api/projects/:id/plan-types/:typeId/panel',
-  requireAuth, requireModuleAccess('worksites', 'edit'),
+  requireAuth, requireModuleAccess('worksites', 'manage'),
   planPanelUpload.single('panel'),
   async (req, res) => {
     try {
@@ -6007,7 +6431,7 @@ app.post('/api/projects/:id/plan-types/:typeId/panel',
 );
 
 // DELETE /api/projects/:id/plan-types/:typeId/panel — remove panel
-app.delete('/api/projects/:id/plan-types/:typeId/panel', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.delete('/api/projects/:id/plan-types/:typeId/panel', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { rowCount } = await pool.query(`
       UPDATE plan_types
@@ -6021,7 +6445,7 @@ app.delete('/api/projects/:id/plan-types/:typeId/panel', requireAuth, requireMod
 });
 
 // GET /api/plan-types/:typeId/panel — serve panel file bytes
-app.get('/api/plan-types/:typeId/panel', requireAuth, requireModuleAccess('worksites', 'view'), async (req, res) => {
+app.get('/api/plan-types/:typeId/panel', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows: [pt] } = await pool.query(
       `SELECT panel_file_data, panel_mime_type, panel_file_name FROM plan_types WHERE id=$1`,
@@ -6035,8 +6459,434 @@ app.get('/api/plan-types/:typeId/panel', requireAuth, requireModuleAccess('works
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/plan-types/:typeId/files — list (no BYTEA)
+app.get('/api/plan-types/:typeId/files', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, plan_type_id, mime_type, file_name, caption, uploaded_by, uploaded_at
+       FROM plan_type_files WHERE plan_type_id=$1 ORDER BY uploaded_at`,
+      [req.params.typeId]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/plan-types/:typeId/files — upload (manage)
+app.post('/api/plan-types/:typeId/files', requireAuth, requireModuleAccess('worksites', 'manage'),
+  spaceFileUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    const { caption } = req.body;
+    const { rows: [f] } = await pool.query(
+      `INSERT INTO plan_type_files (plan_type_id, file_data, mime_type, file_name, caption, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, plan_type_id, mime_type, file_name, caption, uploaded_by, uploaded_at`,
+      [req.params.typeId, req.file.buffer, req.file.mimetype, req.file.originalname, caption || null, req.user.id]
+    );
+    res.json(f);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/plan-types/:typeId/files/:fileId — delete (manage)
+app.delete('/api/plan-types/:typeId/files/:fileId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM plan_type_files WHERE id=$1 AND plan_type_id=$2`,
+      [req.params.fileId, req.params.typeId]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/plan-types/:typeId/files/:fileId/bytes — serve file bytes (field)
+app.get('/api/plan-types/:typeId/files/:fileId/bytes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows: [f] } = await pool.query(
+      `SELECT file_data, mime_type, file_name FROM plan_type_files WHERE id=$1 AND plan_type_id=$2`,
+      [req.params.fileId, req.params.typeId]
+    );
+    if (!f) return res.status(404).json({ error: 'Not found' });
+    const safeName = (f.file_name || 'file').replace(/[^\w.\-]/g, '_');
+    res.setHeader('Content-Type', f.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    res.send(f.file_data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Chunk 8: Lists & Notes ───────────────────────────────────────────────────
+
+// GET /api/list-types
+app.get('/api/list-types', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, name, sort_order FROM list_types ORDER BY sort_order, name');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/list-types (manage)
+app.post('/api/list-types', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+    const { rows: [lt] } = await pool.query(
+      `INSERT INTO list_types (name, sort_order) VALUES ($1,
+         (SELECT COALESCE(MAX(sort_order),0)+1 FROM list_types))
+       RETURNING *`, [name.trim()]);
+    res.json(lt);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Lists on spaces ─────────────────────────────────────────────────────────
+
+// GET /api/spaces/:id/lists — space lists + inherited type lists with items
+app.get('/api/spaces/:id/lists', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const spaceId = req.params.id;
+    // Fetch space's own lists
+    const { rows: ownLists } = await pool.query(`
+      SELECT sl.id, sl.space_id, sl.plan_type_id, lt.name AS list_type, lt.id AS list_type_id
+      FROM space_lists sl JOIN list_types lt ON lt.id = sl.list_type_id
+      WHERE sl.space_id = $1 ORDER BY lt.sort_order, sl.created_at`, [spaceId]);
+
+    // Fetch type-level lists if suite has a plan_type
+    const { rows: [space] } = await pool.query(
+      `SELECT plan_type_id FROM spaces WHERE id=$1`, [spaceId]);
+    let typeLists = [];
+    if (space?.plan_type_id) {
+      const { rows } = await pool.query(`
+        SELECT sl.id, sl.plan_type_id, lt.name AS list_type, lt.id AS list_type_id,
+               pt.code AS plan_type_code, pt.name AS plan_type_name,
+               (SELECT COUNT(*) FROM spaces s2
+                WHERE s2.plan_type_id = sl.plan_type_id
+                  AND s2.project_id = (SELECT project_id FROM spaces WHERE id=$2)
+                  AND s2.archived_at IS NULL) AS suite_count
+        FROM space_lists sl JOIN list_types lt ON lt.id = sl.list_type_id
+             JOIN plan_types pt ON pt.id = sl.plan_type_id
+        WHERE sl.plan_type_id = $1 ORDER BY lt.sort_order, sl.created_at`,
+        [space.plan_type_id, spaceId]);
+      typeLists = rows;
+    }
+
+    // Fetch items for all lists
+    const allListIds = [...ownLists, ...typeLists].map(l => l.id);
+    let items = [];
+    if (allListIds.length) {
+      const { rows } = await pool.query(`
+        SELECT li.*, u.name AS added_by_name
+        FROM list_items li LEFT JOIN users u ON u.id = li.added_by
+        WHERE li.list_id = ANY($1) ORDER BY li.added_at`, [allListIds]);
+      items = rows;
+    }
+
+    const attach = lists => lists.map(l => ({
+      ...l, items: items.filter(i => i.list_id === l.id)
+    }));
+    res.json({ ownLists: attach(ownLists), typeLists: attach(typeLists) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/lists (manage)
+app.post('/api/spaces/:id/lists', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { list_type_id } = req.body;
+    if (!list_type_id) return res.status(400).json({ error: 'list_type_id required' });
+    const { rows: [sl] } = await pool.query(
+      `INSERT INTO space_lists (space_id, list_type_id, created_by)
+       VALUES ($1,$2,$3) RETURNING id, space_id, list_type_id, created_at`,
+      [req.params.id, list_type_id, req.user.id]);
+    const { rows: [lt] } = await pool.query('SELECT name FROM list_types WHERE id=$1', [list_type_id]);
+    res.json({ ...sl, list_type: lt?.name, items: [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/spaces/:id/lists/:listId (manage)
+app.delete('/api/spaces/:id/lists/:listId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM space_lists WHERE id=$1 AND space_id=$2',
+      [req.params.listId, req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Lists on plan types ─────────────────────────────────────────────────────
+
+// GET /api/plan-types/:typeId/lists
+app.get('/api/plan-types/:typeId/lists', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows: lists } = await pool.query(`
+      SELECT sl.id, sl.plan_type_id, lt.name AS list_type, lt.id AS list_type_id
+      FROM space_lists sl JOIN list_types lt ON lt.id = sl.list_type_id
+      WHERE sl.plan_type_id = $1 ORDER BY lt.sort_order, sl.created_at`, [req.params.typeId]);
+    const ids = lists.map(l => l.id);
+    let items = [];
+    if (ids.length) {
+      const { rows } = await pool.query(`
+        SELECT li.*, u.name AS added_by_name
+        FROM list_items li LEFT JOIN users u ON u.id = li.added_by
+        WHERE li.list_id = ANY($1) ORDER BY li.added_at`, [ids]);
+      items = rows;
+    }
+    res.json(lists.map(l => ({ ...l, items: items.filter(i => i.list_id === l.id) })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/plan-types/:typeId/lists (manage)
+app.post('/api/plan-types/:typeId/lists', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { list_type_id } = req.body;
+    if (!list_type_id) return res.status(400).json({ error: 'list_type_id required' });
+    const { rows: [sl] } = await pool.query(
+      `INSERT INTO space_lists (plan_type_id, list_type_id, created_by)
+       VALUES ($1,$2,$3) RETURNING id, plan_type_id, list_type_id, created_at`,
+      [req.params.typeId, list_type_id, req.user.id]);
+    const { rows: [lt] } = await pool.query('SELECT name FROM list_types WHERE id=$1', [list_type_id]);
+    res.json({ ...sl, list_type: lt?.name, items: [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/plan-types/:typeId/lists/:listId (manage)
+app.delete('/api/plan-types/:typeId/lists/:listId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM space_lists WHERE id=$1 AND plan_type_id=$2',
+      [req.params.listId, req.params.typeId]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/plan-types/:typeId/totals — standard quantities × suite count for this type
+app.get('/api/plan-types/:typeId/totals', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT li.description, li.quantity, li.unit, lt.name AS list_type,
+             COUNT(DISTINCT s.id)::int AS suite_count,
+             (li.quantity * COUNT(DISTINCT s.id)) AS total_quantity
+      FROM space_lists sl
+      JOIN list_items li ON li.list_id = sl.id
+      JOIN list_types lt ON lt.id = sl.list_type_id
+      JOIN spaces s ON s.plan_type_id = sl.plan_type_id AND s.archived_at IS NULL
+      WHERE sl.plan_type_id = $1
+      GROUP BY li.id, li.description, li.quantity, li.unit, lt.name, lt.sort_order
+      ORDER BY lt.sort_order, lt.name, li.description
+    `, [req.params.typeId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── List items ──────────────────────────────────────────────────────────────
+
+// POST /api/lists/:listId/items
+// field can add to space lists; manage required for type lists
+app.post('/api/lists/:listId/items', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows: [sl] } = await pool.query('SELECT * FROM space_lists WHERE id=$1', [req.params.listId]);
+    if (!sl) return res.status(404).json({ error: 'List not found' });
+    // Type-level lists require manage
+    if (sl.plan_type_id) {
+      const access = await getModuleAccess(req.user.id, 'worksites', req.user.role);
+      const level = access === 'manage' ? 2 : access === 'field' ? 1 : 0;
+      if (level < 2) return res.status(403).json({ error: 'manage access required for type lists' });
+    }
+    const { description, quantity = 1, unit, notes } = req.body;
+    if (!description?.trim()) return res.status(400).json({ error: 'Description required' });
+    const { rows: [item] } = await pool.query(`
+      INSERT INTO list_items (list_id, description, quantity, unit, notes, added_by)
+      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.params.listId, description.trim(), quantity, unit || null, notes || null, req.user.id]);
+    res.json({ ...item, added_by_name: req.user.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/list-items/:itemId
+// field: status→received/installed only; manage: any field
+app.patch('/api/list-items/:itemId', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { status, description, quantity, unit, notes } = req.body;
+    const _access1 = await getModuleAccess(req.user.id, 'worksites', req.user.role);
+    const level = _access1 === 'manage' ? 2 : _access1 === 'field' ? 1 : 0;
+    const isManage = level >= 2;
+
+    if (status && !['needed','ordered','delivered'].includes(status))
+      return res.status(400).json({ error: 'Invalid status' });
+    if (status && !isManage && status !== 'delivered')
+      return res.status(403).json({ error: 'Field users can only mark delivered' });
+
+    // Check ownership for non-manage deletes (only manage can edit description/qty/unit)
+    if ((description !== undefined || quantity !== undefined || unit !== undefined) && !isManage)
+      return res.status(403).json({ error: 'manage access required to edit item details' });
+
+    const fields = [], vals = [];
+    let i = 1;
+    if (status      !== undefined) { fields.push(`status=$${i++}`);      vals.push(status); }
+    if (description !== undefined) { fields.push(`description=$${i++}`); vals.push(description.trim()); }
+    if (quantity    !== undefined) { fields.push(`quantity=$${i++}`);    vals.push(quantity); }
+    if (unit        !== undefined) { fields.push(`unit=$${i++}`);        vals.push(unit || null); }
+    if (notes       !== undefined) { fields.push(`notes=$${i++}`);       vals.push(notes || null); }
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+
+    vals.push(req.params.itemId);
+    const { rows: [item] } = await pool.query(
+      `UPDATE list_items SET ${fields.join(',')} WHERE id=$${i} RETURNING *`, vals);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    res.json(item);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/list-items/:itemId
+// field: own items only; manage: any
+app.delete('/api/list-items/:itemId', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const _access2 = await getModuleAccess(req.user.id, 'worksites', req.user.role);
+    const level = _access2 === 'manage' ? 2 : _access2 === 'field' ? 1 : 0;
+    const isManage = level >= 2;
+    const clause = isManage ? 'WHERE id=$1' : 'WHERE id=$1 AND added_by=$2';
+    const params = isManage ? [req.params.itemId] : [req.params.itemId, req.user.id];
+    const { rowCount } = await pool.query(`DELETE FROM list_items ${clause}`, params);
+    if (!rowCount) return res.status(isManage ? 404 : 403).json({ error: isManage ? 'Not found' : 'Not your item' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Rollup ──────────────────────────────────────────────────────────────────
+
+// GET /api/spaces/:id/list-rollup?status=needed,ordered (defaults to needed+ordered)
+app.get('/api/spaces/:id/list-rollup', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const statuses = req.query.status
+      ? req.query.status.split(',').filter(s => ['needed','ordered','delivered'].includes(s))
+      : ['needed', 'ordered'];
+
+    const { rows } = await pool.query(`
+      WITH RECURSIVE subtree AS (
+        SELECT id, plan_type_id FROM spaces WHERE id = $1 AND archived_at IS NULL
+        UNION ALL
+        SELECT s.id, s.plan_type_id
+        FROM spaces s JOIN subtree p ON s.parent_id = p.id
+        WHERE s.archived_at IS NULL
+      ) CYCLE id SET is_cycle USING cycle_path,
+      space_items AS (
+        SELECT li.description, li.quantity, li.unit, li.status, lt.name AS list_type
+        FROM subtree t
+        JOIN space_lists sl ON sl.space_id = t.id
+        JOIN list_types  lt ON lt.id = sl.list_type_id
+        JOIN list_items  li ON li.list_id = sl.id
+        WHERE li.status = ANY($2) AND NOT t.is_cycle
+      ),
+      type_items AS (
+        SELECT li.description, li.quantity, li.unit, li.status, lt.name AS list_type
+        FROM subtree t
+        JOIN space_lists sl ON sl.plan_type_id = t.plan_type_id AND t.plan_type_id IS NOT NULL
+        JOIN list_types  lt ON lt.id = sl.list_type_id
+        JOIN list_items  li ON li.list_id = sl.id
+        WHERE li.status = ANY($2) AND NOT t.is_cycle
+      ),
+      combined AS (
+        SELECT list_type, description, unit, status, quantity,
+               lower(trim(regexp_replace(description, '\\s+', ' ', 'g'))) AS norm_key
+        FROM (SELECT * FROM space_items UNION ALL SELECT * FROM type_items) all_items
+      )
+      SELECT
+        list_type,
+        -- Display the most common raw spelling for this normalized group
+        (SELECT c2.description FROM combined c2
+         WHERE c2.norm_key = c.norm_key AND c2.list_type = c.list_type
+         GROUP BY c2.description ORDER BY COUNT(*) DESC LIMIT 1) AS description,
+        unit,
+        norm_key,
+        SUM(qty) AS total_quantity,
+        json_object_agg(status, qty ORDER BY status) AS by_status
+      FROM (
+        SELECT list_type, description, unit, norm_key, status, SUM(quantity) AS qty
+        FROM combined
+        GROUP BY list_type, description, unit, norm_key, status
+      ) c
+      GROUP BY list_type, norm_key, unit
+      ORDER BY list_type, norm_key
+    `, [req.params.id, statuses]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Notes on spaces ─────────────────────────────────────────────────────────
+
+// GET /api/spaces/:id/notes
+app.get('/api/spaces/:id/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT sn.id, sn.body, sn.created_at, u.name AS author_name, sn.author_id
+      FROM space_notes sn LEFT JOIN users u ON u.id = sn.author_id
+      WHERE sn.space_id = $1 ORDER BY sn.created_at DESC`, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/notes (field)
+app.post('/api/spaces/:id/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { body } = req.body;
+    if (!body?.trim()) return res.status(400).json({ error: 'Body required' });
+    const { rows: [note] } = await pool.query(`
+      INSERT INTO space_notes (space_id, body, author_id)
+      VALUES ($1,$2,$3) RETURNING id, space_id, body, created_at, author_id`,
+      [req.params.id, body.trim(), req.user.id]);
+    res.json({ ...note, author_name: req.user.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/notes/:noteId — field: own only; manage: any
+app.delete('/api/notes/:noteId', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const _access3 = await getModuleAccess(req.user.id, 'worksites', req.user.role);
+    const level = _access3 === 'manage' ? 2 : _access3 === 'field' ? 1 : 0;
+    const isManage = level >= 2;
+    const clause = isManage ? 'WHERE id=$1 AND space_id IS NOT NULL' : 'WHERE id=$1 AND author_id=$2 AND space_id IS NOT NULL';
+    const params = isManage ? [req.params.noteId] : [req.params.noteId, req.user.id];
+    const { rowCount } = await pool.query(`DELETE FROM space_notes ${clause}`, params);
+    if (!rowCount) return res.status(isManage ? 404 : 403).json({ error: isManage ? 'Not found' : 'Not your note' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Notes on plan types ─────────────────────────────────────────────────────
+
+// GET /api/plan-types/:typeId/notes
+app.get('/api/plan-types/:typeId/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT sn.id, sn.body, sn.created_at, u.name AS author_name, sn.author_id
+      FROM space_notes sn LEFT JOIN users u ON u.id = sn.author_id
+      WHERE sn.plan_type_id = $1 ORDER BY sn.created_at DESC`, [req.params.typeId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/plan-types/:typeId/notes (manage — edits affect all suites of this type)
+app.post('/api/plan-types/:typeId/notes', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { body } = req.body;
+    if (!body?.trim()) return res.status(400).json({ error: 'Body required' });
+    const { rows: [note] } = await pool.query(`
+      INSERT INTO space_notes (plan_type_id, body, author_id)
+      VALUES ($1,$2,$3) RETURNING id, plan_type_id, body, created_at, author_id`,
+      [req.params.typeId, body.trim(), req.user.id]);
+    res.json({ ...note, author_name: req.user.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/plan-type-notes/:noteId (manage)
+app.delete('/api/plan-type-notes/:noteId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM space_notes WHERE id=$1 AND plan_type_id IS NOT NULL', [req.params.noteId]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // PATCH /api/projects/:id/spaces/bulk-assign-type — set plan_type_id on multiple suites
-app.patch('/api/projects/:id/spaces/bulk-assign-type', requireAuth, requireModuleAccess('worksites', 'edit'), async (req, res) => {
+app.patch('/api/projects/:id/spaces/bulk-assign-type', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { space_ids, plan_type_id } = req.body;
     if (!Array.isArray(space_ids) || !space_ids.length) return res.status(400).json({ error: 'space_ids array required' });
