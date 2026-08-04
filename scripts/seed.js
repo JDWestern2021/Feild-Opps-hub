@@ -20,6 +20,148 @@ const date = (offsetDays = 0) => {
   return d.toISOString().slice(0, 10);
 };
 
+// ── Worksite review seed data (material requests, deficiencies, notes) ────────
+async function seedWorksiteData(slId, adminId, supervisorId, leadId, field1Id, field2Id) {
+  // Look up suite IDs by identifier — spread across both buildings, multiple floors
+  async function suiteId(identifier) {
+    const { rows } = await pool.query(
+      `SELECT s.id FROM spaces s
+       JOIN space_types st ON st.id = s.space_type_id
+       WHERE s.project_id=$1 AND s.identifier=$2 AND st.name='Suite' LIMIT 1`,
+      [slId, identifier]
+    );
+    return rows[0]?.id;
+  }
+
+  const suites = {
+    // Building 1
+    b1f1_101: await suiteId('Suite 101'),
+    b1f1_103: await suiteId('Suite 103'),
+    b1f1_108: await suiteId('Suite 108'),
+    b1f2_205: await suiteId('Suite 205'),
+    b1f2_211: await suiteId('Suite 211'),
+    b1f2_215: await suiteId('Suite 215'),
+    b1f3_302: await suiteId('Suite 302'),
+    b1f3_309: await suiteId('Suite 309'),
+    b1f4_412: await suiteId('Suite 412'),
+    b1f4_420: await suiteId('Suite 420'),
+  };
+
+  // In the duplicated Building 2, suite identifiers are identical (same seeder)
+  // so we can't distinguish by identifier alone — look up by building path instead.
+  async function b2SuiteId(identifier) {
+    const { rows } = await pool.query(`
+      WITH RECURSIVE tree AS (
+        SELECT id FROM spaces WHERE project_id=$1 AND identifier='Building 2' AND parent_id IS NULL
+        UNION ALL
+        SELECT s.id FROM spaces s JOIN tree t ON s.parent_id = t.id WHERE s.archived_at IS NULL
+      )
+      SELECT s.id FROM spaces s
+      JOIN space_types st ON st.id = s.space_type_id
+      WHERE s.id IN (SELECT id FROM tree) AND s.identifier=$2 AND st.name='Suite'
+      LIMIT 1
+    `, [slId, identifier]);
+    return rows[0]?.id;
+  }
+
+  const b2 = {
+    f1_102: await b2SuiteId('Suite 102'),
+    f2_207: await b2SuiteId('Suite 207'),
+    f3_314: await b2SuiteId('Suite 314'),
+    f4_401: await b2SuiteId('Suite 401'),
+    f4_416: await b2SuiteId('Suite 416'),
+  };
+
+  // ── Material requests ────────────────────────────────────────────────────────
+  // Duplicate descriptions intentional: smoke detectors & dimmer switches appear
+  // in multiple suites → summary export must sum them.
+  const matRequests = [
+    // B1 Floor 1
+    { sid: suites.b1f1_101, desc: 'Smoke detector',       qty: 1,  unit: 'ea',  status: 'delivered', by: leadId },
+    { sid: suites.b1f1_101, desc: 'Dimmer switch',        qty: 2,  unit: 'ea',  status: 'delivered', by: leadId },
+    { sid: suites.b1f1_103, desc: 'Smoke detector',       qty: 1,  unit: 'ea',  status: 'ordered',   by: leadId },
+    { sid: suites.b1f1_103, desc: 'GFCI outlet',          qty: 3,  unit: 'ea',  status: 'needed',    by: field1Id },
+    { sid: suites.b1f1_108, desc: 'Dimmer switch',        qty: 3,  unit: 'ea',  status: 'ordered',   by: leadId },
+    { sid: suites.b1f1_108, desc: 'Range hood outlet',    qty: 1,  unit: 'ea',  status: 'needed',    by: field1Id },
+    // B1 Floor 2
+    { sid: suites.b1f2_205, desc: 'Smoke detector',       qty: 1,  unit: 'ea',  status: 'needed',    by: field1Id },
+    { sid: suites.b1f2_205, desc: 'USB outlet',           qty: 2,  unit: 'ea',  status: 'needed',    by: field1Id },
+    { sid: suites.b1f2_211, desc: 'GFCI outlet',          qty: 2,  unit: 'ea',  status: 'ordered',   by: leadId },
+    { sid: suites.b1f2_211, desc: 'Dimmer switch',        qty: 4,  unit: 'ea',  status: 'needed',    by: field2Id },
+    { sid: suites.b1f2_215, desc: '50A dryer outlet',     qty: 1,  unit: 'ea',  status: 'needed',    by: field2Id },
+    // B1 Floor 3
+    { sid: suites.b1f3_302, desc: 'Smoke detector',       qty: 1,  unit: 'ea',  status: 'needed',    by: field2Id },
+    { sid: suites.b1f3_309, desc: 'GFCI outlet',          qty: 4,  unit: 'ea',  status: 'needed',    by: field2Id },
+    { sid: suites.b1f4_412, desc: 'Smoke detector',       qty: 1,  unit: 'ea',  status: 'ordered',   by: field1Id },
+    // B1 Floor 4
+    { sid: suites.b1f4_420, desc: 'Dimmer switch',        qty: 2,  unit: 'ea',  status: 'delivered', by: leadId },
+    // Building 2
+    { sid: b2.f1_102,       desc: 'Smoke detector',       qty: 1,  unit: 'ea',  status: 'ordered',   by: leadId },
+    { sid: b2.f1_102,       desc: 'GFCI outlet',          qty: 3,  unit: 'ea',  status: 'needed',    by: field1Id },
+    { sid: b2.f2_207,       desc: 'Dimmer switch',        qty: 3,  unit: 'ea',  status: 'needed',    by: field1Id },
+    { sid: b2.f3_314,       desc: '50A dryer outlet',     qty: 1,  unit: 'ea',  status: 'needed',    by: field2Id },
+    { sid: b2.f4_401,       desc: 'USB outlet',           qty: 2,  unit: 'ea',  status: 'needed',    by: field2Id },
+    { sid: b2.f4_416,       desc: 'Smoke detector',       qty: 1,  unit: 'ea',  status: 'delivered', by: leadId },
+    { sid: b2.f4_416,       desc: 'Dimmer switch',        qty: 2,  unit: 'ea',  status: 'needed',    by: field2Id },
+  ];
+
+  const offsetDays = [-25, -18, -14, -10, -7, -5, -3, -1];
+  for (let i = 0; i < matRequests.length; i++) {
+    const r = matRequests[i];
+    if (!r.sid) continue;
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays[i % offsetDays.length]);
+    await pool.query(
+      `INSERT INTO material_requests (space_id, description, quantity, unit, status, added_by, added_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [r.sid, r.desc, r.qty, r.unit, r.status, r.by, d.toISOString()]
+    );
+  }
+  console.log(`    Material: ${matRequests.length} requests seeded`);
+
+  // ── Deficiencies ─────────────────────────────────────────────────────────────
+  const defs = [
+    { sid: suites.b1f1_101, desc: 'Missing cover plate on bedroom outlet',   status: 'open',        by: field1Id },
+    { sid: suites.b1f1_103, desc: 'Bathroom GFCI tripping — investigate',    status: 'in_progress', by: field1Id },
+    { sid: suites.b1f2_205, desc: 'Kitchen dimmer buzzing at 50% — replace', status: 'open',        by: field2Id },
+    { sid: suites.b1f2_211, desc: 'Panel breaker not labelled',              status: 'resolved',    by: leadId },
+    { sid: suites.b1f3_302, desc: 'Doorbell transformer wrong voltage',      status: 'open',        by: field2Id },
+    { sid: b2.f2_207,       desc: 'Smoke detector missing — not installed',  status: 'open',        by: field1Id },
+    { sid: b2.f3_314,       desc: 'Counter outlet too low — GC drywall issue', status: 'in_progress', by: leadId },
+  ];
+
+  for (let i = 0; i < defs.length; i++) {
+    const d = defs[i];
+    if (!d.sid) continue;
+    const ts = new Date();
+    ts.setDate(ts.getDate() - (defs.length - i) * 3);
+    await pool.query(
+      `INSERT INTO deficiencies (space_id, description, status, raised_by, raised_at)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [d.sid, d.desc, d.status, d.by, ts.toISOString()]
+    );
+  }
+  console.log(`    Deficiencies: ${defs.length} seeded`);
+
+  // ── Space notes ───────────────────────────────────────────────────────────────
+  const notes = [
+    { sid: suites.b1f1_101, body: 'Confirmed rough-in complete. Panel connections pending trim.', by: leadId },
+    { sid: suites.b1f2_205, body: 'GC installed extra pot lights not on drawing E205 — verify circuit capacity.', by: supervisorId },
+    { sid: suites.b1f3_309, body: 'Tenant requested extra USB outlets in master bedroom. Confirm with PM before ordering.', by: field2Id },
+    { sid: b2.f1_102,       body: 'Dryer circuit relocated from laundry closet to ensuite — update as-built.', by: leadId },
+    { sid: b2.f4_401,       body: 'Final inspection passed. All outlets, lights, and panel confirmed.', by: supervisorId },
+  ];
+
+  for (const n of notes) {
+    if (!n.sid) continue;
+    await pool.query(
+      `INSERT INTO space_notes (space_id, body, author_id) VALUES ($1,$2,$3)`,
+      [n.sid, n.body, n.by]
+    );
+  }
+  console.log(`    Notes: ${notes.length} seeded`);
+}
+
 async function seed() {
   const client = await pool.connect();
   try {
@@ -143,6 +285,8 @@ async function seed() {
     // ── Worksites space trees (run after COMMIT — uses pool, not client) ──────
     console.log('▸ Seeding worksite spaces...');
     await seedSpaces(p1.id, p2.id, slId);
+    console.log('▸ Seeding worksite review data...');
+    await seedWorksiteData(slId, adminId, supervisorId, leadId, field1Id, field2Id);
     console.log('');
     console.log('✓ Seed complete.');
     console.log('');
@@ -172,19 +316,20 @@ async function seedSpaces(p1Id, p2Id, slId) {
 
   // Space type ids — throws loudly if schema wasn't seeded
   const T = {
-    building:   await typeId('Building'),
-    floor:      await typeId('Floor'),
-    suite:      await typeId('Suite'),
-    stairwell:  await typeId('Stairwell'),
-    parkade:    await typeId('Parkade'),
-    elec:       await typeId('Electrical Room'),
-    mech:       await typeId('Mechanical Room'),
-    lobby:      await typeId('Lobby'),
-    common:     await typeId('Common Area'),
-    storage:    await typeId('Storage Room'),
-    exterior:   await typeId('Exterior'),
-    elevator:   await typeId('Elevator'),
-    shaft:      await typeId('Mechanical Shaft'),
+    building:    await typeId('Building'),
+    floor:       await typeId('Floor'),
+    suite:       await typeId('Suite'),
+    stairwell:   await typeId('Stairwell'),
+    parkade:     await typeId('Parkade'),
+    parkingLot:  await typeId('Parking Lot'),
+    elec:        await typeId('Electrical Room'),
+    mech:        await typeId('Mechanical Room'),
+    lobby:       await typeId('Lobby'),
+    common:      await typeId('Common Area'),
+    storage:     await typeId('Storage Room'),
+    exterior:    await typeId('Exterior'),
+    elevator:    await typeId('Elevator'),
+    shaft:       await typeId('Mechanical Shaft'),
   };
 
   // ── Henderson Commercial — one General space ────────────────────────────
@@ -205,8 +350,8 @@ async function seedSpaces(p1Id, p2Id, slId) {
     return;
   }
 
-  // Project-level Parking Lot
-  await addSpace({ project_id: slId, identifier: 'Parking Lot', space_type_id: T.parkade, sort_order: 0 });
+  // Project-level surface lot — uses Parking Lot type, not Parkade
+  await addSpace({ project_id: slId, identifier: 'Parking Lot', space_type_id: T.parkingLot, sort_order: 0 });
 
   // ── Plan type assignment map (last 2 digits of suite identifier → type code) ─
   // Verified against drawing E105. Same pattern on every floor of both buildings.
