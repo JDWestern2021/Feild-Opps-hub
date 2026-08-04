@@ -241,9 +241,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
 
 /* ── Mobile panel schedule view ────────────────────────────────────────────── */
 @media (max-width:600px) {
-  /* Hide desktop page chrome and modals on mobile */
-  .page { display: none; }
-
   #mobile-view {
     display: block;
     background: var(--gray-100);
@@ -1035,10 +1032,10 @@ function printSchedule(s, widthIn, heightIn) {
   /* Circuit table — expands to show all rows */
   .tbl-wrap { flex:1; }
   .pt-table { width:100%; border-collapse:collapse; font-size:8px; table-layout:fixed; }
-  .pt-table col.desc-col { width:50%; }
+  .pt-table col.desc-col { width:auto; }
   .pt-table col.pole-col { width:16px; }
   .pt-table col.amp-col  { width:22px; }
-  .pt-table col.cct-col  { width:20px; }
+  .pt-table col.cct-col  { width:28px; }
   .pt-table th { padding:3px 2px; text-align:center; font-size:6px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; border:1px solid #888; }
   .pt-table th.left-hdr  { background:#1a3a5c; color:#fff; }
   .pt-table th.right-hdr { background:#7a2e0a; color:#fff; }
@@ -1352,11 +1349,16 @@ document.getElementById('view-print-btn').addEventListener('click', () => {
 });
 
 document.getElementById('view-edit-btn').addEventListener('click', async () => {
-  document.getElementById('view-overlay').classList.add('hidden');
   try {
     const res = await fetch('/api/panel-schedules/' + viewingId);
-    openModal(await res.json());
-  } catch { showToast('Failed to load', 'error'); }
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    document.getElementById('view-overlay').classList.add('hidden');
+    openModal(data);
+  } catch {
+    showToast('Failed to load panel schedule', 'error');
+    // view modal stays open — user can try again or close manually
+  }
 });
 
 document.getElementById('view-archive-btn').addEventListener('click', async () => {
