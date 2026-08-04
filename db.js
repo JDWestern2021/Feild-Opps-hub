@@ -1087,6 +1087,19 @@ async function initSchema() {
     )
   )`);
 
+  // Per-suite panel overrides — separate table keeps BYTEA off the spaces row
+  // so tree loads never pull panel PDFs accidentally.
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_panel_overrides (
+    id              SERIAL PRIMARY KEY,
+    space_id        INTEGER NOT NULL UNIQUE REFERENCES spaces(id) ON DELETE CASCADE,
+    panel_file_data BYTEA NOT NULL,
+    panel_mime_type TEXT,
+    panel_file_name TEXT,
+    panel_file_size INTEGER,
+    uploaded_by     TEXT,
+    uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // Migrate existing plan_types.notes (free-text textarea) to space_notes entries.
   // Runs once per type that has notes and no space_notes row yet — idempotent.
   await pool.query(`

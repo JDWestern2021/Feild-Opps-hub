@@ -30,6 +30,55 @@
     .ws-layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
     @media (max-width: 900px) { .ws-layout { grid-template-columns: 1fr; } }
 
+    /* ── Sidebar collapse once a project is selected (desktop only) ── */
+    @media (min-width: 769px) {
+      .ws-layout.project-selected { grid-template-columns: 1fr; gap: 0; }
+      .ws-layout.project-selected .project-panel { display: none; }
+
+      /* Single sticky block: panel header + review sub-tabs */
+      .sticky-header { position: sticky; top: 72px; z-index: 20; background: white; border-radius: 12px 12px 0 0; }
+
+      /* Review sub-tabs only show on desktop inside sticky-header */
+      #review-sub-tabs-desktop { display: none; }
+      #review-sub-tabs-mobile  { display: flex; }
+
+      /* Review split: list left, space detail right */
+      #view-review { display: flex; min-height: 400px; }
+      #review-list-panel { flex: 1; min-width: 0; }
+      #review-space-panel {
+        width: 380px; flex-shrink: 0; border-left: 1px solid var(--gray-200);
+        display: none; flex-direction: column; overflow-y: auto;
+      }
+      #review-space-panel.open { display: flex; }
+      .review-space-panel-hdr {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 14px; border-bottom: 1px solid var(--gray-100); flex-shrink: 0;
+        position: sticky; top: 0; background: white; z-index: 1;
+      }
+      .review-space-panel-hdr h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    }
+    @media (max-width: 768px) {
+      #review-sub-tabs-desktop { display: none !important; }
+      #review-sub-tabs-mobile  { display: flex; }
+    }
+
+    /* Back to projects button (desktop only) */
+    .back-proj-btn {
+      display: none; align-items: center; gap: 4px; flex-shrink: 0;
+      font-size: 12px; color: var(--gray-500); background: none; border: none;
+      cursor: pointer; padding: 2px 8px 2px 0; border-right: 1px solid var(--gray-200); margin-right: 4px;
+    }
+    @media (min-width: 769px) {
+      .project-selected .back-proj-btn { display: inline-flex; }
+    }
+
+    /* ── Content-type dots (def=red, mat=blue, note=grey) ── */
+    .space-dots { display: inline-flex; gap: 5px; align-items: center; flex-shrink: 0; }
+    .dot { font-size: 10px; font-weight: 700; white-space: nowrap; line-height: 1; }
+    .dot-def  { color: #dc2626; }
+    .dot-mat  { color: #2563eb; }
+    .dot-note { color: #6b7280; }
+
     /* ── Project list ── */
     .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); overflow: hidden; position: sticky; top: 72px; }
     .project-panel-header { padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); border-bottom: 1px solid var(--gray-100); }
@@ -539,7 +588,7 @@
         min-height: 44px;
       }
       .mn-child-row:active { background: var(--gray-50); }
-      .mn-child-label { font-size: 16px; font-weight: 600; color: var(--dark); }
+      .mn-child-label { font-size: 16px; font-weight: 600; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .mn-child-sub { font-size: 12px; color: var(--gray-400); margin-top: 1px; }
       .mn-child-badge {
         font-size: 10px; font-weight: 700; color: var(--orange);
@@ -654,16 +703,26 @@
       </ul>
     </div>
 
-    <!-- Space / Types panel -->
+    <!-- Space / Types / Review panel -->
     <div class="space-panel" id="space-panel">
-      <div class="space-panel-header">
-        <span class="space-panel-title" id="space-panel-title">Select a project</span>
-        <div class="view-pills" id="view-pills" style="display:none;">
-          <button class="view-pill active" onclick="switchView('spaces')">Spaces</button>
-          <button class="view-pill"        onclick="switchView('types')">Types</button>
-          <button class="view-pill"        onclick="switchView('review')">Review</button>
+      <!-- Sticky wrapper: panel header + review sub-tabs stick together as one block -->
+      <div class="sticky-header">
+        <div class="space-panel-header">
+          <button class="back-proj-btn" id="back-proj-btn" onclick="backToProjects()">← Projects</button>
+          <span class="space-panel-title" id="space-panel-title">Select a project</span>
+          <div class="view-pills" id="view-pills" style="display:none;">
+            <button class="view-pill active" onclick="switchView('spaces')">Spaces</button>
+            <button class="view-pill"        onclick="switchView('types')">Types</button>
+            <button class="view-pill"        onclick="switchView('review')">Review</button>
+          </div>
+          <div class="space-actions" id="space-actions" style="display:none;"></div>
         </div>
-        <div class="space-actions" id="space-actions" style="display:none;"></div>
+        <!-- Desktop-only review sub-tabs — hidden on mobile via CSS -->
+        <div class="review-sub-tabs" id="review-sub-tabs-desktop" style="display:none;">
+          <button class="review-sub-tab active" onclick="switchReviewTab('deficiencies')">Deficiencies</button>
+          <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
+          <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
+        </div>
       </div>
 
       <!-- Spaces view -->
@@ -749,65 +808,76 @@
           <div class="type-detail-sections" id="type-detail-sections"></div>
         </div>
       </div>
-    </div>
-
-    <!-- Review view -->
-    <div id="view-review" style="display:none;">
-      <!-- Mobile header (hidden on desktop via CSS) -->
-      <div id="mobile-review-header">
-        <div class="mn-header">
-          <div class="mn-nav-row">
-            <div class="mn-spacer"></div>
-            <div class="view-pills">
-              <button class="view-pill" onclick="mobileSwitchTab('spaces')">Spaces</button>
-              <button class="view-pill" onclick="mobileSwitchTab('types')">Types</button>
-              <button class="view-pill active">Review</button>
+      <!-- Review view — moved inside space-panel so sticky-header covers it -->
+      <div id="view-review" style="display:none;">
+        <!-- Left: list panel -->
+        <div id="review-list-panel">
+          <!-- Mobile header (hidden on desktop via CSS) -->
+          <div id="mobile-review-header">
+            <div class="mn-header">
+              <div class="mn-nav-row">
+                <div class="mn-spacer"></div>
+                <div class="view-pills">
+                  <button class="view-pill" onclick="mobileSwitchTab('spaces')">Spaces</button>
+                  <button class="view-pill" onclick="mobileSwitchTab('types')">Types</button>
+                  <button class="view-pill active">Review</button>
+                </div>
+              </div>
+              <div class="mn-title" id="mobile-review-title"></div>
             </div>
           </div>
-          <div class="mn-title" id="mobile-review-title"></div>
-        </div>
-      </div>
-      <!-- Sub-tabs -->
-      <div class="review-sub-tabs">
-        <button class="review-sub-tab active" onclick="switchReviewTab('deficiencies')">Deficiencies</button>
-        <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
-        <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
-      </div>
-      <!-- Deficiencies pane -->
-      <div id="review-pane-deficiencies" class="review-pane active">
-        <div class="review-filters" id="review-def-filters">
-          <button class="review-chip active" data-status="open"        onclick="toggleDefFilter(this)">Open</button>
-          <button class="review-chip active" data-status="in_progress" onclick="toggleDefFilter(this)">In Progress</button>
-          <button class="review-chip"        data-status="resolved"    onclick="toggleDefFilter(this)">Resolved</button>
-        </div>
-        <div id="review-def-list" class="review-list"></div>
-      </div>
-      <!-- Notes pane -->
-      <div id="review-pane-notes" class="review-pane">
-        <div id="review-notes-list" class="review-list"></div>
-      </div>
-      <!-- Material pane -->
-      <div id="review-pane-material" class="review-pane">
-        <div class="review-filters" id="review-mat-filters" style="justify-content:space-between;">
-          <div style="display:flex;gap:4px;flex-wrap:wrap;">
-            <button class="review-chip active" data-st="needed"    onclick="toggleMatStatus(this)">Needed</button>
-            <button class="review-chip active" data-st="ordered"   onclick="toggleMatStatus(this)">Ordered</button>
-            <button class="review-chip"        data-st="delivered" onclick="toggleMatStatus(this)">Delivered</button>
+          <!-- Mobile-only sub-tabs (desktop version is in sticky-header above) -->
+          <div class="review-sub-tabs" id="review-sub-tabs-mobile">
+            <button class="review-sub-tab active" onclick="switchReviewTab('deficiencies')">Deficiencies</button>
+            <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
+            <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
           </div>
-          <div id="review-mat-actions" style="display:none;gap:6px;flex-shrink:0;align-items:center;">
-            <button class="btn btn-sm btn-ghost" onclick="openPickSheet()">Pick Sheet</button>
-            <span id="review-mat-exports" style="display:none;gap:6px;">
-              <a id="btn-export-summary"  class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export Summary</a>
-              <a id="btn-export-by-suite" class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export By Suite</a>
-            </span>
+          <!-- Deficiencies pane -->
+          <div id="review-pane-deficiencies" class="review-pane active">
+            <div class="review-filters" id="review-def-filters">
+              <button class="review-chip active" data-status="open"        onclick="toggleDefFilter(this)">Open</button>
+              <button class="review-chip active" data-status="in_progress" onclick="toggleDefFilter(this)">In Progress</button>
+              <button class="review-chip"        data-status="resolved"    onclick="toggleDefFilter(this)">Resolved</button>
+            </div>
+            <div id="review-def-list" class="review-list"></div>
           </div>
-        </div>
-        <div id="review-mat-list" class="review-list"></div>
-      </div>
-    </div>
+          <!-- Notes pane -->
+          <div id="review-pane-notes" class="review-pane">
+            <div id="review-notes-list" class="review-list"></div>
+          </div>
+          <!-- Material pane -->
+          <div id="review-pane-material" class="review-pane">
+            <div class="review-filters" id="review-mat-filters" style="justify-content:space-between;">
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button class="review-chip active" data-st="needed"    onclick="toggleMatStatus(this)">Needed</button>
+                <button class="review-chip active" data-st="ordered"   onclick="toggleMatStatus(this)">Ordered</button>
+                <button class="review-chip"        data-st="delivered" onclick="toggleMatStatus(this)">Delivered</button>
+              </div>
+              <div id="review-mat-actions" style="display:none;gap:6px;flex-shrink:0;align-items:center;">
+                <button class="btn btn-sm btn-ghost" onclick="openPickSheet()">Pick Sheet</button>
+                <span id="review-mat-exports" style="display:none;gap:6px;">
+                  <a id="btn-export-summary"  class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export Summary</a>
+                  <a id="btn-export-by-suite" class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export By Suite</a>
+                </span>
+              </div>
+            </div>
+            <div id="review-mat-list" class="review-list"></div>
+          </div>
+        </div><!-- /#review-list-panel -->
 
-  </div>
-</div>
+        <!-- Right: space detail panel (desktop only) -->
+        <div id="review-space-panel">
+          <div class="review-space-panel-hdr">
+            <h3 id="review-space-title"></h3>
+            <button class="btn btn-sm btn-ghost" onclick="closeReviewDetailPanel()" style="flex-shrink:0;">✕</button>
+          </div>
+          <div id="review-space-body"></div>
+        </div>
+      </div><!-- /#view-review -->
+
+    </div><!-- /.space-panel -->
+  </div><!-- /.ws-layout -->
+</div><!-- /.page-wrap -->
 
 <!-- Bulk action bar (manage only, shown when rows are selected in Review) -->
 <div class="bulk-bar" id="bulk-bar">
@@ -1006,7 +1076,7 @@ let _canEdit         = false;
 let _reviewAccess    = 'none'; // worksites_review module level
 let _canManageReview = false;
 let _currentView     = 'spaces'; // 'spaces' | 'types' | 'review'
-let _defCounts       = {};      // { spaceId: { open, inProgress } } — refreshed on project load and after mutations
+let _spaceCounts     = {};      // { spaceId: { open, inProgress, matCount, noteCount } } — refreshed on project load and after mutations
 let _currentReviewTab   = 'deficiencies'; // 'deficiencies' | 'notes' | 'material'
 // _reviewMatView removed (Chunk 10: single flat list, no toggle)
 let _mobileReturnView   = null;           // set when navigating to a space from Review on mobile
@@ -1056,25 +1126,29 @@ document.addEventListener('click', () => closeMenu());
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
-async function loadDefCounts(projectId) {
+async function loadSpaceCounts(projectId) {
   try {
-    const rows = await fetch(`/api/projects/${projectId}/deficiency-counts`).then(r => r.json());
-    _defCounts = {};
+    const rows = await fetch(`/api/projects/${projectId}/space-counts`).then(r => r.json());
+    _spaceCounts = {};
     for (const r of rows) {
-      _defCounts[r.space_id] = { open: r.open_count, inProgress: r.in_progress_count };
+      _spaceCounts[r.space_id] = {
+        open: r.open_def, inProgress: r.ip_def,
+        matCount: r.mat_count, noteCount: r.note_count,
+      };
     }
-    // Re-render tree so badges appear (desktop only; mobile re-renders on next navigation)
     if (!isMobile()) renderTree();
   } catch {}
 }
 
-function defBadge(spaceId) {
-  const c = _defCounts[spaceId];
+function spaceDots(spaceId) {
+  const c = _spaceCounts[spaceId];
   if (!c) return '';
-  const total = (c.open || 0) + (c.inProgress || 0);
-  if (!total) return '';
-  const cls = c.open > 0 ? 'def-badge-open' : 'def-badge-ip';
-  return `<span class="def-badge ${cls}">${total}</span>`;
+  const def = (c.open || 0) + (c.inProgress || 0);
+  const parts = [];
+  if (def)          parts.push(`<span class="dot dot-def">● ${def}</span>`);
+  if (c.matCount)   parts.push(`<span class="dot dot-mat">● ${c.matCount}</span>`);
+  if (c.noteCount)  parts.push(`<span class="dot dot-note">● ${c.noteCount}</span>`);
+  return parts.length ? `<span class="space-dots">${parts.join('')}</span>` : '';
 }
 
 function projDefBadge(p) {
@@ -1129,13 +1203,14 @@ async function selectProject(id, name, el) {
       fetch(`/api/projects/${id}/spaces`).then(r => r.json()).catch(() => []),
       fetch(`/api/projects/${id}/plan-types`).then(r => r.json()).catch(() => []),
     ]);
-    loadDefCounts(id);  // async — badges appear as soon as counts arrive
+    loadSpaceCounts(id);  // async — badges appear as soon as counts arrive
     _mobileStack = [];
     pushMobileLevel(null);
     return;
   }
 
-  // Desktop path
+  // Desktop path — collapse sidebar so content gets full width
+  document.querySelector('.ws-layout').classList.add('project-selected');
   document.querySelectorAll('.project-list a').forEach(a => a.classList.remove('active'));
   if (el) el.classList.add('active');
   document.getElementById('space-panel-title').textContent = name;
@@ -1146,7 +1221,22 @@ async function selectProject(id, name, el) {
   renderPanelHeader();
   loadSpaces();
   loadPlanTypes();
-  loadDefCounts(id);  // async — re-renders tree nodes once counts arrive
+  loadSpaceCounts(id);  // async — re-renders tree nodes once counts arrive
+}
+
+function backToProjects() {
+  _activeProjectId = null;
+  _spaces = [];
+  _planTypes = [];
+  _spaceCounts = {};
+  closeReviewDetailPanel();
+  document.querySelector('.ws-layout').classList.remove('project-selected');
+  document.getElementById('view-pills').style.display = 'none';
+  document.getElementById('review-sub-tabs-desktop').style.display = 'none';
+  document.getElementById('space-actions').style.display = 'none';
+  document.getElementById('space-panel-title').textContent = 'Select a project';
+  document.querySelectorAll('.project-list a').forEach(a => a.classList.remove('active'));
+  switchView('spaces');
 }
 
 function renderPanelHeader() {
@@ -1189,6 +1279,14 @@ function switchView(view) {
   document.getElementById('view-spaces').style.display = view === 'spaces' ? '' : 'none';
   document.getElementById('view-types').style.display  = view === 'types'  ? '' : 'none';
   document.getElementById('view-review').style.display = view === 'review' ? '' : 'none';
+
+  // Desktop: show sub-tabs inside sticky-header when in review; hide when leaving
+  const deskTabs = document.getElementById('review-sub-tabs-desktop');
+  if (deskTabs) deskTabs.style.display = (view === 'review' && !isMobile()) ? 'flex' : 'none';
+
+  // Close review space panel when leaving review view
+  if (view !== 'review') closeReviewDetailPanel();
+
   if (view === 'types') {
     const mtt = document.getElementById('mobile-types-title');
     if (mtt) mtt.textContent = document.getElementById('space-panel-title').textContent || '';
@@ -1340,7 +1438,7 @@ function renderNode(s, depth) {
         <span class="tree-label">${escHtml(s.identifier)}</span>
         ${planBadge}
         ${badge ? `<span class="tree-type-badge">${badge}</span>` : ''}
-        ${defBadge(s.id)}
+        ${spaceDots(s.id)}
         ${menuHtml}
       </div>
       ${childrenHtml}
@@ -1368,18 +1466,48 @@ function buildDetailSectionsHtml(s) {
   if (s.type_name === 'Suite') {
     const pt = _planTypes.find(t => t.id === s.plan_type_id);
     let body = '';
-    if (pt && pt.has_panel) {
+    if (s.has_panel_override) {
+      // Suite has its own panel — show override, offer revert (manage)
+      body = `<div class="detail-inherited">
+        <a href="/api/spaces/${s.id}/panel" target="_blank" class="btn btn-sm btn-secondary">View Panel Schedule</a>
+        <span style="font-size:12px;color:var(--gray-500);">${escHtml(s.panel_override_file_name || '')}</span>
+        <span class="detail-inherited-from" style="color:#d97706;">Custom panel — does not follow Type ${escHtml(s.plan_type_code || '?')}</span>
+      </div>`;
+      if (_canEdit) {
+        body += `<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label class="btn btn-sm btn-secondary" style="cursor:pointer;">
+            Replace panel<input type="file" style="display:none;" onchange="uploadSpacePanelOverride(${s.id}, this)">
+          </label>
+          <button class="btn btn-sm btn-ghost" style="color:#dc2626;" onclick="revertSpacePanelOverride(${s.id})">Revert to Type ${escHtml(s.plan_type_code || '')}</button>
+        </div>`;
+      }
+    } else if (pt && pt.has_panel) {
+      // Inheriting from type
       body = `<div class="detail-inherited">
         <a href="/api/plan-types/${pt.id}/panel" target="_blank" class="btn btn-sm btn-secondary">View Panel Schedule</a>
         <span style="font-size:12px;color:var(--gray-500);">${escHtml(pt.panel_file_name || '')}</span>
         <span class="detail-inherited-from">From Type ${escHtml(s.plan_type_code)}</span>
       </div>`;
+      if (_canEdit) {
+        body += `<div style="margin-top:8px;">
+          <label class="btn btn-sm btn-ghost" style="cursor:pointer;">
+            Upload custom panel for this suite only<input type="file" style="display:none;" onchange="uploadSpacePanelOverride(${s.id}, this)">
+          </label>
+        </div>`;
+      }
     } else if (pt) {
       body = `<div class="detail-inherited">
         <span class="detail-empty">No panel uploaded for Type ${escHtml(s.plan_type_code)}.</span>
         <span class="detail-inherited-from">From Type ${escHtml(s.plan_type_code)}</span>
-      </div>
-      ${_canEdit ? `<div style="margin-top:8px;"><a href="#" onclick="switchView('types');return false;" style="color:var(--orange);font-size:13px;">Upload in Types →</a></div>` : ''}`;
+      </div>`;
+      if (_canEdit) {
+        body += `<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label class="btn btn-sm btn-ghost" style="cursor:pointer;">
+            Upload custom panel for this suite only<input type="file" style="display:none;" onchange="uploadSpacePanelOverride(${s.id}, this)">
+          </label>
+          <a href="#" onclick="switchView('types');return false;" style="color:var(--orange);font-size:13px;">Upload type panel in Types →</a>
+        </div>`;
+      }
     } else {
       body = `<div class="detail-empty">No type assigned.${_canEdit ? ` <a href="#" onclick="closeDetail();enterSelectModeForSuite(${s.id});return false;" style="color:var(--orange);">Assign →</a>` : ''}</div>`;
     }
@@ -1592,7 +1720,7 @@ function renderMobileChildrenHtml(parentId) {
           ${!hasKids && s.type_name ? `<div class="mn-child-sub">${escHtml(s.type_name)}</div>` : ''}
         </div>
         ${planBadge}
-        ${defBadge(s.id)}
+        ${spaceDots(s.id)}
         <span class="mn-child-chevron">›</span>
       </div>`;
     }
@@ -1776,6 +1904,37 @@ async function removePanel(typeId) {
   if (_activeTypeId === typeId) renderTypePanelContent(_planTypes.find(t => t.id === typeId));
 }
 
+async function uploadSpacePanelOverride(spaceId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append('panel', file);
+  const r = await fetch(`/api/spaces/${spaceId}/panel`, { method: 'POST', body: fd });
+  if (!r.ok) { alert('Upload failed.'); return; }
+  await loadSpaces();
+  // Re-open detail to reflect new override state
+  if (_detailSpaceId === spaceId) openDetail(spaceId);
+}
+
+async function revertSpacePanelOverride(spaceId) {
+  const s = _spaces.find(x => x.id === spaceId);
+  const code = s?.plan_type_code || '';
+  if (!confirm(`Remove custom panel and revert to Type ${code}?`)) return;
+  await fetch(`/api/spaces/${spaceId}/panel`, { method: 'DELETE' });
+  await loadSpaces();
+  if (_detailSpaceId === spaceId) openDetail(spaceId);
+  // Reload plan types so custom_panel_count updates on the Types view
+  await loadPlanTypes();
+  if (_activeTypeId && s?.plan_type_id === _activeTypeId) {
+    const pt = _planTypes.find(t => t.id === _activeTypeId);
+    if (pt) {
+      const n = pt.suite_count;
+      const cpc = pt.custom_panel_count || 0;
+      document.getElementById('type-detail-count').textContent =
+        `${n} suite${n === 1 ? '' : 's'}` + (cpc > 0 ? ` · ${cpc} with custom panel${cpc === 1 ? '' : 's'}` : '');
+    }
+  }
+}
+
 async function deleteType(typeId) {
   const pt = _planTypes.find(t => t.id === typeId);
   if (!confirm(`Delete Type ${pt?.code}?`)) return;
@@ -1803,7 +1962,9 @@ function openTypeDetail(typeId) {
     `Do not upload photos of individual suite conditions here — use the suite detail instead.`;
   document.getElementById('type-detail-code').textContent = `Type ${pt.code}`;
   document.getElementById('type-detail-name').textContent = pt.name || '';
-  document.getElementById('type-detail-count').textContent = `${n} suite${n === 1 ? '' : 's'}`;
+  const cpc = pt.custom_panel_count || 0;
+  document.getElementById('type-detail-count').textContent =
+    `${n} suite${n === 1 ? '' : 's'}` + (cpc > 0 ? ` · ${cpc} with custom panel${cpc === 1 ? '' : 's'}` : '');
 
   renderTypeDetailSections(pt);
   loadTypeFiles(typeId);
@@ -2630,7 +2791,7 @@ async function submitDef(spaceId) {
     _defPhotos = [];
     // Reload deficiency section and refresh rollup badges
     loadDeficiencies(spaceId);
-    if (_activeProjectId) loadDefCounts(_activeProjectId);
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
   } catch (e) {
     // Never clear the form — show retry
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
@@ -2648,7 +2809,7 @@ async function patchDef(defId, status, spaceId) {
     body: JSON.stringify({ status }),
   });
   loadDeficiencies(spaceId);
-  if (_activeProjectId) loadDefCounts(_activeProjectId);
+  if (_activeProjectId) loadSpaceCounts(_activeProjectId);
 }
 
 async function deleteDef(defId, spaceId) {
@@ -2753,7 +2914,7 @@ async function patchReviewDef(defId, status, selectEl) {
       body: JSON.stringify({ status }),
     });
     loadReviewDeficiencies();
-    if (_activeProjectId) loadDefCounts(_activeProjectId);
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
   } catch {
     // revert select on failure
     selectEl.value = selectEl.dataset.prev || selectEl.value;
@@ -2893,7 +3054,7 @@ async function patchMatItemStatus(itemId, status) {
   } catch {}
 }
 
-// Open a space from the Review list — desktop uses detail panel, mobile uses stack
+// Open a space from the Review list — desktop opens right-hand panel; mobile drills in
 function openSpaceFromReview(spaceId) {
   if (!spaceId) return;
   if (isMobile()) {
@@ -2901,9 +3062,39 @@ function openSpaceFromReview(spaceId) {
     switchView('spaces');
     pushMobileLevel(spaceId);
   } else {
-    _detailOrigin = 'review';
-    openDetail(spaceId);
+    openReviewDetailPanel(spaceId);
   }
+}
+
+async function openReviewDetailPanel(spaceId) {
+  const s = _spaces.find(sp => sp.id === spaceId);
+  if (!s) return;
+
+  // Clear any section IDs that may exist in the spaces detail panel to avoid getElementById conflicts
+  const ds = document.getElementById('detail-sections');
+  if (ds) ds.innerHTML = '';
+
+  // Show the panel
+  document.getElementById('review-space-panel').classList.add('open');
+  document.getElementById('review-space-title').textContent = buildBreadcrumb(spaceId) || s.identifier;
+
+  // Render the same sections as the space detail view
+  document.getElementById('review-space-body').innerHTML = buildDetailSectionsHtml(s);
+
+  // Load data using the same functions — they find IDs within the page; now only in review-space-body
+  loadSpaceFiles(spaceId);
+  loadDeficiencies(spaceId);
+  loadSpaceMaterial(spaceId);
+  loadSpaceNotes(spaceId);
+}
+
+function closeReviewDetailPanel() {
+  const panel = document.getElementById('review-space-panel');
+  if (!panel) return;
+  panel.classList.remove('open');
+  // Clear section IDs so they don't conflict when spaces detail is opened later
+  const body = document.getElementById('review-space-body');
+  if (body) body.innerHTML = '';
 }
 
 // ── Pick Sheet ────────────────────────────────────────────────────────────────
@@ -3068,7 +3259,7 @@ async function applyBulkAction() {
     clearBulkSelection();
     if (_bulkTab === 'deficiencies') {
       loadReviewDeficiencies();
-      if (_activeProjectId) loadDefCounts(_activeProjectId);
+      if (_activeProjectId) loadSpaceCounts(_activeProjectId);
     } else {
       loadReviewMaterial();
     }

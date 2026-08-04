@@ -5855,10 +5855,15 @@ app.get('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites'
   try {
     const { rows } = await pool.query(`
       SELECT s.*, st.name AS type_name, st.icon AS type_icon,
-             pt.code AS plan_type_code
+             pt.code AS plan_type_code,
+             (spo.space_id IS NOT NULL) AS has_panel_override,
+             spo.panel_file_name AS panel_override_file_name,
+             spo.uploaded_by AS panel_override_uploaded_by,
+             spo.uploaded_at AS panel_override_uploaded_at
       FROM spaces s
       LEFT JOIN space_types st ON st.id = s.space_type_id
       LEFT JOIN plan_types  pt ON pt.id = s.plan_type_id
+      LEFT JOIN space_panel_overrides spo ON spo.space_id = s.id
       WHERE s.project_id = $1 AND s.archived_at IS NULL
       ORDER BY s.sort_order, s.id
     `, [req.params.id]);
@@ -5866,14 +5871,13 @@ app.get('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites'
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/projects/:id/deficiency-counts — unresolved deficiency totals for every space (subtree)
-// Returns one row per space that has open/in_progress deficiencies beneath it.
-// Uses the same recursive CTE pattern as the list rollup (chunk 8).
-app.get('/api/projects/:id/deficiency-counts', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+// GET /api/projects/:id/space-counts — rolled-up content counts per space (def/mat/notes)
+// Replaces the old deficiency-counts endpoint. Returns open_def, ip_def, mat_count, note_count
+// for each space, aggregated over the space's full subtree including itself.
+app.get('/api/projects/:id/space-counts', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query(`
       WITH RECURSIVE subtree AS (
-        -- Each space seeds its own subtree root
         SELECT id AS space_id, id AS leaf_id
         FROM spaces WHERE project_id = $1 AND archived_at IS NULL
         UNION ALL
@@ -5884,13 +5888,49 @@ app.get('/api/projects/:id/deficiency-counts', requireAuth, requireModuleAccess(
       ) CYCLE leaf_id SET is_cycle USING cycle_path
       SELECT
         st.space_id,
-        SUM(CASE WHEN d.status = 'open'        THEN 1 ELSE 0 END)::int AS open_count,
-        SUM(CASE WHEN d.status = 'in_progress' THEN 1 ELSE 0 END)::int AS in_progress_count
+        SUM(CASE WHEN d.status = 'open'        THEN 1 ELSE 0 END)::int AS open_def,
+        SUM(CASE WHEN d.status = 'in_progress' THEN 1 ELSE 0 END)::int AS ip_def,
+        SUM(CASE WHEN mr.status IN ('needed','ordered') THEN 1 ELSE 0 END)::int AS mat_count,
+        COUNT(DISTINCT n.id)::int AS note_count
       FROM subtree st
-      JOIN deficiencies d ON d.space_id = st.leaf_id
-      WHERE d.status != 'resolved' AND NOT st.is_cycle
+      LEFT JOIN deficiencies     d  ON d.space_id  = st.leaf_id AND d.status  != 'resolved'
+      LEFT JOIN material_requests mr ON mr.space_id = st.leaf_id AND mr.status IN ('needed','ordered')
+      LEFT JOIN space_notes        n  ON n.space_id  = st.leaf_id
+      WHERE NOT st.is_cycle
       GROUP BY st.space_id
-      HAVING SUM(CASE WHEN d.status != 'resolved' THEN 1 ELSE 0 END) > 0
+      HAVING
+        SUM(CASE WHEN d.status = 'open'        THEN 1 ELSE 0 END) > 0
+        OR SUM(CASE WHEN d.status = 'in_progress' THEN 1 ELSE 0 END) > 0
+        OR SUM(CASE WHEN mr.status IN ('needed','ordered') THEN 1 ELSE 0 END) > 0
+        OR COUNT(DISTINCT n.id) > 0
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/spaces/:id/deficiencies — all deficiencies on a specific space
+app.get('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT d.*, u.name AS raised_by_name
+      FROM deficiencies d
+      LEFT JOIN users u ON u.id = d.raised_by
+      WHERE d.space_id = $1
+      ORDER BY d.raised_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/spaces/:id/notes — all notes on a specific space
+app.get('/api/spaces/:id/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT n.*, u.name AS author_name
+      FROM space_notes n
+      LEFT JOIN users u ON u.id = n.author_id
+      WHERE n.space_id = $1
+      ORDER BY n.created_at DESC
     `, [req.params.id]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -6418,9 +6458,11 @@ app.get('/api/projects/:id/plan-types', requireAuth, requireModuleAccess('worksi
       SELECT pt.id, pt.project_id, pt.code, pt.name, pt.notes,
              (pt.panel_file_data IS NOT NULL) AS has_panel,
              pt.panel_file_name, pt.panel_file_size, pt.panel_uploaded_by, pt.panel_uploaded_at,
-             COUNT(s.id)::int AS suite_count
+             COUNT(s.id)::int AS suite_count,
+             COUNT(spo.space_id)::int AS custom_panel_count
       FROM plan_types pt
       LEFT JOIN spaces s ON s.plan_type_id = pt.id AND s.archived_at IS NULL
+      LEFT JOIN space_panel_overrides spo ON spo.space_id = s.id
       WHERE pt.project_id = $1
       GROUP BY pt.id ORDER BY pt.code
     `, [req.params.id]);
@@ -6521,6 +6563,63 @@ app.get('/api/plan-types/:typeId/panel', requireAuth, requireModuleAccess('works
       [req.params.typeId]
     );
     if (!pt || !pt.panel_file_data) return res.status(404).json({ error: 'No panel uploaded' });
+    const safeName = (pt.panel_file_name || 'panel').replace(/[^\w.\-]/g, '_');
+    res.setHeader('Content-Type', pt.panel_mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    res.send(pt.panel_file_data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/panel — upload per-suite panel override (manage)
+app.post('/api/spaces/:id/panel',
+  requireAuth, requireModuleAccess('worksites', 'manage'),
+  planPanelUpload.single('panel'),
+  async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+      const uploader = req.user.name || req.user.email;
+      await pool.query(`
+        INSERT INTO space_panel_overrides (space_id, panel_file_data, panel_mime_type, panel_file_name, panel_file_size, uploaded_by, uploaded_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        ON CONFLICT (space_id) DO UPDATE
+          SET panel_file_data=$2, panel_mime_type=$3, panel_file_name=$4,
+              panel_file_size=$5, uploaded_by=$6, uploaded_at=NOW()
+      `, [req.params.id, req.file.buffer, req.file.mimetype, req.file.originalname, req.file.size, uploader]);
+      res.json({ ok: true, file_name: req.file.originalname, file_size: req.file.size });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  }
+);
+
+// DELETE /api/spaces/:id/panel — revert to type panel (manage)
+app.delete('/api/spaces/:id/panel', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM space_panel_overrides WHERE space_id=$1`, [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/spaces/:id/panel — serve override or type panel (field)
+app.get('/api/spaces/:id/panel', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    // Try override first, fall back to type panel
+    const { rows: [ov] } = await pool.query(
+      `SELECT panel_file_data, panel_mime_type, panel_file_name FROM space_panel_overrides WHERE space_id=$1`,
+      [req.params.id]
+    );
+    if (ov) {
+      const safeName = (ov.panel_file_name || 'panel').replace(/[^\w.\-]/g, '_');
+      res.setHeader('Content-Type', ov.panel_mime_type || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+      return res.send(ov.panel_file_data);
+    }
+    // Fall back to type panel
+    const { rows: [pt] } = await pool.query(
+      `SELECT pt.panel_file_data, pt.panel_mime_type, pt.panel_file_name
+       FROM spaces s JOIN plan_types pt ON pt.id = s.plan_type_id
+       WHERE s.id=$1`,
+      [req.params.id]
+    );
+    if (!pt || !pt.panel_file_data) return res.status(404).json({ error: 'No panel available' });
     const safeName = (pt.panel_file_name || 'panel').replace(/[^\w.\-]/g, '_');
     res.setHeader('Content-Type', pt.panel_mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
