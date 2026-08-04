@@ -1,5 +1,7 @@
+// Load .env.local first so local dev values win over .env (production).
+// override:false is the default — first file to set a var wins.
 require('dotenv').config({ path: '.env.local' });
-require('dotenv').config(); // .env.local wins (override:false means first file wins)
+require('dotenv').config();
 const express      = require('express');
 const path         = require('path');
 const crypto       = require('crypto');
@@ -7172,9 +7174,33 @@ app.patch('/api/projects/:id/spaces/bulk-assign-type', requireAuth, requireModul
 
 (async () => {
   try {
+    // ── Database host guard ──────────────────────────────────────────────────
+    // Hard-fail before connecting if we're not in production but the DB URL
+    // points at a remote host. This catches the case where .env.local wasn't
+    // loaded and .env's Supabase URL leaked in.
+    const _dbUrl  = process.env.DATABASE_URL || '';
+    const _dbHost = (() => { try { return new URL(_dbUrl).hostname; } catch { return _dbUrl; } })();
+    const _isLocal = ['localhost', '127.0.0.1', '::1'].includes(_dbHost);
+    const _isProd  = process.env.NODE_ENV === 'production';
+
+    if (!_isProd && !_isLocal) {
+      console.error('');
+      console.error('╔══════════════════════════════════════════════════════════════╗');
+      console.error('║  ABORT — non-local database in non-production mode           ║');
+      console.error(`║  Host: ${_dbHost.padEnd(54)}║`);
+      console.error('║                                                              ║');
+      console.error('║  .env.local did not load, or DATABASE_URL is wrong.          ║');
+      console.error('║  Run:  npm run dev:local                                     ║');
+      console.error('╚══════════════════════════════════════════════════════════════╝');
+      console.error('');
+      process.exit(1);
+    }
+
     app.listen(PORT, () => {
+      const _dbTag = _isLocal ? `${_dbHost} (LOCAL)` : `${_dbHost} (PRODUCTION ⚠)`;
       console.log(`\n  J&D Western Electric — Field Operations Hub`);
-      console.log(`  Running at http://localhost:${PORT}\n`);
+      console.log(`  Running at http://localhost:${PORT}`);
+      console.log(`  DATABASE: ${_dbTag}\n`);
     });
     await connectWithRetry();
     await initSchema();
