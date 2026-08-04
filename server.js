@@ -1,7 +1,12 @@
-// Load .env.local first so local dev values win over .env (production).
-// override:false is the default — first file to set a var wins.
+// ── ENV LOADING — DO NOT REMOVE OR REORDER ──────────────────────────────────
+// .env.local must load BEFORE .env so local dev values win over production.
+// Commit be46e9a stripped these two lines while patching an unrelated feature
+// and silently pointed the running server at the live Supabase database.
+// The startup guard below also depends on DATABASE_URL being set correctly
+// before it runs — if you remove these lines, that guard cannot protect you.
 require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
+// ────────────────────────────────────────────────────────────────────────────
 const express      = require('express');
 const path         = require('path');
 const crypto       = require('crypto');
@@ -7174,10 +7179,11 @@ app.patch('/api/projects/:id/spaces/bulk-assign-type', requireAuth, requireModul
 
 (async () => {
   try {
-    // ── Database host guard ──────────────────────────────────────────────────
-    // Hard-fail before connecting if we're not in production but the DB URL
-    // points at a remote host. This catches the case where .env.local wasn't
-    // loaded and .env's Supabase URL leaked in.
+    // ── DATABASE HOST GUARD — DO NOT REMOVE ─────────────────────────────────
+    // Refuses to start if NODE_ENV !== 'production' and DATABASE_URL points at
+    // a non-local host. This catches .env.local not loading (see top of file).
+    // Commit be46e9a removed this block while patching an unrelated feature —
+    // the server then ran against live Supabase in local dev with no warning.
     const _dbUrl  = process.env.DATABASE_URL || '';
     const _dbHost = (() => { try { return new URL(_dbUrl).hostname; } catch { return _dbUrl; } })();
     const _isLocal = ['localhost', '127.0.0.1', '::1'].includes(_dbHost);
