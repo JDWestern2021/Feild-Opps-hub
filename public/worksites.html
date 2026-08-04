@@ -788,13 +788,19 @@
       </div>
       <!-- Material pane -->
       <div id="review-pane-material" class="review-pane">
-        <div class="review-filters" id="review-mat-filters">
-          <button class="review-chip active" data-lt="Material"  onclick="toggleMatFilter(this)">Material</button>
-          <button class="review-chip active" data-lt="Finishing" onclick="toggleMatFilter(this)">Finishing</button>
-          <span style="width:1px;background:var(--gray-200);margin:0 2px;"></span>
-          <button class="review-chip active" data-st="needed"    onclick="toggleMatStatus(this)">Needed</button>
-          <button class="review-chip active" data-st="ordered"   onclick="toggleMatStatus(this)">Ordered</button>
-          <button class="review-chip"        data-st="delivered" onclick="toggleMatStatus(this)">Delivered</button>
+        <div class="review-filters" id="review-mat-filters" style="justify-content:space-between;">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="review-chip active" data-st="needed"    onclick="toggleMatStatus(this)">Needed</button>
+            <button class="review-chip active" data-st="ordered"   onclick="toggleMatStatus(this)">Ordered</button>
+            <button class="review-chip"        data-st="delivered" onclick="toggleMatStatus(this)">Delivered</button>
+          </div>
+          <div id="review-mat-actions" style="display:none;gap:6px;flex-shrink:0;align-items:center;">
+            <button class="btn btn-sm btn-ghost" onclick="openPickSheet()">Pick Sheet</button>
+            <span id="review-mat-exports" style="display:none;gap:6px;">
+              <a id="btn-export-summary"  class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export Summary</a>
+              <a id="btn-export-by-suite" class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export By Suite</a>
+            </span>
+          </div>
         </div>
         <div id="review-mat-list" class="review-list"></div>
       </div>
@@ -927,6 +933,25 @@
   </div>
 </div>
 
+<!-- Pick Sheet Modal -->
+<div class="modal-backdrop" id="pick-sheet-modal" style="display:none;" onclick="if(event.target===this)closePickSheetModal()">
+  <div class="modal" style="width:340px;">
+    <h3>Pick Sheet</h3>
+    <div class="form-row">
+      <label>Filter by building (optional)</label>
+      <select id="ps-building-filter"><option value="">All buildings</option></select>
+    </div>
+    <div class="form-row">
+      <label>Filter by floor (optional)</label>
+      <select id="ps-floor-filter"><option value="">All floors</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePickSheetModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="printPickSheet()">Print</button>
+    </div>
+  </div>
+</div>
+
 <!-- LOCAL banner -->
 <script>
 (function () {
@@ -978,6 +1003,8 @@ let _spaces          = [];
 let _projects        = [];      // cached project list (needed for mobile re-render)
 let _activeProjectId = null;
 let _canEdit         = false;
+let _reviewAccess    = 'none'; // worksites_review module level
+let _canManageReview = false;
 let _currentView     = 'spaces'; // 'spaces' | 'types' | 'review'
 let _defCounts       = {};      // { spaceId: { open, inProgress } } — refreshed on project load and after mutations
 let _currentReviewTab   = 'deficiencies'; // 'deficiencies' | 'notes' | 'material'
@@ -1013,6 +1040,8 @@ let _detailSpaceId   = null;
   const access = (me.module_permissions || {}).worksites || 'none';
   if (access === 'none') { location.href = '/index.html'; return; }
   _canEdit = access === 'manage';
+  _reviewAccess    = (me.module_permissions || {}).worksites_review || 'none';
+  _canManageReview = _reviewAccess === 'manage';
   _userId = me.id;
 
   _wasMobile = isMobile();
@@ -1111,6 +1140,8 @@ async function selectProject(id, name, el) {
   if (el) el.classList.add('active');
   document.getElementById('space-panel-title').textContent = name;
   document.getElementById('view-pills').style.display = 'flex';
+  document.querySelector('#view-pills .view-pill[onclick*="review"]').style.display =
+    _reviewAccess !== 'none' ? '' : 'none';
   loadExpandedState();
   renderPanelHeader();
   loadSpaces();
@@ -1368,14 +1399,11 @@ function buildDetailSectionsHtml(s) {
     <div class="detail-section-body" id="ds-def-body"><div class="detail-empty">Loading…</div></div>
   </div>`;
 
-  const hasChildren = _spaces.some(c => c.parent_id === s.id);
-  html += `<div class="detail-section" id="ds-lists">
+  html += `<div class="detail-section" id="ds-material">
     <div class="detail-section-header">
-      <span class="detail-section-title">Lists</span>
-      ${hasChildren ? `<button class="btn btn-sm btn-secondary" style="margin-left:auto;" onclick="showRollup(${s.id})">Rollup ↓</button>` : ''}
+      <span class="detail-section-title">Material</span>
     </div>
-    <div class="detail-section-body" id="ds-lists-body"><div class="detail-empty">Loading…</div></div>
-    <div id="ds-rollup" style="display:none;"></div>
+    <div class="detail-section-body" id="ds-material-body"><div class="detail-empty">Loading…</div></div>
   </div>`;
 
   html += `<div class="detail-section" id="ds-notes">
@@ -1407,7 +1435,7 @@ function openDetail(id) {
 
   loadSpaceFiles(id);
   loadDeficiencies(id);
-  loadSpaceLists(id);
+  loadSpaceMaterial(id);
   loadSpaceNotes(id);
 }
 
@@ -1489,7 +1517,7 @@ function renderMobileLevel() {
       pills.innerHTML = `<div class="view-pills">
         <button class="view-pill ${_currentView === 'spaces' ? 'active' : ''}" onclick="mobileSwitchTab('spaces')">Spaces</button>
         <button class="view-pill ${_currentView === 'types'  ? 'active' : ''}" onclick="mobileSwitchTab('types')">Types</button>
-        <button class="view-pill ${_currentView === 'review' ? 'active' : ''}" onclick="mobileSwitchTab('review')">Review</button>
+        ${_reviewAccess !== 'none' ? `<button class="view-pill ${_currentView === 'review' ? 'active' : ''}" onclick="mobileSwitchTab('review')">Review</button>` : ''}
       </div>`;
     } else {
       pills.querySelectorAll('.view-pill').forEach(b =>
@@ -1519,7 +1547,7 @@ function renderMobileLevel() {
 
     loadSpaceFiles(level.id);
     loadDeficiencies(level.id);
-    loadSpaceLists(level.id);
+    loadSpaceMaterial(level.id);
     loadSpaceNotes(level.id);
   }
 }
@@ -2693,14 +2721,14 @@ function renderReviewDeficiencies(rows) {
     const when = d.raised_at ? new Date(d.raised_at).toLocaleDateString() : '';
     const by   = d.raised_by_name ? 'by ' + escHtml(d.raised_by_name) : '';
     const meta = [when, by].filter(Boolean).join(' ');
-    const select = _canEdit ? `
+    const select = _canManageReview ? `
       <select class="def-status-select" onclick="event.stopPropagation()"
         onchange="patchReviewDef(${d.id}, this.value, this)">
         <option value="open"        ${d.status==='open'        ?'selected':''}>Open</option>
         <option value="in_progress" ${d.status==='in_progress' ?'selected':''}>In Progress</option>
         <option value="resolved"    ${d.status==='resolved'    ?'selected':''}>Resolved</option>
       </select>` : '';
-    const checkbox = _canEdit ? `
+    const checkbox = _canManageReview ? `
       <div class="review-row-check">
         <input type="checkbox" data-id="${d.id}" onclick="event.stopPropagation(); updateBulkBar('deficiencies')" />
       </div>` : '';
@@ -2765,32 +2793,39 @@ function renderReviewNotes(rows) {
 
 // ── Review: Material ──────────────────────────────────────────────────────────
 
-function activeMatListTypes() {
-  return [...document.querySelectorAll('#review-mat-filters .review-chip[data-lt].active')]
-    .map(b => b.dataset.lt);
-}
-
 function activeMatStatuses() {
   return [...document.querySelectorAll('#review-mat-filters .review-chip[data-st].active')]
     .map(b => b.dataset.st);
 }
 
-function toggleMatFilter(btn) { btn.classList.toggle('active'); loadReviewMaterial(); }
 function toggleMatStatus(btn) { btn.classList.toggle('active'); loadReviewMaterial(); }
 
 async function loadReviewMaterial() {
   const list = document.getElementById('review-mat-list');
   if (!list) return;
   clearBulkSelection();
-  const listTypes = activeMatListTypes();
-  const statuses  = activeMatStatuses();
-  if (!listTypes.length || !statuses.length) {
+
+  // Show pick-sheet button (field+) and export buttons (manage only)
+  const actionsEl = document.getElementById('review-mat-actions');
+  const exportsEl = document.getElementById('review-mat-exports');
+  if (actionsEl && _activeProjectId) {
+    actionsEl.style.display = _reviewAccess !== 'none' ? 'flex' : 'none';
+    if (exportsEl && _canManageReview) {
+      document.getElementById('btn-export-summary').href  = `/api/projects/${_activeProjectId}/export/material-summary`;
+      document.getElementById('btn-export-by-suite').href = `/api/projects/${_activeProjectId}/export/material-by-suite`;
+      exportsEl.style.display = 'flex';
+    } else if (exportsEl) {
+      exportsEl.style.display = 'none';
+    }
+  }
+
+  const statuses = activeMatStatuses();
+  if (!statuses.length) {
     list.innerHTML = '<div class="review-empty">No filters selected.</div>'; return;
   }
   list.innerHTML = '<div class="review-empty">Loading…</div>';
   try {
-    const url = `/api/projects/${_activeProjectId}/review/material` +
-      `?list_type=${listTypes.join(',')}&status=${statuses.join(',')}`;
+    const url = `/api/projects/${_activeProjectId}/review/material?status=${statuses.join(',')}`;
     const rows = await fetch(url).then(r => r.json());
     renderReviewMaterial(rows);
   } catch { list.innerHTML = '<div class="review-empty">Could not load material.</div>'; }
@@ -2806,11 +2841,11 @@ function renderReviewMaterial(rows) {
   function itemHtml(item) {
     const when = item.added_at ? new Date(item.added_at).toLocaleDateString() : '';
     const by   = item.added_by_name ? escHtml(item.added_by_name) : '';
-    const meta = [by, when, escHtml(item.list_type)].filter(Boolean).join(' · ');
+    const meta = [by, when].filter(Boolean).join(' · ');
     const qty  = parseFloat(item.quantity);
     const qtyLabel = qty + (item.unit ? ' ' + escHtml(item.unit) : '');
 
-    const statusSelect = _canEdit ? `
+    const statusSelect = _canManageReview ? `
       <select class="review-mat-status-select" onclick="event.stopPropagation()"
         onchange="patchMatItemStatus(${item.id}, this.value)">
         <option value="needed"    ${item.status==='needed'    ?'selected':''}>Needed</option>
@@ -2818,7 +2853,7 @@ function renderReviewMaterial(rows) {
         <option value="delivered" ${item.status==='delivered' ?'selected':''}>Delivered</option>
       </select>` : `<span class="list-item-status ${item.status}">${item.status}</span>`;
 
-    const checkbox = _canEdit ? `
+    const checkbox = _canManageReview ? `
       <div class="review-row-check">
         <input type="checkbox" data-id="${item.id}" onclick="event.stopPropagation(); updateBulkBar('material')" />
       </div>` : '';
@@ -2849,7 +2884,7 @@ function renderReviewMaterial(rows) {
 
 async function patchMatItemStatus(itemId, status) {
   try {
-    await fetch(`/api/list-items/${itemId}`, {
+    await fetch(`/api/material-requests/${itemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -2869,6 +2904,115 @@ function openSpaceFromReview(spaceId) {
     _detailOrigin = 'review';
     openDetail(spaceId);
   }
+}
+
+// ── Pick Sheet ────────────────────────────────────────────────────────────────
+
+let _pickSheetData = null;
+
+async function openPickSheet() {
+  if (!_activeProjectId) return;
+  const modal = document.getElementById('pick-sheet-modal');
+  if (!modal) return;
+
+  try {
+    _pickSheetData = await fetch(`/api/projects/${_activeProjectId}/pick-sheet`).then(r => r.json());
+  } catch { _pickSheetData = []; }
+
+  // Populate building filter from space paths
+  const buildings = [...new Set(_pickSheetData.map(r => r.space_path.split(' / ')[0]).filter(Boolean))].sort();
+  const bSel = document.getElementById('ps-building-filter');
+  bSel.innerHTML = '<option value="">All buildings</option>' +
+    buildings.map(b => `<option value="${escHtml(b)}">${escHtml(b)}</option>`).join('');
+  document.getElementById('ps-floor-filter').innerHTML = '<option value="">All floors</option>';
+
+  bSel.onchange = () => {
+    const chosen = bSel.value;
+    const floors = chosen
+      ? [...new Set(_pickSheetData
+          .filter(r => r.space_path.startsWith(chosen + ' / '))
+          .map(r => r.space_path.split(' / ')[1]).filter(Boolean))].sort()
+      : [];
+    document.getElementById('ps-floor-filter').innerHTML =
+      '<option value="">All floors</option>' +
+      floors.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('');
+  };
+
+  modal.style.display = 'flex';
+}
+
+function closePickSheetModal() {
+  const modal = document.getElementById('pick-sheet-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function printPickSheet() {
+  if (!_pickSheetData) return;
+  const building = document.getElementById('ps-building-filter').value;
+  const floor    = document.getElementById('ps-floor-filter').value;
+
+  let rows = _pickSheetData;
+  if (building) rows = rows.filter(r => r.space_path.startsWith(building + ' / ') || r.space_path === building);
+  if (floor)    rows = rows.filter(r => r.space_path.split(' / ')[1] === floor);
+
+  // Group by space_path
+  const byPath = {};
+  for (const row of rows) {
+    if (!byPath[row.space_path]) byPath[row.space_path] = [];
+    byPath[row.space_path].push(row);
+  }
+
+  const projectName = document.getElementById('space-panel-title')?.textContent || '';
+  const filterLabel = [building, floor].filter(Boolean).join(' / ') || 'All suites';
+
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Pick Sheet — ${escHtml(projectName)}</title>
+  <style>
+    @page { size: letter portrait; margin: 18mm 15mm; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
+    h1 { font-size: 16px; margin: 0 0 2px; }
+    .sub { font-size: 11px; color: #666; margin: 0 0 14px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+    th { text-align: left; border-bottom: 2px solid #333; padding: 4px 6px; font-size: 11px; }
+    td { padding: 4px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+    .suite { font-size: 13px; font-weight: 700; padding: 10px 0 2px; page-break-inside: avoid; }
+    .chk { width: 18px; }
+    .status { font-size: 10px; color: #666; }
+  </style>
+  </head><body>
+  <h1>Pick Sheet — ${escHtml(projectName)}</h1>
+  <p class="sub">Filter: ${escHtml(filterLabel)} &nbsp;·&nbsp; Printed: ${new Date().toLocaleDateString()}</p>`;
+
+  for (const [path, items] of Object.entries(byPath)) {
+    html += `<div class="suite">${path.replace(/</g,'&lt;')}</div>
+    <table><thead><tr>
+      <th class="chk"></th><th>Description</th><th>Qty</th><th>Unit</th><th class="status">Status</th>
+    </tr></thead><tbody>`;
+    for (const item of items) {
+      const qty = parseFloat(item.quantity);
+      const qtyStr = qty % 1 === 0 ? qty.toString() : qty.toFixed(2);
+      html += `<tr>
+        <td><input type="checkbox"></td>
+        <td>${item.description.replace(/</g,'&lt;')}</td>
+        <td>${qtyStr}</td>
+        <td>${(item.unit || '').replace(/</g,'&lt;')}</td>
+        <td class="status">${item.status}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  if (!Object.keys(byPath).length) {
+    html += '<p>No needed or ordered items match the selected filter.</p>';
+  }
+
+  html += '</body></html>';
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+  closePickSheetModal();
 }
 
 // ── Bulk actions (Review — manage only) ───────────────────────────────────────
@@ -2929,6 +3073,88 @@ async function applyBulkAction() {
       loadReviewMaterial();
     }
   } catch { alert('Failed to apply bulk status change.'); }
+}
+
+// ── Space Material ────────────────────────────────────────────────────────────
+
+async function loadSpaceMaterial(spaceId) {
+  const body = document.getElementById('ds-material-body');
+  if (!body) return;
+  try {
+    const items = await fetch(`/api/spaces/${spaceId}/material`).then(r => r.json());
+    renderSpaceMaterial(spaceId, items);
+  } catch {
+    if (body) body.innerHTML = '<div class="detail-empty">Could not load material.</div>';
+  }
+}
+
+function renderSpaceMaterial(spaceId, items) {
+  const body = document.getElementById('ds-material-body');
+  if (!body) return;
+  const STATUS_ORDER = ['needed','ordered','delivered'];
+  let html = '';
+
+  if (items.length) {
+    html += items.map(item => {
+      const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(item.status) + 1) % STATUS_ORDER.length];
+      const canAdvance = _canEdit || nextStatus === 'delivered';
+      const statusBtn = canAdvance
+        ? `<button class="list-item-status ${item.status}" onclick="cycleMaterialStatus(${item.id},'${nextStatus}',${spaceId})" title="Mark ${nextStatus}">${item.status}</button>`
+        : `<span class="list-item-status ${item.status}">${item.status}</span>`;
+      const qty = parseFloat(item.quantity);
+      const qtyLabel = qty !== 1 || item.unit ? qty + (item.unit ? ' ' + escHtml(item.unit) : '') : '';
+      const canDel = _canEdit || String(item.added_by) === String(_userId);
+      return `<div class="list-item-row" id="mr-row-${item.id}">
+        <span class="list-item-desc">${escHtml(item.description)}</span>
+        ${qtyLabel ? `<span class="list-item-qty">${qtyLabel}</span>` : ''}
+        ${statusBtn}
+        ${canDel ? `<button class="list-item-del" onclick="deleteMaterialRequest(${item.id},${spaceId})" title="Remove">✕</button>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    html += '<div class="detail-empty">No material requests.</div>';
+  }
+
+  // Add form (field+)
+  html += `<div class="list-add-form" id="mf-${spaceId}">
+    <input type="text" placeholder="Description" id="mr-desc-${spaceId}" inputmode="text" />
+    <input type="number" placeholder="Qty" id="mr-qty-${spaceId}" value="1" min="0.01" step="any" />
+    <input type="text" placeholder="Unit" id="mr-unit-${spaceId}" style="width:60px;" />
+    <button class="btn-add-item" onclick="addMaterialRequest(${spaceId})">Add</button>
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+async function addMaterialRequest(spaceId) {
+  const desc = document.getElementById(`mr-desc-${spaceId}`)?.value.trim();
+  const qty  = document.getElementById(`mr-qty-${spaceId}`)?.value || '1';
+  const unit = document.getElementById(`mr-unit-${spaceId}`)?.value.trim();
+  if (!desc) return;
+  try {
+    await fetch(`/api/spaces/${spaceId}/material`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc, quantity: qty, unit: unit || undefined })
+    });
+    loadSpaceMaterial(spaceId);
+  } catch {}
+}
+
+async function cycleMaterialStatus(mrId, nextStatus, spaceId) {
+  try {
+    await fetch(`/api/material-requests/${mrId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus })
+    });
+    loadSpaceMaterial(spaceId);
+  } catch {}
+}
+
+async function deleteMaterialRequest(mrId, spaceId) {
+  try {
+    await fetch(`/api/material-requests/${mrId}`, { method: 'DELETE' });
+    loadSpaceMaterial(spaceId);
+  } catch {}
 }
 
 // ── Space Lists ───────────────────────────────────────────────────────────────

@@ -1031,6 +1031,49 @@ async function initSchema() {
   await pool.query(`ALTER TABLE list_items ADD CONSTRAINT list_items_status_check
     CHECK (status IN ('needed','ordered','delivered'))`);
 
+  // One-time migration log — records which migrations have already run.
+  // Checked before any destructive or one-time data operation.
+  await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    name   TEXT PRIMARY KEY,
+    ran_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // Flat material requests per space (replaces space-level space_lists in the UI).
+  // Type-level standard lists still live in space_lists with plan_type_id.
+  await pool.query(`CREATE TABLE IF NOT EXISTS material_requests (
+    id          SERIAL PRIMARY KEY,
+    space_id    INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    quantity    NUMERIC NOT NULL DEFAULT 1,
+    unit        TEXT,
+    status      TEXT NOT NULL DEFAULT 'needed'
+                  CHECK (status IN ('needed','ordered','delivered')),
+    added_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes       TEXT
+  )`);
+
+  // One-time backfill: copy space-level list_items → material_requests.
+  // Guards on the schema_migrations row so it never re-runs (and never
+  // resurrects items the user has deleted).
+  {
+    const { rowCount } = await pool.query(
+      "SELECT 1 FROM schema_migrations WHERE name = 'material_requests_backfill'"
+    );
+    if (!rowCount) {
+      await pool.query(`
+        INSERT INTO material_requests (space_id, description, quantity, unit, status, added_by, added_at, notes)
+        SELECT sl.space_id, li.description, li.quantity, li.unit, li.status, li.added_by, li.added_at, li.notes
+        FROM list_items li
+        JOIN space_lists sl ON sl.id = li.list_id
+        WHERE sl.space_id IS NOT NULL
+      `);
+      await pool.query(
+        "INSERT INTO schema_migrations (name) VALUES ('material_requests_backfill')"
+      );
+    }
+  }
+
   await pool.query(`CREATE TABLE IF NOT EXISTS space_notes (
     id           SERIAL PRIMARY KEY,
     space_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,

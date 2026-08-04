@@ -414,10 +414,11 @@ const MODULE_LABELS = {
   safety_supervisor: 'Safety Supervisor (incident & near-miss reports)'
 };
 
-// Section-level module permissions (None / View / Edit)
+// Section-level module permissions (None / Field / Manage)
 // Add entries here to expose new modules — no other UI code changes needed.
 const SECTION_MODULES = [
   { key: 'worksites', label: 'Worksites' },
+  { key: 'worksites_review', label: 'Worksites — Review' },
 ];
 
 function showToast(msg, type='') { const t=$('toast'); t.textContent=msg; t.className=`show ${type}`; setTimeout(()=>t.className='',3200); }
@@ -646,10 +647,10 @@ function switchDTab(tab) {
       else showToast('Failed to save permissions','error');
     });
 
-    // ── Section module permissions (None / View / Edit) ──
+    // ── Section module permissions (None / Field / Manage) ──
     if (SECTION_MODULES.length) {
       const modMap = isAdmin
-        ? Object.fromEntries(SECTION_MODULES.map(m => [m.key, 'edit']))
+        ? Object.fromEntries(SECTION_MODULES.map(m => [m.key, 'manage']))
         : await fetch(`/api/users/${u.id}/module-permissions`).then(r=>r.json()).catch(()=>({}));
 
       const modSection = document.createElement('div');
@@ -664,9 +665,9 @@ function switchDTab(tab) {
             <select class="mod-access-sel" data-module="${m.key}"
               style="font-size:12px;padding:4px 8px;border:1.5px solid #e5e7eb;border-radius:6px;background:#fff;color:#111;"
               ${locked ? 'disabled' : ''}>
-              <option value="none" ${val==='none'?'selected':''}>None</option>
-              <option value="view" ${val==='view'?'selected':''}>View</option>
-              <option value="edit" ${val==='edit'?'selected':''}>Edit</option>
+              <option value="none"   ${val==='none'   ?'selected':''}>None</option>
+              <option value="field"  ${val==='field'  ?'selected':''}>Field</option>
+              <option value="manage" ${val==='manage' ?'selected':''}>Manage</option>
             </select>
           </div>`;
         }).join('')}

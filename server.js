@@ -307,8 +307,7 @@ async function getModuleAccess(userId, module, role) {
 
 async function getUserModuleMap(userId, role) {
   if (role === 'admin') {
-    // admins get edit on all known modules
-    return { worksites: 'manage' };
+    return { worksites: 'manage', worksites_review: 'manage' };
   }
   const { rows } = await pool.query(
     'SELECT module, access FROM user_module_permissions WHERE user_id=$1',
@@ -5916,7 +5915,7 @@ const SPACE_PATH_CTE = `
 `;
 
 // GET /api/projects/:id/review/deficiencies?status=open,in_progress
-app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
   try {
     const validStatuses = ['open', 'in_progress', 'resolved'];
     const statuses = req.query.status
@@ -5944,7 +5943,7 @@ app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAcces
 // PATCH /api/projects/:id/review/deficiencies/:defId — inline status change from review list
 // PATCH /api/projects/:id/review/deficiencies/bulk — bulk status update (manage only)
 // Must be registered BEFORE /:defId so "bulk" is not matched as a defId.
-app.patch('/api/projects/:id/review/deficiencies/bulk', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+app.patch('/api/projects/:id/review/deficiencies/bulk', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
   try {
     const { ids, status } = req.body;
     const projectId = parseInt(req.params.id);
@@ -5974,7 +5973,7 @@ app.patch('/api/projects/:id/review/deficiencies/bulk', requireAuth, requireModu
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
   try {
     const { status } = req.body;
     const valid = ['open', 'in_progress', 'resolved'];
@@ -5994,7 +5993,7 @@ app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireMo
 });
 
 // GET /api/projects/:id/review/notes
-app.get('/api/projects/:id/review/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+app.get('/api/projects/:id/review/notes', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query(`
       ${SPACE_PATH_CTE}
@@ -6022,41 +6021,34 @@ app.get('/api/projects/:id/review/notes', requireAuth, requireModuleAccess('work
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/projects/:id/review/material?list_type=Material,Finishing&status=needed,ordered
-// Flat list of space-specific requests only (type-level items excluded intentionally).
-app.get('/api/projects/:id/review/material', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+// GET /api/projects/:id/review/material?status=needed,ordered
+// Flat list of space material requests for this project.
+app.get('/api/projects/:id/review/material', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
   try {
-    const validStatuses  = ['needed','ordered','delivered'];
-    const validListTypes = ['Material','Finishing'];
-    const statuses  = req.query.status
+    const validStatuses = ['needed','ordered','delivered'];
+    const statuses = req.query.status
       ? req.query.status.split(',').filter(s => validStatuses.includes(s))
       : ['needed', 'ordered'];
-    const listTypes = req.query.list_type
-      ? req.query.list_type.split(',').filter(t => validListTypes.includes(t))
-      : validListTypes;
-    if (!statuses.length || !listTypes.length) return res.json([]);
+    if (!statuses.length) return res.json([]);
 
     const { rows } = await pool.query(`
       ${SPACE_PATH_CTE}
-      SELECT li.id, li.description, li.quantity, li.unit, li.status,
-             lt.name AS list_type, sp.path AS space_path, sp.id AS space_id,
-             u.name  AS added_by_name, li.added_at
+      SELECT mr.id, mr.description, mr.quantity, mr.unit, mr.status, mr.notes,
+             sp.path AS space_path, sp.id AS space_id,
+             u.name  AS added_by_name, mr.added_at
       FROM space_paths sp
-      JOIN space_lists sl ON sl.space_id = sp.id
-      JOIN list_types  lt ON lt.id = sl.list_type_id
-      JOIN list_items  li ON li.list_id = sl.id
-      LEFT JOIN users   u  ON u.id = li.added_by
+      JOIN material_requests mr ON mr.space_id = sp.id
+      LEFT JOIN users u ON u.id = mr.added_by
       WHERE NOT sp.is_cycle
-        AND li.status = ANY($2)
-        AND lt.name   = ANY($3)
-      ORDER BY sp.path, lt.name, li.description
-    `, [req.params.id, statuses, listTypes]);
+        AND mr.status = ANY($2)
+      ORDER BY sp.path, mr.description
+    `, [req.params.id, statuses]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // PATCH /api/projects/:id/review/material/bulk — bulk status update (manage only)
-app.patch('/api/projects/:id/review/material/bulk', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+app.patch('/api/projects/:id/review/material/bulk', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
   try {
     const { ids, status } = req.body;
     const projectId = parseInt(req.params.id);
@@ -6065,18 +6057,95 @@ app.patch('/api/projects/:id/review/material/bulk', requireAuth, requireModuleAc
     const intIds = ids.map(Number).filter(n => Number.isFinite(n) && n > 0);
     if (!intIds.length) return res.status(400).json({ error: 'No valid ids' });
 
-    // Ownership check: all list_items must belong to a space within this project
+    // Ownership check: all material_requests must belong to a space within this project
     const { rows: owned } = await pool.query(`
-      SELECT li.id FROM list_items li
-      JOIN space_lists sl ON sl.id = li.list_id
-      JOIN spaces s ON s.id = sl.space_id
-      WHERE li.id = ANY($1) AND s.project_id = $2
+      SELECT mr.id FROM material_requests mr
+      JOIN spaces s ON s.id = mr.space_id
+      WHERE mr.id = ANY($1) AND s.project_id = $2
     `, [intIds, projectId]);
     if (owned.length !== intIds.length)
       return res.status(403).json({ error: 'One or more items do not belong to this project' });
 
-    await pool.query(`UPDATE list_items SET status=$1 WHERE id = ANY($2)`, [status, intIds]);
+    await pool.query(`UPDATE material_requests SET status=$1 WHERE id = ANY($2)`, [status, intIds]);
     res.json({ updated: intIds.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/pick-sheet — printable per-project, needed+ordered only
+app.get('/api/projects/:id/pick-sheet', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const { rows } = await pool.query(`
+      ${SPACE_PATH_CTE}
+      SELECT mr.id, mr.description, mr.quantity, mr.unit, mr.status, mr.notes,
+             sp.path AS space_path, sp.id AS space_id
+      FROM space_paths sp
+      JOIN material_requests mr ON mr.space_id = sp.id
+      WHERE NOT sp.is_cycle
+        AND mr.status IN ('needed','ordered')
+      ORDER BY sp.path, mr.description
+    `, [projectId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/export/material-summary — CSV totals per description+unit (manage)
+app.get('/api/projects/:id/export/material-summary', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const { rows } = await pool.query(`
+      ${SPACE_PATH_CTE}
+      SELECT mr.description, mr.unit,
+             SUM(CASE WHEN mr.status='needed'   THEN mr.quantity ELSE 0 END) AS needed,
+             SUM(CASE WHEN mr.status='ordered'  THEN mr.quantity ELSE 0 END) AS ordered,
+             SUM(CASE WHEN mr.status='delivered' THEN mr.quantity ELSE 0 END) AS delivered,
+             SUM(mr.quantity) AS total
+      FROM space_paths sp
+      JOIN material_requests mr ON mr.space_id = sp.id
+      WHERE NOT sp.is_cycle
+      GROUP BY mr.description, mr.unit
+      ORDER BY mr.description
+    `, [projectId]);
+
+    const header = 'Description,Unit,Needed,Ordered,Delivered,Total\n';
+    const csvEsc = v => (v == null ? '' : `"${String(v).replace(/"/g, '""')}"`);
+    const body = rows.map(r =>
+      [r.description, r.unit, r.needed, r.ordered, r.delivered, r.total].map(csvEsc).join(',')
+    ).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="material-summary-project-${projectId}.csv"`);
+    res.send(header + body);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/export/material-by-suite — CSV flat list with space path (manage)
+app.get('/api/projects/:id/export/material-by-suite', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const { rows } = await pool.query(`
+      ${SPACE_PATH_CTE}
+      SELECT sp.path AS space_path, mr.description, mr.quantity, mr.unit,
+             mr.status, mr.notes, u.name AS added_by, mr.added_at
+      FROM space_paths sp
+      JOIN material_requests mr ON mr.space_id = sp.id
+      LEFT JOIN users u ON u.id = mr.added_by
+      WHERE NOT sp.is_cycle
+      ORDER BY sp.path, mr.description
+    `, [projectId]);
+
+    const header = 'Suite,Description,Quantity,Unit,Status,Notes,Added By,Added At\n';
+    const csvEsc = v => (v == null ? '' : `"${String(v).replace(/"/g, '""')}"`);
+    const body = rows.map(r =>
+      [r.space_path, r.description, r.quantity, r.unit,
+       r.status, r.notes, r.added_by,
+       r.added_at ? new Date(r.added_at).toISOString().slice(0,10) : '']
+      .map(csvEsc).join(',')
+    ).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="material-by-suite-project-${projectId}.csv"`);
+    res.send(header + body);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6532,6 +6601,95 @@ app.post('/api/list-types', requireAuth, requireModuleAccess('worksites', 'manag
          (SELECT COALESCE(MAX(sort_order),0)+1 FROM list_types))
        RETURNING *`, [name.trim()]);
     res.json(lt);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Material requests on spaces ─────────────────────────────────────────────
+
+// GET /api/spaces/:id/material
+app.get('/api/spaces/:id/material', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT mr.*, u.name AS added_by_name
+      FROM material_requests mr
+      LEFT JOIN users u ON u.id = mr.added_by
+      WHERE mr.space_id = $1
+      ORDER BY mr.added_at
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/material (field+)
+app.post('/api/spaces/:id/material', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { description, quantity, unit, notes } = req.body;
+    if (!description?.trim()) return res.status(400).json({ error: 'description required' });
+    const qty = parseFloat(quantity) || 1;
+    const { rows: [mr] } = await pool.query(`
+      INSERT INTO material_requests (space_id, description, quantity, unit, notes, added_by)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [req.params.id, description.trim(), qty, unit || null, notes || null, req.user.id]);
+    res.json({ ...mr, added_by_name: req.user.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/material-requests/:id — field: delivered only; manage: all fields
+app.patch('/api/material-requests/:id', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const mrId = parseInt(req.params.id);
+    const isManage = await (async () => {
+      const access = await pool.query(
+        `SELECT level FROM module_permissions WHERE user_id=$1 AND module='worksites'`,
+        [req.user.id]);
+      return req.user.role === 'admin' || access.rows[0]?.level === 'manage';
+    })();
+
+    const fields = [];
+    const vals   = [];
+    let i = 1;
+
+    if (req.body.status !== undefined) {
+      const valid = ['needed','ordered','delivered'];
+      if (!valid.includes(req.body.status)) return res.status(400).json({ error: 'Invalid status' });
+      if (!isManage && req.body.status !== 'delivered')
+        return res.status(403).json({ error: 'Field users may only set status to delivered' });
+      fields.push(`status=$${i++}`); vals.push(req.body.status);
+    }
+    if (isManage) {
+      for (const col of ['description','quantity','unit','notes']) {
+        if (req.body[col] !== undefined) { fields.push(`${col}=$${i++}`); vals.push(req.body[col]); }
+      }
+    }
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+    vals.push(mrId);
+    const { rows: [mr] } = await pool.query(
+      `UPDATE material_requests SET ${fields.join(', ')} WHERE id=$${i} RETURNING *`, vals);
+    if (!mr) return res.status(404).json({ error: 'Not found' });
+    res.json(mr);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/material-requests/:id — field: own; manage: any
+app.delete('/api/material-requests/:id', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const mrId = parseInt(req.params.id);
+    const { rows: [mr] } = await pool.query('SELECT * FROM material_requests WHERE id=$1', [mrId]);
+    if (!mr) return res.status(404).json({ error: 'Not found' });
+
+    const isManage = await (async () => {
+      const access = await pool.query(
+        `SELECT level FROM module_permissions WHERE user_id=$1 AND module='worksites'`,
+        [req.user.id]);
+      return req.user.role === 'admin' || access.rows[0]?.level === 'manage';
+    })();
+
+    if (!isManage && mr.added_by !== req.user.id)
+      return res.status(403).json({ error: 'You can only delete your own requests' });
+
+    await pool.query('DELETE FROM material_requests WHERE id=$1', [mrId]);
+    res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
