@@ -1093,6 +1093,7 @@ let _detailOrigin       = null;           // 'review' when detail opened from Re
 // Mobile navigation
 let _mobileStack     = [];      // [{id: spaceId|null, scrollY: number}]
 let _wasMobile       = null;    // null = not yet initialized
+let _detailRoot      = null;    // container owning the active ds-* IDs (scopes getElementById)
 
 // Tree state
 let _expanded        = new Set();
@@ -1568,6 +1569,7 @@ function openDetail(id) {
   document.getElementById('detail-space-type').textContent = s.type_name || '';
 
   document.getElementById('detail-sections').innerHTML = buildDetailSectionsHtml(s);
+  _detailRoot = document.getElementById('detail-sections');
 
   loadSpaceFiles(id);
   loadDeficiencies(id);
@@ -1590,6 +1592,14 @@ function closeDetail() {
 // ── Mobile navigation ─────────────────────────────────────────────────────────
 
 function isMobile() { return window.innerWidth <= 768; }
+
+function _dsBody(id) {
+  if (_detailRoot) {
+    const el = _detailRoot.querySelector('#' + id);
+    if (el) return el;
+  }
+  return document.getElementById(id);
+}
 
 function pushMobileLevel(id) {
   const cur = _mobileStack[_mobileStack.length - 1];
@@ -1680,6 +1690,7 @@ function renderMobileLevel() {
     }
     html += buildDetailSectionsHtml(s);
     content.innerHTML = html;
+    _detailRoot = content;
 
     loadSpaceFiles(level.id);
     loadDeficiencies(level.id);
@@ -1795,6 +1806,9 @@ function handleBreakpointChange() {
     const spaceId = top && top.id !== null ? top.id : null;
     _mobileStack = [];
     _detailSpaceId = null;
+    _detailRoot = null;
+    const mnc = document.getElementById('mn-content');
+    if (mnc) mnc.innerHTML = '';
     document.getElementById('view-pills').style.display = _activeProjectId ? 'flex' : 'none';
     renderPanelHeader();
     renderTree();
@@ -2537,7 +2551,7 @@ function closeFileViewer() {
 // ── Space files ───────────────────────────────────────────────────────────────
 
 async function loadSpaceFiles(spaceId) {
-  const body = document.getElementById('ds-files-body');
+  const body = _dsBody('ds-files-body');
   if (!body) return;
   try {
     const files = await fetch(`/api/spaces/${spaceId}/files`).then(r => r.json());
@@ -2548,7 +2562,7 @@ async function loadSpaceFiles(spaceId) {
 }
 
 function renderFilesSection(spaceId, files) {
-  const body = document.getElementById('ds-files-body');
+  const body = _dsBody('ds-files-body');
   if (!body) return;
   let html = '';
   if (files.length) {
@@ -2587,7 +2601,7 @@ function renderFilesSection(spaceId, files) {
 async function uploadSpaceFiles(spaceId, input) {
   const rawFiles = Array.from(input.files);
   if (!rawFiles.length) return;
-  const body = document.getElementById('ds-files-body');
+  const body = _dsBody('ds-files-body');
   if (body) body.innerHTML = '<div class="detail-empty">Uploading…</div>';
   for (const raw of rawFiles) {
     const file = await compressImage(raw);
@@ -2626,7 +2640,7 @@ function loadDraft(spaceId) {
 }
 
 async function loadDeficiencies(spaceId) {
-  const body = document.getElementById('ds-def-body');
+  const body = _dsBody('ds-def-body');
   if (!body) return;
   try {
     const defs = await fetch(`/api/spaces/${spaceId}/deficiencies`).then(r => r.json());
@@ -2683,7 +2697,7 @@ function defCardHtml(d, spaceId) {
 }
 
 function renderDeficienciesSection(spaceId, defs) {
-  const body = document.getElementById('ds-def-body');
+  const body = _dsBody('ds-def-body');
   if (!body) return;
   let html = '';
 
@@ -3188,6 +3202,7 @@ async function openReviewDetailPanel(spaceId) {
 
   // Render the same sections as the space detail view
   document.getElementById('review-space-body').innerHTML = buildDetailSectionsHtml(s);
+  _detailRoot = document.getElementById('review-space-body');
 
   // Load data using the same functions — they find IDs within the page; now only in review-space-body
   loadSpaceFiles(spaceId);
@@ -3236,7 +3251,11 @@ const PRINT_STYLES = `
   .pf-field { flex: 1; }
   .pf-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #555; margin-bottom: 14px; }
   .pf-line { border-bottom: 1px solid #0C0C0C; }
-  @media print { button, input[type=button] { display: none; } }
+  .print-toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
+  .print-toolbar button { padding: 7px 18px; font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; border: none; border-radius: 4px; cursor: pointer; }
+  .print-toolbar .btn-print { background: #FF6100; color: #fff; }
+  .print-toolbar .btn-close { background: #e0e0e0; color: #0C0C0C; }
+  @media print { .print-toolbar { display: none; } }
 `;
 
 // openPrintWindow: fetches logo once per session, builds branded header + footer.
@@ -3285,14 +3304,17 @@ async function openPrintWindow(info, bodyHtml) {
   </div>`;
 
   const title = `${info.sheetTitle} — ${info.projectName}`;
+  const toolbar = `<div class="print-toolbar">
+    <button class="btn-print" onclick="window.print()">Print</button>
+    <button class="btn-close" onclick="window.close()">Close</button>
+  </div>`;
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
     <base href="${window.location.origin}/">
     <title>${escHtml(title)}</title><style>${PRINT_STYLES}</style>
-  </head><body>${header}${bodyHtml}${footer}</body></html>`);
+  </head><body>${toolbar}${header}${bodyHtml}${footer}</body></html>`);
   win.document.close();
   win.focus();
-  win.print();
 }
 
 // ── Print helpers ─────────────────────────────────────────────────────────────
@@ -3551,7 +3573,7 @@ async function applyBulkAction() {
 // ── Space Material ────────────────────────────────────────────────────────────
 
 async function loadSpaceMaterial(spaceId) {
-  const body = document.getElementById('ds-material-body');
+  const body = _dsBody('ds-material-body');
   if (!body) return;
   try {
     const items = await fetch(`/api/spaces/${spaceId}/material`).then(r => r.json());
@@ -3562,7 +3584,7 @@ async function loadSpaceMaterial(spaceId) {
 }
 
 function renderSpaceMaterial(spaceId, items) {
-  const body = document.getElementById('ds-material-body');
+  const body = _dsBody('ds-material-body');
   if (!body) return;
   const STATUS_ORDER = ['needed','ordered','delivered'];
 
@@ -3651,7 +3673,7 @@ async function ensureListTypes() {
 }
 
 async function loadSpaceLists(spaceId) {
-  const body = document.getElementById('ds-lists-body');
+  const body = _dsBody('ds-lists-body');
   if (!body) return;
   await ensureListTypes();
   try {
@@ -3663,7 +3685,7 @@ async function loadSpaceLists(spaceId) {
 }
 
 function renderSpaceListsSection(spaceId, data) {
-  const body = document.getElementById('ds-lists-body');
+  const body = _dsBody('ds-lists-body');
   if (!body) return;
   const { ownLists = [], typeLists = [] } = data;
   let html = '';
@@ -3786,7 +3808,7 @@ async function cycleItemStatus(itemId, nextStatus, listId, spaceId, isTypeList) 
 }
 
 async function showRollup(spaceId) {
-  const el = document.getElementById('ds-rollup');
+  const el = _dsBody('ds-rollup');
   if (!el) return;
   if (el.style.display !== 'none') { el.style.display = 'none'; return; }
   el.style.display = '';
@@ -3835,7 +3857,7 @@ async function deleteListItem(itemId, listId, spaceId, isTypeList) {
 let _userId = null; // set on init from /api/auth/me
 
 async function loadSpaceNotes(spaceId) {
-  const body = document.getElementById('ds-notes-body');
+  const body = _dsBody('ds-notes-body');
   if (!body) return;
   try {
     const notes = await fetch(`/api/spaces/${spaceId}/notes`).then(r => r.json());
@@ -3846,7 +3868,7 @@ async function loadSpaceNotes(spaceId) {
 }
 
 function renderSpaceNotesSection(spaceId, notes) {
-  const body = document.getElementById('ds-notes-body');
+  const body = _dsBody('ds-notes-body');
   if (!body) return;
   const draftKey = `note-draft-space-${spaceId}`;
   const draft = localStorage.getItem(draftKey) || '';
