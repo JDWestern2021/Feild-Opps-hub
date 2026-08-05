@@ -3208,30 +3208,98 @@ function closeReviewDetailPanel() {
 // ── Shared print stylesheet ───────────────────────────────────────────────────
 
 const PRINT_STYLES = `
-  @page { size: letter portrait; margin: 18mm 15mm; }
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 0; }
-  h1 { font-size: 16px; margin: 0 0 2px; }
-  .sub { font-size: 11px; color: #666; margin: 0 0 14px; }
+  @page { size: letter portrait; margin: 14mm 15mm 18mm; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #0C0C0C; margin: 0; }
+  /* ── Company header band ── */
+  .ph { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
+  .ph-left { display: flex; align-items: center; gap: 10px; }
+  .ph-logo { height: 48px; width: auto; display: block; }
+  .ph-co { font-size: 13px; font-weight: 700; letter-spacing: .03em; color: #0C0C0C; line-height: 1.3; }
+  .ph-right { text-align: right; }
+  .ph-sheet { font-size: 17px; font-weight: 700; color: #0C0C0C; line-height: 1; margin-bottom: 3px; }
+  .ph-project { font-size: 12px; color: #0C0C0C; margin-bottom: 1px; }
+  .ph-meta { font-size: 10px; color: #555; }
+  .ph-rule { border: none; border-top: 3px solid #FF6100; margin: 8px 0 14px; }
+  /* ── Body ── */
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
   th { text-align: left; border-bottom: 2px solid #333; padding: 4px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
   td { padding: 4px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
   .group-hdr { font-size: 13px; font-weight: 700; padding: 10px 0 2px; page-break-inside: avoid; border-bottom: none; }
   .chk { width: 20px; }
   .photo-col { width: 28px; text-align: center; font-size: 10px; font-weight: 700; color: #555; }
-  .status-col { font-size: 10px; color: #666; width: 56px; }
+  .status-col { font-size: 10px; color: #555; width: 56px; }
   .qty-col { width: 36px; }
   .unit-col { width: 44px; }
+  /* ── Footer ── */
+  .pf { margin-top: 28px; border-top: 1px solid #999; padding-top: 10px;
+        display: flex; gap: 40px; font-size: 11px; color: #0C0C0C; }
+  .pf-field { flex: 1; }
+  .pf-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #555; margin-bottom: 14px; }
+  .pf-line { border-bottom: 1px solid #0C0C0C; }
   @media print { button, input[type=button] { display: none; } }
 `;
 
-function openPrintWindow(title, bodyHtml) {
+// openPrintWindow: fetches logo once per session, builds branded header + footer.
+// info = { sheetTitle, projectName, scopeLabel, itemCount }
+let _printLogoDataUrl = null;
+async function openPrintWindow(info, bodyHtml) {
+  if (!_printLogoDataUrl) {
+    try {
+      const resp = await fetch('/logo-white.png');
+      const blob = await resp.blob();
+      _printLogoDataUrl = await new Promise(res => {
+        const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob);
+      });
+    } catch { _printLogoDataUrl = ''; }
+  }
+
+  const logoImg = _printLogoDataUrl
+    ? `<img class="ph-logo" src="${_printLogoDataUrl}" alt="J&D Western Electric Ltd.">`
+    : '';
+
+  const dateStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'short', day:'numeric' });
+  const header = `
+  <div class="ph">
+    <div class="ph-left">
+      ${logoImg}
+      <div class="ph-co">J&amp;D WESTERN ELECTRIC LTD.</div>
+    </div>
+    <div class="ph-right">
+      <div class="ph-sheet">${escHtml(info.sheetTitle)}</div>
+      <div class="ph-project">${escHtml(info.projectName)}</div>
+      <div class="ph-meta">Scope: ${escHtml(info.scopeLabel)} &nbsp;·&nbsp; ${info.itemCount} item${info.itemCount === 1 ? '' : 's'} &nbsp;·&nbsp; Printed: ${dateStr}</div>
+    </div>
+  </div>
+  <hr class="ph-rule">`;
+
+  const footer = `
+  <div class="pf">
+    <div class="pf-field">
+      <div class="pf-label">Completed by</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+    <div class="pf-field">
+      <div class="pf-label">Date</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+  </div>`;
+
+  const title = `${info.sheetTitle} — ${info.projectName}`;
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>${title}</title><style>${PRINT_STYLES}</style>
-  </head><body>${bodyHtml}</body></html>`);
+    <base href="${window.location.origin}/">
+    <title>${escHtml(title)}</title><style>${PRINT_STYLES}</style>
+  </head><body>${header}${bodyHtml}${footer}</body></html>`);
   win.document.close();
   win.focus();
   win.print();
+}
+
+// ── Print helpers ─────────────────────────────────────────────────────────────
+
+function _activeProjectName() {
+  const p = (_projects || []).find(p => p.id === _activeProjectId);
+  return p?.name || document.getElementById('space-panel-title')?.textContent || '';
 }
 
 // ── Pick Sheet ────────────────────────────────────────────────────────────────
@@ -3274,7 +3342,7 @@ function closePickSheetModal() {
   if (modal) modal.style.display = 'none';
 }
 
-function _pickSheetHtml(rows, scopeLabel, projectName) {
+function _pickSheetHtml(rows) {
   // Group by space_path, preserving the order rows arrived in (tree order from API)
   const byPath = {};
   const pathOrder = [];
@@ -3283,8 +3351,7 @@ function _pickSheetHtml(rows, scopeLabel, projectName) {
     byPath[row.space_path].push(row);
   }
 
-  let body = `<h1>Pick Sheet — ${escHtml(projectName)}</h1>
-  <p class="sub">Scope: ${escHtml(scopeLabel)} &nbsp;·&nbsp; ${rows.length} item${rows.length === 1 ? '' : 's'} &nbsp;·&nbsp; Printed: ${new Date().toLocaleDateString()}</p>`;
+  let body = '';
 
   for (const path of pathOrder) {
     const items = byPath[path];
@@ -3310,7 +3377,7 @@ function _pickSheetHtml(rows, scopeLabel, projectName) {
   return body;
 }
 
-function printPickSheet() {
+async function printPickSheet() {
   if (!_pickSheetData) return;
   const building = document.getElementById('ps-building-filter').value;
   const floor    = document.getElementById('ps-floor-filter').value;
@@ -3319,13 +3386,13 @@ function printPickSheet() {
   if (building) rows = rows.filter(r => r.space_path.startsWith(building + ' / ') || r.space_path === building);
   if (floor)    rows = rows.filter(r => r.space_path.split(' / ')[1] === floor);
 
-  const projectName = document.getElementById('space-panel-title')?.textContent || '';
+  const projectName = _activeProjectName();
   const scopeLabel  = [building, floor].filter(Boolean).join(' / ') || 'All suites';
-  openPrintWindow(`Pick Sheet — ${projectName}`, _pickSheetHtml(rows, scopeLabel, projectName));
+  await openPrintWindow({ sheetTitle: 'Pick Sheet', projectName, scopeLabel, itemCount: rows.length }, _pickSheetHtml(rows));
   closePickSheetModal();
 }
 
-function printPickSheetFromChecked() {
+async function printPickSheetFromChecked() {
   const checkedIds = new Set(
     [...document.querySelectorAll('#review-mat-list input[type=checkbox]:checked')]
       .map(cb => parseInt(cb.dataset.id))
@@ -3334,13 +3401,13 @@ function printPickSheetFromChecked() {
 
   // _reviewMatRows is set by renderReviewMaterial
   const rows = (_reviewMatRows || []).filter(r => checkedIds.has(r.id));
-  const projectName = document.getElementById('space-panel-title')?.textContent || '';
-  openPrintWindow(`Pick Sheet — ${projectName}`, _pickSheetHtml(rows, `${checkedIds.size} selected items`, projectName));
+  const projectName = _activeProjectName();
+  await openPrintWindow({ sheetTitle: 'Pick Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length }, _pickSheetHtml(rows));
 }
 
 // ── Deficiency Work Sheet ─────────────────────────────────────────────────────
 
-function _defSheetHtml(rows, scopeLabel, projectName) {
+function _defSheetHtml(rows) {
   // Group by space_path, preserving order (already sorted by path from API)
   const byPath = {};
   const pathOrder = [];
@@ -3349,8 +3416,7 @@ function _defSheetHtml(rows, scopeLabel, projectName) {
     byPath[d.space_path].push(d);
   }
 
-  let body = `<h1>Deficiency Work Sheet — ${escHtml(projectName)}</h1>
-  <p class="sub">Scope: ${escHtml(scopeLabel)} &nbsp;·&nbsp; ${rows.length} item${rows.length === 1 ? '' : 's'} &nbsp;·&nbsp; Printed: ${new Date().toLocaleDateString()}</p>`;
+  let body = '';
 
   for (const path of pathOrder) {
     const items = byPath[path];
@@ -3373,10 +3439,10 @@ function _defSheetHtml(rows, scopeLabel, projectName) {
   return body;
 }
 
-function printDeficiencySheetFromScope() {
+async function printDeficiencySheetFromScope() {
   const scopeSel    = document.getElementById('review-def-scope');
   const scopeId     = parseInt(scopeSel?.value) || null;
-  const projectName = document.getElementById('space-panel-title')?.textContent || '';
+  const projectName = _activeProjectName();
 
   let rows = _reviewDefRows.filter(d => d.status !== 'resolved');
   let scopeLabel = 'All spaces';
@@ -3396,10 +3462,10 @@ function printDeficiencySheetFromScope() {
     }
   }
 
-  openPrintWindow(`Deficiency Work Sheet — ${projectName}`, _defSheetHtml(rows, scopeLabel, projectName));
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length }, _defSheetHtml(rows));
 }
 
-function printDeficiencySheetFromChecked() {
+async function printDeficiencySheetFromChecked() {
   const checkedIds = new Set(
     [...document.querySelectorAll('#review-def-list input[type=checkbox]:checked')]
       .map(cb => parseInt(cb.dataset.id))
@@ -3407,8 +3473,8 @@ function printDeficiencySheetFromChecked() {
   if (!checkedIds.size) return;
 
   const rows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
-  const projectName = document.getElementById('space-panel-title')?.textContent || '';
-  openPrintWindow(`Deficiency Work Sheet — ${projectName}`, _defSheetHtml(rows, `${checkedIds.size} selected items`, projectName));
+  const projectName = _activeProjectName();
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length }, _defSheetHtml(rows));
 }
 
 // Dispatches the bulk-bar "Print Sheet" button based on active tab
