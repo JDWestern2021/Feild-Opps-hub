@@ -1094,6 +1094,7 @@ let _detailOrigin       = null;           // 'review' when detail opened from Re
 let _mobileStack     = [];      // [{id: spaceId|null, scrollY: number}]
 let _wasMobile       = null;    // null = not yet initialized
 let _detailRoot      = null;    // container owning the active ds-* IDs (scopes getElementById)
+let _isSimpleProject = false;   // true when project has exactly one "General" space (hide all space navigation)
 
 // Tree state
 let _expanded        = new Set();
@@ -1170,7 +1171,7 @@ function projDefBadge(p) {
 }
 
 async function loadProjects() {
-  _projects = await fetch('/api/project-folders').then(r => r.json()).catch(() => []);
+  _projects = await fetch('/api/project-folders?worksites=1').then(r => r.json()).catch(() => []);
   const list = document.getElementById('project-list');
   if (!_projects.length) {
     list.innerHTML = '<li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">No active projects.</li>';
@@ -1213,8 +1214,15 @@ async function selectProject(id, name, el) {
       fetch(`/api/projects/${id}/plan-types`).then(r => r.json()).catch(() => []),
     ]);
     loadSpaceCounts(id);  // async — badges appear as soon as counts arrive
+    _isSimpleProject = _spaces.length === 1 && _spaces[0].identifier === 'General';
     _mobileStack = [];
-    pushMobileLevel(null);
+    if (_isSimpleProject) {
+      // Skip project root nav — seed stack at space level, no history entry for root
+      _mobileStack = [{ id: null, scrollY: 0 }, { id: _spaces[0].id, scrollY: 0 }];
+      renderMobileLevel();
+    } else {
+      pushMobileLevel(null);
+    }
     return;
   }
 
@@ -1237,6 +1245,7 @@ function backToProjects() {
   _activeProjectId = null;
   _spaces = [];
   _planTypes = [];
+  _isSimpleProject = false;
   _spaceCounts = {};
   closeReviewDetailPanel();
   document.querySelector('.ws-layout').classList.remove('project-selected');
@@ -1361,6 +1370,7 @@ function collapseAll() {
 async function loadSpaces() {
   if (!_activeProjectId) return;
   _spaces = await fetch(`/api/projects/${_activeProjectId}/spaces`).then(r => r.json()).catch(() => []);
+  _isSimpleProject = _spaces.length === 1 && _spaces[0].identifier === 'General';
   renderTree();
 }
 
@@ -1373,6 +1383,13 @@ function renderTree() {
     empty.style.display = 'block';
     empty.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
       <p>${_canEdit ? 'No spaces yet. Use <strong>+ Add Space</strong> or <strong>Bulk Generate</strong> to get started.' : 'No spaces have been set up for this project yet.'}</p>`;
+    return;
+  }
+  // Single-General-space project: go straight to content, no tree navigation
+  if (_isSimpleProject) {
+    tree.style.display  = 'none';
+    empty.style.display = 'none';
+    openDetail(_spaces[0].id);
     return;
   }
   empty.style.display = 'none';
@@ -1568,6 +1585,8 @@ function openDetail(id) {
     (s.plan_type_code ? ` <span class="detail-plan-badge">Type ${escHtml(s.plan_type_code)}</span>` : '');
   document.getElementById('detail-space-type').textContent = s.type_name || '';
 
+  document.getElementById('space-detail').querySelector('.detail-back-bar').style.display = _isSimpleProject ? 'none' : '';
+  document.getElementById('space-detail').querySelector('.detail-header').style.display  = _isSimpleProject ? 'none' : '';
   document.getElementById('detail-sections').innerHTML = buildDetailSectionsHtml(s);
   _detailRoot = document.getElementById('detail-sections');
 
@@ -1578,6 +1597,7 @@ function openDetail(id) {
 }
 
 function closeDetail() {
+  if (_isSimpleProject) return; // no back navigation on simple projects
   _detailSpaceId = null;
   document.getElementById('space-detail').style.display = 'none';
   if (_detailOrigin === 'review') {
@@ -1649,7 +1669,7 @@ function renderMobileLevel() {
   const pills   = document.getElementById('mn-pills');
   const content = document.getElementById('mn-content');
 
-  back.style.display = _mobileStack.length >= 1 ? '' : 'none';
+  back.style.display = (_mobileStack.length >= 1 && !_isSimpleProject) ? '' : 'none';
 
   if (level.id === null) {
     // Project root — show project name, Spaces/Types pills, top-level spaces
@@ -1677,8 +1697,8 @@ function renderMobileLevel() {
     if (!s) { content.innerHTML = '<div style="padding:24px 16px;color:var(--gray-400);">Space not found.</div>'; return; }
 
     _detailSpaceId = level.id;
-    crumb.textContent = buildBreadcrumb(level.id);
-    title.textContent = s.identifier;
+    crumb.textContent = _isSimpleProject ? '' : buildBreadcrumb(level.id);
+    title.textContent = _isSimpleProject ? '' : s.identifier;
     pills.style.display = 'none';
     pills.innerHTML = '';
 
