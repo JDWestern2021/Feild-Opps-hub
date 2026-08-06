@@ -338,6 +338,24 @@
       font-size: 12px; border: 1px solid var(--gray-200); border-radius: 6px;
       padding: 4px 8px; background: var(--surface); color: var(--dark); cursor: pointer;
     }
+    .def-resolve-prompt {
+      margin: 0 12px 10px;
+      padding: 10px 12px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+    }
+    .def-resolve-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .def-resolve-fields label {
+      display: flex; flex-direction: column; gap: 3px;
+      font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .04em;
+    }
+    .def-resolve-input {
+      font-size: 13px; padding: 6px 8px; border: 1px solid var(--gray-200);
+      border-radius: 6px; background: var(--surface); color: var(--dark);
+      font-family: inherit;
+    }
+    .def-resolve-btns { display: flex; gap: 8px; }
     .def-resolved-toggle {
       margin-bottom: 12px;
     }
@@ -846,6 +864,21 @@
               </select>
               <button class="btn btn-sm btn-ghost" onclick="printDeficiencySheetFromScope()" style="white-space:nowrap;">Work Sheet</button>
             </div>
+            <div id="review-def-sheet-fields" style="display:none;padding:6px 12px 8px;border-bottom:1px solid var(--gray-100);">
+              <div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Work Sheet Assignment (optional)</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
+                  Assigned to
+                  <input id="def-sheet-assigned" type="text" placeholder="Name" autocomplete="off"
+                    style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
+                  Supervisor
+                  <input id="def-sheet-supervisor" type="text" placeholder="Name" autocomplete="off"
+                    style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
+                </label>
+              </div>
+            </div>
             <div id="review-def-list" class="review-list"></div>
           </div>
           <!-- Notes pane -->
@@ -1123,6 +1156,7 @@ let _detailSpaceId   = null;
   _reviewAccess    = (me.module_permissions || {}).worksites_review || 'none';
   _canManageReview = _reviewAccess === 'manage';
   _userId = me.id;
+  _myName = me.name || null;
 
   _wasMobile = isMobile();
 
@@ -2675,10 +2709,11 @@ function defCardHtml(d, spaceId) {
   const when = d.raised_at ? new Date(d.raised_at).toLocaleDateString() : '';
   const raisedMeta = [when, d.raised_by_name ? 'by ' + escHtml(d.raised_by_name) : ''].filter(Boolean).join(' ');
   let resolvedMeta = '';
-  if (d.status === 'resolved' && (d.resolved_at || d.resolved_by_name)) {
+  if (d.status === 'resolved') {
     const rw = d.resolved_at ? new Date(d.resolved_at).toLocaleDateString() : '';
-    const rb = d.resolved_by_name ? 'by ' + escHtml(d.resolved_by_name) : '';
-    resolvedMeta = `<div class="def-meta">Resolved ${[rw, rb].filter(Boolean).join(' ')}</div>`;
+    resolvedMeta = rw ? `<div class="def-meta">Resolved ${rw}</div>` : '';
+    if (d.completed_by)  resolvedMeta += `<div class="def-meta">Completed by: ${escHtml(d.completed_by)}</div>`;
+    if (d.signed_off_by) resolvedMeta += `<div class="def-meta">Signed off: ${escHtml(d.signed_off_by)}</div>`;
   }
   let photosHtml = '';
   if (d.photos && d.photos.length) {
@@ -2845,6 +2880,10 @@ async function submitDef(spaceId) {
 }
 
 async function patchDef(defId, status, spaceId) {
+  if (status === 'resolved') {
+    showDefResolvePrompt(defId, spaceId);
+    return;
+  }
   await fetch(`/api/deficiencies/${defId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -2852,6 +2891,52 @@ async function patchDef(defId, status, spaceId) {
   });
   loadDeficiencies(spaceId);
   if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+}
+
+function showDefResolvePrompt(defId, spaceId) {
+  const card = _dsBody(`def-card-${defId}`);
+  if (!card) return;
+
+  // Revert the select visually while prompt is shown
+  const sel = card.querySelector('.def-status-select');
+  if (sel) sel.value = 'open';
+
+  // Remove any existing prompt in this card
+  card.querySelector('.def-resolve-prompt')?.remove();
+
+  const prompt = document.createElement('div');
+  prompt.className = 'def-resolve-prompt';
+  prompt.innerHTML = `
+    <div class="def-resolve-fields">
+      <label>Completed by<input type="text" class="def-resolve-input" id="drp-completed-${defId}" placeholder="Name of person who did the work" autocomplete="off"></label>
+      <label>Signed off by<input type="text" class="def-resolve-input" id="drp-signoff-${defId}" value="${escHtml(_myName || '')}" autocomplete="off"></label>
+    </div>
+    <div class="def-resolve-btns">
+      <button class="btn btn-sm btn-primary" onclick="confirmDefResolve(${defId},${spaceId})">Mark Resolved</button>
+      <button class="btn btn-sm btn-ghost" onclick="cancelDefResolve(${defId})">Cancel</button>
+    </div>`;
+  card.appendChild(prompt);
+  prompt.querySelector(`#drp-completed-${defId}`)?.focus();
+}
+
+async function confirmDefResolve(defId, spaceId) {
+  const completed_by = document.getElementById(`drp-completed-${defId}`)?.value.trim() || null;
+  const signed_off_by = document.getElementById(`drp-signoff-${defId}`)?.value.trim() || null;
+  await fetch(`/api/deficiencies/${defId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'resolved', completed_by, signed_off_by }),
+  });
+  loadDeficiencies(spaceId);
+  if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+}
+
+function cancelDefResolve(defId) {
+  const card = _dsBody(`def-card-${defId}`);
+  if (!card) return;
+  card.querySelector('.def-resolve-prompt')?.remove();
+  const sel = card.querySelector('.def-status-select');
+  if (sel) sel.value = card.classList.contains('status-in_progress') ? 'in_progress' : 'open';
 }
 
 async function deleteDef(defId, spaceId) {
@@ -2973,6 +3058,8 @@ function buildDefScopePicker(allRows) {
   if (!opts.length) { scopeRow.style.display = 'none'; return; }
   sel.innerHTML = '<option value="">All spaces</option>' + opts.join('');
   scopeRow.style.display = 'flex';
+  const sheetFields = document.getElementById('review-def-sheet-fields');
+  if (sheetFields) sheetFields.style.display = '';
 }
 function applyDefScope() {
   const scopeId = parseInt(document.getElementById('review-def-scope').value) || null;
@@ -3020,6 +3107,11 @@ function renderReviewDeficiencies(rows) {
       <div class="review-row-check">
         <input type="checkbox" data-id="${d.id}" onclick="event.stopPropagation(); updateBulkBar('deficiencies')" />
       </div>` : '';
+    let accountability = '';
+    if (d.status === 'resolved') {
+      if (d.completed_by)  accountability += `<div class="review-row-meta">Completed by: ${escHtml(d.completed_by)}</div>`;
+      if (d.signed_off_by) accountability += `<div class="review-row-meta">Signed off: ${escHtml(d.signed_off_by)}</div>`;
+    }
     return `<div class="review-row" onclick="openSpaceFromReview(${d.space_id})">
       ${checkbox}
       <div class="review-row-left status-${d.status}"></div>
@@ -3027,6 +3119,7 @@ function renderReviewDeficiencies(rows) {
         <div class="review-row-desc">${escHtml(d.description)}</div>
         <div class="review-row-path">${escHtml(d.space_path || '')}</div>
         <div class="review-row-meta">${meta}</div>
+        ${accountability}
       </div>
       <div class="review-row-actions">${select}</div>
     </div>`;
@@ -3046,6 +3139,11 @@ function renderReviewDeficiencies(rows) {
 }
 
 async function patchReviewDef(defId, status, selectEl) {
+  if (status === 'resolved') {
+    selectEl.value = selectEl.dataset.prev || 'open';
+    showReviewResolvePrompt(defId, selectEl);
+    return;
+  }
   try {
     await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${defId}`, {
       method: 'PATCH',
@@ -3055,8 +3153,46 @@ async function patchReviewDef(defId, status, selectEl) {
     loadReviewDeficiencies();
     if (_activeProjectId) loadSpaceCounts(_activeProjectId);
   } catch {
-    // revert select on failure
     selectEl.value = selectEl.dataset.prev || selectEl.value;
+  }
+}
+
+function showReviewResolvePrompt(defId, selectEl) {
+  // Remove any existing prompt
+  document.getElementById(`rrp-${defId}`)?.remove();
+
+  const row = selectEl.closest('.review-row');
+  if (!row) return;
+
+  const prompt = document.createElement('div');
+  prompt.id = `rrp-${defId}`;
+  prompt.className = 'def-resolve-prompt';
+  prompt.innerHTML = `
+    <div class="def-resolve-fields">
+      <label>Completed by<input type="text" class="def-resolve-input" id="rrp-completed-${defId}" placeholder="Name of person who did the work" autocomplete="off"></label>
+      <label>Signed off by<input type="text" class="def-resolve-input" id="rrp-signoff-${defId}" value="${escHtml(_myName || '')}" autocomplete="off"></label>
+    </div>
+    <div class="def-resolve-btns">
+      <button class="btn btn-sm btn-primary" onclick="confirmReviewResolve(${defId})">Mark Resolved</button>
+      <button class="btn btn-sm btn-ghost" onclick="document.getElementById('rrp-${defId}')?.remove()">Cancel</button>
+    </div>`;
+  row.after(prompt);
+  prompt.querySelector(`#rrp-completed-${defId}`)?.focus();
+}
+
+async function confirmReviewResolve(defId) {
+  const completed_by  = document.getElementById(`rrp-completed-${defId}`)?.value.trim() || null;
+  const signed_off_by = document.getElementById(`rrp-signoff-${defId}`)?.value.trim() || null;
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${defId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'resolved', completed_by, signed_off_by }),
+    });
+    loadReviewDeficiencies();
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+  } catch {
+    document.getElementById(`rrp-${defId}`)?.remove();
   }
 }
 
@@ -3254,6 +3390,10 @@ const PRINT_STYLES = `
   .ph-sheet { font-size: 17px; font-weight: 700; color: #0C0C0C; line-height: 1; margin-bottom: 3px; }
   .ph-project { font-size: 12px; color: #0C0C0C; margin-bottom: 1px; }
   .ph-meta { font-size: 10px; color: #555; }
+  .ph-assign { display: flex; gap: 32px; margin-top: 6px; font-size: 11px; color: #0C0C0C; }
+  .ph-assign-field { display: flex; gap: 6px; align-items: baseline; }
+  .ph-assign-label { font-weight: 700; white-space: nowrap; }
+  .ph-assign-blank { display: inline-block; width: 160px; border-bottom: 1px solid #0C0C0C; }
   .ph-rule { border: none; border-top: 3px solid #FF6100; margin: 8px 0 14px; }
   /* ── Body ── */
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
@@ -3309,12 +3449,25 @@ async function openPrintWindow(info, bodyHtml) {
       <div class="ph-meta">Scope: ${escHtml(info.scopeLabel)} &nbsp;·&nbsp; ${info.itemCount} item${info.itemCount === 1 ? '' : 's'} &nbsp;·&nbsp; Printed: ${dateStr}</div>
     </div>
   </div>
+  ${(info.assignedTo !== undefined || info.supervisor !== undefined) ? `
+  <div class="ph-assign">
+    <span class="ph-assign-field"><span class="ph-assign-label">Assigned to:</span> ${info.assignedTo ? escHtml(info.assignedTo) : '<span class="ph-assign-blank">___________________________</span>'}</span>
+    <span class="ph-assign-field"><span class="ph-assign-label">Supervisor:</span> ${info.supervisor ? escHtml(info.supervisor) : '<span class="ph-assign-blank">___________________________</span>'}</span>
+  </div>` : ''}
   <hr class="ph-rule">`;
 
   const footer = `
   <div class="pf">
     <div class="pf-field">
       <div class="pf-label">Completed by</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+    <div class="pf-field">
+      <div class="pf-label">Date</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+    <div class="pf-field">
+      <div class="pf-label">Supervisor sign-off</div>
       <div class="pf-line">&nbsp;</div>
     </div>
     <div class="pf-field">
@@ -3481,6 +3634,13 @@ function _defSheetHtml(rows) {
   return body;
 }
 
+function _defSheetAssignment() {
+  // Collect optional assignee/supervisor from inline inputs, or prompt once
+  const assignedTo  = (document.getElementById('def-sheet-assigned')?.value  || '').trim() || null;
+  const supervisor  = (document.getElementById('def-sheet-supervisor')?.value || '').trim() || null;
+  return { assignedTo, supervisor };
+}
+
 async function printDeficiencySheetFromScope() {
   const scopeSel    = document.getElementById('review-def-scope');
   const scopeId     = parseInt(scopeSel?.value) || null;
@@ -3504,7 +3664,8 @@ async function printDeficiencySheetFromScope() {
     }
   }
 
-  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length }, _defSheetHtml(rows));
+  const { assignedTo, supervisor } = _defSheetAssignment();
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
 }
 
 async function printDeficiencySheetFromChecked() {
@@ -3516,7 +3677,8 @@ async function printDeficiencySheetFromChecked() {
 
   const rows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
   const projectName = _activeProjectName();
-  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length }, _defSheetHtml(rows));
+  const { assignedTo, supervisor } = _defSheetAssignment();
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
 }
 
 // Dispatches the bulk-bar "Print Sheet" button based on active tab
@@ -3874,7 +4036,8 @@ async function deleteListItem(itemId, listId, spaceId, isTypeList) {
 
 // ── Space Notes ───────────────────────────────────────────────────────────────
 
-let _userId = null; // set on init from /api/auth/me
+let _userId = null;  // set on init from /api/auth/me
+let _myName = null;  // set on init — default for signed_off_by prompt
 
 async function loadSpaceNotes(spaceId) {
   const body = _dsBody('ds-notes-body');

@@ -373,9 +373,10 @@ async function seedSpaces(p1Id, p2Id, slId) {
 
     // Parkade level
     const parkade = await addSpace({ project_id: slId, parent_id: bldg.id, identifier: 'Parkade', space_type_id: T.parkade, sort_order: 4 });
-    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Electrical Room', space_type_id: T.elec,  sort_order: 0 });
-    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Mechanical Room', space_type_id: T.mech,  sort_order: 1 });
-    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Lobby',           space_type_id: T.lobby, sort_order: 2 });
+    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Main Area',       space_type_id: T.common, sort_order: 0 });
+    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Electrical Room', space_type_id: T.elec,   sort_order: 1 });
+    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Mechanical Room', space_type_id: T.mech,   sort_order: 2 });
+    await addSpace({ project_id: slId, parent_id: parkade.id, identifier: 'Lobby',           space_type_id: T.lobby,  sort_order: 3 });
 
     // Floor builder — rooms named per drawing numbering (floorNum e.g. 1,2,3,4)
     async function buildFloor(floorNum, sortOrder) {
