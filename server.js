@@ -6000,6 +6000,7 @@ app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAcces
       ${SPACE_PATH_CTE}
       SELECT d.id, d.space_id, d.description, d.status, d.raised_at, d.resolved_at,
              d.completed_by, d.completed_at, d.signed_off_by, d.signed_off_at,
+             d.assigned_to_name, d.assigned_supervisor, d.assigned_at,
              ru.name AS raised_by_name,
              rv.name AS resolved_by_name,
              sp.path AS space_path,
@@ -6012,6 +6013,50 @@ app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAcces
       ORDER BY sp.path, d.raised_at DESC
     `, [req.params.id, statuses]);
     res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/deficiency-assignees — distinct assigned names for autocomplete
+app.get('/api/projects/:id/deficiency-assignees', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT d.assigned_to_name
+      FROM deficiencies d
+      JOIN spaces s ON s.id = d.space_id
+      WHERE s.project_id = $1 AND d.assigned_to_name IS NOT NULL
+      ORDER BY d.assigned_to_name
+    `, [req.params.id]);
+    res.json(rows.map(r => r.assigned_to_name));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/projects/:id/review/deficiencies/assign — bulk-assign deficiencies (manage only)
+// Must be registered BEFORE /:defId so "assign" is not matched as a defId.
+app.post('/api/projects/:id/review/deficiencies/assign', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
+  try {
+    const { ids, assigned_to_name, assigned_supervisor } = req.body;
+    const projectId = parseInt(req.params.id);
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+    const intIds = ids.map(Number).filter(n => Number.isFinite(n) && n > 0);
+    if (!intIds.length) return res.status(400).json({ error: 'No valid ids' });
+
+    const { rows: owned } = await pool.query(`
+      SELECT d.id FROM deficiencies d
+      JOIN spaces s ON s.id = d.space_id
+      WHERE d.id = ANY($1) AND s.project_id = $2
+    `, [intIds, projectId]);
+    if (owned.length !== intIds.length)
+      return res.status(403).json({ error: 'One or more deficiencies do not belong to this project' });
+
+    await pool.query(`
+      UPDATE deficiencies
+      SET assigned_to_name   = $1,
+          assigned_supervisor = $2,
+          assigned_at         = NOW()
+      WHERE id = ANY($3)
+    `, [assigned_to_name?.trim() || null, assigned_supervisor?.trim() || null, intIds]);
+
+    res.json({ assigned: intIds.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
