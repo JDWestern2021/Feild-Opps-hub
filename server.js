@@ -7824,8 +7824,9 @@ app.post('/api/projects/:id/import-spaces', requireAdmin, async (req, res) => {
       // Insert spaces in topological order (parents before children)
       const oldToNew = {}; // old _id → new db id
       const toInsert = [...body.spaces];
+      const maxIterations = toInsert.length * toInsert.length + 10;
       let iterations = 0;
-      while (toInsert.length > 0 && iterations < toInsert.length * 2 + 5) {
+      while (toInsert.length > 0 && iterations < maxIterations) {
         iterations++;
         const s = toInsert.shift();
         // If parent not yet inserted, push to back and try later
