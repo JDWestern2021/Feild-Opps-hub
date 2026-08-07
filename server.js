@@ -1738,6 +1738,7 @@ app.delete('/api/po/:id', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 
 app.get('/api/project-folders', requireAuth, async (req, res) => {
+  const worksitesOnly = req.query.worksites === '1';
   const { rows } = await pool.query(`
     SELECT p.id, p.name, p.job_numbers,
       COALESCE(dc.open_count, 0)::int        AS def_open,
@@ -1753,6 +1754,7 @@ app.get('/api/project-folders', requireAuth, async (req, res) => {
       GROUP BY s.project_id
     ) dc ON dc.project_id = p.id
     WHERE p.status = 'active'
+      ${worksitesOnly ? 'AND p.track_in_worksites = TRUE' : ''}
     ORDER BY p.name
   `);
   res.json(rows);
@@ -1793,12 +1795,20 @@ app.get('/api/project-folders/all', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/project-folders', requireAdmin, async (req, res) => {
-  const { name, job_numbers } = req.body;
+  const { name, job_numbers, track_in_worksites } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Project name is required' });
   const jn = normalizeJobNumbers(job_numbers);
-  const { rows } = await pool.query('INSERT INTO projects (name,job_numbers,status,created_at) VALUES ($1,$2,$3,$4) RETURNING id,name,job_numbers,status',
-    [name.trim(),jn,'active',new Date().toISOString()]);
-  res.status(201).json(rows[0]);
+  const tiw = track_in_worksites === false ? false : true;
+  const { rows } = await pool.query(
+    'INSERT INTO projects (name,job_numbers,status,created_at,track_in_worksites) VALUES ($1,$2,$3,$4,$5) RETURNING id,name,job_numbers,status,track_in_worksites',
+    [name.trim(), jn, 'active', new Date().toISOString(), tiw]
+  );
+  const project = rows[0];
+  await pool.query(
+    "INSERT INTO spaces (project_id, parent_id, space_type_id, identifier, sort_order) VALUES ($1, NULL, NULL, 'General', 0)",
+    [project.id]
+  );
+  res.status(201).json(project);
 });
 
 app.post('/api/project-folders/quick', requireAuth, async (req, res) => {
@@ -1806,18 +1816,32 @@ app.post('/api/project-folders/quick', requireAuth, async (req, res) => {
   if (!name?.trim()) return res.status(400).json({ error: 'Project name is required' });
   const { rows: ex } = await pool.query("SELECT id,name,job_numbers,status FROM projects WHERE status='active' AND LOWER(name)=LOWER($1)",[name.trim()]);
   if (ex[0]) return res.json(ex[0]);
-  const { rows } = await pool.query('INSERT INTO projects (name,job_numbers,status,created_at) VALUES ($1,$2,$3,$4) RETURNING id,name,job_numbers,status',
-    [name.trim(),null,'active',new Date().toISOString()]);
-  res.status(201).json(rows[0]);
+  const { rows } = await pool.query(
+    'INSERT INTO projects (name,job_numbers,status,created_at) VALUES ($1,$2,$3,$4) RETURNING id,name,job_numbers,status',
+    [name.trim(), null, 'active', new Date().toISOString()]
+  );
+  const project = rows[0];
+  await pool.query(
+    "INSERT INTO spaces (project_id, parent_id, space_type_id, identifier, sort_order) VALUES ($1, NULL, NULL, 'General', 0)",
+    [project.id]
+  );
+  res.status(201).json(project);
 });
 
 app.patch('/api/project-folders/:id', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
-  const { name, job_numbers } = req.body;
+  const { name, job_numbers, track_in_worksites } = req.body;
   if (name!==undefined && !name.trim()) return res.status(400).json({ error: 'Project name cannot be empty' });
-  await pool.query('UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3 WHERE id=$4',
-    [name?.trim()||null, job_numbers!==undefined?normalizeJobNumbers(job_numbers):rows[0].job_numbers, new Date().toISOString(), req.params.id]);
+  const tiwClause = track_in_worksites !== undefined ? `,track_in_worksites=$5` : '';
+  const params = [
+    name?.trim()||null,
+    job_numbers!==undefined ? normalizeJobNumbers(job_numbers) : rows[0].job_numbers,
+    new Date().toISOString(),
+    req.params.id,
+    ...(track_in_worksites !== undefined ? [!!track_in_worksites] : []),
+  ];
+  await pool.query(`UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3 WHERE id=$4${tiwClause}`, params);
   res.json({ ok: true });
 });
 

@@ -2123,6 +2123,13 @@
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="project-permit-required" value="unset" checked> Not sure yet</label>
         </div>
       </div>
+      <div class="form-group" style="margin-top:14px;">
+        <label class="form-label">Track this job in Worksites?</label>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="project-track-worksites" checked> Yes</label>
+        </div>
+        <span class="form-hint" style="display:block;margin-top:6px;">Turn this off for billing-only project records.</span>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary btn-sm" id="project-save-btn">Save Project</button>
@@ -5057,6 +5064,7 @@ function openProjectModal(project) {
   $('project-modal-title').textContent = project ? 'Edit Project' : 'New Project';
   $('project-name-input').value = project ? project.name : '';
   $('project-jobs-input').value = project ? (project.job_numbers || '') : '';
+  $('project-track-worksites').checked = project ? project.track_in_worksites !== false : true;
   // Permit radio only shown on new project creation; edit uses Permits tab
   const permitRow = $('project-modal-permit-row');
   if (!project) {
@@ -5090,10 +5098,11 @@ $('project-save-btn').addEventListener('click', async () => {
   if (!name) { showToast('Project name is required', 'error'); return; }
   const wasEditing = !!editingProjectId;
   const permit_required = document.querySelector('input[name="project-permit-required"]:checked')?.value || 'unset';
+  const track_in_worksites = $('project-track-worksites').checked;
   try {
     const res = wasEditing
-      ? await fetch('/api/project-folders/' + editingProjectId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers }) })
-      : await fetch('/api/project-folders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers }) });
+      ? await fetch('/api/project-folders/' + editingProjectId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers, track_in_worksites }) })
+      : await fetch('/api/project-folders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, job_numbers, track_in_worksites }) });
     if (!res.ok) throw new Error();
     const newProj = await res.json();
     if (!wasEditing && permit_required !== 'unset') {

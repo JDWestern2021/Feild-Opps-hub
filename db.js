@@ -1112,6 +1112,33 @@ async function initSchema() {
       )
   `);
 
+  // track_in_worksites: false hides a project from the Worksites list (billing-only records)
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS track_in_worksites BOOLEAN NOT NULL DEFAULT TRUE`);
+
+  // One-time backfill: create a "General" space for every project that has none.
+  // Guards on schema_migrations so deleting the auto-created space doesn't resurrect it.
+  {
+    const { rowCount } = await pool.query(
+      "SELECT 1 FROM schema_migrations WHERE name = 'general_space_backfill'"
+    );
+    if (!rowCount) {
+      const { rows: projectsWithoutSpaces } = await pool.query(`
+        SELECT p.id FROM projects p
+        WHERE NOT EXISTS (SELECT 1 FROM spaces s WHERE s.project_id = p.id)
+      `);
+      for (const p of projectsWithoutSpaces) {
+        await pool.query(
+          "INSERT INTO spaces (project_id, parent_id, space_type_id, identifier, sort_order) VALUES ($1, NULL, NULL, 'General', 0)",
+          [p.id]
+        );
+      }
+      await pool.query("INSERT INTO schema_migrations (name) VALUES ('general_space_backfill')");
+      if (projectsWithoutSpaces.length) {
+        console.log(`  ✓ Backfilled General space for ${projectsWithoutSpaces.length} project(s)`);
+      }
+    }
+  }
+
   console.log('  ✓ Database schema ready');
 }
 
