@@ -1835,6 +1835,26 @@ app.post('/api/project-folders/quick', requireAuth, async (req, res) => {
   res.status(201).json(project);
 });
 
+app.patch('/api/project-folders/bulk-worksites', requireAdmin, async (req, res) => {
+  try {
+    const { ids, track_in_worksites } = req.body;
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+    if (typeof track_in_worksites !== 'boolean') return res.status(400).json({ error: 'track_in_worksites boolean required' });
+    const intIds = ids.map(Number).filter(n => Number.isFinite(n) && n > 0);
+    if (!intIds.length) return res.status(400).json({ error: 'No valid ids' });
+    const { rows: projects } = await pool.query(`SELECT id, name FROM projects WHERE id = ANY($1)`, [intIds]);
+    if (!projects.length) return res.status(404).json({ error: 'No matching projects' });
+    await pool.query(`UPDATE projects SET track_in_worksites=$1 WHERE id = ANY($2)`, [track_in_worksites, intIds]);
+    const verb = track_in_worksites ? 'restored-to-worksites' : 'removed-from-worksites';
+    const names = projects.map(p => p.name).join(', ');
+    for (const p of projects) {
+      await pool.query(`INSERT INTO activity_log (project_id,entity_type,entity_id,action,detail,user_id,actor_name,created_at) VALUES ($1,'project',$1,$2,$3,$4,$5,NOW())`,
+        [p.id, verb, `bulk: ${names}`, req.user.id, req.user.name]);
+    }
+    res.json({ ok: true, updated: projects.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.patch('/api/project-folders/:id', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Project not found' });

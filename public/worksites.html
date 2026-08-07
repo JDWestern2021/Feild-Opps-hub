@@ -118,6 +118,24 @@
     .proj-menu button:hover { background: var(--gray-50); }
     .proj-menu button.danger { color: var(--red); }
     .proj-menu button.danger:hover { background: #fef2f2; }
+    /* ── Project bulk bar ── */
+    .proj-bulk-bar {
+      display: none; align-items: center; gap: 8px; flex-wrap: wrap;
+      background: var(--dark); color: #fff;
+      padding: 8px 10px; font-size: 12px; font-weight: 600;
+    }
+    .proj-bulk-bar.visible { display: flex; }
+    .proj-bulk-bar-count { flex: 1; }
+    .proj-bulk-action { background: var(--orange); color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; min-height: 36px; }
+    .proj-bulk-action:hover { background: #c2410c; }
+    .proj-bulk-clear { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; min-height: 36px; }
+    /* Checkbox on project rows — admin only, desktop only */
+    .proj-cb-wrap { display: none; align-items: center; padding: 0 4px 0 8px; flex-shrink: 0; }
+    .proj-cb-wrap input { cursor: pointer; accent-color: var(--orange); width: 15px; height: 15px; }
+    @media (min-width: 769px) {
+      .proj-cb-wrap.admin-cb { display: flex; }
+    }
+
     .ws-show-removed-wrap {
       padding: 6px 10px 2px; font-size: 12px; color: var(--gray-400);
       display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
@@ -848,6 +866,11 @@
     <!-- Project list -->
     <div class="project-panel">
       <div class="project-panel-header">Projects</div>
+      <div class="proj-bulk-bar" id="proj-bulk-bar">
+        <div class="proj-bulk-bar-count" id="proj-bulk-count">0 selected</div>
+        <button class="proj-bulk-action" id="proj-bulk-action-btn" onclick="applyProjBulkAction()">Remove from Worksites</button>
+        <button class="proj-bulk-clear" onclick="clearProjBulkSelection()">Clear</button>
+      </div>
       <ul class="project-list" id="project-list">
         <li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">Loading…</li>
       </ul>
@@ -1434,9 +1457,11 @@ async function loadProjects(showRemoved) {
           : `<button class="danger" onclick="event.stopPropagation();removeFromWorksites(${p.id},${nameJson})">Remove from Worksites</button>`
         }
       </div>` : '';
+    const cb = _isAdmin ? `<div class="proj-cb-wrap admin-cb"><input type="checkbox" class="proj-bulk-cb" data-id="${p.id}" data-name="${escHtml(p.name)}" data-removed="${isRemoved}" onchange="onProjCbChange()"></div>` : '';
     return `
-      <li class="${isRemoved ? 'proj-removed' : ''}">
-        <a href="#" onclick="${isRemoved ? 'return false' : `selectProject(${p.id},${nameJson},this);return false`}">
+      <li class="${isRemoved ? 'proj-removed' : ''}" style="display:flex;align-items:center;">
+        ${cb}
+        <a href="#" style="flex:1;min-width:0;" onclick="${isRemoved ? 'return false' : `selectProject(${p.id},${nameJson},this);return false`}">
           <span style="display:flex;align-items:center;gap:6px;">
             ${escHtml(p.name)}
             ${isRemoved ? '<span style="font-size:11px;color:var(--gray-400);font-weight:500;">(removed)</span>' : projDefBadge(p)}
@@ -1548,6 +1573,46 @@ async function restoreToWorksites(id) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ track_in_worksites: true }),
   });
+  const showRemoved = document.getElementById('ws-show-removed')?.checked;
+  await loadProjects(showRemoved);
+}
+
+// ── Project bulk select ───────────────────────────────────────────────────────
+function onProjCbChange() {
+  const cbs = [...document.querySelectorAll('.proj-bulk-cb:checked')];
+  const bar = document.getElementById('proj-bulk-bar');
+  const countEl = document.getElementById('proj-bulk-count');
+  const actionBtn = document.getElementById('proj-bulk-action-btn');
+  if (!cbs.length) { bar.classList.remove('visible'); return; }
+  bar.classList.add('visible');
+  countEl.textContent = `${cbs.length} selected`;
+  // Determine mode: if any checked box is a removed project, action is Restore; otherwise Remove
+  const anyRemoved = cbs.some(cb => cb.dataset.removed === 'true');
+  actionBtn.textContent = anyRemoved ? 'Restore to Worksites' : 'Remove from Worksites';
+}
+
+function clearProjBulkSelection() {
+  document.querySelectorAll('.proj-bulk-cb').forEach(cb => cb.checked = false);
+  document.getElementById('proj-bulk-bar').classList.remove('visible');
+}
+
+async function applyProjBulkAction() {
+  const cbs = [...document.querySelectorAll('.proj-bulk-cb:checked')];
+  if (!cbs.length) return;
+  const anyRemoved = cbs.some(cb => cb.dataset.removed === 'true');
+  const addToWorksites = anyRemoved;
+  const names = cbs.map(cb => '  • ' + cb.dataset.name).join('\n');
+  const verb = addToWorksites ? 'Restore' : 'Remove';
+  const msg = `${verb} these ${cbs.length} project${cbs.length !== 1 ? 's' : ''} ${addToWorksites ? 'to' : 'from'} Worksites?\n\n${names}\n\n${addToWorksites ? 'They will reappear in this list.' : 'They stay in Projects with all POs, tickets and billing. They just won\'t appear in this list.'}`;
+  if (!confirm(msg)) return;
+  const ids = cbs.map(cb => parseInt(cb.dataset.id, 10));
+  const res = await fetch('/api/project-folders/bulk-worksites', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, track_in_worksites: addToWorksites }),
+  });
+  if (!res.ok) { alert('Failed: ' + (await res.json()).error); return; }
+  clearProjBulkSelection();
   const showRemoved = document.getElementById('ws-show-removed')?.checked;
   await loadProjects(showRemoved);
 }
