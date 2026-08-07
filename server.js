@@ -6167,9 +6167,9 @@ app.get('/api/projects/:id/work-sheets/:wsId', requireAuth, requireModuleAccess(
       JOIN deficiencies d ON d.id = wsi.deficiency_id
       JOIN space_paths sp ON sp.id = d.space_id AND NOT sp.is_cycle
       LEFT JOIN users ru ON ru.id = d.raised_by
-      WHERE wsi.work_sheet_id = $1
+      WHERE wsi.work_sheet_id = $2
       ORDER BY sp.path, d.raised_at
-    `, [ws.id]);
+    `, [ws.project_id, ws.id]);
 
     res.json({ ...ws, items });
   } catch (e) { res.status(500).json({ error: e.message }); }
