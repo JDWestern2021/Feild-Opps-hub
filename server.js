@@ -335,6 +335,13 @@ function requireModuleAccess(module, minLevel) {
   };
 }
 
+async function logActivity(client, { project_id, space_id, entity_type, entity_id, action, detail, user }) {
+  await client.query(`
+    INSERT INTO activity_log (project_id, space_id, entity_type, entity_id, action, detail, user_id, actor_name)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+  `, [project_id, space_id ?? null, entity_type, entity_id ?? null, action, detail ?? null, user.id, user.name]);
+}
+
 app.get('/api/auth/me', async (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Not authenticated' });
   const { rows } = await pool.query('SELECT id,name,email,role,status,permissions FROM users WHERE id=$1', [req.session.userId]);
@@ -5905,8 +5912,7 @@ app.get('/api/projects/:id/spaces', requireAuth, requireModuleAccess('worksites'
 });
 
 // GET /api/projects/:id/space-counts — rolled-up content counts per space (def/mat/notes)
-// Replaces the old deficiency-counts endpoint. Returns open_def, ip_def, mat_count, note_count
-// for each space, aggregated over the space's full subtree including itself.
+// note_count = unacknowledged notes for the current user
 app.get('/api/projects/:id/space-counts', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -5924,19 +5930,20 @@ app.get('/api/projects/:id/space-counts', requireAuth, requireModuleAccess('work
         SUM(CASE WHEN d.status = 'open'        THEN 1 ELSE 0 END)::int AS open_def,
         SUM(CASE WHEN d.status = 'in_progress' THEN 1 ELSE 0 END)::int AS ip_def,
         SUM(CASE WHEN mr.status IN ('needed','ordered') THEN 1 ELSE 0 END)::int AS mat_count,
-        COUNT(DISTINCT n.id)::int AS note_count
+        COUNT(DISTINCT CASE WHEN na.user_id IS NULL THEN n.id END)::int AS note_count
       FROM subtree st
-      LEFT JOIN deficiencies     d  ON d.space_id  = st.leaf_id AND d.status  != 'resolved'
+      LEFT JOIN deficiencies      d  ON d.space_id  = st.leaf_id AND d.status != 'resolved'
       LEFT JOIN material_requests mr ON mr.space_id = st.leaf_id AND mr.status IN ('needed','ordered')
       LEFT JOIN space_notes        n  ON n.space_id  = st.leaf_id
+      LEFT JOIN note_acknowledgements na ON na.note_id = n.id AND na.user_id = $2
       WHERE NOT st.is_cycle
       GROUP BY st.space_id
       HAVING
         SUM(CASE WHEN d.status = 'open'        THEN 1 ELSE 0 END) > 0
         OR SUM(CASE WHEN d.status = 'in_progress' THEN 1 ELSE 0 END) > 0
         OR SUM(CASE WHEN mr.status IN ('needed','ordered') THEN 1 ELSE 0 END) > 0
-        OR COUNT(DISTINCT n.id) > 0
-    `, [req.params.id]);
+        OR COUNT(DISTINCT CASE WHEN na.user_id IS NULL THEN n.id END) > 0
+    `, [req.params.id, req.user.id]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -5950,20 +5957,6 @@ app.get('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('worksi
       LEFT JOIN users u ON u.id = d.raised_by
       WHERE d.space_id = $1
       ORDER BY d.raised_at DESC
-    `, [req.params.id]);
-    res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// GET /api/spaces/:id/notes — all notes on a specific space
-app.get('/api/spaces/:id/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT n.*, u.name AS author_name
-      FROM space_notes n
-      LEFT JOIN users u ON u.id = n.author_id
-      WHERE n.space_id = $1
-      ORDER BY n.created_at DESC
     `, [req.params.id]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -6090,17 +6083,36 @@ app.patch('/api/projects/:id/review/deficiencies/bulk', requireAuth, requireModu
     const resolvedAt  = status === 'resolved' ? now : null;
     const completedBy = status === 'resolved' ? (completed_by?.trim() || null) : null;
     const signedOffBy = status === 'resolved' ? (signed_off_by?.trim() || req.user.name || null) : null;
-    await pool.query(`
-      UPDATE deficiencies
-      SET status=$1,
-          resolved_by   = CASE WHEN $1='resolved' THEN $3::int         ELSE NULL END,
-          resolved_at   = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END,
-          completed_by  = CASE WHEN $1='resolved' THEN $5              ELSE NULL END,
-          completed_at  = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END,
-          signed_off_by = CASE WHEN $1='resolved' THEN $6              ELSE NULL END,
-          signed_off_at = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END
-      WHERE id = ANY($2)
-    `, [status, intIds, resolvedBy, resolvedAt, completedBy, signedOffBy]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`
+        UPDATE deficiencies
+        SET status=$1,
+            resolved_by   = CASE WHEN $1='resolved' THEN $3::int         ELSE NULL END,
+            resolved_at   = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END,
+            completed_by  = CASE WHEN $1='resolved' THEN $5              ELSE NULL END,
+            completed_at  = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END,
+            signed_off_by = CASE WHEN $1='resolved' THEN $6              ELSE NULL END,
+            signed_off_at = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END
+        WHERE id = ANY($2)
+      `, [status, intIds, resolvedBy, resolvedAt, completedBy, signedOffBy]);
+      // Log one entry per deficiency so per-item history works
+      const { rows: defs } = await client.query(
+        `SELECT d.id, d.description, d.space_id, s.project_id FROM deficiencies d JOIN spaces s ON s.id=d.space_id WHERE d.id = ANY($1)`,
+        [intIds]);
+      for (const d of defs) {
+        await logActivity(client, {
+          project_id: d.project_id, space_id: d.space_id,
+          entity_type: 'deficiency', entity_id: d.id,
+          action: `status:${status}`,
+          detail: d.description.slice(0, 100) + (status !== 'resolved' ? '' : ` · resolved`),
+          user: req.user
+        });
+      }
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
     res.json({ updated: intIds.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6110,6 +6122,10 @@ app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireMo
     const { status, completed_by, signed_off_by } = req.body;
     const valid = ['open', 'in_progress', 'resolved'];
     if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const { rows: [old] } = await pool.query(
+      `SELECT d.*, s.project_id FROM deficiencies d JOIN spaces s ON s.id=d.space_id WHERE d.id=$1`,
+      [req.params.defId]);
+    if (!old) return res.status(404).json({ error: 'Not found' });
     let extra, vals;
     if (status === 'resolved') {
       extra = ', resolved_by=$3, resolved_at=NOW(), completed_by=$4, completed_at=NOW(), signed_off_by=$5, signed_off_at=NOW()';
@@ -6118,11 +6134,23 @@ app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireMo
       extra = ', resolved_by=NULL, resolved_at=NULL, completed_by=NULL, completed_at=NULL, signed_off_by=NULL, signed_off_at=NULL';
       vals = [status, req.params.defId];
     }
-    const { rows: [d] } = await pool.query(
-      `UPDATE deficiencies SET status=$1${extra} WHERE id=$2 RETURNING id, status`, vals
-    );
-    if (!d) return res.status(404).json({ error: 'Not found' });
-    res.json(d);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: [d] } = await client.query(
+        `UPDATE deficiencies SET status=$1${extra} WHERE id=$2 RETURNING id, status`, vals);
+      if (!d) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+      await logActivity(client, {
+        project_id: old.project_id, space_id: old.space_id,
+        entity_type: 'deficiency', entity_id: old.id,
+        action: `status:${status}`,
+        detail: `${old.description.slice(0, 100)} · ${old.status} → ${status}`,
+        user: req.user
+      });
+      await client.query('COMMIT');
+      res.json(d);
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6234,6 +6262,14 @@ app.post('/api/projects/:id/work-sheets', requireAuth, requireModuleAccess('work
       );
     }
 
+    await logActivity(client, {
+      project_id: projectId, space_id: null,
+      entity_type: 'work_sheet', entity_id: ws.id,
+      action: 'created',
+      detail: `${sheetNumber} · ${intIds.length} item${intIds.length !== 1 ? 's' : ''}${assigned_to ? ' · assigned to ' + assigned_to.trim() : ''}`,
+      user: req.user
+    });
+
     await client.query('COMMIT');
     res.json({ ...ws, item_count: intIds.length });
   } catch (e) {
@@ -6267,11 +6303,25 @@ app.patch('/api/projects/:id/work-sheets/:wsId', requireAuth, requireModuleAcces
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
     vals.push(ws.id);
 
-    const { rows: [updated] } = await pool.query(
-      `UPDATE work_sheets SET ${updates.join(',')} WHERE id=$${i} RETURNING *`,
-      vals
-    );
-    res.json(updated);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: [updated] } = await client.query(
+        `UPDATE work_sheets SET ${updates.join(',')} WHERE id=$${i} RETURNING *`, vals);
+      let detail = ws.sheet_number;
+      if (status !== undefined) detail += ` · ${ws.status} → ${status}`;
+      if (assigned_to !== undefined) detail += ` · assigned to ${assigned_to?.trim() || 'nobody'}`;
+      await logActivity(client, {
+        project_id: parseInt(req.params.id), space_id: null,
+        entity_type: 'work_sheet', entity_id: ws.id,
+        action: status !== undefined ? `status:${status}` : 'updated',
+        detail,
+        user: req.user
+      });
+      await client.query('COMMIT');
+      res.json(updated);
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6336,17 +6386,24 @@ app.get('/api/projects/:id/review/notes', requireAuth, requireModuleAccess('work
       ${SPACE_PATH_CTE}
       SELECT sn.id, sn.body, sn.created_at, u.name AS author_name,
              sp.path AS space_path, sp.id AS space_id,
-             NULL::text AS plan_type_label
+             NULL::text AS plan_type_label,
+             COALESCE(json_agg(
+               json_build_object('user_id', na.user_id, 'user_name', au.name, 'acknowledged_at', na.acknowledged_at)
+             ) FILTER (WHERE na.user_id IS NOT NULL), '[]') AS acknowledgements
       FROM space_notes sn
       JOIN space_paths sp ON sp.id = sn.space_id AND NOT sp.is_cycle
-      LEFT JOIN users u ON u.id = sn.author_id
+      LEFT JOIN users u  ON u.id  = sn.author_id
+      LEFT JOIN note_acknowledgements na ON na.note_id = sn.id
+      LEFT JOIN users au ON au.id = na.user_id
       WHERE sn.space_id IS NOT NULL
+      GROUP BY sn.id, u.name, sp.path, sp.id
 
       UNION ALL
 
       SELECT ptn.id, ptn.body, ptn.created_at, u.name AS author_name,
              NULL AS space_path, NULL AS space_id,
-             'All ' || pt.name || ' suites' AS plan_type_label
+             'All ' || pt.name || ' suites' AS plan_type_label,
+             '[]'::json AS acknowledgements
       FROM space_notes ptn
       JOIN plan_types pt ON pt.id = ptn.plan_type_id
       LEFT JOIN users u ON u.id = ptn.author_id
@@ -6676,13 +6733,25 @@ app.post('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('works
   try {
     const { description } = req.body;
     if (!description?.trim()) return res.status(400).json({ error: 'Description required' });
-    const { rows: [space] } = await pool.query('SELECT id FROM spaces WHERE id=$1', [req.params.id]);
+    const { rows: [space] } = await pool.query('SELECT id, project_id FROM spaces WHERE id=$1', [req.params.id]);
     if (!space) return res.status(404).json({ error: 'Space not found' });
-    const { rows: [d] } = await pool.query(`
-      INSERT INTO deficiencies (space_id, description, raised_by)
-      VALUES ($1, $2, $3) RETURNING *
-    `, [req.params.id, description.trim(), req.user.id]);
-    res.json(d);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: [d] } = await client.query(`
+        INSERT INTO deficiencies (space_id, description, raised_by)
+        VALUES ($1, $2, $3) RETURNING *
+      `, [req.params.id, description.trim(), req.user.id]);
+      await logActivity(client, {
+        project_id: space.project_id, space_id: space.id,
+        entity_type: 'deficiency', entity_id: d.id,
+        action: 'raised', detail: description.trim().slice(0, 200),
+        user: req.user
+      });
+      await client.query('COMMIT');
+      res.json(d);
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6692,6 +6761,10 @@ app.patch('/api/deficiencies/:id', requireAuth, requireModuleAccess('worksites',
     const { status, assigned_to, completed_by, signed_off_by } = req.body;
     const allowed = ['open', 'in_progress', 'resolved'];
     if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const { rows: [old] } = await pool.query(
+      `SELECT d.*, s.project_id FROM deficiencies d JOIN spaces s ON s.id = d.space_id WHERE d.id=$1`,
+      [req.params.id]);
+    if (!old) return res.status(404).json({ error: 'Not found' });
     const fields = [], vals = [];
     let i = 1;
     if (status !== undefined) {
@@ -6711,11 +6784,26 @@ app.patch('/api/deficiencies/:id', requireAuth, requireModuleAccess('worksites',
     if (assigned_to !== undefined) { fields.push(`assigned_to = $${i++}`); vals.push(assigned_to || null); }
     if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
     vals.push(req.params.id);
-    const { rows: [d] } = await pool.query(
-      `UPDATE deficiencies SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`, vals
-    );
-    if (!d) return res.status(404).json({ error: 'Not found' });
-    res.json(d);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: [d] } = await client.query(
+        `UPDATE deficiencies SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`, vals);
+      if (!d) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+      let detail = old.description.slice(0, 100);
+      if (status !== undefined && status !== old.status) detail += ` · ${old.status} → ${status}`;
+      if (assigned_to !== undefined && assigned_to !== old.assigned_to) detail += ` · assigned to ${assigned_to || 'nobody'}`;
+      await logActivity(client, {
+        project_id: old.project_id, space_id: old.space_id,
+        entity_type: 'deficiency', entity_id: old.id,
+        action: status !== undefined ? `status:${status}` : 'updated',
+        detail,
+        user: req.user
+      });
+      await client.query('COMMIT');
+      res.json(d);
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -7030,12 +7118,27 @@ app.post('/api/spaces/:id/material', requireAuth, requireModuleAccess('worksites
     const { description, quantity, unit, notes } = req.body;
     if (!description?.trim()) return res.status(400).json({ error: 'description required' });
     const qty = parseFloat(quantity) || 1;
-    const { rows: [mr] } = await pool.query(`
-      INSERT INTO material_requests (space_id, description, quantity, unit, notes, added_by)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `, [req.params.id, description.trim(), qty, unit || null, notes || null, req.user.id]);
-    res.json({ ...mr, added_by_name: req.user.name });
+    const { rows: [space] } = await pool.query('SELECT id, project_id FROM spaces WHERE id=$1', [req.params.id]);
+    if (!space) return res.status(404).json({ error: 'Space not found' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: [mr] } = await client.query(`
+        INSERT INTO material_requests (space_id, description, quantity, unit, notes, added_by)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+      `, [req.params.id, description.trim(), qty, unit || null, notes || null, req.user.id]);
+      await logActivity(client, {
+        project_id: space.project_id, space_id: space.id,
+        entity_type: 'material', entity_id: mr.id,
+        action: 'added',
+        detail: `${qty}${unit ? ' ' + unit : ''} × ${description.trim()}`,
+        user: req.user
+      });
+      await client.query('COMMIT');
+      res.json({ ...mr, added_by_name: req.user.name });
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -7079,21 +7182,82 @@ app.patch('/api/material-requests/:id', requireAuth, requireModuleAccess('worksi
 app.delete('/api/material-requests/:id', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const mrId = parseInt(req.params.id);
-    const { rows: [mr] } = await pool.query('SELECT * FROM material_requests WHERE id=$1', [mrId]);
+    const { rows: [mr] } = await pool.query(
+      `SELECT mr.*, s.project_id FROM material_requests mr JOIN spaces s ON s.id = mr.space_id WHERE mr.id=$1`, [mrId]);
     if (!mr) return res.status(404).json({ error: 'Not found' });
 
-    const isManage = await (async () => {
-      const access = await pool.query(
-        `SELECT level FROM module_permissions WHERE user_id=$1 AND module='worksites'`,
-        [req.user.id]);
-      return req.user.role === 'admin' || access.rows[0]?.level === 'manage';
-    })();
+    const access = await pool.query(
+      `SELECT level FROM module_permissions WHERE user_id=$1 AND module='worksites'`, [req.user.id]);
+    const isManage = req.user.role === 'admin' || access.rows[0]?.level === 'manage';
 
     if (!isManage && mr.added_by !== req.user.id)
       return res.status(403).json({ error: 'You can only delete your own requests' });
 
-    await pool.query('DELETE FROM material_requests WHERE id=$1', [mrId]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM material_requests WHERE id=$1', [mrId]);
+      await logActivity(client, {
+        project_id: mr.project_id, space_id: mr.space_id,
+        entity_type: 'material', entity_id: mrId,
+        action: 'removed',
+        detail: `${mr.quantity}${mr.unit ? ' ' + mr.unit : ''} × ${mr.description}`,
+        user: req.user
+      });
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
     res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Activity log ─────────────────────────────────────────────────────────────
+
+// GET /api/projects/:id/activity?limit=50&offset=0&user_id=&since=
+app.get('/api/projects/:id/activity', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit)  || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    const conditions = [`project_id = $1`];
+    const vals = [req.params.id];
+    let p = 2;
+    if (req.query.user_id) { conditions.push(`user_id = $${p++}`); vals.push(parseInt(req.query.user_id)); }
+    if (req.query.since)   { conditions.push(`created_at > $${p++}`); vals.push(req.query.since); }
+    vals.push(limit, offset);
+    const { rows } = await pool.query(`
+      SELECT id, entity_type, entity_id, action, detail, user_id, actor_name, created_at, space_id
+      FROM activity_log
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC
+      LIMIT $${p++} OFFSET $${p}
+    `, vals);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/deficiencies/:id/activity
+app.get('/api/deficiencies/:id/activity', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, action, detail, user_id, actor_name, created_at
+      FROM activity_log
+      WHERE entity_type = 'deficiency' AND entity_id = $1
+      ORDER BY created_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/work-sheets/:wsId/activity
+app.get('/api/projects/:id/work-sheets/:wsId/activity', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, action, detail, user_id, actor_name, created_at
+      FROM activity_log
+      WHERE entity_type = 'work_sheet' AND entity_id = $1
+      ORDER BY created_at DESC
+    `, [req.params.wsId]);
+    res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -7377,9 +7541,17 @@ app.get('/api/spaces/:id/list-rollup', requireAuth, requireModuleAccess('worksit
 app.get('/api/spaces/:id/notes', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT sn.id, sn.body, sn.created_at, u.name AS author_name, sn.author_id
-      FROM space_notes sn LEFT JOIN users u ON u.id = sn.author_id
-      WHERE sn.space_id = $1 ORDER BY sn.created_at DESC`, [req.params.id]);
+      SELECT sn.id, sn.body, sn.created_at, u.name AS author_name, sn.author_id,
+             COALESCE(json_agg(
+               json_build_object('user_id', na.user_id, 'user_name', au.name, 'acknowledged_at', na.acknowledged_at)
+             ) FILTER (WHERE na.user_id IS NOT NULL), '[]') AS acknowledgements
+      FROM space_notes sn
+      LEFT JOIN users u  ON u.id  = sn.author_id
+      LEFT JOIN note_acknowledgements na ON na.note_id = sn.id
+      LEFT JOIN users au ON au.id = na.user_id
+      WHERE sn.space_id = $1
+      GROUP BY sn.id, u.name
+      ORDER BY sn.created_at DESC`, [req.params.id]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -7389,11 +7561,41 @@ app.post('/api/spaces/:id/notes', requireAuth, requireModuleAccess('worksites', 
   try {
     const { body } = req.body;
     if (!body?.trim()) return res.status(400).json({ error: 'Body required' });
-    const { rows: [note] } = await pool.query(`
-      INSERT INTO space_notes (space_id, body, author_id)
-      VALUES ($1,$2,$3) RETURNING id, space_id, body, created_at, author_id`,
-      [req.params.id, body.trim(), req.user.id]);
-    res.json({ ...note, author_name: req.user.name });
+    const { rows: [space] } = await pool.query('SELECT id, project_id FROM spaces WHERE id=$1', [req.params.id]);
+    if (!space) return res.status(404).json({ error: 'Space not found' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: [note] } = await client.query(`
+        INSERT INTO space_notes (space_id, body, author_id)
+        VALUES ($1,$2,$3) RETURNING id, space_id, body, created_at, author_id`,
+        [req.params.id, body.trim(), req.user.id]);
+      // Auto-acknowledge author's own note
+      await client.query(
+        `INSERT INTO note_acknowledgements (note_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        [note.id, req.user.id]);
+      await logActivity(client, {
+        project_id: space.project_id, space_id: space.id,
+        entity_type: 'note', entity_id: note.id,
+        action: 'created', detail: body.trim().slice(0, 200),
+        user: req.user
+      });
+      await client.query('COMMIT');
+      res.json({ ...note, author_name: req.user.name, acknowledgements: [{ user_id: req.user.id, user_name: req.user.name, acknowledged_at: new Date() }] });
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/notes/:noteId/acknowledge (field+)
+app.post('/api/notes/:noteId/acknowledge', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const { rows: [note] } = await pool.query('SELECT id FROM space_notes WHERE id=$1', [req.params.noteId]);
+    if (!note) return res.status(404).json({ error: 'Not found' });
+    await pool.query(
+      `INSERT INTO note_acknowledgements (note_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+      [req.params.noteId, req.user.id]);
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -7401,12 +7603,26 @@ app.post('/api/spaces/:id/notes', requireAuth, requireModuleAccess('worksites', 
 app.delete('/api/notes/:noteId', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const _access3 = await getModuleAccess(req.user.id, 'worksites', req.user.role);
-    const level = _access3 === 'manage' ? 2 : _access3 === 'field' ? 1 : 0;
-    const isManage = level >= 2;
-    const clause = isManage ? 'WHERE id=$1 AND space_id IS NOT NULL' : 'WHERE id=$1 AND author_id=$2 AND space_id IS NOT NULL';
-    const params = isManage ? [req.params.noteId] : [req.params.noteId, req.user.id];
-    const { rowCount } = await pool.query(`DELETE FROM space_notes ${clause}`, params);
-    if (!rowCount) return res.status(isManage ? 404 : 403).json({ error: isManage ? 'Not found' : 'Not your note' });
+    const isManage = req.user.role === 'admin' || _access3 === 'manage';
+    const { rows: [note] } = await pool.query(
+      'SELECT sn.*, s.project_id FROM space_notes sn JOIN spaces s ON s.id = sn.space_id WHERE sn.id=$1 AND sn.space_id IS NOT NULL',
+      [req.params.noteId]);
+    if (!note) return res.status(404).json({ error: 'Not found' });
+    if (!isManage && note.author_id !== req.user.id)
+      return res.status(403).json({ error: 'Not your note' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM space_notes WHERE id=$1', [note.id]);
+      await logActivity(client, {
+        project_id: note.project_id, space_id: note.space_id,
+        entity_type: 'note', entity_id: note.id,
+        action: 'deleted', detail: note.body.slice(0, 200),
+        user: req.user
+      });
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
     res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -7429,20 +7645,49 @@ app.post('/api/plan-types/:typeId/notes', requireAuth, requireModuleAccess('work
   try {
     const { body } = req.body;
     if (!body?.trim()) return res.status(400).json({ error: 'Body required' });
-    const { rows: [note] } = await pool.query(`
-      INSERT INTO space_notes (plan_type_id, body, author_id)
-      VALUES ($1,$2,$3) RETURNING id, plan_type_id, body, created_at, author_id`,
-      [req.params.typeId, body.trim(), req.user.id]);
-    res.json({ ...note, author_name: req.user.name });
+    const { rows: [pt] } = await pool.query('SELECT id, project_id FROM plan_types WHERE id=$1', [req.params.typeId]);
+    if (!pt) return res.status(404).json({ error: 'Plan type not found' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: [note] } = await client.query(`
+        INSERT INTO space_notes (plan_type_id, body, author_id)
+        VALUES ($1,$2,$3) RETURNING id, plan_type_id, body, created_at, author_id`,
+        [req.params.typeId, body.trim(), req.user.id]);
+      await logActivity(client, {
+        project_id: pt.project_id, space_id: null,
+        entity_type: 'plan_type_note', entity_id: note.id,
+        action: 'created', detail: body.trim().slice(0, 200),
+        user: req.user
+      });
+      await client.query('COMMIT');
+      res.json({ ...note, author_name: req.user.name });
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // DELETE /api/plan-type-notes/:noteId (manage)
 app.delete('/api/plan-type-notes/:noteId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
-    const { rowCount } = await pool.query(
-      'DELETE FROM space_notes WHERE id=$1 AND plan_type_id IS NOT NULL', [req.params.noteId]);
-    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    const { rows: [note] } = await pool.query(
+      `SELECT sn.*, pt.project_id FROM space_notes sn
+       JOIN plan_types pt ON pt.id = sn.plan_type_id
+       WHERE sn.id=$1 AND sn.plan_type_id IS NOT NULL`, [req.params.noteId]);
+    if (!note) return res.status(404).json({ error: 'Not found' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM space_notes WHERE id=$1', [note.id]);
+      await logActivity(client, {
+        project_id: note.project_id, space_id: null,
+        entity_type: 'plan_type_note', entity_id: note.id,
+        action: 'deleted', detail: note.body.slice(0, 200),
+        user: req.user
+      });
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
     res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
