@@ -787,6 +787,8 @@ $('pw-save-btn').addEventListener('click', async () => {
 });
 
 // ── Invite drawer ──
+const INV_SECTION_DEFAULTS = { worksites: 'field', worksites_review: 'none' };
+
 function buildInvitePermsGrid() {
   $('inv-perms-grid').innerHTML = ALL_MODULES.map(mod => `
     <div class="perm-row">
@@ -798,11 +800,37 @@ function buildInvitePermsGrid() {
       </label>
     </div>`).join('');
 
+  // Section module selects (Worksites, Worksites — Review)
+  if (SECTION_MODULES.length) {
+    const section = document.createElement('div');
+    section.id = 'inv-section-perms';
+    section.style.cssText = 'margin-top:16px;';
+    section.innerHTML = `
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;margin:0 0 10px;">Section Access</p>
+      ${SECTION_MODULES.map(m => {
+        const def = INV_SECTION_DEFAULTS[m.key] || 'none';
+        return `<div class="perm-row" style="margin-bottom:8px;">
+          <div class="perm-row-name">${m.label}</div>
+          <select class="inv-mod-sel" data-module="${m.key}"
+            style="font-size:12px;padding:4px 8px;border:1.5px solid #e5e7eb;border-radius:6px;background:#fff;color:#111;">
+            <option value="none"   ${def==='none'   ?'selected':''}>None</option>
+            <option value="field"  ${def==='field'  ?'selected':''}>Field</option>
+            <option value="manage" ${def==='manage' ?'selected':''}>Manage</option>
+          </select>
+        </div>`;
+      }).join('')}`;
+    $('inv-perms-grid').appendChild(section);
+  }
+
   // Auto-set perms when role changes
   $('inv-role').addEventListener('change', () => {
     const isAdmin = $('inv-role').value === 'admin';
     $('inv-perms-grid').querySelectorAll('.inv-perm-cb').forEach(cb => {
       if (isAdmin) cb.checked=true;
+    });
+    // Admins get manage on all section modules
+    $('inv-perms-grid').querySelectorAll('.inv-mod-sel').forEach(sel => {
+      if (isAdmin) sel.value='manage';
     });
   });
 }
@@ -830,8 +858,10 @@ $('btn-do-invite').addEventListener('click', async () => {
   const name=$('inv-name').value.trim(), email=$('inv-email').value.trim(), role=$('inv-role').value;
   if (!name||!email) { showWarn('inv-warn','Name and email are required'); return; }
   const perms = Array.from($('inv-perms-grid').querySelectorAll('.inv-perm-cb:checked')).map(c=>c.dataset.perm);
+  const module_permissions = {};
+  $('inv-perms-grid').querySelectorAll('.inv-mod-sel').forEach(sel => { module_permissions[sel.dataset.module] = sel.value; });
   $('btn-do-invite').disabled=true; $('btn-do-invite').textContent='Sending…';
-  const res=await fetch('/api/users/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,role,permissions:perms})});
+  const res=await fetch('/api/users/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,role,permissions:perms,module_permissions})});
   const data=await res.json();
   $('btn-do-invite').disabled=false; $('btn-do-invite').textContent='Send Invitation';
   if (!res.ok) { showWarn('inv-warn',data.error||'Failed'); return; }

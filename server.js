@@ -443,7 +443,7 @@ app.get('/api/users', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/users/invite', requireAdmin, async (req, res) => {
-  const { name, email, role } = req.body;
+  const { name, email, role, module_permissions } = req.body;
   if (!name||!email||!role) return res.status(400).json({ error: 'Name, email and role required' });
   const existing = await pool.query('SELECT id FROM users WHERE LOWER(email)=$1', [email.toLowerCase()]);
   if (existing.rows[0]) return res.status(409).json({ error: 'A user with this email already exists' });
@@ -454,10 +454,18 @@ app.post('/api/users/invite', requireAdmin, async (req, res) => {
     [name, email.toLowerCase(), role, 'invited', token, expires, new Date().toISOString()]
   );
   if (role !== 'admin') {
-    await pool.query(
-      'INSERT INTO user_module_permissions (user_id, module, access) VALUES ($1, $2, $3) ON CONFLICT (user_id, module) DO NOTHING',
-      [newUser.id, 'worksites', 'field']
-    );
+    const VALID_ACCESS = ['none','field','manage'];
+    // Use caller-supplied module_permissions if provided; fall back to legacy default
+    const modPerms = (module_permissions && typeof module_permissions === 'object')
+      ? module_permissions
+      : { worksites: 'field' };
+    for (const [module, access] of Object.entries(modPerms)) {
+      if (!VALID_ACCESS.includes(access)) continue;
+      await pool.query(
+        'INSERT INTO user_module_permissions (user_id, module, access) VALUES ($1,$2,$3) ON CONFLICT (user_id, module) DO UPDATE SET access=EXCLUDED.access',
+        [newUser.id, module, access]
+      );
+    }
   }
   const inviteUrl = `${req.protocol}://${req.get('host')}/accept-invite.html?token=${token}`;
   const smtpHost = await getSetting('smtp_host');
