@@ -1838,19 +1838,41 @@ app.post('/api/project-folders/quick', requireAuth, async (req, res) => {
 app.patch('/api/project-folders/:id', requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1',[req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
+  const old = rows[0];
   const { name, job_numbers, track_in_worksites } = req.body;
   if (name!==undefined && !name.trim()) return res.status(400).json({ error: 'Project name cannot be empty' });
   const tiwVals  = track_in_worksites !== undefined ? [!!track_in_worksites] : [];
   const tiwClause = tiwVals.length ? `, track_in_worksites=$4` : '';
   const idParam   = tiwVals.length ? '$5' : '$4';
+  const newName   = name?.trim() || old.name;
+  const newJobs   = job_numbers!==undefined ? normalizeJobNumbers(job_numbers) : old.job_numbers;
   const params = [
     name?.trim()||null,
-    job_numbers!==undefined ? normalizeJobNumbers(job_numbers) : rows[0].job_numbers,
+    newJobs,
     new Date().toISOString(),
     ...tiwVals,
     req.params.id,
   ];
   await pool.query(`UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3${tiwClause} WHERE id=${idParam}`, params);
+
+  // Log if name or job_numbers changed (track_in_worksites toggle is a different action)
+  const nameChanged = newName !== old.name;
+  const jobsChanged = newJobs !== old.job_numbers;
+  if ((nameChanged || jobsChanged) && req.user) {
+    const parts = [];
+    if (nameChanged) parts.push(`name: "${old.name}" → "${newName}"`);
+    if (jobsChanged) parts.push(`job#: "${old.job_numbers || ''}" → "${newJobs || ''}"`);
+    const client = await pool.connect();
+    try {
+      await logActivity(client, {
+        project_id: parseInt(req.params.id), space_id: null,
+        entity_type: 'project', entity_id: parseInt(req.params.id),
+        action: 'updated', detail: parts.join(' · '),
+        user: req.user
+      });
+    } finally { client.release(); }
+  }
+
   res.json({ ok: true });
 });
 
