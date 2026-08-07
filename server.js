@@ -6000,15 +6000,20 @@ app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAcces
       ${SPACE_PATH_CTE}
       SELECT d.id, d.space_id, d.description, d.status, d.raised_at, d.resolved_at,
              d.completed_by, d.completed_at, d.signed_off_by, d.signed_off_at,
-             d.assigned_to_name, d.assigned_supervisor, d.assigned_at,
              ru.name AS raised_by_name,
              rv.name AS resolved_by_name,
              sp.path AS space_path,
-             (SELECT COUNT(*)::int FROM deficiency_photos WHERE deficiency_id = d.id) AS photo_count
+             (SELECT COUNT(*)::int FROM deficiency_photos WHERE deficiency_id = d.id) AS photo_count,
+             ws.id   AS ws_id,
+             ws.sheet_number AS ws_number,
+             ws.assigned_to  AS ws_assigned_to,
+             ws.supervisor   AS ws_supervisor
       FROM deficiencies d
       JOIN space_paths sp ON sp.id = d.space_id AND NOT sp.is_cycle
       LEFT JOIN users ru ON ru.id = d.raised_by
       LEFT JOIN users rv ON rv.id = d.resolved_by
+      LEFT JOIN work_sheet_items wsi ON wsi.deficiency_id = d.id
+      LEFT JOIN work_sheets ws ON ws.id = wsi.work_sheet_id AND ws.status = 'open'
       WHERE d.status = ANY($2)
       ORDER BY sp.path, d.raised_at DESC
     `, [req.params.id, statuses]);
@@ -6118,6 +6123,209 @@ app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireMo
     );
     if (!d) return res.status(404).json({ error: 'Not found' });
     res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Work Sheets ───────────────────────────────────────────────────────────────
+
+// GET /api/projects/:id/work-sheets
+app.get('/api/projects/:id/work-sheets', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT ws.id, ws.sheet_number, ws.assigned_to, ws.supervisor, ws.status,
+             ws.created_at, ws.closed_at,
+             COUNT(wsi.id)::int AS item_count,
+             COUNT(CASE WHEN d.status != 'resolved' THEN 1 END)::int AS open_count,
+             COUNT(CASE WHEN d.status  = 'resolved' THEN 1 END)::int AS resolved_count
+      FROM work_sheets ws
+      LEFT JOIN work_sheet_items wsi ON wsi.work_sheet_id = ws.id
+      LEFT JOIN deficiencies d ON d.id = wsi.deficiency_id
+      WHERE ws.project_id = $1
+      GROUP BY ws.id
+      ORDER BY ws.id DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/work-sheets/:wsId
+app.get('/api/projects/:id/work-sheets/:wsId', requireAuth, requireModuleAccess('worksites_review', 'field'), async (req, res) => {
+  try {
+    const { rows: [ws] } = await pool.query(
+      `SELECT * FROM work_sheets WHERE id=$1 AND project_id=$2`,
+      [req.params.wsId, req.params.id]
+    );
+    if (!ws) return res.status(404).json({ error: 'Not found' });
+
+    const { rows: items } = await pool.query(`
+      ${SPACE_PATH_CTE}
+      SELECT d.id, d.description, d.status, d.raised_at,
+             d.completed_by, d.signed_off_by, d.signed_off_at,
+             ru.name AS raised_by_name,
+             sp.path AS space_path
+      FROM work_sheet_items wsi
+      JOIN deficiencies d ON d.id = wsi.deficiency_id
+      JOIN space_paths sp ON sp.id = d.space_id AND NOT sp.is_cycle
+      LEFT JOIN users ru ON ru.id = d.raised_by
+      WHERE wsi.work_sheet_id = $2
+      ORDER BY sp.path, d.raised_at
+    `, [ws.project_id, ws.id]);
+
+    res.json({ ...ws, items });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/projects/:id/work-sheets — create sheet, add items, optional bulk status
+app.post('/api/projects/:id/work-sheets', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { deficiency_ids, assigned_to, supervisor, set_status } = req.body;
+    const projectId = parseInt(req.params.id);
+    const intIds = (deficiency_ids || []).map(Number).filter(n => Number.isFinite(n) && n > 0);
+    if (!intIds.length) return res.status(400).json({ error: 'deficiency_ids required' });
+
+    // Verify all deficiencies belong to this project
+    const { rows: owned } = await client.query(`
+      SELECT d.id FROM deficiencies d
+      JOIN spaces s ON s.id = d.space_id
+      WHERE d.id = ANY($1) AND s.project_id = $2
+    `, [intIds, projectId]);
+    if (owned.length !== intIds.length)
+      return res.status(403).json({ error: 'One or more deficiencies do not belong to this project' });
+
+    // Check for any deficiency already on an open sheet
+    const { rows: conflicts } = await client.query(`
+      SELECT wsi.deficiency_id, ws.sheet_number
+      FROM work_sheet_items wsi
+      JOIN work_sheets ws ON ws.id = wsi.work_sheet_id
+      WHERE wsi.deficiency_id = ANY($1) AND ws.status = 'open'
+    `, [intIds]);
+    if (conflicts.length) {
+      return res.status(409).json({
+        error: 'Some deficiencies are already on an open sheet',
+        conflicts: conflicts.map(c => ({ deficiency_id: c.deficiency_id, sheet_number: c.sheet_number })),
+      });
+    }
+
+    await client.query('BEGIN');
+
+    // Generate sheet number: WS-NNN (project-scoped, padded to 3 digits)
+    const { rows: [{ next_num }] } = await client.query(
+      `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(sheet_number,'[^0-9]','','g') AS INT)),0)+1 AS next_num
+       FROM work_sheets WHERE project_id=$1`,
+      [projectId]
+    );
+    const sheetNumber = 'WS-' + String(next_num).padStart(3, '0');
+
+    const { rows: [ws] } = await client.query(`
+      INSERT INTO work_sheets (project_id, sheet_number, assigned_to, supervisor, created_by)
+      VALUES ($1,$2,$3,$4,$5) RETURNING *
+    `, [projectId, sheetNumber, assigned_to?.trim()||null, supervisor?.trim()||null, req.user.id]);
+
+    await client.query(`
+      INSERT INTO work_sheet_items (work_sheet_id, deficiency_id)
+      SELECT $1, unnest($2::int[])
+    `, [ws.id, intIds]);
+
+    if (set_status && ['open','in_progress','resolved'].includes(set_status)) {
+      await client.query(
+        `UPDATE deficiencies SET status=$1 WHERE id = ANY($2)`,
+        [set_status, intIds]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ ...ws, item_count: intIds.length });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
+// PATCH /api/projects/:id/work-sheets/:wsId — reassign or change status
+app.patch('/api/projects/:id/work-sheets/:wsId', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
+  try {
+    const { assigned_to, supervisor, status } = req.body;
+    const { rows: [ws] } = await pool.query(
+      `SELECT * FROM work_sheets WHERE id=$1 AND project_id=$2`,
+      [req.params.wsId, req.params.id]
+    );
+    if (!ws) return res.status(404).json({ error: 'Not found' });
+
+    const updates = [];
+    const vals = [];
+    let i = 1;
+    if (assigned_to !== undefined) { updates.push(`assigned_to=$${i++}`); vals.push(assigned_to?.trim()||null); }
+    if (supervisor  !== undefined) { updates.push(`supervisor=$${i++}`);  vals.push(supervisor?.trim()||null); }
+    if (status !== undefined) {
+      if (!['open','closed'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+      updates.push(`status=$${i++}`);
+      vals.push(status);
+      if (status === 'closed') { updates.push(`closed_at=$${i++}`); vals.push(new Date()); }
+      if (status === 'open')   { updates.push(`closed_at=NULL`); }
+    }
+    if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+    vals.push(ws.id);
+
+    const { rows: [updated] } = await pool.query(
+      `UPDATE work_sheets SET ${updates.join(',')} WHERE id=$${i} RETURNING *`,
+      vals
+    );
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/projects/:id/work-sheets/:wsId/items — add a deficiency
+app.post('/api/projects/:id/work-sheets/:wsId/items', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
+  try {
+    const { deficiency_id } = req.body;
+    const defId = parseInt(deficiency_id);
+    if (!Number.isFinite(defId)) return res.status(400).json({ error: 'deficiency_id required' });
+
+    const { rows: [ws] } = await pool.query(
+      `SELECT * FROM work_sheets WHERE id=$1 AND project_id=$2 AND status='open'`,
+      [req.params.wsId, req.params.id]
+    );
+    if (!ws) return res.status(404).json({ error: 'Sheet not found or not open' });
+
+    // Check deficiency belongs to project
+    const { rows: [owned] } = await pool.query(
+      `SELECT d.id FROM deficiencies d JOIN spaces s ON s.id=d.space_id WHERE d.id=$1 AND s.project_id=$2`,
+      [defId, req.params.id]
+    );
+    if (!owned) return res.status(403).json({ error: 'Deficiency does not belong to this project' });
+
+    // Check not already on an open sheet
+    const { rows: [conflict] } = await pool.query(`
+      SELECT ws2.sheet_number FROM work_sheet_items wsi
+      JOIN work_sheets ws2 ON ws2.id = wsi.work_sheet_id
+      WHERE wsi.deficiency_id=$1 AND ws2.status='open'
+    `, [defId]);
+    if (conflict) return res.status(409).json({ error: `Already on open sheet ${conflict.sheet_number}` });
+
+    await pool.query(
+      `INSERT INTO work_sheet_items (work_sheet_id, deficiency_id) VALUES ($1,$2)`,
+      [ws.id, defId]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/projects/:id/work-sheets/:wsId/items/:defId — remove deficiency from sheet
+app.delete('/api/projects/:id/work-sheets/:wsId/items/:defId', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
+  try {
+    const { rows: [ws] } = await pool.query(
+      `SELECT id FROM work_sheets WHERE id=$1 AND project_id=$2`,
+      [req.params.wsId, req.params.id]
+    );
+    if (!ws) return res.status(404).json({ error: 'Sheet not found' });
+
+    const { rowCount } = await pool.query(
+      `DELETE FROM work_sheet_items WHERE work_sheet_id=$1 AND deficiency_id=$2`,
+      [ws.id, req.params.defId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Item not on this sheet' });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
