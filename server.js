@@ -3325,28 +3325,117 @@ app.delete('/api/safety/:id', requireAdmin, async (req, res) => {
 
 // Update / save draft safety form
 app.patch('/api/safety/:id', requireAuth, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { form_data, status, project_id, project_name, job_number } = req.body;
-    const { rows } = await pool.query('SELECT * FROM safety_forms WHERE id=$1', [parseInt(req.params.id)]);
-    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const formId = parseInt(req.params.id);
+
+    await client.query('BEGIN');
+
+    // SELECT FOR UPDATE holds a row lock until the transaction commits,
+    // so concurrent PATCHes serialize here and each reads the latest data.
+    const { rows } = await client.query('SELECT * FROM safety_forms WHERE id=$1 FOR UPDATE', [formId]);
+    if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const f = rows[0];
-    if (req.user.role !== 'admin' && ADMIN_ONLY_FORM_TYPES.includes(f.form_type))
+
+    if (req.user.role !== 'admin' && ADMIN_ONLY_FORM_TYPES.includes(f.form_type)) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Access restricted to administrators' });
+    }
     const fd = typeof f.form_data === 'string' ? JSON.parse(f.form_data) : (f.form_data || {});
     const listedWorker = (fd.workers || []).some(w =>
       (w.user_id && String(w.user_id) === String(req.user.id)) ||
       (!w.user_id && w.name && w.name.toLowerCase() === req.user.name.toLowerCase())
     );
-    if (req.user.role !== 'admin' && f.submitted_by_id !== req.user.id && !listedWorker)
+    if (req.user.role !== 'admin' && f.submitted_by_id !== req.user.id && !listedWorker) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Forbidden' });
-    await pool.query(
+    }
+
+    let mergedData = form_data || null;
+    if (form_data) {
+      // Merge workers: union of existing + incoming, keyed by user_id (if set) or name.
+      // A worker is never silently dropped as a side-effect of a save from a stale snapshot.
+      const existingWorkers = fd.workers || [];
+      const incomingWorkers = form_data.workers || [];
+      const workerMap = new Map();
+      for (const w of existingWorkers) workerMap.set(w.user_id ? `uid:${w.user_id}` : `name:${w.name}`, w);
+      for (const w of incomingWorkers) {
+        const key = w.user_id ? `uid:${w.user_id}` : `name:${w.name}`;
+        if (!workerMap.has(key)) workerMap.set(key, w);
+      }
+      const mergedWorkers = [...workerMap.values()];
+
+      // Merge signatures: existing signatures win — once a signature is in the DB it cannot
+      // be overwritten by a subsequent save. Removal requires an explicit admin action.
+      const existingSigs = fd.worker_signatures || {};
+      const incomingSigs = form_data.worker_signatures || {};
+      const mergedSigs   = { ...incomingSigs, ...existingSigs }; // existing keys win
+
+      // Consistency check: log any signature whose worker is not in the merged worker list
+      const workerNames = new Set(mergedWorkers.map(w => w.name));
+      for (const sigName of Object.keys(mergedSigs)) {
+        if (!workerNames.has(sigName)) {
+          console.warn(`[safety PATCH] orphaned signature on form ${f.id}: sig for "${sigName}" has no matching worker — signature preserved`);
+        }
+      }
+
+      mergedData = { ...form_data, workers: mergedWorkers, worker_signatures: mergedSigs };
+    }
+
+    await client.query(
       `UPDATE safety_forms SET form_data=COALESCE($1,form_data), status=COALESCE($2,status),
        project_id=COALESCE($3,project_id), project_name=COALESCE($4,project_name),
        job_number=COALESCE($5,job_number) WHERE id=$6`,
-      [form_data ? JSON.stringify(form_data) : null, status, project_id, project_name, job_number, parseInt(req.params.id)]
+      [mergedData ? JSON.stringify(mergedData) : null, status, project_id, project_name, job_number, formId]
     );
+
+    await client.query('COMMIT');
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Remove a single worker signature (admin only, explicit action, logged)
+// Signatures are immutable via normal saves — this is the only authorised removal path.
+app.delete('/api/safety/:id/signature', requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { worker_name, reason } = req.body;
+    if (!worker_name) return res.status(400).json({ error: 'worker_name is required' });
+    const formId = parseInt(req.params.id);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM safety_forms WHERE id=$1 FOR UPDATE', [formId]);
+    if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const f = rows[0];
+    const fd = typeof f.form_data === 'string' ? JSON.parse(f.form_data) : (f.form_data || {});
+    const sigs = { ...(fd.worker_signatures || {}) };
+    if (!sigs[worker_name]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No signature found for that worker' }); }
+    delete sigs[worker_name];
+    const updatedData = { ...fd, worker_signatures: sigs };
+    await client.query(
+      `UPDATE safety_forms SET form_data=$1 WHERE id=$2`,
+      [JSON.stringify(updatedData), formId]
+    );
+    await client.query(
+      `INSERT INTO activity_log (project_id, action, details, user_id, user_name, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [f.project_id, 'safety_signature_removed',
+       `Admin removed signature for "${worker_name}" on form ${f.form_number || formId}${reason ? ` — reason: ${reason}` : ''}`,
+       req.user.id, req.user.name]
+    );
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
 });
 
 // Set PSI / WCB flags (admin only)
