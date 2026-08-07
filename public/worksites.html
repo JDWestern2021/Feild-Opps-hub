@@ -1204,9 +1204,10 @@
         <option value="open">Open</option>
       </select>
     </div>
-    <div class="modal-footer" style="gap:8px;">
+    <div class="modal-footer" style="gap:8px;flex-wrap:wrap;">
       <button class="btn btn-secondary" onclick="closeWsCreateModal()">Cancel</button>
       <button class="btn btn-ghost" onclick="wsPrintOnly()">Print only</button>
+      <button class="btn btn-secondary" id="ws-create-only-btn" onclick="wsCreateOnly()">Create only</button>
       <button class="btn btn-primary" id="ws-create-btn" onclick="wsCreateAndPrint()">Create &amp; Print</button>
     </div>
   </div>
@@ -3710,22 +3711,43 @@ const PRINT_STYLES = `
   @media print { .print-toolbar { display: none; } }
 `;
 
-// openPrintWindow: fetches logo once per session, builds branded header + footer.
-// info = { sheetTitle, projectName, scopeLabel, itemCount }
+// Print window helpers.
+// Rule: window.open() MUST be the first thing called inside a click handler —
+// before any await — or the browser treats it as a popup and blocks it.
+//
+// For simple callers (no async work before print): call openPrintWindow() directly.
+// For callers that must await something first (wsCreateAndPrint): call
+//   openBlankPrintWindow() synchronously, do the async work, then writePrintWindow().
 let _printLogoDataUrl = null;
-async function openPrintWindow(info, bodyHtml) {
-  if (!_printLogoDataUrl) {
-    try {
-      const resp = await fetch('/logo-white.png');
-      const blob = await resp.blob();
-      _printLogoDataUrl = await new Promise(res => {
-        const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob);
-      });
-    } catch { _printLogoDataUrl = ''; }
-  }
+async function _fetchPrintLogo() {
+  if (_printLogoDataUrl !== null) return _printLogoDataUrl;
+  try {
+    const resp = await fetch('/logo-white.png');
+    const blob = await resp.blob();
+    _printLogoDataUrl = await new Promise(res => {
+      const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob);
+    });
+  } catch { _printLogoDataUrl = ''; }
+  return _printLogoDataUrl;
+}
 
-  const logoImg = _printLogoDataUrl
-    ? `<img class="ph-logo" src="${_printLogoDataUrl}" alt="J&D Western Electric Ltd.">`
+// Step 1 (synchronous): open the blank window. Returns null if popups are blocked.
+function openBlankPrintWindow() {
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('Popup blocked. Allow popups for this site in your browser settings, then try again.');
+    return null;
+  }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Loading…</title></head><body><p style="font-family:sans-serif;padding:20px;">Preparing sheet…</p></body></html>');
+  return win;
+}
+
+// Step 2 (async): fetch logo and write the real content into an already-open window.
+async function writePrintWindow(win, info, bodyHtml) {
+  const logoDataUrl = await _fetchPrintLogo();
+
+  const logoImg = logoDataUrl
+    ? `<img class="ph-logo" src="${logoDataUrl}" alt="J&D Western Electric Ltd.">`
     : '';
 
   const dateStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'short', day:'numeric' });
@@ -3773,13 +3795,23 @@ async function openPrintWindow(info, bodyHtml) {
     <button class="btn-print" onclick="window.print()">Print</button>
     <button class="btn-close" onclick="window.close()">Close</button>
   </div>`;
-  const win = window.open('', '_blank');
+
+  // Replace placeholder content with the real sheet.
+  win.document.open();
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
     <base href="${window.location.origin}/">
     <title>${escHtml(title)}</title><style>${PRINT_STYLES}</style>
   </head><body>${toolbar}${header}${bodyHtml}${footer}</body></html>`);
   win.document.close();
   win.focus();
+}
+
+// Convenience wrapper for callers that do no async work before printing.
+// Opens the window and writes in one call — still synchronous-first inside.
+async function openPrintWindow(info, bodyHtml) {
+  const win = openBlankPrintWindow();
+  if (!win) return;
+  await writePrintWindow(win, info, bodyHtml);
 }
 
 // ── Print helpers ─────────────────────────────────────────────────────────────
@@ -3976,6 +4008,11 @@ function openWsCreateModal(source) {
 function closeWsCreateModal() {
   document.getElementById('ws-create-modal').style.display = 'none';
   _wsModalRows = [];
+  // Reset any buttons that may have been disabled during a failed/blocked attempt
+  const createBtn = document.getElementById('ws-create-btn');
+  const createOnlyBtn = document.getElementById('ws-create-only-btn');
+  if (createBtn)     { createBtn.disabled = false;     createBtn.textContent = 'Create & Print'; }
+  if (createOnlyBtn) { createOnlyBtn.disabled = false; createOnlyBtn.textContent = 'Create only'; }
 }
 
 function toggleWsAssignFields() {
@@ -3997,7 +4034,7 @@ async function fetchWsAssignees() {
 }
 
 async function wsPrintOnly() {
-  // Print without creating a sheet — old behaviour
+  // Print without creating a sheet — no server call.
   const projectName = _activeProjectName();
   await openPrintWindow(
     { sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${_wsModalRows.length} items`, itemCount: _wsModalRows.length, assignedTo: null, supervisor: null },
@@ -4006,50 +4043,75 @@ async function wsPrintOnly() {
   closeWsCreateModal();
 }
 
-async function wsCreateAndPrint() {
+function _wsCollectForm() {
   const doAssign  = document.getElementById('ws-do-assign').checked;
-  const assignedTo = doAssign ? (document.getElementById('ws-assigned-to').value.trim() || null) : null;
-  const supervisor = doAssign ? (document.getElementById('ws-supervisor').value.trim() || null) : null;
-  const setStatus  = document.getElementById('ws-set-status').value || null;
-  const btn        = document.getElementById('ws-create-btn');
+  return {
+    assignedTo: doAssign ? (document.getElementById('ws-assigned-to').value.trim() || null) : null,
+    supervisor: doAssign ? (document.getElementById('ws-supervisor').value.trim() || null) : null,
+    setStatus:  document.getElementById('ws-set-status').value || null,
+  };
+}
 
+async function _wsCreate() {
+  const { assignedTo, supervisor, setStatus } = _wsCollectForm();
+  const r = await fetch(`/api/projects/${_activeProjectId}/work-sheets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deficiency_ids: _wsModalRows.map(d => d.id),
+      assigned_to: assignedTo,
+      supervisor,
+      set_status: setStatus,
+    }),
+  });
+  if (r.status === 409) {
+    const { conflicts } = await r.json();
+    const nums = [...new Set(conflicts.map(c => c.sheet_number))].join(', ');
+    throw Object.assign(new Error(`Some items are already on an open sheet (${nums}). Remove them first, or use "Print only".`), { is409: true });
+  }
+  if (!r.ok) throw new Error((await r.json()).error || 'Server error');
+  return { ws: await r.json(), assignedTo, supervisor };
+}
+
+function _wsPostCreateRefresh() {
+  closeWsCreateModal();
+  clearBulkSelection();
+  loadReviewDeficiencies(); // moves items to new status filter, refreshes ws chips
+  _wsAssigneesLoaded = false;
+  if (_currentReviewTab === 'sheets') loadWorkSheets();
+}
+
+async function wsCreateOnly() {
+  const btn = document.getElementById('ws-create-only-btn');
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    const r = await fetch(`/api/projects/${_activeProjectId}/work-sheets`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deficiency_ids: _wsModalRows.map(d => d.id),
-        assigned_to: assignedTo,
-        supervisor,
-        set_status: setStatus,
-      }),
-    });
-    if (r.status === 409) {
-      const { conflicts } = await r.json();
-      const nums = [...new Set(conflicts.map(c => c.sheet_number))].join(', ');
-      alert(`Some items are already on an open sheet (${nums}). Remove them first, or use "Print only".`);
-      btn.disabled = false; btn.textContent = 'Create & Print';
-      return;
-    }
-    if (!r.ok) throw new Error((await r.json()).error || 'Server error');
-    const ws = await r.json();
+    await _wsCreate();
+    _wsPostCreateRefresh();
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false; btn.textContent = 'Create only';
+  }
+}
 
-    // Print the sheet
+async function wsCreateAndPrint() {
+  const btn = document.getElementById('ws-create-btn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+
+  // Open print window SYNCHRONOUSLY before any await — required to avoid popup blocking.
+  const win = openBlankPrintWindow();
+  if (!win) { btn.disabled = false; btn.textContent = 'Create & Print'; return; }
+
+  try {
+    const { ws, assignedTo, supervisor } = await _wsCreate();
     const projectName = _activeProjectName();
-    await openPrintWindow(
+    await writePrintWindow(win,
       { sheetTitle: ws.sheet_number, projectName, scopeLabel: `${_wsModalRows.length} items`, itemCount: _wsModalRows.length, assignedTo, supervisor },
       _defSheetHtml(_wsModalRows)
     );
-
-    closeWsCreateModal();
-    clearBulkSelection();
-    // Refresh deficiency list and sheets list
-    loadReviewDeficiencies();
-    _wsAssigneesLoaded = false; // new name may have been added
-    if (_currentReviewTab === 'sheets') loadWorkSheets();
+    _wsPostCreateRefresh();
   } catch (e) {
-    alert('Failed: ' + e.message);
+    win.close();
+    alert(e.message);
     btn.disabled = false; btn.textContent = 'Create & Print';
   }
 }
@@ -4121,6 +4183,7 @@ function renderWsDetail(ws) {
 
   const date = ws.created_at ? new Date(ws.created_at).toLocaleDateString() : '';
   const closedLine = ws.closed_at ? ` · Closed ${new Date(ws.closed_at).toLocaleDateString()}` : '';
+  const isOpen = ws.status === 'open';
   document.getElementById('ws-detail-header').innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       <div>
@@ -4132,7 +4195,7 @@ function renderWsDetail(ws) {
       </div>
       <div class="ws-desktop-only" style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
         <button class="btn btn-sm btn-ghost" onclick="showWsReassign(${ws.id})">Reassign</button>
-        ${ws.status === 'open'
+        ${isOpen
           ? `<button class="btn btn-sm btn-ghost" style="color:var(--gray-500);" onclick="closeWorkSheet(${ws.id})">Close sheet</button>`
           : `<button class="btn btn-sm btn-ghost" onclick="reopenWorkSheet(${ws.id})">Reopen</button>`
         }
@@ -4145,6 +4208,16 @@ function renderWsDetail(ws) {
     return;
   }
 
+  // Bulk action bar (hidden until a checkbox is ticked)
+  const bulkBar = isOpen ? `
+    <div id="ws-bulk-bar" style="display:none;position:sticky;top:0;z-index:10;background:var(--dark);color:#fff;padding:10px 14px;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="ws-bulk-count" style="font-size:13px;font-weight:600;flex:1;"></span>
+      <button class="btn btn-sm" style="background:#16a34a;color:#fff;border:none;" onclick="wsBulkResolve(${ws.id})">Mark Resolved</button>
+      <button class="btn btn-sm" style="background:#dc2626;color:#fff;border:none;" onclick="wsBulkReturnToOpen(${ws.id})"
+        title="Sets checked items back to Open and removes them from this sheet so they can be reassigned">Return to Open</button>
+      <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.3);" onclick="wsDeselectAll()">Deselect all</button>
+    </div>` : '';
+
   // Group by space_path
   const byPath = {};
   const pathOrder = [];
@@ -4153,30 +4226,138 @@ function renderWsDetail(ws) {
     byPath[d.space_path].push(d);
   }
 
-  let html = '';
+  let rows = '';
   for (const path of pathOrder) {
-    html += `<div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;padding:8px 14px 4px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);">${escHtml(path)}</div>`;
+    rows += `<div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;padding:8px 14px 4px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);">${escHtml(path)}</div>`;
     for (const d of byPath[path]) {
       const statusColor = d.status === 'resolved' ? '#16a34a' : d.status === 'in_progress' ? '#d97706' : '#dc2626';
-      html += `<div class="ws-detail-item">
+      const statusLabel = d.status === 'in_progress' ? 'In Progress' : d.status === 'resolved' ? 'Resolved' : 'Open';
+      rows += `<div class="ws-detail-item" data-def-id="${d.id}">
+        ${isOpen ? `<label style="display:flex;align-items:center;padding:0 8px 0 14px;cursor:pointer;flex-shrink:0;">
+          <input type="checkbox" class="ws-item-cb" data-id="${d.id}" onchange="wsUpdateBulkBar()" style="width:16px;height:16px;cursor:pointer;">
+        </label>` : ''}
         <div class="ws-detail-item-left" style="background:${statusColor};"></div>
         <div class="ws-detail-item-body">
           <div class="ws-detail-item-desc">${escHtml(d.description)}</div>
-          <div class="ws-detail-item-path" style="font-size:11px;color:var(--gray-400);">${escHtml(d.status.replace('_',' '))}</div>
+          <div class="ws-detail-item-path">${escHtml(statusLabel)}</div>
         </div>
         <div class="ws-detail-item-actions ws-desktop-only">
-          <select class="def-status-select" style="font-size:12px;" onchange="patchWsItemStatus(${d.id},this.value,this)">
+          ${isOpen ? `<select class="def-status-select" style="font-size:12px;" onchange="patchWsItemStatus(${d.id},this.value,this)" data-prev="${d.status}">
             <option value="open"        ${d.status==='open'        ?'selected':''}>Open</option>
             <option value="in_progress" ${d.status==='in_progress' ?'selected':''}>In Progress</option>
             <option value="resolved"    ${d.status==='resolved'    ?'selected':''}>Resolved</option>
-          </select>
+          </select>` : ''}
           <button class="btn btn-sm btn-ghost" style="font-size:12px;color:var(--gray-400);"
             onclick="removeFromWorkSheet(${ws.id},${d.id})">Remove</button>
         </div>
       </div>`;
     }
   }
-  document.getElementById('ws-detail-items').innerHTML = html;
+  document.getElementById('ws-detail-items').innerHTML = bulkBar + rows;
+}
+
+function wsUpdateBulkBar() {
+  const bar = document.getElementById('ws-bulk-bar');
+  if (!bar) return;
+  const checked = [...document.querySelectorAll('.ws-item-cb:checked')];
+  if (checked.length) {
+    bar.style.display = 'flex';
+    document.getElementById('ws-bulk-count').textContent = `${checked.length} selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function wsDeselectAll() {
+  document.querySelectorAll('.ws-item-cb').forEach(cb => cb.checked = false);
+  wsUpdateBulkBar();
+}
+
+function _wsCheckedIds() {
+  return [...document.querySelectorAll('.ws-item-cb:checked')].map(cb => parseInt(cb.dataset.id));
+}
+
+// Inline resolve prompt inside the sheet detail for bulk resolve
+function wsBulkResolve(wsId) {
+  const ids = _wsCheckedIds();
+  if (!ids.length) return;
+
+  // Remove any existing inline prompt
+  document.getElementById('ws-bulk-resolve-prompt')?.remove();
+
+  const bar = document.getElementById('ws-bulk-bar');
+  const prompt = document.createElement('div');
+  prompt.id = 'ws-bulk-resolve-prompt';
+  prompt.style.cssText = 'padding:12px 14px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);';
+  prompt.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">
+      Mark ${ids.length} item${ids.length===1?'':'s'} resolved
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <label style="flex:1;min-width:140px;font-size:12px;color:var(--gray-500);">Completed by
+        <input type="text" id="wsbr-completed" placeholder="Name of person who did the work" autocomplete="off"
+          style="display:block;width:100%;box-sizing:border-box;margin-top:3px;padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;">
+      </label>
+      <label style="flex:1;min-width:140px;font-size:12px;color:var(--gray-500);">Signed off by
+        <input type="text" id="wsbr-signoff" value="${escHtml(_myName||'')}" autocomplete="off"
+          style="display:block;width:100%;box-sizing:border-box;margin-top:3px;padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;">
+      </label>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-sm btn-secondary" onclick="document.getElementById('ws-bulk-resolve-prompt')?.remove()">Cancel</button>
+      <button class="btn btn-sm btn-primary" onclick="confirmWsBulkResolve(${wsId})">Confirm — Mark Resolved</button>
+    </div>`;
+  bar.after(prompt);
+  prompt.querySelector('#wsbr-completed')?.focus();
+}
+
+async function confirmWsBulkResolve(wsId) {
+  const ids = _wsCheckedIds();
+  if (!ids.length) return;
+  const completed_by  = document.getElementById('wsbr-completed')?.value.trim() || null;
+  const signed_off_by = document.getElementById('wsbr-signoff')?.value.trim() || null;
+
+  try {
+    await Promise.all(ids.map(id =>
+      fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'resolved', completed_by, signed_off_by }),
+      })
+    ));
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+    await openWorkSheet(wsId);
+    loadReviewDeficiencies();
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+async function wsBulkReturnToOpen(wsId) {
+  const ids = _wsCheckedIds();
+  if (!ids.length) return;
+  if (!confirm(
+    `Return ${ids.length} item${ids.length===1?'':'s'} to Open?\n\n` +
+    `This will:\n` +
+    `  · Set their status back to Open\n` +
+    `  · Remove them from this work sheet\n\n` +
+    `They become unassigned and available for a new sheet.`
+  )) return;
+
+  try {
+    // Set status to open, then remove from this sheet
+    await Promise.all(ids.map(id =>
+      fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'open' }),
+      })
+    ));
+    await Promise.all(ids.map(id =>
+      fetch(`/api/projects/${_activeProjectId}/work-sheets/${wsId}/items/${id}`, { method: 'DELETE' })
+    ));
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+    await openWorkSheet(wsId);
+    loadReviewDeficiencies();
+  } catch (e) { alert('Failed: ' + e.message); }
 }
 
 function showWsReassign(wsId) {
