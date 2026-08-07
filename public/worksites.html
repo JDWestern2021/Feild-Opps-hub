@@ -489,8 +489,12 @@
     .ws-row-date { font-size: 11px; color: var(--gray-400); white-space: nowrap; }
     .ws-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
                 background: var(--gray-100); color: var(--gray-500); text-transform: uppercase; }
-    .ws-badge.closed { background: #e5e7eb; color: #6b7280; }
-    .ws-badge.open { background: #fff7f0; color: var(--orange); border: 1px solid var(--orange); }
+    .ws-badge.closed      { background: #e5e7eb; color: #6b7280; }
+    .ws-badge.open        { background: #fff7f0; color: var(--orange); border: 1px solid var(--orange); }
+    .ws-badge.in-progress { background: #fffbeb; color: #d97706; border: 1px solid #fcd34d; }
+    .ws-badge.complete    { background: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
+    .ws-complete-banner { display:flex; align-items:center; gap:10px; padding:10px 14px;
+                          background:#f0fdf4; border-bottom:1px solid #86efac; color:#15803d; font-size:13px; }
     .ws-chip {
       display: inline-flex; align-items: center; gap: 4px;
       font-size: 11px; padding: 2px 7px; border-radius: 10px;
@@ -4120,6 +4124,26 @@ async function wsCreateAndPrint() {
 
 let _currentWs = null; // loaded sheet detail
 
+// Derives completion state from item counts. Closed status (archiving) wins over
+// everything. Among open sheets: complete = all resolved, in-progress = some resolved,
+// open = none resolved or no items.
+function _wsCompletionState(ws) {
+  if (ws.status === 'closed') return 'closed';
+  // List view supplies counts; detail view supplies items array — handle both.
+  const total    = ws.item_count    != null ? ws.item_count    : (ws.items?.length ?? 0);
+  const resolved = ws.resolved_count != null ? ws.resolved_count
+                                              : (ws.items?.filter(i => i.status === 'resolved').length ?? 0);
+  if (total === 0 || resolved === 0) return 'open';
+  if (resolved >= total)             return 'complete';
+  return 'in-progress';
+}
+
+const _WS_STATE_LABEL = { open: 'Open', 'in-progress': 'In Progress', complete: 'Complete', closed: 'Closed' };
+function _wsStateBadge(ws) {
+  const s = _wsCompletionState(ws);
+  return `<span class="ws-badge ${s}">${_WS_STATE_LABEL[s]}</span>`;
+}
+
 async function loadWorkSheets() {
   const list = document.getElementById('ws-list');
   if (!list) return;
@@ -4128,19 +4152,30 @@ async function loadWorkSheets() {
   try {
     const sheets = await fetch(`/api/projects/${_activeProjectId}/work-sheets`).then(r => r.json());
     if (!sheets.length) { list.innerHTML = '<div class="review-empty">No work sheets yet.</div>'; return; }
+
+    // Sort: Open → In Progress → Complete → Closed, newest first within each group.
+    const _sortOrder = { open: 0, 'in-progress': 1, complete: 2, closed: 3 };
+    sheets.sort((a, b) => {
+      const sa = _sortOrder[_wsCompletionState(a)] ?? 9;
+      const sb = _sortOrder[_wsCompletionState(b)] ?? 9;
+      return sa !== sb ? sa - sb : b.id - a.id;
+    });
+
     list.innerHTML = sheets.map(ws => {
       const date = ws.created_at ? new Date(ws.created_at).toLocaleDateString() : '';
       const who  = ws.assigned_to ? escHtml(ws.assigned_to) : '<span style="color:var(--gray-400);">Unassigned</span>';
-      const countLabel = ws.open_count === 0
-        ? `<span style="color:var(--gray-400);">all resolved</span>`
-        : `${ws.open_count} open${ws.resolved_count ? `, ${ws.resolved_count} resolved` : ''}`;
-      const badge = `<span class="ws-badge ${ws.status}">${ws.status}</span>`;
+      const state = _wsCompletionState(ws);
+      const countLabel = state === 'complete'
+        ? `<span style="color:#16a34a;">all resolved</span>`
+        : state === 'closed'
+          ? `${ws.item_count} items`
+          : `${ws.open_count} open${ws.resolved_count ? `, ${ws.resolved_count} resolved` : ''}`;
       return `<div class="ws-row" onclick="openWorkSheet(${ws.id})">
         <div class="ws-row-number">${escHtml(ws.sheet_number)}</div>
         <div class="ws-row-assignee">${who}</div>
-        <div class="ws-row-counts">${ws.item_count} items · ${countLabel}</div>
+        <div class="ws-row-counts">${ws.item_count} item${ws.item_count===1?'':'s'} · ${countLabel}</div>
         <div class="ws-row-date">${date}</div>
-        ${badge}
+        ${_wsStateBadge(ws)}
       </div>`;
     }).join('');
   } catch { list.innerHTML = '<div class="review-empty">Could not load work sheets.</div>'; }
@@ -4155,6 +4190,7 @@ async function openWorkSheet(wsId) {
     const ws = await fetch(`/api/projects/${_activeProjectId}/work-sheets/${wsId}`).then(r => r.json());
     _currentWs = ws;
     renderWsDetail(ws);
+    _maybeShowCompleteBanner(ws);
   } catch {
     body.innerHTML = '<div class="review-empty">Could not load sheet.</div>';
   }
@@ -4178,8 +4214,7 @@ function closeWsDetail() {
 
 function renderWsDetail(ws) {
   document.getElementById('ws-detail-number').textContent = ws.sheet_number;
-  document.getElementById('ws-detail-status-badge').innerHTML =
-    `<span class="ws-badge ${ws.status}">${ws.status}</span>`;
+  document.getElementById('ws-detail-status-badge').innerHTML = _wsStateBadge(ws);
 
   const date = ws.created_at ? new Date(ws.created_at).toLocaleDateString() : '';
   const closedLine = ws.closed_at ? ` · Closed ${new Date(ws.closed_at).toLocaleDateString()}` : '';
@@ -4254,6 +4289,26 @@ function renderWsDetail(ws) {
     }
   }
   document.getElementById('ws-detail-items').innerHTML = bulkBar + rows;
+}
+
+function _maybeShowCompleteBanner(ws) {
+  // Only prompt on open sheets that just reached complete state — not closed, not already prompted.
+  if (ws.status !== 'open') return;
+  if (_wsCompletionState(ws) !== 'complete') return;
+
+  // Insert banner at the top of the items container, before the bulk bar.
+  const container = document.getElementById('ws-detail-items');
+  if (!container || container.querySelector('.ws-complete-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'ws-complete-banner';
+  banner.innerHTML = `
+    <span style="flex:1;font-weight:600;">All items resolved</span>
+    <button class="btn btn-sm" style="background:#16a34a;color:#fff;border:none;"
+      onclick="closeWorkSheet(${ws.id})">Close sheet</button>
+    <button class="btn btn-sm btn-ghost" style="color:#15803d;border-color:#86efac;"
+      onclick="this.closest('.ws-complete-banner').remove()">Dismiss</button>`;
+  container.prepend(banner);
 }
 
 function wsUpdateBulkBar() {
