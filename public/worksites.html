@@ -80,17 +80,49 @@
     .dot-note { color: #6b7280; }
 
     /* ── Project list ── */
-    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); overflow: hidden; position: sticky; top: 72px; }
+    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); position: sticky; top: 72px; }
+    .project-panel-header { border-radius: 12px 12px 0 0; }
     .project-panel-header { padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); border-bottom: 1px solid var(--gray-100); }
     .project-list { list-style: none; margin: 0; padding: 6px; }
+    .project-list li { position: relative; }
     .project-list li a {
       display: block; padding: 9px 12px; border-radius: 8px;
       font-size: 13px; font-weight: 600; color: var(--dark);
       text-decoration: none; transition: background .12s;
+      padding-right: 36px; /* room for ⋮ button */
     }
     .project-list li a:hover { background: var(--gray-50); }
     .project-list li a.active { background: rgba(244,121,32,.1); color: var(--orange); }
     .project-list li .proj-num { font-size: 11px; color: var(--gray-400); font-weight: 500; margin-top: 1px; }
+    .project-list li.proj-removed a { opacity: .45; }
+    .proj-menu-btn {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      border: none; background: none; cursor: pointer; color: var(--gray-400);
+      font-size: 16px; border-radius: 5px; padding: 0;
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      transition: background .1s, color .1s;
+    }
+    .proj-menu-btn:hover, .proj-menu-btn.active { background: var(--gray-100); color: var(--dark); }
+    .proj-menu {
+      display: none; position: absolute; right: 0; top: calc(100% - 4px);
+      background: #fff; border: 1px solid var(--gray-200);
+      border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.13);
+      min-width: 200px; z-index: 300; padding: 4px;
+    }
+    .proj-menu.open { display: block; }
+    .proj-menu button {
+      display: block; width: 100%; text-align: left; border: none; background: none;
+      padding: 10px 12px; font-size: 13px; color: var(--dark); font-family: inherit;
+      border-radius: 6px; cursor: pointer; transition: background .1s;
+    }
+    .proj-menu button:hover { background: var(--gray-50); }
+    .proj-menu button.danger { color: var(--red); }
+    .proj-menu button.danger:hover { background: #fef2f2; }
+    .ws-show-removed-wrap {
+      padding: 6px 10px 2px; font-size: 12px; color: var(--gray-400);
+      display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+    }
+    .ws-show-removed-wrap input { cursor: pointer; accent-color: var(--orange); }
 
     /* ── Space panel ── */
     .space-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); }
@@ -295,7 +327,7 @@
     .file-viewer-close {
       position: absolute; top: 16px; right: 16px;
       border: none; background: rgba(255,255,255,.15); color: #fff;
-      border-radius: 8px; width: 36px; height: 36px; font-size: 20px;
+      border-radius: 8px; width: 44px; height: 44px; font-size: 20px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
     }
     .file-viewer-close:hover { background: rgba(255,255,255,.25); }
@@ -338,6 +370,24 @@
       font-size: 12px; border: 1px solid var(--gray-200); border-radius: 6px;
       padding: 4px 8px; background: var(--surface); color: var(--dark); cursor: pointer;
     }
+    .def-resolve-prompt {
+      margin: 0 12px 10px;
+      padding: 10px 12px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+    }
+    .def-resolve-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .def-resolve-fields label {
+      display: flex; flex-direction: column; gap: 3px;
+      font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .04em;
+    }
+    .def-resolve-input {
+      font-size: 13px; padding: 6px 8px; border: 1px solid var(--gray-200);
+      border-radius: 6px; background: var(--surface); color: var(--dark);
+      font-family: inherit;
+    }
+    .def-resolve-btns { display: flex; gap: 8px; }
     .def-resolved-toggle {
       margin-bottom: 12px;
     }
@@ -360,7 +410,7 @@
     .review-pane.active { display: block; }
     .review-filters { display: flex; gap: 6px; padding: 10px 12px; flex-wrap: wrap; }
     .review-chip {
-      padding: 4px 10px; border-radius: 20px; border: 1.5px solid var(--gray-200);
+      padding: 8px 12px; border-radius: 20px; border: 1.5px solid var(--gray-200);
       font-size: 12px; font-weight: 600; cursor: pointer; background: var(--surface);
       color: var(--gray-500); font-family: inherit;
     }
@@ -409,9 +459,9 @@
     }
     .bulk-bar.visible { display: flex; }
     .bulk-bar-count { flex: 1; }
-    .bulk-bar select { font-size: 13px; border-radius: 6px; border: none; padding: 6px 10px; cursor: pointer; }
-    .bulk-bar-apply { background: var(--orange); color: #fff; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 700; cursor: pointer; }
-    .bulk-bar-clear { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+    .bulk-bar select { font-size: 13px; border-radius: 6px; border: none; padding: 6px 10px; cursor: pointer; min-height: 44px; }
+    .bulk-bar-apply { background: var(--orange); color: #fff; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 700; cursor: pointer; min-height: 44px; }
+    .bulk-bar-clear { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; min-height: 44px; }
     .review-delivered-toggle { margin: 0; }
     .review-delivered-toggle summary { list-style: none; font-size: 12px; color: var(--gray-400); cursor: pointer; padding: 10px 12px; }
     .review-delivered-toggle summary::before { content: '▶'; font-size: 9px; margin-right: 4px; }
@@ -566,6 +616,7 @@
         background: none; border: none; font-family: inherit;
         font-size: 14px; font-weight: 600; color: var(--orange);
         cursor: pointer; padding: 6px 0; white-space: nowrap;
+        min-height: 44px; display: inline-flex; align-items: center;
       }
       #mn-pills { margin-top: 10px; }
       #mn-pills .view-pills { display: flex; gap: 0; width: 100%; }
@@ -682,6 +733,30 @@
       border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600;
       cursor: pointer; min-height: 44px;
     }
+
+    /* ── Mobile tap-target fixes (44px workflow controls, 32px destructive) ── */
+    @media (max-width: 768px) {
+      /* Workflow controls — used constantly, often in gloves */
+      .review-sub-tab          { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 16px; }
+      .review-chip             { min-height: 44px; display: inline-flex; align-items: center; }
+      .def-status-select       { min-height: 44px; font-size: 16px; /* prevent iOS zoom */ }
+      .def-resolved-toggle summary { min-height: 44px; display: flex; align-items: center; }
+      .def-add-btn             { min-height: 44px; }
+      .review-row-check        { min-height: 44px; }
+      .review-row-check input[type=checkbox] { width: 22px; height: 22px; }
+      .review-mat-status-select { min-height: 44px; font-size: 16px; padding: 0 8px; }
+      .list-item-status        { min-height: 44px; display: inline-flex; align-items: center; padding: 0 10px; font-size: 11px; }
+
+      /* Project ⋮ menu button */
+      .proj-menu-btn { width: 44px; height: 44px; }
+      .proj-menu button { min-height: 44px; }
+
+      /* Destructive buttons — 32px touch area, icon stays small */
+      .file-del       { padding: 7px; }  /* 16px icon + 7+7 padding = 30px ≈ 32px */
+      .list-block-del { padding: 9px 6px; }
+      .list-item-del  { padding: 10px 6px; }
+      .note-del       { padding: 10px 6px; }
+    }
   </style>
 </head>
 <body>
@@ -701,6 +776,10 @@
       <ul class="project-list" id="project-list">
         <li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">Loading…</li>
       </ul>
+      <label class="ws-show-removed-wrap" id="ws-show-removed-wrap" style="display:none;">
+        <input type="checkbox" id="ws-show-removed" onchange="loadProjects(this.checked)">
+        Show removed
+      </label>
     </div>
 
     <!-- Space / Types / Review panel -->
@@ -846,6 +925,21 @@
               </select>
               <button class="btn btn-sm btn-ghost" onclick="printDeficiencySheetFromScope()" style="white-space:nowrap;">Work Sheet</button>
             </div>
+            <div id="review-def-sheet-fields" style="display:none;padding:6px 12px 8px;border-bottom:1px solid var(--gray-100);">
+              <div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Work Sheet Assignment (optional)</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
+                  Assigned to
+                  <input id="def-sheet-assigned" type="text" placeholder="Name" autocomplete="off"
+                    style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
+                  Supervisor
+                  <input id="def-sheet-supervisor" type="text" placeholder="Name" autocomplete="off"
+                    style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
+                </label>
+              </div>
+            </div>
             <div id="review-def-list" class="review-list"></div>
           </div>
           <!-- Notes pane -->
@@ -891,7 +985,7 @@
   <div class="bulk-bar-count" id="bulk-bar-count">0 selected</div>
   <select id="bulk-bar-select"></select>
   <button class="bulk-bar-apply" onclick="applyBulkAction()">Apply</button>
-  <button class="bulk-bar-sheet" id="bulk-bar-sheet" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;" onclick="printFromBulkSelection()">Print Sheet</button>
+  <button class="bulk-bar-sheet" id="bulk-bar-sheet" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;min-height:44px;" onclick="printFromBulkSelection()">Print Sheet</button>
   <button class="bulk-bar-clear" onclick="clearBulkSelection()">Clear</button>
 </div>
 
@@ -1122,7 +1216,10 @@ let _detailSpaceId   = null;
   _canEdit = access === 'manage';
   _reviewAccess    = (me.module_permissions || {}).worksites_review || 'none';
   _canManageReview = _reviewAccess === 'manage';
-  _userId = me.id;
+  _userId  = me.id;
+  _myName  = me.name || null;
+  _isAdmin = me.role === 'admin';
+  if (_isAdmin) document.getElementById('ws-show-removed-wrap').style.display = '';
 
   _wasMobile = isMobile();
 
@@ -1170,24 +1267,96 @@ function projDefBadge(p) {
   return `<span class="def-badge ${cls}">${total}</span>`;
 }
 
-async function loadProjects() {
-  _projects = await fetch('/api/project-folders?worksites=1').then(r => r.json()).catch(() => []);
+async function loadProjects(showRemoved) {
+  const url = showRemoved ? '/api/project-folders' : '/api/project-folders?worksites=1';
+  const all = await fetch(url).then(r => r.json()).catch(() => []);
+  // When showing removed: split into active worksites + removed (track_in_worksites=false)
+  // When not showing removed: all results are active worksites
+  _projects = showRemoved ? all.filter(p => p.track_in_worksites !== false) : all;
+  const removed = showRemoved ? all.filter(p => p.track_in_worksites === false) : [];
+
   const list = document.getElementById('project-list');
-  if (!_projects.length) {
-    list.innerHTML = '<li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">No active projects.</li>';
-    return;
-  }
-  list.innerHTML = _projects.map(p => `
-    <li>
-      <a href="#" onclick="selectProject(${p.id},${JSON.stringify(p.name).replace(/"/g,'&quot;')},this);return false;">
-        <span style="display:flex;align-items:center;gap:6px;">
-          ${escHtml(p.name)}
-          ${projDefBadge(p)}
-        </span>
-        <div class="proj-num">${escHtml(p.job_numbers || '')}</div>
-      </a>
-    </li>
-  `).join('');
+  const renderRow = (p, isRemoved) => {
+    const nameJson = JSON.stringify(p.name).replace(/"/g,'&quot;');
+    const menu = _isAdmin ? `
+      <button class="proj-menu-btn" onclick="openProjMenu(event,${p.id})" aria-label="Project options">⋮</button>
+      <div class="proj-menu" id="proj-menu-${p.id}">
+        ${isRemoved
+          ? `<button onclick="event.stopPropagation();restoreToWorksites(${p.id})">Restore to Worksites</button>`
+          : `<button class="danger" onclick="event.stopPropagation();removeFromWorksites(${p.id},${nameJson})">Remove from Worksites</button>`
+        }
+      </div>` : '';
+    return `
+      <li class="${isRemoved ? 'proj-removed' : ''}">
+        <a href="#" onclick="${isRemoved ? 'return false' : `selectProject(${p.id},${nameJson},this);return false`}">
+          <span style="display:flex;align-items:center;gap:6px;">
+            ${escHtml(p.name)}
+            ${isRemoved ? '<span style="font-size:11px;color:var(--gray-400);font-weight:500;">(removed)</span>' : projDefBadge(p)}
+          </span>
+          <div class="proj-num">${escHtml(p.job_numbers || '')}</div>
+        </a>
+        ${menu}
+      </li>`;
+  };
+
+  const rows = [
+    ..._projects.map(p => renderRow(p, false)),
+    ...(removed.length ? [`<li style="padding:6px 12px 2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);">Removed</li>`] : []),
+    ...removed.map(p => renderRow(p, true)),
+  ];
+
+  list.innerHTML = rows.length
+    ? rows.join('')
+    : '<li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">No active projects.</li>';
+}
+
+function openProjMenu(e, id) {
+  e.stopPropagation();
+  e.preventDefault();
+  const btn  = e.currentTarget;
+  // Find the .proj-menu that is a sibling of this button (avoids duplicate-ID first-match bug)
+  const menu = btn.parentElement.querySelector('.proj-menu');
+  if (!menu) return;
+  const isOpen = menu.classList.contains('open');
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  if (!isOpen) { menu.classList.add('open'); btn.classList.add('active'); }
+}
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+});
+
+async function removeFromWorksites(id, name) {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  const p = _projects.find(p => p.id === id);
+  const jobNum = p?.job_numbers ? ` (${p.job_numbers})` : '';
+  const confirmed = confirm(
+    `Remove ${name}${jobNum} from Worksites?\n\n` +
+    `The project stays in Projects with all its POs, tickets and billing — it just won't appear in this list.`
+  );
+  if (!confirmed) return;
+  await fetch(`/api/project-folders/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ track_in_worksites: false }),
+  });
+  const showRemoved = document.getElementById('ws-show-removed')?.checked;
+  await loadProjects(showRemoved);
+}
+
+async function restoreToWorksites(id) {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  await fetch(`/api/project-folders/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ track_in_worksites: true }),
+  });
+  const showRemoved = document.getElementById('ws-show-removed')?.checked;
+  await loadProjects(showRemoved);
 }
 
 async function selectProject(id, name, el) {
@@ -1644,8 +1813,14 @@ function renderMobileProjectList() {
     content.innerHTML = '<div style="padding:24px 16px;color:var(--gray-400);font-size:14px;">No active projects.</div>';
     return;
   }
-  content.innerHTML = _projects.map(p =>
-    `<div class="mn-child-row" onclick="selectProject(${p.id},${JSON.stringify(p.name).replace(/"/g,'&quot;')},null)">
+  content.innerHTML = _projects.map(p => {
+    const nameJson = JSON.stringify(p.name).replace(/"/g,'&quot;');
+    const menu = _isAdmin ? `
+      <button class="proj-menu-btn" style="position:static;transform:none;width:44px;height:44px;flex-shrink:0;" onclick="openProjMenu(event,${p.id})" aria-label="Project options">⋮</button>
+      <div class="proj-menu" id="proj-menu-${p.id}" style="top:100%;right:0;">
+        <button class="danger" onclick="event.stopPropagation();removeFromWorksites(${p.id},${nameJson})">Remove from Worksites</button>
+      </div>` : '';
+    return `<div class="mn-child-row" style="position:relative;padding-right:${_isAdmin ? '0' : ''};" onclick="selectProject(${p.id},${nameJson},null)">
       <div style="flex:1;min-width:0;">
         <div class="mn-child-label" style="display:flex;align-items:center;gap:6px;">
           ${escHtml(p.name)}
@@ -1653,9 +1828,10 @@ function renderMobileProjectList() {
         </div>
         ${p.job_numbers ? `<div class="mn-child-sub">${escHtml(p.job_numbers)}</div>` : ''}
       </div>
-      <span class="mn-child-chevron">›</span>
-    </div>`
-  ).join('');
+      ${_isAdmin ? '' : '<span class="mn-child-chevron">›</span>'}
+      ${menu}
+    </div>`;
+  }).join('');
 }
 
 function renderMobileLevel() {
@@ -2646,7 +2822,7 @@ async function deleteSpaceFile(spaceId, fileId) {
 function defDraftKey(spaceId) { return `def_draft_${spaceId}`; }
 
 function saveDraft(spaceId) {
-  const ta = document.getElementById('def-textarea');
+  const ta = _dsBody('def-textarea');
   if (!ta) return;
   localStorage.setItem(defDraftKey(spaceId), ta.value);
 }
@@ -2675,10 +2851,11 @@ function defCardHtml(d, spaceId) {
   const when = d.raised_at ? new Date(d.raised_at).toLocaleDateString() : '';
   const raisedMeta = [when, d.raised_by_name ? 'by ' + escHtml(d.raised_by_name) : ''].filter(Boolean).join(' ');
   let resolvedMeta = '';
-  if (d.status === 'resolved' && (d.resolved_at || d.resolved_by_name)) {
+  if (d.status === 'resolved') {
     const rw = d.resolved_at ? new Date(d.resolved_at).toLocaleDateString() : '';
-    const rb = d.resolved_by_name ? 'by ' + escHtml(d.resolved_by_name) : '';
-    resolvedMeta = `<div class="def-meta">Resolved ${[rw, rb].filter(Boolean).join(' ')}</div>`;
+    resolvedMeta = rw ? `<div class="def-meta">Resolved ${rw}</div>` : '';
+    if (d.completed_by)  resolvedMeta += `<div class="def-meta">Completed by: ${escHtml(d.completed_by)}</div>`;
+    if (d.signed_off_by) resolvedMeta += `<div class="def-meta">Signed off: ${escHtml(d.signed_off_by)}</div>`;
   }
   let photosHtml = '';
   if (d.photos && d.photos.length) {
@@ -2774,27 +2951,27 @@ function renderDeficienciesSection(spaceId, defs) {
 let _defPhotos = []; // staged photos for the new deficiency form
 
 function showDefForm(spaceId) {
-  const btn = document.getElementById('def-show-btn');
-  const form = document.getElementById('def-form');
+  const btn = _dsBody('def-show-btn');
+  const form = _dsBody('def-form');
   if (btn) btn.style.display = 'none';
   if (form) form.style.display = '';
-  const ta = document.getElementById('def-textarea');
+  const ta = _dsBody('def-textarea');
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
 
 function hideDefForm() {
-  const btn = document.getElementById('def-show-btn');
-  const form = document.getElementById('def-form');
+  const btn = _dsBody('def-show-btn');
+  const form = _dsBody('def-form');
   if (btn) btn.style.display = '';
   if (form) form.style.display = 'none';
   _defPhotos = [];
-  const preview = document.getElementById('def-photo-preview');
+  const preview = _dsBody('def-photo-preview');
   if (preview) preview.innerHTML = '';
 }
 
 function queueDefPhotos(input) {
   for (const f of Array.from(input.files)) _defPhotos.push(f);
-  const preview = document.getElementById('def-photo-preview');
+  const preview = _dsBody('def-photo-preview');
   if (!preview) return;
   preview.innerHTML = '';
   for (const f of _defPhotos) {
@@ -2804,9 +2981,9 @@ function queueDefPhotos(input) {
 }
 
 async function submitDef(spaceId) {
-  const ta = document.getElementById('def-textarea');
-  const errEl = document.getElementById('def-error');
-  const submitBtn = document.querySelector('#def-form .btn-primary');
+  const ta = _dsBody('def-textarea');
+  const errEl = _dsBody('def-error');
+  const submitBtn = _dsBody('def-form')?.querySelector('.btn-primary');
   const description = ta?.value.trim();
   if (!description) {
     if (errEl) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; }
@@ -2845,6 +3022,10 @@ async function submitDef(spaceId) {
 }
 
 async function patchDef(defId, status, spaceId) {
+  if (status === 'resolved') {
+    showDefResolvePrompt(defId, spaceId);
+    return;
+  }
   await fetch(`/api/deficiencies/${defId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -2852,6 +3033,52 @@ async function patchDef(defId, status, spaceId) {
   });
   loadDeficiencies(spaceId);
   if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+}
+
+function showDefResolvePrompt(defId, spaceId) {
+  const card = _dsBody(`def-card-${defId}`);
+  if (!card) return;
+
+  // Revert the select visually while prompt is shown
+  const sel = card.querySelector('.def-status-select');
+  if (sel) sel.value = 'open';
+
+  // Remove any existing prompt in this card
+  card.querySelector('.def-resolve-prompt')?.remove();
+
+  const prompt = document.createElement('div');
+  prompt.className = 'def-resolve-prompt';
+  prompt.innerHTML = `
+    <div class="def-resolve-fields">
+      <label>Completed by<input type="text" class="def-resolve-input" id="drp-completed-${defId}" placeholder="Name of person who did the work" autocomplete="off"></label>
+      <label>Signed off by<input type="text" class="def-resolve-input" id="drp-signoff-${defId}" value="${escHtml(_myName || '')}" autocomplete="off"></label>
+    </div>
+    <div class="def-resolve-btns">
+      <button class="btn btn-sm btn-primary" onclick="confirmDefResolve(${defId},${spaceId})">Mark Resolved</button>
+      <button class="btn btn-sm btn-ghost" onclick="cancelDefResolve(${defId})">Cancel</button>
+    </div>`;
+  card.appendChild(prompt);
+  prompt.querySelector(`#drp-completed-${defId}`)?.focus();
+}
+
+async function confirmDefResolve(defId, spaceId) {
+  const completed_by = document.getElementById(`drp-completed-${defId}`)?.value.trim() || null;
+  const signed_off_by = document.getElementById(`drp-signoff-${defId}`)?.value.trim() || null;
+  await fetch(`/api/deficiencies/${defId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'resolved', completed_by, signed_off_by }),
+  });
+  loadDeficiencies(spaceId);
+  if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+}
+
+function cancelDefResolve(defId) {
+  const card = _dsBody(`def-card-${defId}`);
+  if (!card) return;
+  card.querySelector('.def-resolve-prompt')?.remove();
+  const sel = card.querySelector('.def-status-select');
+  if (sel) sel.value = card.classList.contains('status-in_progress') ? 'in_progress' : 'open';
 }
 
 async function deleteDef(defId, spaceId) {
@@ -2973,6 +3200,8 @@ function buildDefScopePicker(allRows) {
   if (!opts.length) { scopeRow.style.display = 'none'; return; }
   sel.innerHTML = '<option value="">All spaces</option>' + opts.join('');
   scopeRow.style.display = 'flex';
+  const sheetFields = document.getElementById('review-def-sheet-fields');
+  if (sheetFields) sheetFields.style.display = '';
 }
 function applyDefScope() {
   const scopeId = parseInt(document.getElementById('review-def-scope').value) || null;
@@ -3020,6 +3249,11 @@ function renderReviewDeficiencies(rows) {
       <div class="review-row-check">
         <input type="checkbox" data-id="${d.id}" onclick="event.stopPropagation(); updateBulkBar('deficiencies')" />
       </div>` : '';
+    let accountability = '';
+    if (d.status === 'resolved') {
+      if (d.completed_by)  accountability += `<div class="review-row-meta">Completed by: ${escHtml(d.completed_by)}</div>`;
+      if (d.signed_off_by) accountability += `<div class="review-row-meta">Signed off: ${escHtml(d.signed_off_by)}</div>`;
+    }
     return `<div class="review-row" onclick="openSpaceFromReview(${d.space_id})">
       ${checkbox}
       <div class="review-row-left status-${d.status}"></div>
@@ -3027,6 +3261,7 @@ function renderReviewDeficiencies(rows) {
         <div class="review-row-desc">${escHtml(d.description)}</div>
         <div class="review-row-path">${escHtml(d.space_path || '')}</div>
         <div class="review-row-meta">${meta}</div>
+        ${accountability}
       </div>
       <div class="review-row-actions">${select}</div>
     </div>`;
@@ -3046,6 +3281,11 @@ function renderReviewDeficiencies(rows) {
 }
 
 async function patchReviewDef(defId, status, selectEl) {
+  if (status === 'resolved') {
+    selectEl.value = selectEl.dataset.prev || 'open';
+    showReviewResolvePrompt(defId, selectEl);
+    return;
+  }
   try {
     await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${defId}`, {
       method: 'PATCH',
@@ -3055,8 +3295,46 @@ async function patchReviewDef(defId, status, selectEl) {
     loadReviewDeficiencies();
     if (_activeProjectId) loadSpaceCounts(_activeProjectId);
   } catch {
-    // revert select on failure
     selectEl.value = selectEl.dataset.prev || selectEl.value;
+  }
+}
+
+function showReviewResolvePrompt(defId, selectEl) {
+  // Remove any existing prompt
+  document.getElementById(`rrp-${defId}`)?.remove();
+
+  const row = selectEl.closest('.review-row');
+  if (!row) return;
+
+  const prompt = document.createElement('div');
+  prompt.id = `rrp-${defId}`;
+  prompt.className = 'def-resolve-prompt';
+  prompt.innerHTML = `
+    <div class="def-resolve-fields">
+      <label>Completed by<input type="text" class="def-resolve-input" id="rrp-completed-${defId}" placeholder="Name of person who did the work" autocomplete="off"></label>
+      <label>Signed off by<input type="text" class="def-resolve-input" id="rrp-signoff-${defId}" value="${escHtml(_myName || '')}" autocomplete="off"></label>
+    </div>
+    <div class="def-resolve-btns">
+      <button class="btn btn-sm btn-primary" onclick="confirmReviewResolve(${defId})">Mark Resolved</button>
+      <button class="btn btn-sm btn-ghost" onclick="document.getElementById('rrp-${defId}')?.remove()">Cancel</button>
+    </div>`;
+  row.after(prompt);
+  prompt.querySelector(`#rrp-completed-${defId}`)?.focus();
+}
+
+async function confirmReviewResolve(defId) {
+  const completed_by  = document.getElementById(`rrp-completed-${defId}`)?.value.trim() || null;
+  const signed_off_by = document.getElementById(`rrp-signoff-${defId}`)?.value.trim() || null;
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${defId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'resolved', completed_by, signed_off_by }),
+    });
+    loadReviewDeficiencies();
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+  } catch {
+    document.getElementById(`rrp-${defId}`)?.remove();
   }
 }
 
@@ -3254,6 +3532,10 @@ const PRINT_STYLES = `
   .ph-sheet { font-size: 17px; font-weight: 700; color: #0C0C0C; line-height: 1; margin-bottom: 3px; }
   .ph-project { font-size: 12px; color: #0C0C0C; margin-bottom: 1px; }
   .ph-meta { font-size: 10px; color: #555; }
+  .ph-assign { display: flex; gap: 32px; margin-top: 6px; font-size: 11px; color: #0C0C0C; }
+  .ph-assign-field { display: flex; gap: 6px; align-items: baseline; }
+  .ph-assign-label { font-weight: 700; white-space: nowrap; }
+  .ph-assign-blank { display: inline-block; width: 160px; border-bottom: 1px solid #0C0C0C; }
   .ph-rule { border: none; border-top: 3px solid #FF6100; margin: 8px 0 14px; }
   /* ── Body ── */
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
@@ -3309,12 +3591,25 @@ async function openPrintWindow(info, bodyHtml) {
       <div class="ph-meta">Scope: ${escHtml(info.scopeLabel)} &nbsp;·&nbsp; ${info.itemCount} item${info.itemCount === 1 ? '' : 's'} &nbsp;·&nbsp; Printed: ${dateStr}</div>
     </div>
   </div>
+  ${(info.assignedTo !== undefined || info.supervisor !== undefined) ? `
+  <div class="ph-assign">
+    <span class="ph-assign-field"><span class="ph-assign-label">Assigned to:</span> ${info.assignedTo ? escHtml(info.assignedTo) : '<span class="ph-assign-blank">___________________________</span>'}</span>
+    <span class="ph-assign-field"><span class="ph-assign-label">Supervisor:</span> ${info.supervisor ? escHtml(info.supervisor) : '<span class="ph-assign-blank">___________________________</span>'}</span>
+  </div>` : ''}
   <hr class="ph-rule">`;
 
   const footer = `
   <div class="pf">
     <div class="pf-field">
       <div class="pf-label">Completed by</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+    <div class="pf-field">
+      <div class="pf-label">Date</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+    <div class="pf-field">
+      <div class="pf-label">Supervisor sign-off</div>
       <div class="pf-line">&nbsp;</div>
     </div>
     <div class="pf-field">
@@ -3481,6 +3776,13 @@ function _defSheetHtml(rows) {
   return body;
 }
 
+function _defSheetAssignment() {
+  // Collect optional assignee/supervisor from inline inputs, or prompt once
+  const assignedTo  = (document.getElementById('def-sheet-assigned')?.value  || '').trim() || null;
+  const supervisor  = (document.getElementById('def-sheet-supervisor')?.value || '').trim() || null;
+  return { assignedTo, supervisor };
+}
+
 async function printDeficiencySheetFromScope() {
   const scopeSel    = document.getElementById('review-def-scope');
   const scopeId     = parseInt(scopeSel?.value) || null;
@@ -3504,7 +3806,8 @@ async function printDeficiencySheetFromScope() {
     }
   }
 
-  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length }, _defSheetHtml(rows));
+  const { assignedTo, supervisor } = _defSheetAssignment();
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
 }
 
 async function printDeficiencySheetFromChecked() {
@@ -3516,7 +3819,8 @@ async function printDeficiencySheetFromChecked() {
 
   const rows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
   const projectName = _activeProjectName();
-  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length }, _defSheetHtml(rows));
+  const { assignedTo, supervisor } = _defSheetAssignment();
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
 }
 
 // Dispatches the bulk-bar "Print Sheet" button based on active tab
@@ -3874,7 +4178,9 @@ async function deleteListItem(itemId, listId, spaceId, isTypeList) {
 
 // ── Space Notes ───────────────────────────────────────────────────────────────
 
-let _userId = null; // set on init from /api/auth/me
+let _userId  = null;  // set on init from /api/auth/me
+let _myName  = null;  // set on init — default for signed_off_by prompt
+let _isAdmin = false; // set on init — gates ⋮ project menu
 
 async function loadSpaceNotes(spaceId) {
   const body = _dsBody('ds-notes-body');

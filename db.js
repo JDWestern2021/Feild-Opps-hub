@@ -963,6 +963,11 @@ async function initSchema() {
     resolved_at  TIMESTAMPTZ
   )`);
 
+  await pool.query(`ALTER TABLE deficiencies ADD COLUMN IF NOT EXISTS completed_by  TEXT`);
+  await pool.query(`ALTER TABLE deficiencies ADD COLUMN IF NOT EXISTS completed_at  TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE deficiencies ADD COLUMN IF NOT EXISTS signed_off_by TEXT`);
+  await pool.query(`ALTER TABLE deficiencies ADD COLUMN IF NOT EXISTS signed_off_at TIMESTAMPTZ`);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS deficiency_photos (
     id              SERIAL PRIMARY KEY,
     deficiency_id   INTEGER NOT NULL REFERENCES deficiencies(id) ON DELETE CASCADE,

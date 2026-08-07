@@ -1740,7 +1740,7 @@ app.delete('/api/po/:id', requireAdmin, async (req, res) => {
 app.get('/api/project-folders', requireAuth, async (req, res) => {
   const worksitesOnly = req.query.worksites === '1';
   const { rows } = await pool.query(`
-    SELECT p.id, p.name, p.job_numbers,
+    SELECT p.id, p.name, p.job_numbers, p.track_in_worksites,
       COALESCE(dc.open_count, 0)::int        AS def_open,
       COALESCE(dc.in_progress_count, 0)::int AS def_in_progress
     FROM projects p
@@ -1833,15 +1833,17 @@ app.patch('/api/project-folders/:id', requireAdmin, async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
   const { name, job_numbers, track_in_worksites } = req.body;
   if (name!==undefined && !name.trim()) return res.status(400).json({ error: 'Project name cannot be empty' });
-  const tiwClause = track_in_worksites !== undefined ? `,track_in_worksites=$5` : '';
+  const tiwVals  = track_in_worksites !== undefined ? [!!track_in_worksites] : [];
+  const tiwClause = tiwVals.length ? `, track_in_worksites=$4` : '';
+  const idParam   = tiwVals.length ? '$5' : '$4';
   const params = [
     name?.trim()||null,
     job_numbers!==undefined ? normalizeJobNumbers(job_numbers) : rows[0].job_numbers,
     new Date().toISOString(),
+    ...tiwVals,
     req.params.id,
-    ...(track_in_worksites !== undefined ? [!!track_in_worksites] : []),
   ];
-  await pool.query(`UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3 WHERE id=$4${tiwClause}`, params);
+  await pool.query(`UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3${tiwClause} WHERE id=${idParam}`, params);
   res.json({ ok: true });
 });
 
@@ -5997,6 +5999,7 @@ app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAcces
     const { rows } = await pool.query(`
       ${SPACE_PATH_CTE}
       SELECT d.id, d.space_id, d.description, d.status, d.raised_at, d.resolved_at,
+             d.completed_by, d.completed_at, d.signed_off_by, d.signed_off_at,
              ru.name AS raised_by_name,
              rv.name AS resolved_by_name,
              sp.path AS space_path,
@@ -6017,7 +6020,7 @@ app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAcces
 // Must be registered BEFORE /:defId so "bulk" is not matched as a defId.
 app.patch('/api/projects/:id/review/deficiencies/bulk', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
   try {
-    const { ids, status } = req.body;
+    const { ids, status, completed_by, signed_off_by } = req.body;
     const projectId = parseInt(req.params.id);
     if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
     if (!['open','in_progress','resolved'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
@@ -6032,32 +6035,41 @@ app.patch('/api/projects/:id/review/deficiencies/bulk', requireAuth, requireModu
     if (owned.length !== intIds.length)
       return res.status(403).json({ error: 'One or more deficiencies do not belong to this project' });
 
-    const resolvedBy = status === 'resolved' ? req.user.id : null;
-    const resolvedAt = status === 'resolved' ? new Date() : null;
+    const now = new Date();
+    const resolvedBy  = status === 'resolved' ? req.user.id : null;
+    const resolvedAt  = status === 'resolved' ? now : null;
+    const completedBy = status === 'resolved' ? (completed_by?.trim() || null) : null;
+    const signedOffBy = status === 'resolved' ? (signed_off_by?.trim() || req.user.name || null) : null;
     await pool.query(`
       UPDATE deficiencies
       SET status=$1,
-          resolved_by = CASE WHEN $1='resolved' THEN $3::int ELSE resolved_by END,
-          resolved_at = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE resolved_at END
+          resolved_by   = CASE WHEN $1='resolved' THEN $3::int         ELSE NULL END,
+          resolved_at   = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END,
+          completed_by  = CASE WHEN $1='resolved' THEN $5              ELSE NULL END,
+          completed_at  = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END,
+          signed_off_by = CASE WHEN $1='resolved' THEN $6              ELSE NULL END,
+          signed_off_at = CASE WHEN $1='resolved' THEN $4::timestamptz ELSE NULL END
       WHERE id = ANY($2)
-    `, [status, intIds, resolvedBy, resolvedAt]);
+    `, [status, intIds, resolvedBy, resolvedAt, completedBy, signedOffBy]);
     res.json({ updated: intIds.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.patch('/api/projects/:id/review/deficiencies/:defId', requireAuth, requireModuleAccess('worksites_review', 'manage'), async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, completed_by, signed_off_by } = req.body;
     const valid = ['open', 'in_progress', 'resolved'];
     if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-    const extra = status === 'resolved'
-      ? ', resolved_by = $3, resolved_at = NOW()'
-      : ', resolved_by = NULL, resolved_at = NULL';
-    const vals = status === 'resolved'
-      ? [status, req.params.defId, req.user.id]
-      : [status, req.params.defId];
+    let extra, vals;
+    if (status === 'resolved') {
+      extra = ', resolved_by=$3, resolved_at=NOW(), completed_by=$4, completed_at=NOW(), signed_off_by=$5, signed_off_at=NOW()';
+      vals = [status, req.params.defId, req.user.id, completed_by?.trim() || null, signed_off_by?.trim() || req.user.name || null];
+    } else {
+      extra = ', resolved_by=NULL, resolved_at=NULL, completed_by=NULL, completed_at=NULL, signed_off_by=NULL, signed_off_at=NULL';
+      vals = [status, req.params.defId];
+    }
     const { rows: [d] } = await pool.query(
-      `UPDATE deficiencies SET status = $1${extra} WHERE id = $2 RETURNING id, status`, vals
+      `UPDATE deficiencies SET status=$1${extra} WHERE id=$2 RETURNING id, status`, vals
     );
     if (!d) return res.status(404).json({ error: 'Not found' });
     res.json(d);
@@ -6389,6 +6401,7 @@ app.get('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('worksi
     const { rows } = await pool.query(`
       SELECT d.id, d.space_id, d.description, d.status,
              d.raised_at, d.resolved_at,
+             d.completed_by, d.completed_at, d.signed_off_by, d.signed_off_at,
              ru.name AS raised_by_name,
              au.name AS assigned_to_name,
              rv.name AS resolved_by_name,
@@ -6423,7 +6436,7 @@ app.post('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('works
 // PATCH /api/deficiencies/:id — update status/assign/resolve (manage-level)
 app.patch('/api/deficiencies/:id', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
-    const { status, assigned_to } = req.body;
+    const { status, assigned_to, completed_by, signed_off_by } = req.body;
     const allowed = ['open', 'in_progress', 'resolved'];
     if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
     const fields = [], vals = [];
@@ -6433,6 +6446,13 @@ app.patch('/api/deficiencies/:id', requireAuth, requireModuleAccess('worksites',
       if (status === 'resolved') {
         fields.push(`resolved_by = $${i++}`, `resolved_at = NOW()`);
         vals.push(req.user.id);
+        fields.push(`completed_by = $${i++}`, `completed_at = NOW()`);
+        vals.push(completed_by?.trim() || null);
+        fields.push(`signed_off_by = $${i++}`, `signed_off_at = NOW()`);
+        vals.push(signed_off_by?.trim() || req.user.name || null);
+      } else {
+        // Reopening clears accountability fields
+        fields.push(`completed_by = NULL`, `completed_at = NULL`, `signed_off_by = NULL`, `signed_off_at = NULL`);
       }
     }
     if (assigned_to !== undefined) { fields.push(`assigned_to = $${i++}`); vals.push(assigned_to || null); }

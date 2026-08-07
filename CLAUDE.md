@@ -70,6 +70,28 @@ against production accidents.
 - Enforcement goes in the query layer, not scattered `if (user.role ===)` checks.
 - Pattern for project-scoped access (not yet built): `assertAccess(userId, projectId, module, action)`.
 
+## Mobile tap targets
+
+Every interactive element visible on mobile must have `min-height: 44px` set
+**explicitly** in CSS. This is not satisfied by inheriting a base button or
+select style — the audit on chunk-15 found that only elements with `min-height:
+44px` directly on their class were passing; everything else inherited base
+styles and rendered at 13–31px, including controls built after this rule was
+already in CLAUDE.md.
+
+Two tiers:
+- **Workflow controls** (buttons, chips, tabs, selects, checkboxes, toggles):
+  `min-height: 44px` — these are hit in gloves, often repeatedly.
+- **Destructive buttons** (delete, remove): target ~32px via padding around a
+  small icon — hard-to-hit is intentional for irreversible actions.
+
+Guard with `@media (max-width: 768px)` when the element is shared with a
+desktop layout where compact sizing is intentional. Desktop-only controls
+(tree toggles, sidebar links) are exempt — mouse pointers are precise.
+
+When adding any new interactive element: set `min-height` explicitly. Don't
+assume the base style covers it.
+
 ## Schema drift
 `initSchema()` is additive only (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD
 COLUMN IF NOT EXISTS). Keep it that way. The moment anything drops or alters an
