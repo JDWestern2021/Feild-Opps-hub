@@ -1740,7 +1740,7 @@ app.delete('/api/po/:id', requireAdmin, async (req, res) => {
 app.get('/api/project-folders', requireAuth, async (req, res) => {
   const worksitesOnly = req.query.worksites === '1';
   const { rows } = await pool.query(`
-    SELECT p.id, p.name, p.job_numbers,
+    SELECT p.id, p.name, p.job_numbers, p.track_in_worksites,
       COALESCE(dc.open_count, 0)::int        AS def_open,
       COALESCE(dc.in_progress_count, 0)::int AS def_in_progress
     FROM projects p
@@ -1833,15 +1833,17 @@ app.patch('/api/project-folders/:id', requireAdmin, async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Project not found' });
   const { name, job_numbers, track_in_worksites } = req.body;
   if (name!==undefined && !name.trim()) return res.status(400).json({ error: 'Project name cannot be empty' });
-  const tiwClause = track_in_worksites !== undefined ? `,track_in_worksites=$5` : '';
+  const tiwVals  = track_in_worksites !== undefined ? [!!track_in_worksites] : [];
+  const tiwClause = tiwVals.length ? `, track_in_worksites=$4` : '';
+  const idParam   = tiwVals.length ? '$5' : '$4';
   const params = [
     name?.trim()||null,
     job_numbers!==undefined ? normalizeJobNumbers(job_numbers) : rows[0].job_numbers,
     new Date().toISOString(),
+    ...tiwVals,
     req.params.id,
-    ...(track_in_worksites !== undefined ? [!!track_in_worksites] : []),
   ];
-  await pool.query(`UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3 WHERE id=$4${tiwClause}`, params);
+  await pool.query(`UPDATE projects SET name=COALESCE($1,name),job_numbers=$2,updated_at=$3${tiwClause} WHERE id=${idParam}`, params);
   res.json({ ok: true });
 });
 

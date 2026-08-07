@@ -80,17 +80,49 @@
     .dot-note { color: #6b7280; }
 
     /* ── Project list ── */
-    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); overflow: hidden; position: sticky; top: 72px; }
+    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); position: sticky; top: 72px; }
+    .project-panel-header { border-radius: 12px 12px 0 0; }
     .project-panel-header { padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); border-bottom: 1px solid var(--gray-100); }
     .project-list { list-style: none; margin: 0; padding: 6px; }
+    .project-list li { position: relative; }
     .project-list li a {
       display: block; padding: 9px 12px; border-radius: 8px;
       font-size: 13px; font-weight: 600; color: var(--dark);
       text-decoration: none; transition: background .12s;
+      padding-right: 36px; /* room for ⋮ button */
     }
     .project-list li a:hover { background: var(--gray-50); }
     .project-list li a.active { background: rgba(244,121,32,.1); color: var(--orange); }
     .project-list li .proj-num { font-size: 11px; color: var(--gray-400); font-weight: 500; margin-top: 1px; }
+    .project-list li.proj-removed a { opacity: .45; }
+    .proj-menu-btn {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      border: none; background: none; cursor: pointer; color: var(--gray-400);
+      font-size: 16px; border-radius: 5px; padding: 0;
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      transition: background .1s, color .1s;
+    }
+    .proj-menu-btn:hover, .proj-menu-btn.active { background: var(--gray-100); color: var(--dark); }
+    .proj-menu {
+      display: none; position: absolute; right: 0; top: calc(100% - 4px);
+      background: #fff; border: 1px solid var(--gray-200);
+      border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.13);
+      min-width: 200px; z-index: 300; padding: 4px;
+    }
+    .proj-menu.open { display: block; }
+    .proj-menu button {
+      display: block; width: 100%; text-align: left; border: none; background: none;
+      padding: 10px 12px; font-size: 13px; color: var(--dark); font-family: inherit;
+      border-radius: 6px; cursor: pointer; transition: background .1s;
+    }
+    .proj-menu button:hover { background: var(--gray-50); }
+    .proj-menu button.danger { color: var(--red); }
+    .proj-menu button.danger:hover { background: #fef2f2; }
+    .ws-show-removed-wrap {
+      padding: 6px 10px 2px; font-size: 12px; color: var(--gray-400);
+      display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+    }
+    .ws-show-removed-wrap input { cursor: pointer; accent-color: var(--orange); }
 
     /* ── Space panel ── */
     .space-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); }
@@ -715,6 +747,10 @@
       .review-mat-status-select { min-height: 44px; font-size: 16px; padding: 0 8px; }
       .list-item-status        { min-height: 44px; display: inline-flex; align-items: center; padding: 0 10px; font-size: 11px; }
 
+      /* Project ⋮ menu button */
+      .proj-menu-btn { width: 44px; height: 44px; }
+      .proj-menu button { min-height: 44px; }
+
       /* Destructive buttons — 32px touch area, icon stays small */
       .file-del       { padding: 7px; }  /* 16px icon + 7+7 padding = 30px ≈ 32px */
       .list-block-del { padding: 9px 6px; }
@@ -740,6 +776,10 @@
       <ul class="project-list" id="project-list">
         <li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">Loading…</li>
       </ul>
+      <label class="ws-show-removed-wrap" id="ws-show-removed-wrap" style="display:none;">
+        <input type="checkbox" id="ws-show-removed" onchange="loadProjects(this.checked)">
+        Show removed
+      </label>
     </div>
 
     <!-- Space / Types / Review panel -->
@@ -1176,8 +1216,10 @@ let _detailSpaceId   = null;
   _canEdit = access === 'manage';
   _reviewAccess    = (me.module_permissions || {}).worksites_review || 'none';
   _canManageReview = _reviewAccess === 'manage';
-  _userId = me.id;
-  _myName = me.name || null;
+  _userId  = me.id;
+  _myName  = me.name || null;
+  _isAdmin = me.role === 'admin';
+  if (_isAdmin) document.getElementById('ws-show-removed-wrap').style.display = '';
 
   _wasMobile = isMobile();
 
@@ -1225,24 +1267,96 @@ function projDefBadge(p) {
   return `<span class="def-badge ${cls}">${total}</span>`;
 }
 
-async function loadProjects() {
-  _projects = await fetch('/api/project-folders?worksites=1').then(r => r.json()).catch(() => []);
+async function loadProjects(showRemoved) {
+  const url = showRemoved ? '/api/project-folders' : '/api/project-folders?worksites=1';
+  const all = await fetch(url).then(r => r.json()).catch(() => []);
+  // When showing removed: split into active worksites + removed (track_in_worksites=false)
+  // When not showing removed: all results are active worksites
+  _projects = showRemoved ? all.filter(p => p.track_in_worksites !== false) : all;
+  const removed = showRemoved ? all.filter(p => p.track_in_worksites === false) : [];
+
   const list = document.getElementById('project-list');
-  if (!_projects.length) {
-    list.innerHTML = '<li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">No active projects.</li>';
-    return;
-  }
-  list.innerHTML = _projects.map(p => `
-    <li>
-      <a href="#" onclick="selectProject(${p.id},${JSON.stringify(p.name).replace(/"/g,'&quot;')},this);return false;">
-        <span style="display:flex;align-items:center;gap:6px;">
-          ${escHtml(p.name)}
-          ${projDefBadge(p)}
-        </span>
-        <div class="proj-num">${escHtml(p.job_numbers || '')}</div>
-      </a>
-    </li>
-  `).join('');
+  const renderRow = (p, isRemoved) => {
+    const nameJson = JSON.stringify(p.name).replace(/"/g,'&quot;');
+    const menu = _isAdmin ? `
+      <button class="proj-menu-btn" onclick="openProjMenu(event,${p.id})" aria-label="Project options">⋮</button>
+      <div class="proj-menu" id="proj-menu-${p.id}">
+        ${isRemoved
+          ? `<button onclick="event.stopPropagation();restoreToWorksites(${p.id})">Restore to Worksites</button>`
+          : `<button class="danger" onclick="event.stopPropagation();removeFromWorksites(${p.id},${nameJson})">Remove from Worksites</button>`
+        }
+      </div>` : '';
+    return `
+      <li class="${isRemoved ? 'proj-removed' : ''}">
+        <a href="#" onclick="${isRemoved ? 'return false' : `selectProject(${p.id},${nameJson},this);return false`}">
+          <span style="display:flex;align-items:center;gap:6px;">
+            ${escHtml(p.name)}
+            ${isRemoved ? '<span style="font-size:11px;color:var(--gray-400);font-weight:500;">(removed)</span>' : projDefBadge(p)}
+          </span>
+          <div class="proj-num">${escHtml(p.job_numbers || '')}</div>
+        </a>
+        ${menu}
+      </li>`;
+  };
+
+  const rows = [
+    ..._projects.map(p => renderRow(p, false)),
+    ...(removed.length ? [`<li style="padding:6px 12px 2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);">Removed</li>`] : []),
+    ...removed.map(p => renderRow(p, true)),
+  ];
+
+  list.innerHTML = rows.length
+    ? rows.join('')
+    : '<li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">No active projects.</li>';
+}
+
+function openProjMenu(e, id) {
+  e.stopPropagation();
+  e.preventDefault();
+  const btn  = e.currentTarget;
+  // Find the .proj-menu that is a sibling of this button (avoids duplicate-ID first-match bug)
+  const menu = btn.parentElement.querySelector('.proj-menu');
+  if (!menu) return;
+  const isOpen = menu.classList.contains('open');
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  if (!isOpen) { menu.classList.add('open'); btn.classList.add('active'); }
+}
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+});
+
+async function removeFromWorksites(id, name) {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  const p = _projects.find(p => p.id === id);
+  const jobNum = p?.job_numbers ? ` (${p.job_numbers})` : '';
+  const confirmed = confirm(
+    `Remove ${name}${jobNum} from Worksites?\n\n` +
+    `The project stays in Projects with all its POs, tickets and billing — it just won't appear in this list.`
+  );
+  if (!confirmed) return;
+  await fetch(`/api/project-folders/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ track_in_worksites: false }),
+  });
+  const showRemoved = document.getElementById('ws-show-removed')?.checked;
+  await loadProjects(showRemoved);
+}
+
+async function restoreToWorksites(id) {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  await fetch(`/api/project-folders/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ track_in_worksites: true }),
+  });
+  const showRemoved = document.getElementById('ws-show-removed')?.checked;
+  await loadProjects(showRemoved);
 }
 
 async function selectProject(id, name, el) {
@@ -1699,8 +1813,14 @@ function renderMobileProjectList() {
     content.innerHTML = '<div style="padding:24px 16px;color:var(--gray-400);font-size:14px;">No active projects.</div>';
     return;
   }
-  content.innerHTML = _projects.map(p =>
-    `<div class="mn-child-row" onclick="selectProject(${p.id},${JSON.stringify(p.name).replace(/"/g,'&quot;')},null)">
+  content.innerHTML = _projects.map(p => {
+    const nameJson = JSON.stringify(p.name).replace(/"/g,'&quot;');
+    const menu = _isAdmin ? `
+      <button class="proj-menu-btn" style="position:static;transform:none;width:44px;height:44px;flex-shrink:0;" onclick="openProjMenu(event,${p.id})" aria-label="Project options">⋮</button>
+      <div class="proj-menu" id="proj-menu-${p.id}" style="top:100%;right:0;">
+        <button class="danger" onclick="event.stopPropagation();removeFromWorksites(${p.id},${nameJson})">Remove from Worksites</button>
+      </div>` : '';
+    return `<div class="mn-child-row" style="position:relative;padding-right:${_isAdmin ? '0' : ''};" onclick="selectProject(${p.id},${nameJson},null)">
       <div style="flex:1;min-width:0;">
         <div class="mn-child-label" style="display:flex;align-items:center;gap:6px;">
           ${escHtml(p.name)}
@@ -1708,9 +1828,10 @@ function renderMobileProjectList() {
         </div>
         ${p.job_numbers ? `<div class="mn-child-sub">${escHtml(p.job_numbers)}</div>` : ''}
       </div>
-      <span class="mn-child-chevron">›</span>
-    </div>`
-  ).join('');
+      ${_isAdmin ? '' : '<span class="mn-child-chevron">›</span>'}
+      ${menu}
+    </div>`;
+  }).join('');
 }
 
 function renderMobileLevel() {
@@ -4057,8 +4178,9 @@ async function deleteListItem(itemId, listId, spaceId, isTypeList) {
 
 // ── Space Notes ───────────────────────────────────────────────────────────────
 
-let _userId = null;  // set on init from /api/auth/me
-let _myName = null;  // set on init — default for signed_off_by prompt
+let _userId  = null;  // set on init from /api/auth/me
+let _myName  = null;  // set on init — default for signed_off_by prompt
+let _isAdmin = false; // set on init — gates ⋮ project menu
 
 async function loadSpaceNotes(spaceId) {
   const body = _dsBody('ds-notes-body');
