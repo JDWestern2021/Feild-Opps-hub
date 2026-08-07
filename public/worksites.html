@@ -295,7 +295,7 @@
     .file-viewer-close {
       position: absolute; top: 16px; right: 16px;
       border: none; background: rgba(255,255,255,.15); color: #fff;
-      border-radius: 8px; width: 36px; height: 36px; font-size: 20px;
+      border-radius: 8px; width: 44px; height: 44px; font-size: 20px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
     }
     .file-viewer-close:hover { background: rgba(255,255,255,.25); }
@@ -427,9 +427,9 @@
     }
     .bulk-bar.visible { display: flex; }
     .bulk-bar-count { flex: 1; }
-    .bulk-bar select { font-size: 13px; border-radius: 6px; border: none; padding: 6px 10px; cursor: pointer; }
-    .bulk-bar-apply { background: var(--orange); color: #fff; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 700; cursor: pointer; }
-    .bulk-bar-clear { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+    .bulk-bar select { font-size: 13px; border-radius: 6px; border: none; padding: 6px 10px; cursor: pointer; min-height: 44px; }
+    .bulk-bar-apply { background: var(--orange); color: #fff; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 700; cursor: pointer; min-height: 44px; }
+    .bulk-bar-clear { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; min-height: 44px; }
     .review-delivered-toggle { margin: 0; }
     .review-delivered-toggle summary { list-style: none; font-size: 12px; color: var(--gray-400); cursor: pointer; padding: 10px 12px; }
     .review-delivered-toggle summary::before { content: '▶'; font-size: 9px; margin-right: 4px; }
@@ -584,6 +584,7 @@
         background: none; border: none; font-family: inherit;
         font-size: 14px; font-weight: 600; color: var(--orange);
         cursor: pointer; padding: 6px 0; white-space: nowrap;
+        min-height: 44px; display: inline-flex; align-items: center;
       }
       #mn-pills { margin-top: 10px; }
       #mn-pills .view-pills { display: flex; gap: 0; width: 100%; }
@@ -699,6 +700,26 @@
       margin-top: 6px; background: var(--orange); color: #fff; border: none;
       border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600;
       cursor: pointer; min-height: 44px;
+    }
+
+    /* ── Mobile tap-target fixes (44px workflow controls, 32px destructive) ── */
+    @media (max-width: 768px) {
+      /* Workflow controls — used constantly, often in gloves */
+      .review-sub-tab          { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 16px; }
+      .review-chip             { min-height: 44px; display: inline-flex; align-items: center; }
+      .def-status-select       { min-height: 44px; font-size: 16px; /* prevent iOS zoom */ }
+      .def-resolved-toggle summary { min-height: 44px; display: flex; align-items: center; }
+      .def-add-btn             { min-height: 44px; }
+      .review-row-check        { min-height: 44px; }
+      .review-row-check input[type=checkbox] { width: 22px; height: 22px; }
+      .review-mat-status-select { min-height: 44px; font-size: 16px; padding: 0 8px; }
+      .list-item-status        { min-height: 44px; display: inline-flex; align-items: center; padding: 0 10px; font-size: 11px; }
+
+      /* Destructive buttons — 32px touch area, icon stays small */
+      .file-del       { padding: 7px; }  /* 16px icon + 7+7 padding = 30px ≈ 32px */
+      .list-block-del { padding: 9px 6px; }
+      .list-item-del  { padding: 10px 6px; }
+      .note-del       { padding: 10px 6px; }
     }
   </style>
 </head>
@@ -924,7 +945,7 @@
   <div class="bulk-bar-count" id="bulk-bar-count">0 selected</div>
   <select id="bulk-bar-select"></select>
   <button class="bulk-bar-apply" onclick="applyBulkAction()">Apply</button>
-  <button class="bulk-bar-sheet" id="bulk-bar-sheet" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;" onclick="printFromBulkSelection()">Print Sheet</button>
+  <button class="bulk-bar-sheet" id="bulk-bar-sheet" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;min-height:44px;" onclick="printFromBulkSelection()">Print Sheet</button>
   <button class="bulk-bar-clear" onclick="clearBulkSelection()">Clear</button>
 </div>
 
