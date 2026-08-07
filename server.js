@@ -5841,43 +5841,6 @@ app.patch('/api/co-line-items/:id', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/change-orders/:id/export', requireAuth, async (req, res) => {
-  try {
-    const { rows: [co] } = await pool.query('SELECT * FROM rfq_change_orders WHERE id=$1',[req.params.id]);
-    if (!co) return res.status(404).json({ error: 'Not found' });
-    const { rows: line_items } = await pool.query('SELECT * FROM rfq_co_line_items WHERE change_order_id=$1 ORDER BY sort_order',[co.id]);
-    const wb = new ExcelJS.Workbook();
-    const rows = [
-      ['CHANGE ORDER'],
-      [`CO Number: ${co.co_number}`, '', `Project: ${co.project_name}`],
-      [`GC: ${co.gc_name}`, '', `Contact: ${co.gc_contact}`],
-      [],
-      ['Description','Qty','Unit','Unit Cost','Markup %','Mat. Sell','Labour Hrs','Labour Rate','Labour Total','Line Total'],
-    ];
-    let grandTotal = 0;
-    line_items.forEach(li => {
-      const matSell = Number(li.qty) * Number(li.unit_cost) * (1 + Number(li.markup_pct)/100);
-      const labTotal = Number(li.labour_hours) * Number(li.labour_rate);
-      const lineTotal = matSell + labTotal;
-      grandTotal += lineTotal;
-      rows.push([
-        li.description, Number(li.qty), li.unit, Number(li.unit_cost),
-        Number(li.markup_pct), matSell.toFixed(2),
-        Number(li.labour_hours), Number(li.labour_rate), labTotal.toFixed(2), lineTotal.toFixed(2)
-      ]);
-    });
-    rows.push([]);
-    rows.push(['','','','','','','','','GRAND TOTAL', grandTotal.toFixed(2)]);
-    const ws = wb.addWorksheet('Change Order');
-    ws.columns = [{width:40},{width:8},{width:8},{width:12},{width:10},{width:12},{width:12},{width:12},{width:14},{width:14}];
-    rows.forEach(r => ws.addRow(r));
-    const buf = await wb.xlsx.writeBuffer();
-    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition',`attachment; filename="CO-${co.co_number}.xlsx"`);
-    res.send(buf);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
 // ─────────────────────────────────────────────
 // WORKSITES — SPACE TYPES + SPACES
 // ─────────────────────────────────────────────
@@ -5948,19 +5911,6 @@ app.get('/api/projects/:id/space-counts', requireAuth, requireModuleAccess('work
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/spaces/:id/deficiencies — all deficiencies on a specific space
-app.get('/api/spaces/:id/deficiencies', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT d.*, u.name AS raised_by_name
-      FROM deficiencies d
-      LEFT JOIN users u ON u.id = d.raised_by
-      WHERE d.space_id = $1
-      ORDER BY d.raised_at DESC
-    `, [req.params.id]);
-    res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
 
 // ── Chunk 9: Project-level review routes ────────────────────────────────────
 
