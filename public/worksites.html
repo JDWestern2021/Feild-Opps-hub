@@ -1,0 +1,3627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Worksites — J&D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { margin: 0; background: var(--gray-50); font-family: var(--font, system-ui, sans-serif); }
+
+    /* ── Standalone header ── */
+    .ws-header {
+      background: #0f172a; color: #fff;
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 20px; height: 52px; position: sticky; top: 0; z-index: 50;
+    }
+    .ws-header img { width: 30px; height: 30px; border-radius: 6px; }
+    .ws-header-title { font-size: 14px; font-weight: 700; flex: 1; }
+    .ws-header a {
+      font-size: 12px; font-weight: 600; color: rgba(255,255,255,.6);
+      text-decoration: none; padding: 6px 10px; border-radius: 6px;
+      transition: background .12s, color .12s;
+    }
+    .ws-header a:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+    /* ── Page wrap ── */
+    .page-wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+
+    /* ── Two-panel layout ── */
+    .ws-layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 900px) { .ws-layout { grid-template-columns: 1fr; } }
+
+    /* ── Sidebar collapse once a project is selected (desktop only) ── */
+    @media (min-width: 769px) {
+      .ws-layout.project-selected { grid-template-columns: 1fr; gap: 0; }
+      .ws-layout.project-selected .project-panel { display: none; }
+
+      /* Single sticky block: panel header + review sub-tabs */
+      .sticky-header { position: sticky; top: 72px; z-index: 20; background: white; border-radius: 12px 12px 0 0; }
+
+      /* Review sub-tabs only show on desktop inside sticky-header */
+      #review-sub-tabs-desktop { display: none; }
+      #review-sub-tabs-mobile  { display: flex; }
+
+      /* Review split: list left, space detail right */
+      #view-review { display: flex; min-height: 400px; }
+      #review-list-panel { flex: 1; min-width: 0; }
+      #review-space-panel {
+        width: 380px; flex-shrink: 0; border-left: 1px solid var(--gray-200);
+        display: none; flex-direction: column; overflow-y: auto;
+      }
+      #review-space-panel.open { display: flex; }
+      .review-space-panel-hdr {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 14px; border-bottom: 1px solid var(--gray-100); flex-shrink: 0;
+        position: sticky; top: 0; background: white; z-index: 1;
+      }
+      .review-space-panel-hdr h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    }
+    @media (max-width: 768px) {
+      #review-sub-tabs-desktop { display: none !important; }
+      #review-sub-tabs-mobile  { display: flex; }
+    }
+
+    /* Back to projects button (desktop only) */
+    .back-proj-btn {
+      display: none; align-items: center; gap: 4px; flex-shrink: 0;
+      font-size: 12px; color: var(--gray-500); background: none; border: none;
+      cursor: pointer; padding: 2px 8px 2px 0; border-right: 1px solid var(--gray-200); margin-right: 4px;
+    }
+    @media (min-width: 769px) {
+      .project-selected .back-proj-btn { display: inline-flex; }
+    }
+
+    /* ── Content-type dots (def=red, mat=blue, note=grey) ── */
+    .space-dots { display: inline-flex; gap: 5px; align-items: center; flex-shrink: 0; }
+    .dot { font-size: 10px; font-weight: 700; white-space: nowrap; line-height: 1; }
+    .dot-def  { color: #dc2626; }
+    .dot-mat  { color: #2563eb; }
+    .dot-note { color: #6b7280; }
+
+    /* ── Project list ── */
+    .project-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); overflow: hidden; position: sticky; top: 72px; }
+    .project-panel-header { padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); border-bottom: 1px solid var(--gray-100); }
+    .project-list { list-style: none; margin: 0; padding: 6px; }
+    .project-list li a {
+      display: block; padding: 9px 12px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; color: var(--dark);
+      text-decoration: none; transition: background .12s;
+    }
+    .project-list li a:hover { background: var(--gray-50); }
+    .project-list li a.active { background: rgba(244,121,32,.1); color: var(--orange); }
+    .project-list li .proj-num { font-size: 11px; color: var(--gray-400); font-weight: 500; margin-top: 1px; }
+
+    /* ── Space panel ── */
+    .space-panel { background: #fff; border-radius: 12px; border: 1px solid var(--gray-200); }
+    .space-panel-header {
+      padding: 10px 14px; border-bottom: 1px solid var(--gray-100);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .space-panel-title { font-size: 15px; font-weight: 700; color: var(--dark); flex: 1; min-width: 0; }
+    .space-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .space-actions .sa-sep { width: 1px; height: 18px; background: var(--gray-200); flex-shrink: 0; }
+
+    /* View-toggle pills (Spaces / Types) */
+    .view-pills { display: flex; gap: 2px; background: var(--gray-100); border-radius: 8px; padding: 3px; flex-shrink: 0; }
+    .view-pill {
+      padding: 4px 12px; border-radius: 6px; border: none; background: none; cursor: pointer;
+      font-size: 12px; font-weight: 600; color: var(--gray-500); font-family: inherit;
+      transition: background .1s, color .1s;
+    }
+    .view-pill.active { background: #fff; color: var(--dark); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+    .btn-ghost {
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      font-size: 12px; font-weight: 500; color: var(--gray-500);
+      padding: 5px 8px; border-radius: 6px; transition: background .1s, color .1s;
+    }
+    .btn-ghost:hover { background: var(--gray-100); color: var(--dark); }
+
+    .space-empty { padding: 48px 24px; text-align: center; color: var(--gray-400); font-size: 14px; }
+    .space-empty svg { width: 40px; height: 40px; margin: 0 auto 12px; display: block; opacity: .3; }
+
+    /* ── Tree ── */
+    .tree { padding: 8px; }
+    .tree-node-row {
+      display: flex; align-items: center; gap: 4px;
+      padding: 5px 6px 5px 4px; border-radius: 8px; transition: background .1s;
+      position: relative; cursor: default;
+    }
+    .tree-node-row:hover { background: var(--gray-50); }
+    .tree-node-row.selected { background: rgba(244,121,32,.07); }
+
+    /* depth-based visual weight */
+    .tree-node-row.d0 { padding-top: 7px; padding-bottom: 7px; }
+    .tree-node-row.d0 .tree-label { font-size: 14px; font-weight: 700; color: var(--dark); }
+    .tree-node-row.d1 .tree-label { font-size: 13px; font-weight: 600; color: var(--dark); }
+    .tree-node-row.d2 .tree-label { font-size: 13px; font-weight: 400; color: var(--gray-700, #374151); }
+
+    .tree-guide { width: 20px; flex-shrink: 0; display: flex; justify-content: center; }
+    .tree-guide-line { width: 1px; min-height: 28px; background: var(--gray-200); }
+
+    .tree-toggle {
+      border: none; background: none; cursor: pointer;
+      width: 18px; height: 18px; padding: 0; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: var(--gray-400); border-radius: 4px;
+      transition: color .1s, background .1s; line-height: 1;
+    }
+    .tree-toggle:hover { color: var(--dark); background: var(--gray-100); }
+    .tree-toggle-spacer { width: 18px; flex-shrink: 0; }
+
+    /* Select-mode checkbox */
+    .tree-check {
+      width: 16px; height: 16px; flex-shrink: 0; cursor: pointer;
+      accent-color: var(--orange); margin: 0;
+    }
+    .tree-check-spacer { width: 16px; flex-shrink: 0; }
+
+    .tree-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .tree-type-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      color: var(--gray-400); white-space: nowrap; flex-shrink: 0;
+    }
+    /* Plan type code badge — slightly more prominent than space type */
+    .tree-plan-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      color: var(--orange); white-space: nowrap; flex-shrink: 0;
+      background: rgba(244,121,32,.1); border-radius: 4px; padding: 1px 5px;
+    }
+
+    /* ⋮ menu */
+    .tree-menu-wrap { position: relative; flex-shrink: 0; }
+    .tree-menu-btn {
+      border: none; background: none; cursor: pointer; padding: 0;
+      width: 24px; height: 24px; border-radius: 5px; font-size: 16px;
+      color: var(--gray-400); display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .1s, background .1s, color .1s;
+    }
+    .tree-node-row:hover .tree-menu-btn, .tree-menu-btn.active { opacity: 1; }
+    .tree-menu-btn:hover, .tree-menu-btn.active { background: var(--gray-100); color: var(--dark); }
+
+    .tree-menu {
+      display: none; position: absolute; right: 0; top: calc(100% + 2px);
+      background: #fff; border: 1px solid var(--gray-200);
+      border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.13);
+      min-width: 192px; z-index: 300; padding: 4px;
+    }
+    .tree-menu.open { display: block; }
+    .tree-menu button {
+      display: block; width: 100%; text-align: left; border: none; background: none;
+      padding: 8px 12px; font-size: 13px; color: var(--dark); font-family: inherit;
+      border-radius: 6px; cursor: pointer; transition: background .1s;
+    }
+    .tree-menu button:hover:not(:disabled) { background: var(--gray-50); }
+    .tree-menu button.danger { color: var(--red); }
+    .tree-menu button.danger:hover { background: #fef2f2; }
+    .tree-menu button:disabled { color: var(--gray-300); cursor: default; }
+    .tree-menu-divider { height: 1px; background: var(--gray-100); margin: 3px 0; }
+
+    .tree-children { margin-left: 20px; }
+
+    /* ── Bulk-select bar (sticky at bottom of space panel) ── */
+    .select-bar {
+      display: none; position: sticky; bottom: 0;
+      background: #fff; border-top: 1px solid var(--gray-200);
+      padding: 10px 14px; border-radius: 0 0 12px 12px;
+      align-items: center; gap: 10px;
+    }
+    .select-bar.visible { display: flex; }
+    .select-bar-count { font-size: 13px; font-weight: 600; color: var(--dark); flex: 1; }
+    @media (max-width: 900px) { .select-controls { display: none !important; } }
+
+    /* ── Space detail panel ── */
+    .space-detail { }
+    .detail-back-bar {
+      padding: 8px 14px; border-bottom: 1px solid var(--gray-100);
+    }
+    .detail-back-btn {
+      border: none; background: none; cursor: pointer; font-family: inherit;
+      font-size: 13px; font-weight: 600; color: var(--orange);
+      padding: 4px 0; display: flex; align-items: center; gap: 5px;
+    }
+    .detail-back-btn:hover { text-decoration: underline; }
+    .detail-header {
+      padding: 16px 16px 14px; border-bottom: 1px solid var(--gray-100);
+    }
+    .detail-breadcrumb {
+      font-size: 11px; color: var(--gray-400); font-weight: 500;
+      margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .detail-title {
+      font-size: 20px; font-weight: 800; color: var(--dark);
+      margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .detail-plan-badge {
+      font-size: 13px; font-weight: 700; background: rgba(244,121,32,.12);
+      color: var(--orange); border-radius: 6px; padding: 2px 8px;
+    }
+    .detail-space-type { font-size: 12px; color: var(--gray-400); margin-top: 3px; }
+    .detail-section { border-bottom: 1px solid var(--gray-100); }
+    .detail-section:last-child { border-bottom: none; }
+    .detail-section-header {
+      padding: 12px 16px 0; display: flex; align-items: center; gap: 8px;
+    }
+    .detail-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--gray-500); flex: 1;
+    }
+    .detail-section-body { padding: 8px 16px 16px; }
+    .detail-empty { font-size: 13px; color: var(--gray-400); }
+    /* File list */
+    .file-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .file-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 8px; background: var(--gray-50);
+    }
+    .file-thumb {
+      width: 40px; height: 40px; border-radius: 6px; object-fit: cover;
+      flex-shrink: 0; background: var(--gray-200); cursor: pointer;
+    }
+    .file-thumb-pdf {
+      width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0;
+      background: #fee2e2; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: #dc2626; cursor: pointer;
+    }
+    .file-info { flex: 1; min-width: 0; }
+    .file-name {
+      font-size: 13px; font-weight: 600; color: var(--dark);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+    }
+    .file-name:hover { color: var(--orange); }
+    .file-meta { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+    .file-del {
+      border: none; background: none; cursor: pointer; color: var(--gray-300);
+      font-size: 16px; padding: 4px; border-radius: 4px; flex-shrink: 0;
+      line-height: 1; transition: color .1s, background .1s;
+    }
+    .file-del:hover { color: var(--red); background: #fef2f2; }
+    /* Upload button */
+    .file-upload-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--orange);
+      cursor: pointer; border: none; background: none; font-family: inherit;
+      padding: 0;
+    }
+    .file-upload-btn:hover { text-decoration: underline; }
+    /* Full-screen file viewer */
+    .file-viewer {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.92);
+      z-index: 2000; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .file-viewer.open { display: flex; }
+    .file-viewer-close {
+      position: absolute; top: 16px; right: 16px;
+      border: none; background: rgba(255,255,255,.15); color: #fff;
+      border-radius: 8px; width: 36px; height: 36px; font-size: 20px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .file-viewer-close:hover { background: rgba(255,255,255,.25); }
+    .file-viewer img {
+      max-width: 100%; max-height: 90vh; border-radius: 8px;
+      touch-action: pinch-zoom;
+    }
+    .file-viewer iframe {
+      width: 95vw; height: 90vh; border: none; border-radius: 8px; background: #fff;
+    }
+    /* Deficiency list */
+    .def-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .def-card {
+      border: 1px solid var(--gray-200); border-radius: 10px; overflow: hidden;
+      border-left: 4px solid var(--gray-200);
+    }
+    .def-card.status-open        { border-left-color: #dc2626; }
+    .def-card.status-in_progress { border-left-color: #d97706; }
+    .def-card.status-resolved    { border-left-color: #16a34a; opacity: 0.75; }
+    .def-card-header {
+      padding: 10px 12px; display: flex; align-items: flex-start; gap: 10px;
+      background: var(--gray-50);
+    }
+    .def-status-badge {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+      border-radius: 4px; padding: 2px 7px; white-space: nowrap; flex-shrink: 0; margin-top: 2px;
+    }
+    .def-status-badge.open        { background: #fef2f2; color: #991b1b; }
+    .def-status-badge.in_progress { background: #fffbeb; color: #92400e; }
+    .def-status-badge.resolved    { background: #f0fdf4; color: #166534; }
+    .def-desc { font-size: 13px; color: var(--dark); flex: 1; line-height: 1.4; }
+    .def-meta { font-size: 11px; color: var(--gray-400); padding: 6px 12px; }
+    .def-meta + .def-meta { padding-top: 0; }
+    .def-photos { display: flex; gap: 6px; padding: 0 12px 10px; flex-wrap: wrap; }
+    .def-photo {
+      width: 56px; height: 56px; border-radius: 6px; object-fit: cover; cursor: pointer;
+    }
+    .def-actions { display: flex; gap: 6px; padding: 0 12px 10px; flex-wrap: wrap; align-items: center; }
+    .def-status-select {
+      font-size: 12px; border: 1px solid var(--gray-200); border-radius: 6px;
+      padding: 4px 8px; background: var(--surface); color: var(--dark); cursor: pointer;
+    }
+    .def-resolved-toggle {
+      margin-bottom: 12px;
+    }
+    .def-resolved-toggle summary {
+      font-size: 12px; color: var(--gray-400); cursor: pointer; padding: 4px 0;
+      list-style: none; display: flex; align-items: center; gap: 6px;
+    }
+    .def-resolved-toggle summary::before { content: '▶'; font-size: 9px; }
+    .def-resolved-toggle[open] summary::before { content: '▼'; }
+    .def-resolved-toggle .def-list { margin-top: 10px; }
+    /* ── Review view ── */
+    .review-sub-tabs { display: flex; gap: 2px; padding: 12px 12px 0; border-bottom: 1px solid var(--gray-100); margin-bottom: 0; }
+    .review-sub-tab {
+      padding: 8px 16px; border: none; background: none; cursor: pointer; font-family: inherit;
+      font-size: 13px; font-weight: 600; color: var(--gray-400); border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .review-sub-tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+    .review-pane { display: none; }
+    .review-pane.active { display: block; }
+    .review-filters { display: flex; gap: 6px; padding: 10px 12px; flex-wrap: wrap; }
+    .review-chip {
+      padding: 4px 10px; border-radius: 20px; border: 1.5px solid var(--gray-200);
+      font-size: 12px; font-weight: 600; cursor: pointer; background: var(--surface);
+      color: var(--gray-500); font-family: inherit;
+    }
+    .review-chip.active { border-color: var(--orange); color: var(--orange); background: #fff7f0; }
+    .review-list { display: flex; flex-direction: column; }
+    .review-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px; border-bottom: 1px solid var(--gray-100);
+      cursor: pointer; transition: background .1s;
+    }
+    .review-row:hover { background: var(--gray-50); }
+    .review-row-left { width: 4px; flex-shrink: 0; border-radius: 2px; align-self: stretch; min-height: 20px; }
+    .review-row-left.status-open        { background: #dc2626; }
+    .review-row-left.status-in_progress { background: #d97706; }
+    .review-row-left.status-resolved    { background: #16a34a; }
+    .review-row-body { flex: 1; min-width: 0; }
+    .review-row-desc { font-size: 14px; color: var(--dark); font-weight: 500; margin-bottom: 3px; }
+    .review-row-path { font-size: 11px; color: var(--gray-400); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .review-row-meta { font-size: 11px; color: var(--gray-400); }
+    .review-row-actions { flex-shrink: 0; display: flex; align-items: center; }
+    .review-empty { padding: 40px 16px; text-align: center; color: var(--gray-400); font-size: 14px; }
+    .review-material-toggle { display: flex; gap: 0; margin: 10px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
+    .review-material-toggle button {
+      flex: 1; padding: 8px; border: none; background: var(--surface); cursor: pointer;
+      font-size: 12px; font-weight: 600; color: var(--gray-500); font-family: inherit;
+    }
+    .review-material-toggle button.active { background: var(--orange); color: #fff; }
+    .review-totals-row {
+      padding: 10px 12px; border-bottom: 1px solid var(--gray-100);
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    .review-totals-qty { font-size: 16px; font-weight: 700; color: var(--dark); flex-shrink: 0; }
+    .review-totals-desc { font-size: 14px; color: var(--dark); flex: 1; min-width: 0; }
+    .review-totals-unit { font-size: 12px; color: var(--gray-400); }
+    .review-totals-type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-400); flex-shrink: 0; }
+    .review-group-header { padding: 6px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-400); background: var(--gray-50); border-bottom: 1px solid var(--gray-100); }
+    .review-row-check { display: flex; align-items: center; padding: 0 4px 0 0; flex-shrink: 0; }
+    .review-row-check input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--orange); }
+    .review-mat-status-select { font-size: 12px; border: 1px solid var(--gray-200); border-radius: 6px; padding: 3px 6px; background: var(--surface); color: var(--dark); cursor: pointer; }
+    .bulk-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+      background: var(--dark); color: #fff;
+      display: none; align-items: center; gap: 10px;
+      padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      font-size: 14px; font-weight: 600; box-shadow: 0 -2px 12px rgba(0,0,0,.2);
+    }
+    .bulk-bar.visible { display: flex; }
+    .bulk-bar-count { flex: 1; }
+    .bulk-bar select { font-size: 13px; border-radius: 6px; border: none; padding: 6px 10px; cursor: pointer; }
+    .bulk-bar-apply { background: var(--orange); color: #fff; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .bulk-bar-clear { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+    .review-delivered-toggle { margin: 0; }
+    .review-delivered-toggle summary { list-style: none; font-size: 12px; color: var(--gray-400); cursor: pointer; padding: 10px 12px; }
+    .review-delivered-toggle summary::before { content: '▶'; font-size: 9px; margin-right: 4px; }
+    .review-delivered-toggle[open] summary::before { content: '▼'; }
+    /* Add deficiency form */
+    .def-form { border: 1px solid var(--orange); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .def-form textarea {
+      width: 100%; box-sizing: border-box; border: 1.5px solid var(--gray-200); border-radius: 8px;
+      padding: 10px 12px; font-size: 16px; /* 16px prevents iOS auto-zoom */
+      font-family: inherit; color: var(--dark); resize: vertical; min-height: 80px;
+      outline: none; transition: border-color .15s;
+    }
+    .def-form textarea:focus { border-color: var(--orange); }
+    .def-form-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .def-photo-preview { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .def-photo-preview img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; }
+    .def-error { font-size: 13px; color: var(--red); margin-top: 6px; }
+    /* Add deficiency trigger button */
+    .def-add-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--orange);
+      cursor: pointer; border: none; background: none; font-family: inherit; padding: 0;
+    }
+    .def-add-btn:hover { text-decoration: underline; }
+    /* Inherited content (e.g. panel schedule from a plan type) */
+    .detail-inherited {
+      background: var(--gray-50); border-radius: 8px; padding: 12px 14px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .detail-inherited-from {
+      margin-left: auto; font-size: 11px; color: var(--gray-400);
+      white-space: nowrap; font-weight: 500;
+    }
+
+    /* ── Types view ── */
+    .types-view { padding: 12px; }
+    .types-table { width: 100%; border-collapse: collapse; }
+    .types-table th {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+      color: var(--gray-500); text-align: left; padding: 6px 10px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .types-table td { padding: 10px 10px; border-bottom: 1px solid var(--gray-50); vertical-align: middle; }
+    .types-table tr:last-child td { border-bottom: none; }
+    .types-table tbody tr { cursor: pointer; }
+    .types-table tbody tr:hover td { background: var(--gray-50); }
+    .type-code { font-size: 16px; font-weight: 800; color: var(--dark); }
+    .type-name-input {
+      border: none; background: none; font-size: 13px; color: var(--gray-600);
+      font-family: inherit; width: 100%; padding: 2px 4px; border-radius: 4px;
+      transition: background .1s;
+    }
+    .type-name-input:hover { background: var(--gray-100); }
+    .type-name-input:focus { background: var(--gray-100); outline: 1px solid var(--orange); }
+    .type-count { font-size: 12px; color: var(--gray-500); white-space: nowrap; }
+    .type-panel-actions { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+    .type-panel-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gray-300); }
+    .type-panel-dot.has-panel { background: #22c55e; }
+
+    /* ── Type detail ── */
+    .type-detail { display: flex; flex-direction: column; }
+    .type-detail-back-bar {
+      padding: 10px 14px 0;
+    }
+    .type-detail-back-btn {
+      background: none; border: none; font-family: inherit; font-size: 13px;
+      font-weight: 600; color: var(--orange); cursor: pointer; padding: 4px 0;
+    }
+    .type-detail-back-btn:hover { text-decoration: underline; }
+    .type-detail-banner {
+      margin: 10px 14px; padding: 12px 14px;
+      background: #fff7ed; border: 1.5px solid #fed7aa; border-radius: 10px;
+      font-size: 13px; color: #9a3412; line-height: 1.45;
+    }
+    .type-detail-banner strong { font-weight: 700; }
+    .type-detail-header { padding: 4px 14px 14px; border-bottom: 1px solid var(--gray-100); }
+    .type-detail-code { font-size: 26px; font-weight: 900; color: var(--dark); line-height: 1.1; }
+    .type-detail-name { font-size: 14px; color: var(--gray-500); margin-top: 2px; }
+    .type-detail-count { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+    .type-detail-sections { padding: 0; }
+    .type-detail-section { border-bottom: 1px solid var(--gray-100); padding: 14px; }
+    .type-detail-section:last-child { border-bottom: none; }
+    .type-detail-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--gray-400); margin-bottom: 10px;
+    }
+    .type-notes-textarea {
+      width: 100%; box-sizing: border-box; border: 1.5px solid var(--gray-200);
+      border-radius: 8px; padding: 10px 11px; font-size: 16px; font-family: inherit;
+      color: var(--dark); resize: vertical; min-height: 80px; outline: none;
+      transition: border-color .15s;
+    }
+    .type-notes-textarea:focus { border-color: var(--orange); }
+    .type-notes-saved { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+    .type-panel-section { display: flex; flex-direction: column; gap: 8px; }
+    .type-panel-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    /* ── Modals ── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 14px; padding: 24px;
+      width: 420px; max-width: calc(100vw - 32px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    .modal h3 { font-size: 16px; font-weight: 800; color: var(--dark); margin: 0 0 16px; }
+    .form-row { margin-bottom: 14px; }
+    .form-row label { display: block; font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 5px; }
+    .form-row input, .form-row select, .form-row textarea {
+      width: 100%; box-sizing: border-box;
+      border: 1.5px solid var(--gray-200); border-radius: 8px;
+      padding: 9px 11px; font-size: 13px; color: var(--dark);
+      background: #fff; outline: none; font-family: inherit;
+      transition: border-color .15s;
+    }
+    .form-row input:focus, .form-row select:focus, .form-row textarea:focus { border-color: var(--orange); }
+    .form-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .modal-tabs { display: flex; border-bottom: 1px solid var(--gray-100); margin-bottom: 16px; }
+    .modal-tab {
+      padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+      border: none; background: none; color: var(--gray-400);
+      border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit;
+    }
+    .modal-tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+
+    /* ── Mobile single-pane navigation (hidden on desktop) ── */
+    #mobile-nav { display: none; }
+    #mobile-types-header { display: none; }
+
+    @media (max-width: 768px) {
+      .page-wrap { padding: 0 0 48px; }
+      .ws-layout { display: block; }
+      .project-panel { display: none; }
+      .space-panel { border-radius: 0; border-left: none; border-right: none; border-top: none; }
+      .space-panel-header { display: none; }
+      #space-empty { display: none; }
+      #space-tree { display: none !important; }
+      #space-detail { display: none !important; }
+      #mobile-nav { display: block; }
+      #mobile-types-header { display: block; }
+
+      .mn-header {
+        padding: 10px 16px 14px; border-bottom: 1px solid var(--gray-100);
+        background: #fff; position: sticky; top: 52px; z-index: 40;
+      }
+      .mn-nav-row { display: flex; align-items: center; min-height: 36px; }
+      .mn-back-btn {
+        background: none; border: none; font-family: inherit;
+        font-size: 14px; font-weight: 600; color: var(--orange);
+        cursor: pointer; padding: 6px 0; white-space: nowrap;
+      }
+      #mn-pills { margin-top: 10px; }
+      #mn-pills .view-pills { display: flex; gap: 0; width: 100%; }
+      #mn-pills .view-pill { flex: 1; min-height: 44px; font-size: 15px; }
+      .mn-breadcrumb {
+        font-size: 11px; color: var(--gray-400); font-weight: 500;
+        margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .mn-title {
+        font-size: 20px; font-weight: 800; color: var(--dark); line-height: 1.2; margin-top: 4px;
+      }
+      .mn-group-heading {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .07em; color: var(--gray-400); padding: 14px 16px 4px;
+      }
+      .mn-child-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 14px 16px; border-bottom: 1px solid var(--gray-100);
+        cursor: pointer; background: #fff; -webkit-tap-highlight-color: transparent;
+        min-height: 44px;
+      }
+      .mn-child-row:active { background: var(--gray-50); }
+      .mn-child-label { font-size: 16px; font-weight: 600; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .mn-child-sub { font-size: 12px; color: var(--gray-400); margin-top: 1px; }
+      .mn-child-badge {
+        font-size: 10px; font-weight: 700; color: var(--orange);
+        background: rgba(244,121,32,.1); border-radius: 4px;
+        padding: 2px 6px; white-space: nowrap; flex-shrink: 0;
+      }
+      .mn-child-chevron { color: var(--gray-300); font-size: 20px; flex-shrink: 0; line-height: 1; }
+
+      /* Types table: drop Name column on narrow screens */
+      .types-table th:nth-child(2), .types-table td:nth-child(2) { display: none; }
+    }
+
+    /* ── Deficiency rollup badges ──────────────────────────────── */
+    .def-badge {
+      display: inline-block; border-radius: 10px;
+      font-size: 10px; font-weight: 700; padding: 1px 6px; flex-shrink: 0;
+    }
+    .def-badge-open { background: #fecaca; color: #991b1b; }
+    .def-badge-ip   { background: #fde68a; color: #92400e; }
+
+    /* ── Lists & Notes ─────────────────────────────────────────── */
+    .list-block { margin-bottom: 12px; }
+    .list-block-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0 6px; border-bottom: 1px solid var(--gray-100);
+    }
+    .list-block-title { font-size: 13px; font-weight: 600; color: var(--gray-700); flex: 1; }
+    .list-block-del { background: none; border: none; color: var(--gray-300);
+      font-size: 14px; cursor: pointer; padding: 2px 6px; line-height: 1; }
+    .list-block-del:hover { color: var(--red); }
+    .list-inherited-banner {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--gray-50); border-radius: 6px;
+      padding: 6px 10px; margin-bottom: 6px; font-size: 11px; color: var(--gray-500);
+    }
+    .list-item-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 0; border-bottom: 1px solid var(--gray-50);
+    }
+    .list-item-row:last-of-type { border-bottom: none; }
+    .list-item-desc { flex: 1; font-size: 13px; color: var(--gray-700); }
+    .list-item-qty { font-size: 12px; color: var(--gray-500); white-space: nowrap; }
+    .list-item-status {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+      border-radius: 4px; padding: 2px 6px; white-space: nowrap; cursor: pointer;
+      border: none; flex-shrink: 0;
+    }
+    .list-item-status.needed    { background: #fee2e2; color: #991b1b; }
+    .list-item-status.ordered   { background: #fef3c7; color: #92400e; }
+    .list-item-status.delivered { background: #dcfce7; color: #166534; }
+    .list-item-del { background: none; border: none; color: var(--gray-300);
+      font-size: 12px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+    .list-item-del:hover { color: var(--red); }
+    .list-add-form { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .list-add-form input[type=text] {
+      flex: 1; min-width: 120px; font-size: 13px;
+      border: 1px solid var(--gray-200); border-radius: 6px; padding: 6px 10px;
+    }
+    .list-add-form input[type=number] {
+      width: 60px; font-size: 13px;
+      border: 1px solid var(--gray-200); border-radius: 6px; padding: 6px 8px;
+    }
+    .list-add-form .btn-add-item {
+      background: var(--orange); color: #fff; border: none; border-radius: 6px;
+      padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+      min-height: 44px;
+    }
+    .lists-create-row { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .lists-create-row select {
+      font-size: 13px; border: 1px solid var(--gray-200); border-radius: 6px; padding: 6px 10px;
+    }
+
+    /* ── Notes ─────────────────────────────────────────────────── */
+    .note-entry { padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
+    .note-entry:last-of-type { border-bottom: none; }
+    .note-meta { font-size: 11px; color: var(--gray-400); margin-bottom: 4px;
+      display: flex; align-items: center; gap: 6px; }
+    .note-author { font-weight: 600; color: var(--gray-600); }
+    .note-body { font-size: 13px; color: var(--gray-700); white-space: pre-wrap; line-height: 1.5; }
+    .note-del { background: none; border: none; color: var(--gray-300);
+      font-size: 12px; cursor: pointer; padding: 0 4px; margin-left: auto; }
+    .note-del:hover { color: var(--red); }
+    .note-add-form { margin-top: 10px; }
+    .note-add-form textarea {
+      width: 100%; box-sizing: border-box; font-size: 13px;
+      border: 1px solid var(--gray-200); border-radius: 6px; padding: 8px 10px;
+      min-height: 70px; resize: vertical; font-family: inherit; line-height: 1.5;
+    }
+    .note-add-form .btn-add-note {
+      margin-top: 6px; background: var(--orange); color: #fff; border: none;
+      border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600;
+      cursor: pointer; min-height: 44px;
+    }
+  </style>
+</head>
+<body>
+
+<header class="ws-header">
+  <a href="index.html"><img src="logo-bolt.png" alt="J&D Western Electric"/></a>
+  <span class="ws-header-title">Worksites</span>
+  <a href="index.html">← Field Hub</a>
+</header>
+
+<div class="page-wrap">
+  <div class="ws-layout">
+
+    <!-- Project list -->
+    <div class="project-panel">
+      <div class="project-panel-header">Projects</div>
+      <ul class="project-list" id="project-list">
+        <li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">Loading…</li>
+      </ul>
+    </div>
+
+    <!-- Space / Types / Review panel -->
+    <div class="space-panel" id="space-panel">
+      <!-- Sticky wrapper: panel header + review sub-tabs stick together as one block -->
+      <div class="sticky-header">
+        <div class="space-panel-header">
+          <button class="back-proj-btn" id="back-proj-btn" onclick="backToProjects()">← Projects</button>
+          <span class="space-panel-title" id="space-panel-title">Select a project</span>
+          <div class="view-pills" id="view-pills" style="display:none;">
+            <button class="view-pill active" onclick="switchView('spaces')">Spaces</button>
+            <button class="view-pill"        onclick="switchView('types')">Types</button>
+            <button class="view-pill"        onclick="switchView('review')">Review</button>
+          </div>
+          <div class="space-actions" id="space-actions" style="display:none;"></div>
+        </div>
+        <!-- Desktop-only review sub-tabs — hidden on mobile via CSS -->
+        <div class="review-sub-tabs" id="review-sub-tabs-desktop" style="display:none;">
+          <button class="review-sub-tab active" onclick="switchReviewTab('deficiencies')">Deficiencies</button>
+          <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
+          <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
+        </div>
+      </div>
+
+      <!-- Spaces view -->
+      <div id="view-spaces">
+        <div class="space-empty" id="space-empty">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
+          <p>Select a project on the left to view its spaces.</p>
+        </div>
+        <!-- Mobile single-pane navigation (hidden on desktop via CSS) -->
+        <div id="mobile-nav">
+          <div class="mn-header" id="mn-header">
+            <div class="mn-nav-row">
+              <button class="mn-back-btn" id="mn-back" onclick="history.back()" style="display:none;">&#8592; Back</button>
+            </div>
+            <div class="mn-breadcrumb" id="mn-breadcrumb"></div>
+            <div class="mn-title" id="mn-title"></div>
+            <div id="mn-pills" style="display:none;"></div>
+          </div>
+          <div id="mn-content"></div>
+        </div>
+
+        <div class="tree" id="space-tree" style="display:none;"></div>
+        <!-- Space detail panel — replaces tree when a space is tapped -->
+        <div class="space-detail" id="space-detail" style="display:none;">
+          <div class="detail-back-bar">
+            <button class="detail-back-btn" onclick="closeDetail()">&#8592; Back</button>
+          </div>
+          <div class="detail-header">
+            <div class="detail-breadcrumb" id="detail-breadcrumb"></div>
+            <h2 class="detail-title" id="detail-title"></h2>
+            <div class="detail-space-type" id="detail-space-type"></div>
+          </div>
+          <div class="detail-sections" id="detail-sections"></div>
+        </div>
+        <!-- Bulk-select bar -->
+        <div class="select-bar" id="select-bar">
+          <span class="select-bar-count" id="select-count">0 selected</span>
+          <button class="btn btn-sm btn-secondary" onclick="openAssignTypeModal()">Assign Type</button>
+          <button class="btn btn-sm btn-ghost" onclick="exitSelectMode()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Types view (hidden until "Types" tab clicked) -->
+      <div id="view-types" style="display:none;">
+        <!-- Types list -->
+        <div class="types-view" id="types-list-view">
+          <!-- Mobile header for types view (hidden on desktop) -->
+          <div id="mobile-types-header">
+            <div class="mn-header">
+              <div class="mn-nav-row">
+                <div class="mn-spacer"></div>
+                <div class="view-pills">
+                  <button class="view-pill" onclick="switchView('spaces')">Spaces</button>
+                  <button class="view-pill active">Types</button>
+                </div>
+              </div>
+              <div class="mn-title" id="mobile-types-title"></div>
+            </div>
+          </div>
+          <div id="types-empty" style="padding:32px 0;text-align:center;color:var(--gray-400);font-size:14px;">
+            No types defined for this project yet.
+          </div>
+          <table class="types-table" id="types-table" style="display:none;">
+            <thead>
+              <tr>
+                <th>Type</th><th>Name</th><th>Suites</th><th>Panel</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="types-tbody"></tbody>
+          </table>
+        </div>
+        <!-- Type detail panel -->
+        <div class="type-detail" id="type-detail" style="display:none;">
+          <div class="type-detail-back-bar">
+            <button class="type-detail-back-btn" onclick="closeTypeDetail()">&#8592; Back to Types</button>
+          </div>
+          <div class="type-detail-banner" id="type-detail-banner"></div>
+          <div class="type-detail-header">
+            <div class="type-detail-code" id="type-detail-code"></div>
+            <div class="type-detail-name" id="type-detail-name"></div>
+            <div class="type-detail-count" id="type-detail-count"></div>
+          </div>
+          <div class="type-detail-sections" id="type-detail-sections"></div>
+        </div>
+      </div>
+      <!-- Review view — moved inside space-panel so sticky-header covers it -->
+      <div id="view-review" style="display:none;">
+        <!-- Left: list panel -->
+        <div id="review-list-panel">
+          <!-- Mobile header (hidden on desktop via CSS) -->
+          <div id="mobile-review-header">
+            <div class="mn-header">
+              <div class="mn-nav-row">
+                <div class="mn-spacer"></div>
+                <div class="view-pills">
+                  <button class="view-pill" onclick="mobileSwitchTab('spaces')">Spaces</button>
+                  <button class="view-pill" onclick="mobileSwitchTab('types')">Types</button>
+                  <button class="view-pill active">Review</button>
+                </div>
+              </div>
+              <div class="mn-title" id="mobile-review-title"></div>
+            </div>
+          </div>
+          <!-- Mobile-only sub-tabs (desktop version is in sticky-header above) -->
+          <div class="review-sub-tabs" id="review-sub-tabs-mobile">
+            <button class="review-sub-tab active" onclick="switchReviewTab('deficiencies')">Deficiencies</button>
+            <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
+            <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
+          </div>
+          <!-- Deficiencies pane -->
+          <div id="review-pane-deficiencies" class="review-pane active">
+            <div class="review-filters" id="review-def-filters">
+              <button class="review-chip active" data-status="open"        onclick="toggleDefFilter(this)">Open</button>
+              <button class="review-chip active" data-status="in_progress" onclick="toggleDefFilter(this)">In Progress</button>
+              <button class="review-chip"        data-status="resolved"    onclick="toggleDefFilter(this)">Resolved</button>
+            </div>
+            <div id="review-def-list" class="review-list"></div>
+          </div>
+          <!-- Notes pane -->
+          <div id="review-pane-notes" class="review-pane">
+            <div id="review-notes-list" class="review-list"></div>
+          </div>
+          <!-- Material pane -->
+          <div id="review-pane-material" class="review-pane">
+            <div class="review-filters" id="review-mat-filters" style="justify-content:space-between;">
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button class="review-chip active" data-st="needed"    onclick="toggleMatStatus(this)">Needed</button>
+                <button class="review-chip active" data-st="ordered"   onclick="toggleMatStatus(this)">Ordered</button>
+                <button class="review-chip"        data-st="delivered" onclick="toggleMatStatus(this)">Delivered</button>
+              </div>
+              <div id="review-mat-actions" style="display:none;gap:6px;flex-shrink:0;align-items:center;">
+                <button class="btn btn-sm btn-ghost" onclick="openPickSheet()">Pick Sheet</button>
+                <span id="review-mat-exports" style="display:none;gap:6px;">
+                  <a id="btn-export-summary"  class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export Summary</a>
+                  <a id="btn-export-by-suite" class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank">Export By Suite</a>
+                </span>
+              </div>
+            </div>
+            <div id="review-mat-list" class="review-list"></div>
+          </div>
+        </div><!-- /#review-list-panel -->
+
+        <!-- Right: space detail panel (desktop only) -->
+        <div id="review-space-panel">
+          <div class="review-space-panel-hdr">
+            <h3 id="review-space-title"></h3>
+            <button class="btn btn-sm btn-ghost" onclick="closeReviewDetailPanel()" style="flex-shrink:0;">✕</button>
+          </div>
+          <div id="review-space-body"></div>
+        </div>
+      </div><!-- /#view-review -->
+
+    </div><!-- /.space-panel -->
+  </div><!-- /.ws-layout -->
+</div><!-- /.page-wrap -->
+
+<!-- Bulk action bar (manage only, shown when rows are selected in Review) -->
+<div class="bulk-bar" id="bulk-bar">
+  <div class="bulk-bar-count" id="bulk-bar-count">0 selected</div>
+  <select id="bulk-bar-select"></select>
+  <button class="bulk-bar-apply" onclick="applyBulkAction()">Apply</button>
+  <button class="bulk-bar-clear" onclick="clearBulkSelection()">Clear</button>
+</div>
+
+<!-- Add Space Modal -->
+<div class="modal-backdrop" id="add-modal">
+  <div class="modal">
+    <h3 id="add-modal-title">Add Space</h3>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-single" onclick="switchTab('single')">Single</button>
+      <button class="modal-tab" id="tab-bulk" onclick="switchTab('bulk')">Bulk Generate</button>
+    </div>
+    <div id="pane-single">
+      <div class="form-row">
+        <label>Type</label>
+        <select id="single-type"></select>
+      </div>
+      <div class="form-row">
+        <label>Identifier (e.g. "Unit 101", "Building A")</label>
+        <input type="text" id="single-identifier" placeholder="Unit 101"/>
+      </div>
+    </div>
+    <div id="pane-bulk" style="display:none;">
+      <div class="form-row">
+        <label>Type</label>
+        <select id="bulk-type"></select>
+      </div>
+      <div class="form-row">
+        <label>Prefix (optional, e.g. "Unit ")</label>
+        <input type="text" id="bulk-prefix" placeholder="Unit "/>
+      </div>
+      <div class="form-row form-inline">
+        <div><label>Start #</label><input type="number" id="bulk-start" value="101" min="1"/></div>
+        <div><label>End #</label><input type="number" id="bulk-end" value="110" min="1"/></div>
+      </div>
+      <div class="form-row">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="bulk-pad" checked style="width:auto;"/> Zero-pad numbers (101 not 1)
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAdd()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Space Modal -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <h3>Rename Space</h3>
+    <div class="form-row">
+      <label>Type</label>
+      <select id="edit-type"></select>
+    </div>
+    <div class="form-row">
+      <label>Identifier</label>
+      <input type="text" id="edit-identifier"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate Space Modal -->
+<div class="modal-backdrop" id="dup-modal">
+  <div class="modal">
+    <h3>Duplicate Space</h3>
+    <p style="font-size:13px;color:var(--gray-500);margin:0 0 16px;">Copies this space and everything inside it.</p>
+    <div class="form-row">
+      <label>New Identifier (e.g. "Building 2")</label>
+      <input type="text" id="dup-identifier" placeholder="Building 2"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDupModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitDuplicate()">Duplicate</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Type Modal (bulk-select) -->
+<div class="modal-backdrop" id="assign-type-modal">
+  <div class="modal">
+    <h3>Assign Type</h3>
+    <p id="assign-type-subtitle" style="font-size:13px;color:var(--gray-500);margin:0 0 14px;"></p>
+    <div class="form-row">
+      <label>Plan Type</label>
+      <select id="assign-type-select">
+        <option value="">— Remove type —</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAssignTypeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAssignType()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Type Modal -->
+<div class="modal-backdrop" id="add-type-modal">
+  <div class="modal">
+    <h3>Add Plan Type</h3>
+    <div class="form-row">
+      <label>Code (e.g. "A", "B", "2BR")</label>
+      <input type="text" id="new-type-code" placeholder="A" style="text-transform:uppercase;"/>
+    </div>
+    <div class="form-row">
+      <label>Name (optional)</label>
+      <input type="text" id="new-type-name" placeholder="1BR Corner"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddTypeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddType()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pick Sheet Modal -->
+<div class="modal-backdrop" id="pick-sheet-modal" style="display:none;" onclick="if(event.target===this)closePickSheetModal()">
+  <div class="modal" style="width:340px;">
+    <h3>Pick Sheet</h3>
+    <div class="form-row">
+      <label>Filter by building (optional)</label>
+      <select id="ps-building-filter"><option value="">All buildings</option></select>
+    </div>
+    <div class="form-row">
+      <label>Filter by floor (optional)</label>
+      <select id="ps-floor-filter"><option value="">All floors</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePickSheetModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="printPickSheet()">Print</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOCAL banner -->
+<script>
+(function () {
+  fetch('/api/env')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d.local) return;
+      var b = document.createElement('div');
+      b.textContent = 'LOCAL — TEST DATA';
+      b.style.cssText = [
+        'position:fixed','top:0','left:0','right:0','z-index:99999',
+        'background:#dc2626','color:#fff','text-align:center',
+        'font-size:11px','font-weight:800','letter-spacing:.1em',
+        'padding:4px 0','pointer-events:none','user-select:none',
+      ].join(';');
+      document.body.appendChild(b);
+      document.querySelector('.ws-header').style.top = '22px';
+    })
+    .catch(function () {});
+})();
+</script>
+
+<script>
+'use strict';
+
+// Space type name → short uppercase badge
+const ABBREV = {
+  'Building':         'BLDG',
+  'Floor':            'FLOOR',
+  'Suite':            'SUITE',
+  'Stairwell':        'STAIR',
+  'Parkade':          'PKDE',
+  'Electrical Room':  'ELEC RM',
+  'Mechanical Room':  'MECH RM',
+  'Lobby':            'LOBBY',
+  'Common Area':      'COMMON',
+  'Storage Room':     'STORAGE',
+  'Exterior':         'EXT',
+  'General':          'GEN',
+  'Roof':             'ROOF',
+  'Garage':           'GARAGE',
+  'Elevator':         'ELEV',
+  'Mechanical Shaft': 'MECH SHF',
+};
+
+let _spaceTypes      = [];
+let _planTypes       = [];      // plan types for active project
+let _spaces          = [];
+let _projects        = [];      // cached project list (needed for mobile re-render)
+let _activeProjectId = null;
+let _canEdit         = false;
+let _reviewAccess    = 'none'; // worksites_review module level
+let _canManageReview = false;
+let _currentView     = 'spaces'; // 'spaces' | 'types' | 'review'
+let _spaceCounts     = {};      // { spaceId: { open, inProgress, matCount, noteCount } } — refreshed on project load and after mutations
+let _currentReviewTab   = 'deficiencies'; // 'deficiencies' | 'notes' | 'material'
+// _reviewMatView removed (Chunk 10: single flat list, no toggle)
+let _mobileReturnView   = null;           // set when navigating to a space from Review on mobile
+let _detailOrigin       = null;           // 'review' when detail opened from Review on desktop
+
+// Mobile navigation
+let _mobileStack     = [];      // [{id: spaceId|null, scrollY: number}]
+let _wasMobile       = null;    // null = not yet initialized
+
+// Tree state
+let _expanded        = new Set();
+let _openMenuId      = null;
+
+// Modal state
+let _addParentId     = null;
+let _editSpaceId     = null;
+let _dupSpaceId      = null;
+let _activeTab       = 'single';
+
+// Select mode
+let _selectMode      = false;
+let _selected        = new Set(); // space IDs
+let _detailSpaceId   = null;
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+
+(async function init() {
+  const me = await fetch('/api/auth/me').then(r => r.json()).catch(() => null);
+  if (!me || !me.id) { location.href = '/login.html'; return; }
+
+  const access = (me.module_permissions || {}).worksites || 'none';
+  if (access === 'none') { location.href = '/index.html'; return; }
+  _canEdit = access === 'manage';
+  _reviewAccess    = (me.module_permissions || {}).worksites_review || 'none';
+  _canManageReview = _reviewAccess === 'manage';
+  _userId = me.id;
+
+  _wasMobile = isMobile();
+
+  _spaceTypes = await fetch('/api/space-types').then(r => r.json()).catch(() => []);
+  populateTypeSelects();
+  await loadProjects();
+  if (isMobile()) renderMobileProjectList();
+})();
+
+document.addEventListener('click', () => closeMenu());
+
+// ── Projects ─────────────────────────────────────────────────────────────────
+
+async function loadSpaceCounts(projectId) {
+  try {
+    const rows = await fetch(`/api/projects/${projectId}/space-counts`).then(r => r.json());
+    _spaceCounts = {};
+    for (const r of rows) {
+      _spaceCounts[r.space_id] = {
+        open: r.open_def, inProgress: r.ip_def,
+        matCount: r.mat_count, noteCount: r.note_count,
+      };
+    }
+    if (!isMobile()) renderTree();
+  } catch {}
+}
+
+function spaceDots(spaceId) {
+  const c = _spaceCounts[spaceId];
+  if (!c) return '';
+  const def = (c.open || 0) + (c.inProgress || 0);
+  const parts = [];
+  if (def)          parts.push(`<span class="dot dot-def">● ${def}</span>`);
+  if (c.matCount)   parts.push(`<span class="dot dot-mat">● ${c.matCount}</span>`);
+  if (c.noteCount)  parts.push(`<span class="dot dot-note">● ${c.noteCount}</span>`);
+  return parts.length ? `<span class="space-dots">${parts.join('')}</span>` : '';
+}
+
+function projDefBadge(p) {
+  const open = p.def_open || 0;
+  const ip   = p.def_in_progress || 0;
+  const total = open + ip;
+  if (!total) return '';
+  const cls = open > 0 ? 'def-badge-open' : 'def-badge-ip';
+  return `<span class="def-badge ${cls}">${total}</span>`;
+}
+
+async function loadProjects() {
+  _projects = await fetch('/api/project-folders').then(r => r.json()).catch(() => []);
+  const list = document.getElementById('project-list');
+  if (!_projects.length) {
+    list.innerHTML = '<li style="padding:12px 16px;font-size:13px;color:var(--gray-400);">No active projects.</li>';
+    return;
+  }
+  list.innerHTML = _projects.map(p => `
+    <li>
+      <a href="#" onclick="selectProject(${p.id},${JSON.stringify(p.name).replace(/"/g,'&quot;')},this);return false;">
+        <span style="display:flex;align-items:center;gap:6px;">
+          ${escHtml(p.name)}
+          ${projDefBadge(p)}
+        </span>
+        <div class="proj-num">${escHtml(p.job_numbers || '')}</div>
+      </a>
+    </li>
+  `).join('');
+}
+
+async function selectProject(id, name, el) {
+  _activeProjectId = id;
+  _currentView = 'spaces';
+  exitSelectMode();
+  closeDetail();
+  closeTypeDetail();
+
+  if (isMobile()) {
+    // Update types-view mobile header title
+    const mtt = document.getElementById('mobile-types-title');
+    if (mtt) mtt.textContent = name;
+    // Show loading in mobile nav
+    document.getElementById('mn-back').style.display = 'none';
+    document.getElementById('mn-breadcrumb').textContent = '';
+    document.getElementById('mn-title').textContent = name;
+    document.getElementById('mn-pills').innerHTML = '';
+    document.getElementById('mn-content').innerHTML =
+      '<div style="padding:24px 16px;color:var(--gray-400);font-size:14px;">Loading…</div>';
+    // Fetch data before rendering
+    [_spaces, _planTypes] = await Promise.all([
+      fetch(`/api/projects/${id}/spaces`).then(r => r.json()).catch(() => []),
+      fetch(`/api/projects/${id}/plan-types`).then(r => r.json()).catch(() => []),
+    ]);
+    loadSpaceCounts(id);  // async — badges appear as soon as counts arrive
+    _mobileStack = [];
+    pushMobileLevel(null);
+    return;
+  }
+
+  // Desktop path — collapse sidebar so content gets full width
+  document.querySelector('.ws-layout').classList.add('project-selected');
+  document.querySelectorAll('.project-list a').forEach(a => a.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('space-panel-title').textContent = name;
+  document.getElementById('view-pills').style.display = 'flex';
+  document.querySelector('#view-pills .view-pill[onclick*="review"]').style.display =
+    _reviewAccess !== 'none' ? '' : 'none';
+  loadExpandedState();
+  renderPanelHeader();
+  loadSpaces();
+  loadPlanTypes();
+  loadSpaceCounts(id);  // async — re-renders tree nodes once counts arrive
+}
+
+function backToProjects() {
+  _activeProjectId = null;
+  _spaces = [];
+  _planTypes = [];
+  _spaceCounts = {};
+  closeReviewDetailPanel();
+  document.querySelector('.ws-layout').classList.remove('project-selected');
+  document.getElementById('view-pills').style.display = 'none';
+  document.getElementById('review-sub-tabs-desktop').style.display = 'none';
+  document.getElementById('space-actions').style.display = 'none';
+  document.getElementById('space-panel-title').textContent = 'Select a project';
+  document.querySelectorAll('.project-list a').forEach(a => a.classList.remove('active'));
+  switchView('spaces');
+}
+
+function renderPanelHeader() {
+  const actions = document.getElementById('space-actions');
+  actions.style.display = 'flex';
+
+  let html = '';
+
+  if (_currentView === 'spaces') {
+    html += `
+      <button class="btn-ghost" onclick="expandAll()">Expand All</button>
+      <button class="btn-ghost" onclick="collapseAll()">Collapse All</button>
+    `;
+    if (_canEdit) {
+      html += `
+        <span class="sa-sep"></span>
+        <button class="btn btn-sm btn-secondary select-controls" onclick="enterSelectMode()">Select</button>
+        <button class="btn btn-sm btn-secondary" onclick="openAddModal(null)">+ Add Space</button>
+        <button class="btn btn-sm btn-secondary" onclick="openAddModal(null,'bulk')">Bulk Generate</button>
+      `;
+    }
+  } else {
+    if (_canEdit) {
+      html += `<button class="btn btn-sm btn-secondary" onclick="openAddTypeModal()">+ Add Type</button>`;
+    }
+  }
+
+  actions.innerHTML = html;
+}
+
+function switchView(view) {
+  _currentView = view;
+  exitSelectMode();
+  closeDetail();
+  closeTypeDetail();
+  document.querySelectorAll('#view-pills .view-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === view);
+  });
+  renderPanelHeader();
+  document.getElementById('view-spaces').style.display = view === 'spaces' ? '' : 'none';
+  document.getElementById('view-types').style.display  = view === 'types'  ? '' : 'none';
+  document.getElementById('view-review').style.display = view === 'review' ? '' : 'none';
+
+  // Desktop: show sub-tabs inside sticky-header when in review; hide when leaving
+  const deskTabs = document.getElementById('review-sub-tabs-desktop');
+  if (deskTabs) deskTabs.style.display = (view === 'review' && !isMobile()) ? 'flex' : 'none';
+
+  // Close review space panel when leaving review view
+  if (view !== 'review') closeReviewDetailPanel();
+
+  if (view === 'types') {
+    const mtt = document.getElementById('mobile-types-title');
+    if (mtt) mtt.textContent = document.getElementById('space-panel-title').textContent || '';
+    renderTypesView();
+  }
+  if (view === 'review') {
+    const mrt = document.getElementById('mobile-review-title');
+    if (mrt) {
+      const projectName = document.getElementById('mn-title').textContent
+        || document.getElementById('space-panel-title').textContent || '';
+      mrt.textContent = projectName;
+    }
+    loadReviewTab(_currentReviewTab);
+  }
+  if (view === 'spaces' && isMobile()) renderMobileLevel();
+}
+
+// ── Expand / collapse state ──────────────────────────────────────────────────
+
+function expandedKey() { return 'ws_expanded_' + _activeProjectId; }
+
+function loadExpandedState() {
+  try {
+    const raw = localStorage.getItem(expandedKey());
+    _expanded = raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) { _expanded = new Set(); }
+}
+
+function saveExpandedState() {
+  try { localStorage.setItem(expandedKey(), JSON.stringify([..._expanded])); } catch (e) {}
+}
+
+function toggleNode(id) {
+  const childDiv = document.getElementById('ch-' + id);
+  const btn      = document.querySelector('[data-toggle="' + id + '"]');
+  if (!childDiv) return;
+  if (_expanded.has(id)) {
+    _expanded.delete(id);
+    childDiv.style.display = 'none';
+    if (btn) btn.textContent = '▸';
+  } else {
+    _expanded.add(id);
+    childDiv.style.display = '';
+    if (btn) btn.textContent = '▾';
+  }
+  saveExpandedState();
+}
+
+function expandAll() {
+  _spaces.filter(s => _spaces.some(c => c.parent_id === s.id)).forEach(s => _expanded.add(s.id));
+  saveExpandedState();
+  renderTree();
+}
+
+function collapseAll() {
+  _expanded.clear();
+  saveExpandedState();
+  renderTree();
+}
+
+// ── Spaces ───────────────────────────────────────────────────────────────────
+
+async function loadSpaces() {
+  if (!_activeProjectId) return;
+  _spaces = await fetch(`/api/projects/${_activeProjectId}/spaces`).then(r => r.json()).catch(() => []);
+  renderTree();
+}
+
+function renderTree() {
+  if (isMobile()) return;
+  const tree  = document.getElementById('space-tree');
+  const empty = document.getElementById('space-empty');
+  if (!_spaces.length) {
+    tree.style.display  = 'none';
+    empty.style.display = 'block';
+    empty.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
+      <p>${_canEdit ? 'No spaces yet. Use <strong>+ Add Space</strong> or <strong>Bulk Generate</strong> to get started.' : 'No spaces have been set up for this project yet.'}</p>`;
+    return;
+  }
+  empty.style.display = 'none';
+  // Don't override display if the detail panel is currently open
+  if (!_detailSpaceId) tree.style.display = 'block';
+  tree.innerHTML = renderChildren(null, 0);
+}
+
+function renderChildren(parentId, depth) {
+  return _spaces
+    .filter(s => s.parent_id == parentId)
+    .map(s => renderNode(s, depth))
+    .join('');
+}
+
+function renderNode(s, depth) {
+  const hasKids  = _spaces.some(c => c.parent_id === s.id);
+  const isOpen   = _expanded.has(s.id);
+  const isSuite  = s.type_name === 'Suite';
+  const isSelected = _selected.has(s.id);
+  const isDetail = _detailSpaceId === s.id;
+
+  const guides = Array.from({ length: depth }, () =>
+    '<div class="tree-guide"><div class="tree-guide-line"></div></div>'
+  ).join('');
+
+  const toggle = hasKids
+    ? `<button class="tree-toggle" data-toggle="${s.id}" onclick="event.stopPropagation();toggleNode(${s.id})">${isOpen ? '▾' : '▸'}</button>`
+    : '<div class="tree-toggle-spacer"></div>';
+
+  // Checkbox — only for suites in select mode
+  let checkHtml = '';
+  if (_selectMode) {
+    checkHtml = isSuite
+      ? `<input type="checkbox" class="tree-check" ${isSelected ? 'checked' : ''}
+           onclick="event.stopPropagation();toggleSelect(${s.id})" />`
+      : '<div class="tree-check-spacer"></div>';
+  }
+
+  const badge = ABBREV[s.type_name] || (s.type_name ? s.type_name.toUpperCase() : '');
+  const planBadge = s.plan_type_code
+    ? `<span class="tree-plan-badge">${escHtml(s.plan_type_code)}</span>`
+    : '';
+
+  const dCls = depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'd2';
+  const selCls = isDetail ? ' selected' : '';
+
+  const menuHtml = _canEdit ? `
+    <div class="tree-menu-wrap">
+      <button class="tree-menu-btn" id="mbtn-${s.id}"
+        onclick="event.stopPropagation();openMenu(${s.id})">⋮</button>
+      <div class="tree-menu" id="menu-${s.id}">
+        <button onclick="closeMenu();openAddModal(${s.id})">Add Space Inside</button>
+        <button onclick="closeMenu();openEditModal(${s.id})">Rename</button>
+        <button onclick="closeMenu();openDupModal(${s.id})">Duplicate With Contents</button>
+        <div class="tree-menu-divider"></div>
+        <button disabled>Move</button>
+        <button class="danger" onclick="closeMenu();archiveSpace(${s.id})">Archive</button>
+      </div>
+    </div>` : '';
+
+  const childrenHtml = hasKids
+    ? `<div class="tree-children" id="ch-${s.id}" style="${isOpen ? '' : 'display:none'}">${renderChildren(s.id, depth + 1)}</div>`
+    : '';
+
+  return `
+    <div class="tree-node">
+      <div class="tree-node-row ${dCls}${selCls}" onclick="openDetail(${s.id})" style="cursor:pointer">
+        ${guides}
+        ${toggle}
+        ${checkHtml}
+        <span class="tree-label">${escHtml(s.identifier)}</span>
+        ${planBadge}
+        ${badge ? `<span class="tree-type-badge">${badge}</span>` : ''}
+        ${spaceDots(s.id)}
+        ${menuHtml}
+      </div>
+      ${childrenHtml}
+    </div>
+  `;
+}
+
+// ── Space detail panel ───────────────────────────────────────────────────────
+
+let _detailScrollY = 0; // page scroll saved when opening detail
+
+function buildBreadcrumb(spaceId) {
+  const parts = [];
+  let cur = _spaces.find(s => s.id === spaceId);
+  while (cur && cur.parent_id != null) {
+    cur = _spaces.find(s => s.id === cur.parent_id);
+    if (cur) parts.unshift(escHtml(cur.identifier));
+  }
+  return parts.join(' / ');
+}
+
+function buildDetailSectionsHtml(s) {
+  let html = '';
+
+  if (s.type_name === 'Suite') {
+    const pt = _planTypes.find(t => t.id === s.plan_type_id);
+    let body = '';
+    if (s.has_panel_override) {
+      // Suite has its own panel — show override, offer revert (manage)
+      body = `<div class="detail-inherited">
+        <a href="/api/spaces/${s.id}/panel" target="_blank" class="btn btn-sm btn-secondary">View Panel Schedule</a>
+        <span style="font-size:12px;color:var(--gray-500);">${escHtml(s.panel_override_file_name || '')}</span>
+        <span class="detail-inherited-from" style="color:#d97706;">Custom panel — does not follow Type ${escHtml(s.plan_type_code || '?')}</span>
+      </div>`;
+      if (_canEdit) {
+        body += `<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label class="btn btn-sm btn-secondary" style="cursor:pointer;">
+            Replace panel<input type="file" style="display:none;" onchange="uploadSpacePanelOverride(${s.id}, this)">
+          </label>
+          <button class="btn btn-sm btn-ghost" style="color:#dc2626;" onclick="revertSpacePanelOverride(${s.id})">Revert to Type ${escHtml(s.plan_type_code || '')}</button>
+        </div>`;
+      }
+    } else if (pt && pt.has_panel) {
+      // Inheriting from type
+      body = `<div class="detail-inherited">
+        <a href="/api/plan-types/${pt.id}/panel" target="_blank" class="btn btn-sm btn-secondary">View Panel Schedule</a>
+        <span style="font-size:12px;color:var(--gray-500);">${escHtml(pt.panel_file_name || '')}</span>
+        <span class="detail-inherited-from">From Type ${escHtml(s.plan_type_code)}</span>
+      </div>`;
+      if (_canEdit) {
+        body += `<div style="margin-top:8px;">
+          <label class="btn btn-sm btn-ghost" style="cursor:pointer;">
+            Upload custom panel for this suite only<input type="file" style="display:none;" onchange="uploadSpacePanelOverride(${s.id}, this)">
+          </label>
+        </div>`;
+      }
+    } else if (pt) {
+      body = `<div class="detail-inherited">
+        <span class="detail-empty">No panel uploaded for Type ${escHtml(s.plan_type_code)}.</span>
+        <span class="detail-inherited-from">From Type ${escHtml(s.plan_type_code)}</span>
+      </div>`;
+      if (_canEdit) {
+        body += `<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label class="btn btn-sm btn-ghost" style="cursor:pointer;">
+            Upload custom panel for this suite only<input type="file" style="display:none;" onchange="uploadSpacePanelOverride(${s.id}, this)">
+          </label>
+          <a href="#" onclick="switchView('types');return false;" style="color:var(--orange);font-size:13px;">Upload type panel in Types →</a>
+        </div>`;
+      }
+    } else {
+      body = `<div class="detail-empty">No type assigned.${_canEdit ? ` <a href="#" onclick="closeDetail();enterSelectModeForSuite(${s.id});return false;" style="color:var(--orange);">Assign →</a>` : ''}</div>`;
+    }
+    html += `<div class="detail-section" id="ds-panel">
+      <div class="detail-section-header"><span class="detail-section-title">Panel Schedule</span></div>
+      <div class="detail-section-body">${body}</div>
+    </div>`;
+  }
+
+  html += `<div class="detail-section" id="ds-files">
+    <div class="detail-section-header"><span class="detail-section-title">Files</span></div>
+    <div class="detail-section-body" id="ds-files-body"><div class="detail-empty">Loading…</div></div>
+  </div>`;
+
+  html += `<div class="detail-section" id="ds-def">
+    <div class="detail-section-header"><span class="detail-section-title">Deficiencies</span></div>
+    <div class="detail-section-body" id="ds-def-body"><div class="detail-empty">Loading…</div></div>
+  </div>`;
+
+  html += `<div class="detail-section" id="ds-material">
+    <div class="detail-section-header">
+      <span class="detail-section-title">Material</span>
+    </div>
+    <div class="detail-section-body" id="ds-material-body"><div class="detail-empty">Loading…</div></div>
+  </div>`;
+
+  html += `<div class="detail-section" id="ds-notes">
+    <div class="detail-section-header"><span class="detail-section-title">Notes</span></div>
+    <div class="detail-section-body" id="ds-notes-body"><div class="detail-empty">Loading…</div></div>
+  </div>`;
+
+  return html;
+}
+
+function openDetail(id) {
+  const s = _spaces.find(x => x.id === id);
+  if (!s) return;
+  if (_detailSpaceId === id) { closeDetail(); return; }
+
+  _detailScrollY = window.scrollY;
+  _detailSpaceId = id;
+
+  document.getElementById('space-tree').style.display = 'none';
+  document.getElementById('space-detail').style.display = '';
+
+  document.getElementById('detail-breadcrumb').textContent = buildBreadcrumb(id);
+  document.getElementById('detail-title').innerHTML =
+    escHtml(s.identifier) +
+    (s.plan_type_code ? ` <span class="detail-plan-badge">Type ${escHtml(s.plan_type_code)}</span>` : '');
+  document.getElementById('detail-space-type').textContent = s.type_name || '';
+
+  document.getElementById('detail-sections').innerHTML = buildDetailSectionsHtml(s);
+
+  loadSpaceFiles(id);
+  loadDeficiencies(id);
+  loadSpaceMaterial(id);
+  loadSpaceNotes(id);
+}
+
+function closeDetail() {
+  _detailSpaceId = null;
+  document.getElementById('space-detail').style.display = 'none';
+  if (_detailOrigin === 'review') {
+    _detailOrigin = null;
+    switchView('review');
+  } else {
+    document.getElementById('space-tree').style.display = 'block';
+    requestAnimationFrame(() => window.scrollTo(0, _detailScrollY));
+  }
+}
+
+// ── Mobile navigation ─────────────────────────────────────────────────────────
+
+function isMobile() { return window.innerWidth <= 768; }
+
+function pushMobileLevel(id) {
+  const cur = _mobileStack[_mobileStack.length - 1];
+  if (cur) cur.scrollY = window.scrollY;
+  _mobileStack.push({ id, scrollY: 0 });
+  history.pushState({ mobileDepth: _mobileStack.length }, '');
+  renderMobileLevel();
+  window.scrollTo(0, 0);
+}
+
+function renderMobileProjectList() {
+  const content = document.getElementById('mn-content');
+  const back    = document.getElementById('mn-back');
+  const crumb   = document.getElementById('mn-breadcrumb');
+  const title   = document.getElementById('mn-title');
+  const pills   = document.getElementById('mn-pills');
+  back.style.display = 'none';
+  crumb.textContent  = '';
+  title.textContent  = 'Worksites';
+  pills.innerHTML    = '';
+  if (!_projects.length) {
+    content.innerHTML = '<div style="padding:24px 16px;color:var(--gray-400);font-size:14px;">No active projects.</div>';
+    return;
+  }
+  content.innerHTML = _projects.map(p =>
+    `<div class="mn-child-row" onclick="selectProject(${p.id},${JSON.stringify(p.name).replace(/"/g,'&quot;')},null)">
+      <div style="flex:1;min-width:0;">
+        <div class="mn-child-label" style="display:flex;align-items:center;gap:6px;">
+          ${escHtml(p.name)}
+          ${projDefBadge(p)}
+        </div>
+        ${p.job_numbers ? `<div class="mn-child-sub">${escHtml(p.job_numbers)}</div>` : ''}
+      </div>
+      <span class="mn-child-chevron">›</span>
+    </div>`
+  ).join('');
+}
+
+function renderMobileLevel() {
+  if (!isMobile()) return;
+  const level = _mobileStack[_mobileStack.length - 1];
+  if (!level) { renderMobileProjectList(); return; }
+
+  const back    = document.getElementById('mn-back');
+  const crumb   = document.getElementById('mn-breadcrumb');
+  const title   = document.getElementById('mn-title');
+  const pills   = document.getElementById('mn-pills');
+  const content = document.getElementById('mn-content');
+
+  back.style.display = _mobileStack.length >= 1 ? '' : 'none';
+
+  if (level.id === null) {
+    // Project root — show project name, Spaces/Types pills, top-level spaces
+    const pname = document.getElementById('mobile-types-title')?.textContent ||
+                  document.getElementById('space-panel-title')?.textContent || '';
+    crumb.textContent = '';
+    title.textContent = pname;
+    pills.style.display = '';
+    // Only generate pills HTML once; on view switches just sync the active class
+    if (!pills.querySelector('.view-pills')) {
+      pills.innerHTML = `<div class="view-pills">
+        <button class="view-pill ${_currentView === 'spaces' ? 'active' : ''}" onclick="mobileSwitchTab('spaces')">Spaces</button>
+        <button class="view-pill ${_currentView === 'types'  ? 'active' : ''}" onclick="mobileSwitchTab('types')">Types</button>
+        ${_reviewAccess !== 'none' ? `<button class="view-pill ${_currentView === 'review' ? 'active' : ''}" onclick="mobileSwitchTab('review')">Review</button>` : ''}
+      </div>`;
+    } else {
+      pills.querySelectorAll('.view-pill').forEach(b =>
+        b.classList.toggle('active', b.textContent.trim().toLowerCase() === _currentView)
+      );
+    }
+    content.innerHTML = renderMobileChildrenHtml(null);
+  } else {
+    // Space level — breadcrumb + title + children list (if any) + content sections
+    const s = _spaces.find(x => x.id === level.id);
+    if (!s) { content.innerHTML = '<div style="padding:24px 16px;color:var(--gray-400);">Space not found.</div>'; return; }
+
+    _detailSpaceId = level.id;
+    crumb.textContent = buildBreadcrumb(level.id);
+    title.textContent = s.identifier;
+    pills.style.display = 'none';
+    pills.innerHTML = '';
+
+    const hasChildren = _spaces.some(c => c.parent_id === level.id);
+    let html = '';
+    if (hasChildren) {
+      html += renderMobileChildrenHtml(level.id);
+      html += '<div style="height:8px;background:var(--gray-50);border-top:1px solid var(--gray-100);border-bottom:1px solid var(--gray-100);"></div>';
+    }
+    html += buildDetailSectionsHtml(s);
+    content.innerHTML = html;
+
+    loadSpaceFiles(level.id);
+    loadDeficiencies(level.id);
+    loadSpaceMaterial(level.id);
+    loadSpaceNotes(level.id);
+  }
+}
+
+function renderMobileChildrenHtml(parentId) {
+  const TYPE_ORDER = ['Building','Floor','Suite','Stairwell','Elevator','Parkade',
+    'Lobby','Common Area','Corridor','Storage Room','Electrical Room',
+    'Mechanical Room','Mechanical Shaft','Garage','Roof','Exterior','General'];
+
+  const children = _spaces
+    .filter(s => s.parent_id == parentId)
+    .sort((a, b) => a.sort_order - b.sort_order || a.identifier.localeCompare(b.identifier));
+
+  if (!children.length) {
+    return '<div style="padding:24px 16px;color:var(--gray-400);font-size:14px;">No spaces here.</div>';
+  }
+
+  // Group by type_name
+  const groups = {};
+  for (const c of children) {
+    const g = c.type_name || 'Other';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(c);
+  }
+  const orderedTypes = [
+    ...TYPE_ORDER.filter(t => groups[t]),
+    ...Object.keys(groups).filter(t => !TYPE_ORDER.includes(t)),
+  ];
+  const showLabels = orderedTypes.length > 1;
+
+  let html = '';
+  for (const type of orderedTypes) {
+    const plural = type.endsWith('y') ? type.slice(0,-1)+'ies' : type+'s';
+    if (showLabels) html += `<div class="mn-group-heading">${escHtml(plural)}</div>`;
+    for (const s of groups[type]) {
+      const hasKids = _spaces.some(c => c.parent_id === s.id);
+      const planBadge = s.plan_type_code
+        ? `<span class="mn-child-badge">Type ${escHtml(s.plan_type_code)}</span>` : '';
+      html += `<div class="mn-child-row" onclick="pushMobileLevel(${s.id})">
+        <div style="flex:1;min-width:0;">
+          <div class="mn-child-label">${escHtml(s.identifier)}</div>
+          ${!hasKids && s.type_name ? `<div class="mn-child-sub">${escHtml(s.type_name)}</div>` : ''}
+        </div>
+        ${planBadge}
+        ${spaceDots(s.id)}
+        <span class="mn-child-chevron">›</span>
+      </div>`;
+    }
+  }
+  return html;
+}
+
+function mobileSwitchTab(tab) {
+  // Update pill active state in mobile nav
+  document.querySelectorAll('#mn-pills .view-pill').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim().toLowerCase() === tab)
+  );
+  switchView(tab);
+}
+
+// Phone back gesture
+window.addEventListener('popstate', (e) => {
+  if (!isMobile()) return;
+  const targetDepth = e.state?.mobileDepth ?? 0;
+  while (_mobileStack.length > targetDepth) _mobileStack.pop();
+  if (_mobileStack.length === 0) {
+    renderMobileProjectList();
+  } else {
+    // If we navigated into a space from Review, return to Review on back
+    if (_mobileReturnView && _mobileStack.length === 1 && _mobileStack[0].id === null) {
+      const rv = _mobileReturnView;
+      _mobileReturnView = null;
+      mobileSwitchTab(rv);
+    } else {
+      renderMobileLevel();
+    }
+    const cur = _mobileStack[_mobileStack.length - 1];
+    window.scrollTo(0, cur?.scrollY || 0);
+  }
+});
+
+// Breakpoint crossing (rotate phone, resize window)
+function handleBreakpointChange() {
+  const nowMobile = isMobile();
+  if (nowMobile === _wasMobile) return;
+  const wasMob = _wasMobile;
+  _wasMobile = nowMobile;
+  if (wasMob === null || !_activeProjectId) return;
+
+  if (nowMobile) {
+    // Desktop → Mobile: reconstruct stack from current desktop position
+    _mobileStack = [];
+    if (_detailSpaceId) {
+      const path = [];
+      let cur = _spaces.find(s => s.id === _detailSpaceId);
+      while (cur) {
+        path.unshift(cur.id);
+        cur = cur.parent_id != null ? _spaces.find(s => s.id === cur.parent_id) : null;
+      }
+      _mobileStack = [{ id: null, scrollY: 0 }, ...path.map(id => ({ id, scrollY: 0 }))];
+    } else {
+      _mobileStack = [{ id: null, scrollY: 0 }];
+    }
+    renderMobileLevel();
+    window.scrollTo(0, 0);
+  } else {
+    // Mobile → Desktop: restore desktop state from top of mobile stack
+    const top = _mobileStack[_mobileStack.length - 1];
+    const spaceId = top && top.id !== null ? top.id : null;
+    _mobileStack = [];
+    _detailSpaceId = null;
+    document.getElementById('view-pills').style.display = _activeProjectId ? 'flex' : 'none';
+    renderPanelHeader();
+    renderTree();
+    if (spaceId) openDetail(spaceId);
+  }
+}
+
+let _bpTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_bpTimer);
+  _bpTimer = setTimeout(handleBreakpointChange, 200);
+});
+window.addEventListener('orientationchange', () => setTimeout(handleBreakpointChange, 350));
+
+// ── Select mode ──────────────────────────────────────────────────────────────
+
+function enterSelectMode() {
+  _selectMode = true;
+  _selected.clear();
+  closeDetail();
+  renderTree();
+  updateSelectBar();
+}
+
+function enterSelectModeForSuite(id) {
+  enterSelectMode();
+  toggleSelect(id);
+}
+
+function exitSelectMode() {
+  _selectMode = false;
+  _selected.clear();
+  document.getElementById('select-bar').classList.remove('visible');
+  renderTree();
+}
+
+function toggleSelect(id) {
+  if (_selected.has(id)) _selected.delete(id); else _selected.add(id);
+  const cb = document.querySelector(`[onclick*="toggleSelect(${id})"]`);
+  if (cb) cb.checked = _selected.has(id);
+  updateSelectBar();
+}
+
+function updateSelectBar() {
+  const bar = document.getElementById('select-bar');
+  const n = _selected.size;
+  document.getElementById('select-count').textContent = `${n} suite${n === 1 ? '' : 's'} selected`;
+  bar.classList.toggle('visible', _selectMode);
+}
+
+// ── Plan Types view ──────────────────────────────────────────────────────────
+
+async function loadPlanTypes() {
+  if (!_activeProjectId) return;
+  _planTypes = await fetch(`/api/projects/${_activeProjectId}/plan-types`).then(r => r.json()).catch(() => []);
+  if (_currentView === 'types') renderTypesView();
+  populateAssignTypeSelect();
+}
+
+function renderTypesView() {
+  const empty = document.getElementById('types-empty');
+  const table = document.getElementById('types-table');
+  const tbody = document.getElementById('types-tbody');
+
+  if (!_planTypes.length) {
+    empty.style.display = ''; table.style.display = 'none'; return;
+  }
+  empty.style.display = 'none'; table.style.display = '';
+
+  tbody.innerHTML = _planTypes.map(pt => `
+    <tr onclick="openTypeDetail(${pt.id})">
+      <td><span class="type-code">${escHtml(pt.code)}</span></td>
+      <td><span style="font-size:13px;color:var(--gray-600);">${escHtml(pt.name || '—')}</span></td>
+      <td><span class="type-count">${pt.suite_count} suite${pt.suite_count === 1 ? '' : 's'}</span></td>
+      <td><span class="type-panel-dot${pt.has_panel ? ' has-panel' : ''}" title="${pt.has_panel ? 'Panel uploaded' : 'No panel'}"></span></td>
+      <td onclick="event.stopPropagation()">
+        ${_canEdit && pt.suite_count === 0
+          ? `<button class="btn btn-sm btn-ghost" style="color:var(--red);" onclick="deleteType(${pt.id})">Delete</button>`
+          : ''
+        }
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function saveTypeName(typeId, rawName) {
+  const name = rawName.trim() || null;
+  const existing = _planTypes.find(t => t.id === typeId);
+  if (existing && existing.name === name) return; // no change
+  await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  await loadPlanTypes();
+}
+
+async function uploadPanel(typeId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append('panel', file);
+  const r = await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}/panel`, { method: 'POST', body: fd });
+  if (!r.ok) { alert('Upload failed.'); return; }
+  await loadPlanTypes();
+  if (_activeTypeId === typeId) renderTypePanelContent(_planTypes.find(t => t.id === typeId));
+  if (_detailSpaceId) {
+    const s = _spaces.find(x => x.id === _detailSpaceId);
+    if (s && s.plan_type_id === typeId) openDetail(_detailSpaceId);
+  }
+}
+
+async function removePanel(typeId) {
+  if (!confirm('Remove panel schedule?')) return;
+  await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}/panel`, { method: 'DELETE' });
+  await loadPlanTypes();
+  if (_activeTypeId === typeId) renderTypePanelContent(_planTypes.find(t => t.id === typeId));
+}
+
+async function uploadSpacePanelOverride(spaceId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append('panel', file);
+  const r = await fetch(`/api/spaces/${spaceId}/panel`, { method: 'POST', body: fd });
+  if (!r.ok) { alert('Upload failed.'); return; }
+  await loadSpaces();
+  // Re-open detail to reflect new override state
+  if (_detailSpaceId === spaceId) openDetail(spaceId);
+}
+
+async function revertSpacePanelOverride(spaceId) {
+  const s = _spaces.find(x => x.id === spaceId);
+  const code = s?.plan_type_code || '';
+  if (!confirm(`Remove custom panel and revert to Type ${code}?`)) return;
+  await fetch(`/api/spaces/${spaceId}/panel`, { method: 'DELETE' });
+  await loadSpaces();
+  if (_detailSpaceId === spaceId) openDetail(spaceId);
+  // Reload plan types so custom_panel_count updates on the Types view
+  await loadPlanTypes();
+  if (_activeTypeId && s?.plan_type_id === _activeTypeId) {
+    const pt = _planTypes.find(t => t.id === _activeTypeId);
+    if (pt) {
+      const n = pt.suite_count;
+      const cpc = pt.custom_panel_count || 0;
+      document.getElementById('type-detail-count').textContent =
+        `${n} suite${n === 1 ? '' : 's'}` + (cpc > 0 ? ` · ${cpc} with custom panel${cpc === 1 ? '' : 's'}` : '');
+    }
+  }
+}
+
+async function deleteType(typeId) {
+  const pt = _planTypes.find(t => t.id === typeId);
+  if (!confirm(`Delete Type ${pt?.code}?`)) return;
+  const r = await fetch(`/api/projects/${_activeProjectId}/plan-types/${typeId}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json(); alert(e.error); return; }
+  await loadPlanTypes();
+}
+
+// ── Type detail ──────────────────────────────────────────────────────────────
+
+let _activeTypeId = null;
+let _typeNotesSaveTimer = null;
+
+function openTypeDetail(typeId) {
+  _activeTypeId = typeId;
+  const pt = _planTypes.find(t => t.id === typeId);
+  if (!pt) return;
+
+  document.getElementById('types-list-view').style.display = 'none';
+  document.getElementById('type-detail').style.display = '';
+
+  const n = pt.suite_count;
+  document.getElementById('type-detail-banner').innerHTML =
+    `<strong>Heads up:</strong> Everything on this page applies to <strong>all ${n} suite${n === 1 ? '' : 's'}</strong> of Type ${escHtml(pt.code)}. ` +
+    `Do not upload photos of individual suite conditions here — use the suite detail instead.`;
+  document.getElementById('type-detail-code').textContent = `Type ${pt.code}`;
+  document.getElementById('type-detail-name').textContent = pt.name || '';
+  const cpc = pt.custom_panel_count || 0;
+  document.getElementById('type-detail-count').textContent =
+    `${n} suite${n === 1 ? '' : 's'}` + (cpc > 0 ? ` · ${cpc} with custom panel${cpc === 1 ? '' : 's'}` : '');
+
+  renderTypeDetailSections(pt);
+  loadTypeFiles(typeId);
+}
+
+function closeTypeDetail() {
+  if (!_activeTypeId) return;
+  _activeTypeId = null;
+  document.getElementById('type-detail').style.display = 'none';
+  document.getElementById('types-list-view').style.display = '';
+}
+
+function renderTypeDetailSections(pt) {
+  const sections = document.getElementById('type-detail-sections');
+  sections.innerHTML = `
+    <div class="type-detail-section" id="type-section-panel">
+      <div class="type-detail-section-title">Panel Schedule</div>
+      <div class="type-panel-section" id="type-panel-content"></div>
+    </div>
+    <div class="type-detail-section" id="type-section-files">
+      <div class="type-detail-section-title">Files</div>
+      <div id="type-files-content"><span style="font-size:13px;color:var(--gray-400);">Loading…</span></div>
+    </div>
+    <div class="type-detail-section" id="type-section-lists">
+      <div class="type-detail-section-title">Lists</div>
+      <div id="type-lists-content"><span style="font-size:13px;color:var(--gray-400);">Loading…</span></div>
+    </div>
+    <div class="type-detail-section" id="type-section-notes">
+      <div class="type-detail-section-title">Notes</div>
+      <div id="type-notes-content"><span style="font-size:13px;color:var(--gray-400);">Loading…</span></div>
+    </div>
+    <div class="type-detail-section" id="type-section-totals">
+      <div class="type-detail-section-title">Standard Totals</div>
+      <div id="type-totals-content"><span style="font-size:13px;color:var(--gray-400);">Loading…</span></div>
+    </div>
+  `;
+  renderTypePanelContent(pt);
+  loadTypeLists(pt.id);
+  loadTypeNotes(pt.id);
+  loadTypeTotals(pt.id);
+}
+
+function renderTypePanelContent(pt) {
+  const el = document.getElementById('type-panel-content');
+  if (!el) return;
+  if (pt.has_panel) {
+    el.innerHTML = `
+      <div class="type-panel-row">
+        <span style="font-size:13px;color:var(--gray-600);">${escHtml(pt.panel_file_name || 'Panel schedule')}</span>
+        <a href="/api/plan-types/${pt.id}/panel" target="_blank" class="btn btn-sm btn-secondary">View</a>
+        ${_canEdit ? `<label class="btn btn-sm btn-ghost" style="cursor:pointer;">Replace<input type="file" accept=".pdf,image/*" style="display:none;" onchange="uploadPanel(${pt.id},this)"/></label>` : ''}
+        ${_canEdit ? `<button class="btn btn-sm btn-ghost" style="color:var(--red);" onclick="removePanel(${pt.id})">Remove</button>` : ''}
+      </div>`;
+  } else {
+    el.innerHTML = _canEdit
+      ? `<label class="btn btn-sm btn-secondary" style="cursor:pointer;">Upload Panel Schedule<input type="file" accept=".pdf,image/*" style="display:none;" onchange="uploadPanel(${pt.id},this)"/></label>`
+      : `<span style="font-size:13px;color:var(--gray-400);">No panel schedule uploaded.</span>`;
+  }
+}
+
+async function loadTypeFiles(typeId) {
+  const el = document.getElementById('type-files-content');
+  if (!el) return;
+  try {
+    const files = await fetch(`/api/plan-types/${typeId}/files`).then(r => r.json());
+    renderTypeFilesContent(typeId, files);
+  } catch { el.innerHTML = `<span style="font-size:13px;color:var(--red);">Failed to load files.</span>`; }
+}
+
+function renderTypeFilesContent(typeId, files) {
+  const el = document.getElementById('type-files-content');
+  if (!el) return;
+  const rows = files.map(f => {
+    const isImg = f.mime_type && f.mime_type.startsWith('image/');
+    const url = `/api/plan-types/${typeId}/files/${f.id}/bytes`;
+    return `<div class="file-row">
+      <div class="file-thumb" onclick="openFileViewer('${url}','${escHtml(f.mime_type)}')">
+        ${isImg ? `<img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:4px;" loading="lazy"/>`
+                : `<div class="file-thumb-pdf">PDF</div>`}
+      </div>
+      <div class="file-info">
+        <div class="file-name">${escHtml(f.file_name)}</div>
+        <div class="file-meta">${new Date(f.uploaded_at).toLocaleDateString()}</div>
+      </div>
+      ${_canEdit ? `<button class="file-del" onclick="deleteTypeFile(${typeId},${f.id})" title="Delete">✕</button>` : ''}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="file-list">${rows}</div>
+    ${_canEdit ? `<label class="file-upload-btn" style="margin-top:8px;display:inline-block;">
+      + Add File
+      <input type="file" accept="image/*,.pdf" multiple style="display:none;" onchange="uploadTypeFiles(${typeId},this)"/>
+    </label>` : ''}
+  `;
+}
+
+async function uploadTypeFiles(typeId, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  for (const file of files) {
+    const compressed = await compressImage(file);
+    const fd = new FormData(); fd.append('file', compressed, file.name);
+    await fetch(`/api/plan-types/${typeId}/files`, { method: 'POST', body: fd });
+  }
+  input.value = '';
+  await loadTypeFiles(typeId);
+}
+
+async function deleteTypeFile(typeId, fileId) {
+  if (!confirm('Delete this file?')) return;
+  await fetch(`/api/plan-types/${typeId}/files/${fileId}`, { method: 'DELETE' });
+  await loadTypeFiles(typeId);
+}
+
+async function loadTypeLists(typeId) {
+  const el = document.getElementById('type-lists-content');
+  if (!el) return;
+  await ensureListTypes();
+  try {
+    const lists = await fetch(`/api/plan-types/${typeId}/lists`).then(r => r.json());
+    renderTypeListsContent(typeId, lists);
+  } catch { el.innerHTML = '<span style="font-size:13px;color:var(--gray-400);">Could not load lists.</span>'; }
+}
+
+function renderTypeListsContent(typeId, lists) {
+  const el = document.getElementById('type-lists-content');
+  if (!el) return;
+  const pt = _planTypes.find(t => t.id === typeId);
+  const n = pt?.suite_count ?? '?';
+  let html = `<div class="list-inherited-banner" style="margin-bottom:10px;">
+    Editing these lists changes all <strong>${n} suite${n===1?'':'s'}</strong> of Type ${escHtml(pt?.code || '')}.
+  </div>`;
+
+  if (!lists.length) html += '<div class="detail-empty">No lists yet.</div>';
+
+  for (const list of lists) {
+    html += `<div class="list-block" data-list-id="${list.id}">
+      <div class="list-block-header">
+        <span class="list-block-title">${escHtml(list.list_type)}</span>
+        ${_canEdit ? `<button class="list-block-del" onclick="deleteTypeList(${typeId},${list.id})" title="Delete list">✕</button>` : ''}
+      </div>`;
+    html += renderTypeListItems(list.items, list.id, typeId);
+    if (_canEdit) {
+      html += `<div class="list-add-form">
+        <input type="text" placeholder="Description" id="tli-desc-${list.id}" inputmode="text" />
+        <input type="number" placeholder="Qty" id="tli-qty-${list.id}" value="1" min="0.01" step="any" />
+        <input type="text" placeholder="Unit" id="tli-unit-${list.id}" style="width:60px;" />
+        <button class="btn-add-item" onclick="addTypeListItem(${typeId},${list.id})">Add</button>
+      </div>`;
+    }
+    html += '</div>';
+  }
+
+  if (_canEdit) {
+    const opts = _listTypes.map(lt => `<option value="${lt.id}">${escHtml(lt.name)}</option>`).join('');
+    html += `<div class="lists-create-row">
+      <select id="new-type-list-type-${typeId}">${opts}</select>
+      <button class="btn btn-sm btn-secondary" onclick="createTypeList(${typeId})">+ Add List</button>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function renderTypeListItems(items, listId, typeId) {
+  if (!items.length) return '<div class="detail-empty" style="padding:6px 0;">No items.</div>';
+  const STATUS_ORDER = ['needed','ordered','delivered'];
+  return items.map(item => {
+    const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(item.status) + 1) % STATUS_ORDER.length];
+    const statusBtn = _canEdit
+      ? `<button class="list-item-status ${item.status}" onclick="cycleTypeItemStatus(${item.id},'${nextStatus}',${typeId})" title="Mark ${nextStatus}">${item.status.replace('_',' ')}</button>`
+      : `<span class="list-item-status ${item.status}">${item.status.replace('_',' ')}</span>`;
+    const qty = parseFloat(item.quantity);
+    const qtyLabel = qty !== 1 ? qty + (item.unit ? ' ' + escHtml(item.unit) : '') : (item.unit ? '1 ' + escHtml(item.unit) : '');
+    return `<div class="list-item-row" id="li-row-${item.id}">
+      <span class="list-item-desc">${escHtml(item.description)}</span>
+      ${qtyLabel ? `<span class="list-item-qty">${qtyLabel}</span>` : ''}
+      ${statusBtn}
+      ${_canEdit ? `<button class="list-item-del" onclick="deleteTypeListItem(${item.id},${typeId})" title="Remove">✕</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function createTypeList(typeId) {
+  const sel = document.getElementById(`new-type-list-type-${typeId}`);
+  if (!sel) return;
+  try {
+    await fetch(`/api/plan-types/${typeId}/lists`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ list_type_id: sel.value })
+    });
+    loadTypeLists(typeId);
+  } catch {}
+}
+
+async function deleteTypeList(typeId, listId) {
+  if (!confirm('Delete this list and all its items from every suite of this type?')) return;
+  try {
+    await fetch(`/api/plan-types/${typeId}/lists/${listId}`, { method: 'DELETE' });
+    loadTypeLists(typeId);
+  } catch {}
+}
+
+async function addTypeListItem(typeId, listId) {
+  const desc = document.getElementById(`tli-desc-${listId}`)?.value.trim();
+  const qty  = document.getElementById(`tli-qty-${listId}`)?.value || '1';
+  const unit = document.getElementById(`tli-unit-${listId}`)?.value.trim();
+  if (!desc) return;
+  try {
+    await fetch(`/api/lists/${listId}/items`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc, quantity: qty, unit: unit || undefined })
+    });
+    loadTypeLists(typeId);
+  } catch {}
+}
+
+async function cycleTypeItemStatus(itemId, nextStatus, typeId) {
+  try {
+    await fetch(`/api/list-items/${itemId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus })
+    });
+    loadTypeLists(typeId);
+  } catch {}
+}
+
+async function deleteTypeListItem(itemId, typeId) {
+  try {
+    await fetch(`/api/list-items/${itemId}`, { method: 'DELETE' });
+    loadTypeLists(typeId);
+  } catch {}
+}
+
+async function loadTypeNotes(typeId) {
+  const el = document.getElementById('type-notes-content');
+  if (!el) return;
+  try {
+    const notes = await fetch(`/api/plan-types/${typeId}/notes`).then(r => r.json());
+    renderTypeNotesContent(typeId, notes);
+  } catch { el.innerHTML = '<span style="font-size:13px;color:var(--gray-400);">Could not load notes.</span>'; }
+}
+
+function renderTypeNotesContent(typeId, notes) {
+  const el = document.getElementById('type-notes-content');
+  if (!el) return;
+  let html = '';
+  for (const n of notes) {
+    const when = formatRelTime(n.created_at);
+    html += `<div class="note-entry" id="type-note-${n.id}">
+      <div class="note-meta">
+        <span class="note-author">${escHtml(n.author_name || '—')}</span>
+        <span>${when}</span>
+        ${_canEdit ? `<button class="note-del" onclick="deleteTypeNote(${n.id},${typeId})" title="Delete">✕</button>` : ''}
+      </div>
+      <div class="note-body">${escHtml(n.body)}</div>
+    </div>`;
+  }
+  if (_canEdit) {
+    html += `<div class="note-add-form">
+      <textarea id="type-note-ta-${typeId}" placeholder="Add a note that applies to all suites of this type…" inputmode="text"></textarea>
+      <button class="btn-add-note" onclick="submitTypeNote(${typeId})">Add Note</button>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function loadTypeTotals(typeId) {
+  const el = document.getElementById('type-totals-content');
+  if (!el) return;
+  try {
+    const rows = await fetch(`/api/plan-types/${typeId}/totals`).then(r => r.json());
+    if (!rows.length) {
+      el.innerHTML = '<span style="font-size:13px;color:var(--gray-400);">No standard list items.</span>';
+      document.getElementById('type-section-totals').style.display = 'none';
+      return;
+    }
+    document.getElementById('type-section-totals').style.display = '';
+    let html = '';
+    let lastType = null;
+    for (const r of rows) {
+      if (r.list_type !== lastType) {
+        if (lastType !== null) html += '</div>';
+        html += `<div style="margin-bottom:6px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px;">${escHtml(r.list_type)}</div>`;
+        lastType = r.list_type;
+      }
+      const qty    = Number(r.quantity);
+      const total  = Number(r.total_quantity);
+      const suites = Number(r.suite_count);
+      html += `<div class="review-totals-row" style="padding:6px 0;border-bottom:1px solid var(--gray-100);">
+        <div class="review-totals-qty">${total.toLocaleString()}</div>
+        <div class="review-totals-desc">${escHtml(r.description)}</div>
+        <div class="review-totals-unit">${escHtml(r.unit||'')} <span style="color:var(--gray-300);">(${qty}×${suites})</span></div>
+      </div>`;
+    }
+    if (lastType !== null) html += '</div>';
+    el.innerHTML = html;
+  } catch { el.innerHTML = '<span style="font-size:13px;color:var(--gray-400);">Could not load totals.</span>'; }
+}
+
+async function submitTypeNote(typeId) {
+  const ta = document.getElementById(`type-note-ta-${typeId}`);
+  const body = ta?.value.trim();
+  if (!body) return;
+  try {
+    await fetch(`/api/plan-types/${typeId}/notes`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body })
+    });
+    loadTypeNotes(typeId);
+  } catch {}
+}
+
+async function deleteTypeNote(noteId, typeId) {
+  try {
+    await fetch(`/api/plan-type-notes/${noteId}`, { method: 'DELETE' });
+    loadTypeNotes(typeId);
+  } catch {}
+}
+
+// ── Add Type Modal ───────────────────────────────────────────────────────────
+
+function openAddTypeModal() {
+  document.getElementById('new-type-code').value = '';
+  document.getElementById('new-type-name').value = '';
+  document.getElementById('add-type-modal').classList.add('open');
+  setTimeout(() => document.getElementById('new-type-code').focus(), 50);
+}
+function closeAddTypeModal() { document.getElementById('add-type-modal').classList.remove('open'); }
+
+async function submitAddType() {
+  const code = document.getElementById('new-type-code').value.trim().toUpperCase();
+  const name = document.getElementById('new-type-name').value.trim() || null;
+  if (!code) { alert('Code is required.'); return; }
+  const r = await fetch(`/api/projects/${_activeProjectId}/plan-types`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, name }),
+  });
+  if (!r.ok) { const e = await r.json(); alert(e.error); return; }
+  closeAddTypeModal();
+  await loadPlanTypes();
+  renderTypesView();
+}
+
+// ── Assign Type Modal ─────────────────────────────────────────────────────────
+
+function populateAssignTypeSelect() {
+  const sel = document.getElementById('assign-type-select');
+  sel.innerHTML = '<option value="">— Remove type —</option>' +
+    _planTypes.map(pt => `<option value="${pt.id}">${escHtml(pt.code)}${pt.name ? ' — ' + escHtml(pt.name) : ''}</option>`).join('');
+}
+
+function openAssignTypeModal() {
+  if (!_selected.size) return;
+  document.getElementById('assign-type-subtitle').textContent =
+    `Assigning to ${_selected.size} suite${_selected.size === 1 ? '' : 's'}`;
+  document.getElementById('assign-type-select').value = '';
+  document.getElementById('assign-type-modal').classList.add('open');
+}
+function closeAssignTypeModal() { document.getElementById('assign-type-modal').classList.remove('open'); }
+
+async function submitAssignType() {
+  const val = document.getElementById('assign-type-select').value;
+  const plan_type_id = val ? parseInt(val, 10) : null;
+  const r = await fetch(`/api/projects/${_activeProjectId}/spaces/bulk-assign-type`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ space_ids: [..._selected], plan_type_id }),
+  });
+  if (!r.ok) { const e = await r.json(); alert(e.error); return; }
+  closeAssignTypeModal();
+  exitSelectMode();
+  await loadSpaces();
+  await loadPlanTypes();
+}
+
+// ── Menu ─────────────────────────────────────────────────────────────────────
+
+function openMenu(id) {
+  if (_openMenuId === id) { closeMenu(); return; }
+  closeMenu();
+  _openMenuId = id;
+  document.getElementById('menu-' + id)?.classList.add('open');
+  document.getElementById('mbtn-' + id)?.classList.add('active');
+}
+function closeMenu() {
+  if (_openMenuId === null) return;
+  document.getElementById('menu-' + _openMenuId)?.classList.remove('open');
+  document.getElementById('mbtn-' + _openMenuId)?.classList.remove('active');
+  _openMenuId = null;
+}
+
+// ── Add Modal ────────────────────────────────────────────────────────────────
+
+function openAddModal(parentId, tab) {
+  _addParentId = parentId;
+  switchTab(tab || 'single');
+  document.getElementById('single-identifier').value = '';
+  document.getElementById('add-modal').classList.add('open');
+  if (!tab || tab === 'single') setTimeout(() => document.getElementById('single-identifier').focus(), 50);
+}
+function closeAddModal() { document.getElementById('add-modal').classList.remove('open'); }
+
+function switchTab(tab) {
+  _activeTab = tab;
+  document.getElementById('tab-single').classList.toggle('active', tab === 'single');
+  document.getElementById('tab-bulk').classList.toggle('active',   tab === 'bulk');
+  document.getElementById('pane-single').style.display = tab === 'single' ? '' : 'none';
+  document.getElementById('pane-bulk').style.display   = tab === 'bulk'   ? '' : 'none';
+  document.getElementById('add-modal-title').textContent = tab === 'single' ? 'Add Space' : 'Bulk Generate';
+}
+
+async function submitAdd() {
+  if (_activeTab === 'single') {
+    const identifier    = document.getElementById('single-identifier').value.trim();
+    const space_type_id = document.getElementById('single-type').value || null;
+    if (!identifier) { alert('Please enter an identifier.'); return; }
+    await fetch(`/api/projects/${_activeProjectId}/spaces`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: _addParentId, space_type_id, identifier }),
+    });
+  } else {
+    const prefix        = document.getElementById('bulk-prefix').value;
+    const start         = parseInt(document.getElementById('bulk-start').value, 10);
+    const end           = parseInt(document.getElementById('bulk-end').value, 10);
+    const pad           = document.getElementById('bulk-pad').checked;
+    const space_type_id = document.getElementById('bulk-type').value || null;
+    if (isNaN(start) || isNaN(end) || start > end) { alert('Invalid range.'); return; }
+    if (end - start > 499) { alert('Maximum 500 spaces at once.'); return; }
+    await fetch(`/api/projects/${_activeProjectId}/spaces/bulk`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: _addParentId, space_type_id, prefix, start, end, pad }),
+    });
+  }
+  closeAddModal();
+  loadSpaces();
+}
+
+// ── Rename Modal ─────────────────────────────────────────────────────────────
+
+function openEditModal(id) {
+  _editSpaceId = id;
+  const s = _spaces.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('edit-identifier').value = s.identifier;
+  document.getElementById('edit-type').value = s.space_type_id || '';
+  document.getElementById('edit-modal').classList.add('open');
+  setTimeout(() => document.getElementById('edit-identifier').focus(), 50);
+}
+function closeEditModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+async function submitEdit() {
+  const identifier    = document.getElementById('edit-identifier').value.trim();
+  const space_type_id = document.getElementById('edit-type').value || null;
+  if (!identifier) { alert('Please enter an identifier.'); return; }
+  await fetch(`/api/spaces/${_editSpaceId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, space_type_id }),
+  });
+  closeEditModal();
+  loadSpaces();
+}
+
+// ── Duplicate Modal ───────────────────────────────────────────────────────────
+
+function openDupModal(id) {
+  _dupSpaceId = id;
+  const s = _spaces.find(x => x.id === id);
+  document.getElementById('dup-identifier').value = s ? s.identifier + ' (copy)' : '';
+  document.getElementById('dup-modal').classList.add('open');
+  setTimeout(() => document.getElementById('dup-identifier').focus(), 50);
+}
+function closeDupModal() { document.getElementById('dup-modal').classList.remove('open'); }
+
+async function submitDuplicate() {
+  const new_identifier = document.getElementById('dup-identifier').value.trim();
+  if (!new_identifier) { alert('Please enter an identifier for the copy.'); return; }
+  const r = await fetch(`/api/spaces/${_dupSpaceId}/duplicate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_identifier }),
+  });
+  if (!r.ok) { alert('Duplicate failed.'); return; }
+  closeDupModal();
+  loadSpaces();
+}
+
+// ── Archive ──────────────────────────────────────────────────────────────────
+
+async function archiveSpace(id) {
+  const s = _spaces.find(x => x.id === id);
+  const hasContents = _spaces.some(x => x.parent_id === id);
+  const msg = hasContents
+    ? `Archive "${s.identifier}"? Everything inside will be hidden.`
+    : `Archive "${s.identifier}"?`;
+  if (!confirm(msg)) return;
+  await fetch(`/api/spaces/${id}`, { method: 'DELETE' });
+  if (_detailSpaceId === id) closeDetail();
+  loadSpaces();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function populateTypeSelects() {
+  const blank = '<option value="">— No type —</option>';
+  const opts  = _spaceTypes.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
+  ['single-type', 'bulk-type', 'edit-type'].forEach(id => {
+    document.getElementById(id).innerHTML = blank + opts;
+  });
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Image compression ─────────────────────────────────────────────────────────
+// Resize photos client-side before upload: max 1600px long edge, JPEG ~0.8.
+// PDFs pass through untouched. ~4 MB phone photo → ~400 KB.
+async function compressImage(file, maxPx = 1600, quality = 0.8) {
+  if (file.type === 'application/pdf') return file;
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => {
+        resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+      }, 'image/jpeg', quality);
+    };
+    img.src = url;
+  });
+}
+
+// ── File viewer ───────────────────────────────────────────────────────────────
+
+function openFileViewer(url, mimeType) {
+  const v = document.getElementById('file-viewer');
+  const img = document.getElementById('fv-img');
+  const frame = document.getElementById('fv-frame');
+  if (mimeType && mimeType.startsWith('image/')) {
+    img.src = url; img.style.display = '';
+    frame.src = ''; frame.style.display = 'none';
+  } else {
+    frame.src = url; frame.style.display = '';
+    img.src = ''; img.style.display = 'none';
+  }
+  v.classList.add('open');
+}
+
+function closeFileViewer() {
+  const v = document.getElementById('file-viewer');
+  v.classList.remove('open');
+  document.getElementById('fv-img').src = '';
+  document.getElementById('fv-frame').src = '';
+}
+
+// ── Space files ───────────────────────────────────────────────────────────────
+
+async function loadSpaceFiles(spaceId) {
+  const body = document.getElementById('ds-files-body');
+  if (!body) return;
+  try {
+    const files = await fetch(`/api/spaces/${spaceId}/files`).then(r => r.json());
+    renderFilesSection(spaceId, files);
+  } catch (e) {
+    if (body) body.innerHTML = '<div class="detail-empty">Could not load files.</div>';
+  }
+}
+
+function renderFilesSection(spaceId, files) {
+  const body = document.getElementById('ds-files-body');
+  if (!body) return;
+  let html = '';
+  if (files.length) {
+    html += '<div class="file-list">';
+    for (const f of files) {
+      const isImage = f.mime_type && f.mime_type.startsWith('image/');
+      const thumb = isImage
+        ? `<img class="file-thumb" src="/api/space-files/${f.id}" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')" />`
+        : `<div class="file-thumb-pdf" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')">PDF</div>`;
+      const when = f.uploaded_at ? new Date(f.uploaded_at).toLocaleDateString() : '';
+      const delBtn = _canEdit
+        ? `<button class="file-del" onclick="deleteSpaceFile(${spaceId},${f.id})" title="Delete">&#x2715;</button>`
+        : '';
+      html += `<div class="file-row" id="file-row-${f.id}">
+        ${thumb}
+        <div class="file-info">
+          <div class="file-name" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')">${escHtml(f.file_name)}</div>
+          <div class="file-meta">${when}${f.uploaded_by_name ? ' · ' + escHtml(f.uploaded_by_name) : ''}${f.caption ? ' · ' + escHtml(f.caption) : ''}</div>
+        </div>
+        ${delBtn}
+      </div>`;
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="detail-empty" style="margin-bottom:10px;">No files yet.</div>';
+  }
+  // Upload button — field level: anyone can upload
+  html += `<label class="file-upload-btn">
+    + Add File
+    <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
+      onchange="uploadSpaceFiles(${spaceId}, this)" />
+  </label>`;
+  body.innerHTML = html;
+}
+
+async function uploadSpaceFiles(spaceId, input) {
+  const rawFiles = Array.from(input.files);
+  if (!rawFiles.length) return;
+  const body = document.getElementById('ds-files-body');
+  if (body) body.innerHTML = '<div class="detail-empty">Uploading…</div>';
+  for (const raw of rawFiles) {
+    const file = await compressImage(raw);
+    const fd = new FormData();
+    fd.append('file', file);
+    await fetch(`/api/spaces/${spaceId}/files`, { method: 'POST', body: fd });
+  }
+  loadSpaceFiles(spaceId);
+}
+
+async function deleteSpaceFile(spaceId, fileId) {
+  if (!confirm('Delete this file?')) return;
+  await fetch(`/api/spaces/${spaceId}/files/${fileId}`, { method: 'DELETE' });
+  document.getElementById(`file-row-${fileId}`)?.remove();
+  // Re-render to show "No files" state if list is now empty
+  const remaining = document.querySelectorAll('[id^="file-row-"]');
+  if (!remaining.length) loadSpaceFiles(spaceId);
+}
+
+// ── Deficiencies ──────────────────────────────────────────────────────────────
+
+function defDraftKey(spaceId) { return `def_draft_${spaceId}`; }
+
+function saveDraft(spaceId) {
+  const ta = document.getElementById('def-textarea');
+  if (!ta) return;
+  localStorage.setItem(defDraftKey(spaceId), ta.value);
+}
+
+function clearDraft(spaceId) {
+  localStorage.removeItem(defDraftKey(spaceId));
+}
+
+function loadDraft(spaceId) {
+  return localStorage.getItem(defDraftKey(spaceId)) || '';
+}
+
+async function loadDeficiencies(spaceId) {
+  const body = document.getElementById('ds-def-body');
+  if (!body) return;
+  try {
+    const defs = await fetch(`/api/spaces/${spaceId}/deficiencies`).then(r => r.json());
+    renderDeficienciesSection(spaceId, defs);
+  } catch (e) {
+    if (body) body.innerHTML = '<div class="detail-empty">Could not load deficiencies.</div>';
+  }
+}
+
+function defCardHtml(d, spaceId) {
+  const badge = `<span class="def-status-badge ${d.status}">${d.status.replace('_',' ')}</span>`;
+  const when = d.raised_at ? new Date(d.raised_at).toLocaleDateString() : '';
+  const raisedMeta = [when, d.raised_by_name ? 'by ' + escHtml(d.raised_by_name) : ''].filter(Boolean).join(' ');
+  let resolvedMeta = '';
+  if (d.status === 'resolved' && (d.resolved_at || d.resolved_by_name)) {
+    const rw = d.resolved_at ? new Date(d.resolved_at).toLocaleDateString() : '';
+    const rb = d.resolved_by_name ? 'by ' + escHtml(d.resolved_by_name) : '';
+    resolvedMeta = `<div class="def-meta">Resolved ${[rw, rb].filter(Boolean).join(' ')}</div>`;
+  }
+  let photosHtml = '';
+  if (d.photos && d.photos.length) {
+    photosHtml = `<div class="def-photos">` +
+      d.photos.map(p => `<img class="def-photo" src="/api/deficiency-photos/${p.id}"
+        onclick="openFileViewer('/api/deficiency-photos/${p.id}','${escHtml(p.mime_type)}')" />`).join('') +
+      `</div>`;
+  }
+  let actionsHtml = '<div class="def-actions">';
+  if (_canEdit) {
+    actionsHtml += `<select class="def-status-select" onchange="patchDef(${d.id},this.value,${spaceId})">
+      <option value="open"        ${d.status==='open'        ?'selected':''}>Open</option>
+      <option value="in_progress" ${d.status==='in_progress' ?'selected':''}>In Progress</option>
+      <option value="resolved"    ${d.status==='resolved'    ?'selected':''}>Resolved</option>
+    </select>`;
+  }
+  actionsHtml += `<label class="file-upload-btn" style="font-size:12px;">
+    + Photo
+    <input type="file" accept="image/*" capture="environment" style="display:none;"
+      onchange="uploadDefPhoto(${d.id},${spaceId},this)" />
+  </label>`;
+  if (_canEdit) {
+    actionsHtml += `<button class="btn btn-sm btn-ghost" style="color:var(--red);margin-left:auto;" onclick="deleteDef(${d.id},${spaceId})">Delete</button>`;
+  }
+  actionsHtml += '</div>';
+  return `<div class="def-card status-${d.status}" id="def-card-${d.id}">
+    <div class="def-card-header">
+      ${badge}
+      <div class="def-desc">${escHtml(d.description)}</div>
+    </div>
+    <div class="def-meta">${raisedMeta}</div>
+    ${resolvedMeta}
+    ${photosHtml}
+    ${actionsHtml}
+  </div>`;
+}
+
+function renderDeficienciesSection(spaceId, defs) {
+  const body = document.getElementById('ds-def-body');
+  if (!body) return;
+  let html = '';
+
+  if (defs.length) {
+    const active   = defs.filter(d => d.status !== 'resolved');
+    const resolved = defs.filter(d => d.status === 'resolved');
+
+    if (active.length) {
+      html += '<div class="def-list">';
+      for (const d of active) html += defCardHtml(d, spaceId);
+      html += '</div>';
+    } else {
+      html += '<div class="detail-empty" style="margin-bottom:10px;">No open deficiencies.</div>';
+    }
+
+    if (resolved.length) {
+      html += `<details class="def-resolved-toggle">
+        <summary>Show resolved (${resolved.length})</summary>
+        <div class="def-list">`;
+      for (const d of resolved) html += defCardHtml(d, spaceId);
+      html += `</div></details>`;
+    }
+  } else {
+    html += '<div class="detail-empty" style="margin-bottom:10px;">No deficiencies.</div>';
+  }
+
+  // Add form (always visible — field users can raise)
+  const draft = loadDraft(spaceId);
+  html += `<div id="def-add-area">
+    <button class="def-add-btn" onclick="showDefForm(${spaceId})" id="def-show-btn">+ Add Deficiency</button>
+    <div class="def-form" id="def-form" style="display:none;">
+      <textarea id="def-textarea" placeholder="Describe the problem…" rows="4"
+        oninput="saveDraft(${spaceId})">${escHtml(draft)}</textarea>
+      <div class="def-photo-preview" id="def-photo-preview"></div>
+      <div class="def-form-actions">
+        <label class="btn btn-sm btn-secondary" style="cursor:pointer;">
+          📷 Photo
+          <input type="file" accept="image/*" capture="environment" multiple style="display:none;"
+            onchange="queueDefPhotos(this)" />
+        </label>
+        <button class="btn btn-sm btn-primary" onclick="submitDef(${spaceId})">Submit</button>
+        <button class="btn btn-sm btn-ghost" onclick="hideDefForm()">Cancel</button>
+      </div>
+      <div class="def-error" id="def-error" style="display:none;"></div>
+    </div>
+  </div>`;
+
+  body.innerHTML = html;
+
+  // If a draft existed, show the form immediately
+  if (draft) showDefForm(spaceId);
+}
+
+let _defPhotos = []; // staged photos for the new deficiency form
+
+function showDefForm(spaceId) {
+  const btn = document.getElementById('def-show-btn');
+  const form = document.getElementById('def-form');
+  if (btn) btn.style.display = 'none';
+  if (form) form.style.display = '';
+  const ta = document.getElementById('def-textarea');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+function hideDefForm() {
+  const btn = document.getElementById('def-show-btn');
+  const form = document.getElementById('def-form');
+  if (btn) btn.style.display = '';
+  if (form) form.style.display = 'none';
+  _defPhotos = [];
+  const preview = document.getElementById('def-photo-preview');
+  if (preview) preview.innerHTML = '';
+}
+
+function queueDefPhotos(input) {
+  for (const f of Array.from(input.files)) _defPhotos.push(f);
+  const preview = document.getElementById('def-photo-preview');
+  if (!preview) return;
+  preview.innerHTML = '';
+  for (const f of _defPhotos) {
+    const url = URL.createObjectURL(f);
+    preview.insertAdjacentHTML('beforeend', `<img src="${url}" />`);
+  }
+}
+
+async function submitDef(spaceId) {
+  const ta = document.getElementById('def-textarea');
+  const errEl = document.getElementById('def-error');
+  const submitBtn = document.querySelector('#def-form .btn-primary');
+  const description = ta?.value.trim();
+  if (!description) {
+    if (errEl) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+  try {
+    const r = await fetch(`/api/spaces/${spaceId}/deficiencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || 'Server error');
+    const def = await r.json();
+    clearDraft(spaceId);
+    // Upload any queued photos
+    for (const raw of _defPhotos) {
+      const photo = await compressImage(raw);
+      const fd = new FormData();
+      fd.append('photo', photo);
+      await fetch(`/api/deficiencies/${def.id}/photos`, { method: 'POST', body: fd });
+    }
+    _defPhotos = [];
+    // Reload deficiency section and refresh rollup badges
+    loadDeficiencies(spaceId);
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+  } catch (e) {
+    // Never clear the form — show retry
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
+    if (errEl) {
+      errEl.innerHTML = `Failed: ${escHtml(e.message)}. <a href="#" onclick="submitDef(${spaceId});return false;">Retry</a>`;
+      errEl.style.display = '';
+    }
+  }
+}
+
+async function patchDef(defId, status, spaceId) {
+  await fetch(`/api/deficiencies/${defId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  loadDeficiencies(spaceId);
+  if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+}
+
+async function deleteDef(defId, spaceId) {
+  if (!confirm('Delete this deficiency and its photos?')) return;
+  await fetch(`/api/deficiencies/${defId}`, { method: 'DELETE' });
+  loadDeficiencies(spaceId);
+}
+
+async function uploadDefPhoto(defId, spaceId, input) {
+  for (const raw of Array.from(input.files)) {
+    const photo = await compressImage(raw);
+    const fd = new FormData();
+    fd.append('photo', photo);
+    await fetch(`/api/deficiencies/${defId}/photos`, { method: 'POST', body: fd });
+  }
+  loadDeficiencies(spaceId);
+}
+
+// ── Review view ──────────────────────────────────────────────────────────────
+
+function switchReviewTab(tab) {
+  _currentReviewTab = tab;
+  clearBulkSelection();
+  document.querySelectorAll('.review-sub-tab').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim().toLowerCase() === tab)
+  );
+  document.querySelectorAll('.review-pane').forEach(p => p.classList.remove('active'));
+  const pane = document.getElementById('review-pane-' + tab);
+  if (pane) pane.classList.add('active');
+  loadReviewTab(tab);
+}
+
+function loadReviewTab(tab) {
+  if (!_activeProjectId) return;
+  if (tab === 'deficiencies') loadReviewDeficiencies();
+  else if (tab === 'notes')   loadReviewNotes();
+  else if (tab === 'material') loadReviewMaterial();
+}
+
+// ── Review: Deficiencies ──────────────────────────────────────────────────────
+
+function activeDefStatuses() {
+  return [...document.querySelectorAll('#review-def-filters .review-chip.active')]
+    .map(b => b.dataset.status);
+}
+
+function toggleDefFilter(btn) {
+  btn.classList.toggle('active');
+  loadReviewDeficiencies();
+}
+
+async function loadReviewDeficiencies() {
+  const list = document.getElementById('review-def-list');
+  if (!list) return;
+  const statuses = activeDefStatuses();
+  if (!statuses.length) { list.innerHTML = '<div class="review-empty">No filters selected.</div>'; return; }
+  list.innerHTML = '<div class="review-empty">Loading…</div>';
+  try {
+    const rows = await fetch(
+      `/api/projects/${_activeProjectId}/review/deficiencies?status=${statuses.join(',')}`
+    ).then(r => r.json());
+    renderReviewDeficiencies(rows);
+  } catch { list.innerHTML = '<div class="review-empty">Could not load deficiencies.</div>'; }
+}
+
+function renderReviewDeficiencies(rows) {
+  const list = document.getElementById('review-def-list');
+  if (!rows.length) { list.innerHTML = '<div class="review-empty">No deficiencies found.</div>'; return; }
+  list.innerHTML = rows.map(d => {
+    const when = d.raised_at ? new Date(d.raised_at).toLocaleDateString() : '';
+    const by   = d.raised_by_name ? 'by ' + escHtml(d.raised_by_name) : '';
+    const meta = [when, by].filter(Boolean).join(' ');
+    const select = _canManageReview ? `
+      <select class="def-status-select" onclick="event.stopPropagation()"
+        onchange="patchReviewDef(${d.id}, this.value, this)">
+        <option value="open"        ${d.status==='open'        ?'selected':''}>Open</option>
+        <option value="in_progress" ${d.status==='in_progress' ?'selected':''}>In Progress</option>
+        <option value="resolved"    ${d.status==='resolved'    ?'selected':''}>Resolved</option>
+      </select>` : '';
+    const checkbox = _canManageReview ? `
+      <div class="review-row-check">
+        <input type="checkbox" data-id="${d.id}" onclick="event.stopPropagation(); updateBulkBar('deficiencies')" />
+      </div>` : '';
+    return `<div class="review-row" onclick="openSpaceFromReview(${d.space_id})">
+      ${checkbox}
+      <div class="review-row-left status-${d.status}"></div>
+      <div class="review-row-body">
+        <div class="review-row-desc">${escHtml(d.description)}</div>
+        <div class="review-row-path">${escHtml(d.space_path || '')}</div>
+        <div class="review-row-meta">${meta}</div>
+      </div>
+      <div class="review-row-actions">${select}</div>
+    </div>`;
+  }).join('');
+}
+
+async function patchReviewDef(defId, status, selectEl) {
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${defId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    loadReviewDeficiencies();
+    if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+  } catch {
+    // revert select on failure
+    selectEl.value = selectEl.dataset.prev || selectEl.value;
+  }
+}
+
+// ── Review: Notes ─────────────────────────────────────────────────────────────
+
+async function loadReviewNotes() {
+  const list = document.getElementById('review-notes-list');
+  if (!list) return;
+  list.innerHTML = '<div class="review-empty">Loading…</div>';
+  try {
+    const rows = await fetch(`/api/projects/${_activeProjectId}/review/notes`).then(r => r.json());
+    renderReviewNotes(rows);
+  } catch { list.innerHTML = '<div class="review-empty">Could not load notes.</div>'; }
+}
+
+function renderReviewNotes(rows) {
+  const list = document.getElementById('review-notes-list');
+  if (!rows.length) { list.innerHTML = '<div class="review-empty">No notes yet.</div>'; return; }
+  list.innerHTML = rows.map(n => {
+    const when   = n.created_at ? new Date(n.created_at).toLocaleDateString() : '';
+    const author = n.author_name ? escHtml(n.author_name) : '—';
+    const loc    = n.plan_type_label
+      ? `<em>${escHtml(n.plan_type_label)}</em>`
+      : escHtml(n.space_path || '');
+    const clickable = n.space_id ? `onclick="openSpaceFromReview(${n.space_id})" style="cursor:pointer;"` : '';
+    return `<div class="review-row" ${clickable}>
+      <div class="review-row-body" style="padding-left:0;">
+        <div class="review-row-path">${loc} · ${author} · ${when}</div>
+        <div class="review-row-desc" style="font-weight:400;font-size:13px;">${escHtml(n.body)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Review: Material ──────────────────────────────────────────────────────────
+
+function activeMatStatuses() {
+  return [...document.querySelectorAll('#review-mat-filters .review-chip[data-st].active')]
+    .map(b => b.dataset.st);
+}
+
+function toggleMatStatus(btn) { btn.classList.toggle('active'); loadReviewMaterial(); }
+
+async function loadReviewMaterial() {
+  const list = document.getElementById('review-mat-list');
+  if (!list) return;
+  clearBulkSelection();
+
+  // Show pick-sheet button (field+) and export buttons (manage only)
+  const actionsEl = document.getElementById('review-mat-actions');
+  const exportsEl = document.getElementById('review-mat-exports');
+  if (actionsEl && _activeProjectId) {
+    actionsEl.style.display = _reviewAccess !== 'none' ? 'flex' : 'none';
+    if (exportsEl && _canManageReview) {
+      document.getElementById('btn-export-summary').href  = `/api/projects/${_activeProjectId}/export/material-summary`;
+      document.getElementById('btn-export-by-suite').href = `/api/projects/${_activeProjectId}/export/material-by-suite`;
+      exportsEl.style.display = 'flex';
+    } else if (exportsEl) {
+      exportsEl.style.display = 'none';
+    }
+  }
+
+  const statuses = activeMatStatuses();
+  if (!statuses.length) {
+    list.innerHTML = '<div class="review-empty">No filters selected.</div>'; return;
+  }
+  list.innerHTML = '<div class="review-empty">Loading…</div>';
+  try {
+    const url = `/api/projects/${_activeProjectId}/review/material?status=${statuses.join(',')}`;
+    const rows = await fetch(url).then(r => r.json());
+    renderReviewMaterial(rows);
+  } catch { list.innerHTML = '<div class="review-empty">Could not load material.</div>'; }
+}
+
+function renderReviewMaterial(rows) {
+  const list = document.getElementById('review-mat-list');
+  if (!rows.length) { list.innerHTML = '<div class="review-empty">No items found.</div>'; return; }
+
+  const active    = rows.filter(r => r.status !== 'delivered');
+  const delivered = rows.filter(r => r.status === 'delivered');
+
+  function itemHtml(item) {
+    const when = item.added_at ? new Date(item.added_at).toLocaleDateString() : '';
+    const by   = item.added_by_name ? escHtml(item.added_by_name) : '';
+    const meta = [by, when].filter(Boolean).join(' · ');
+    const qty  = parseFloat(item.quantity);
+    const qtyLabel = qty + (item.unit ? ' ' + escHtml(item.unit) : '');
+
+    const statusSelect = _canManageReview ? `
+      <select class="review-mat-status-select" onclick="event.stopPropagation()"
+        onchange="patchMatItemStatus(${item.id}, this.value)">
+        <option value="needed"    ${item.status==='needed'    ?'selected':''}>Needed</option>
+        <option value="ordered"   ${item.status==='ordered'   ?'selected':''}>Ordered</option>
+        <option value="delivered" ${item.status==='delivered' ?'selected':''}>Delivered</option>
+      </select>` : `<span class="list-item-status ${item.status}">${item.status}</span>`;
+
+    const checkbox = _canManageReview ? `
+      <div class="review-row-check">
+        <input type="checkbox" data-id="${item.id}" onclick="event.stopPropagation(); updateBulkBar('material')" />
+      </div>` : '';
+
+    return `<div class="review-row" onclick="openSpaceFromReview(${item.space_id})">
+      ${checkbox}
+      <div class="review-row-left" style="background:${ item.status==='needed' ? '#dc2626' : item.status==='ordered' ? '#d97706' : '#16a34a' }"></div>
+      <div class="review-row-body">
+        <div class="review-row-desc">${escHtml(item.description)}</div>
+        <div class="review-row-path">${escHtml(item.space_path || '')}</div>
+        <div class="review-row-meta">${qtyLabel} · ${meta}</div>
+      </div>
+      <div class="review-row-actions">${statusSelect}</div>
+    </div>`;
+  }
+
+  let html = active.map(itemHtml).join('');
+
+  if (delivered.length) {
+    html += `<details class="review-delivered-toggle">
+      <summary>Show delivered (${delivered.length})</summary>
+      ${delivered.map(itemHtml).join('')}
+    </details>`;
+  }
+
+  list.innerHTML = html;
+}
+
+async function patchMatItemStatus(itemId, status) {
+  try {
+    await fetch(`/api/material-requests/${itemId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    loadReviewMaterial();
+  } catch {}
+}
+
+// Open a space from the Review list — desktop opens right-hand panel; mobile drills in
+function openSpaceFromReview(spaceId) {
+  if (!spaceId) return;
+  if (isMobile()) {
+    _mobileReturnView = 'review';
+    switchView('spaces');
+    pushMobileLevel(spaceId);
+  } else {
+    openReviewDetailPanel(spaceId);
+  }
+}
+
+async function openReviewDetailPanel(spaceId) {
+  const s = _spaces.find(sp => sp.id === spaceId);
+  if (!s) return;
+
+  // Clear any section IDs that may exist in the spaces detail panel to avoid getElementById conflicts
+  const ds = document.getElementById('detail-sections');
+  if (ds) ds.innerHTML = '';
+
+  // Show the panel
+  document.getElementById('review-space-panel').classList.add('open');
+  document.getElementById('review-space-title').textContent = buildBreadcrumb(spaceId) || s.identifier;
+
+  // Render the same sections as the space detail view
+  document.getElementById('review-space-body').innerHTML = buildDetailSectionsHtml(s);
+
+  // Load data using the same functions — they find IDs within the page; now only in review-space-body
+  loadSpaceFiles(spaceId);
+  loadDeficiencies(spaceId);
+  loadSpaceMaterial(spaceId);
+  loadSpaceNotes(spaceId);
+}
+
+function closeReviewDetailPanel() {
+  const panel = document.getElementById('review-space-panel');
+  if (!panel) return;
+  panel.classList.remove('open');
+  // Clear section IDs so they don't conflict when spaces detail is opened later
+  const body = document.getElementById('review-space-body');
+  if (body) body.innerHTML = '';
+}
+
+// ── Pick Sheet ────────────────────────────────────────────────────────────────
+
+let _pickSheetData = null;
+
+async function openPickSheet() {
+  if (!_activeProjectId) return;
+  const modal = document.getElementById('pick-sheet-modal');
+  if (!modal) return;
+
+  try {
+    _pickSheetData = await fetch(`/api/projects/${_activeProjectId}/pick-sheet`).then(r => r.json());
+  } catch { _pickSheetData = []; }
+
+  // Populate building filter from space paths
+  const buildings = [...new Set(_pickSheetData.map(r => r.space_path.split(' / ')[0]).filter(Boolean))].sort();
+  const bSel = document.getElementById('ps-building-filter');
+  bSel.innerHTML = '<option value="">All buildings</option>' +
+    buildings.map(b => `<option value="${escHtml(b)}">${escHtml(b)}</option>`).join('');
+  document.getElementById('ps-floor-filter').innerHTML = '<option value="">All floors</option>';
+
+  bSel.onchange = () => {
+    const chosen = bSel.value;
+    const floors = chosen
+      ? [...new Set(_pickSheetData
+          .filter(r => r.space_path.startsWith(chosen + ' / '))
+          .map(r => r.space_path.split(' / ')[1]).filter(Boolean))].sort()
+      : [];
+    document.getElementById('ps-floor-filter').innerHTML =
+      '<option value="">All floors</option>' +
+      floors.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('');
+  };
+
+  modal.style.display = 'flex';
+}
+
+function closePickSheetModal() {
+  const modal = document.getElementById('pick-sheet-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function printPickSheet() {
+  if (!_pickSheetData) return;
+  const building = document.getElementById('ps-building-filter').value;
+  const floor    = document.getElementById('ps-floor-filter').value;
+
+  let rows = _pickSheetData;
+  if (building) rows = rows.filter(r => r.space_path.startsWith(building + ' / ') || r.space_path === building);
+  if (floor)    rows = rows.filter(r => r.space_path.split(' / ')[1] === floor);
+
+  // Group by space_path
+  const byPath = {};
+  for (const row of rows) {
+    if (!byPath[row.space_path]) byPath[row.space_path] = [];
+    byPath[row.space_path].push(row);
+  }
+
+  const projectName = document.getElementById('space-panel-title')?.textContent || '';
+  const filterLabel = [building, floor].filter(Boolean).join(' / ') || 'All suites';
+
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Pick Sheet — ${escHtml(projectName)}</title>
+  <style>
+    @page { size: letter portrait; margin: 18mm 15mm; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
+    h1 { font-size: 16px; margin: 0 0 2px; }
+    .sub { font-size: 11px; color: #666; margin: 0 0 14px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+    th { text-align: left; border-bottom: 2px solid #333; padding: 4px 6px; font-size: 11px; }
+    td { padding: 4px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+    .suite { font-size: 13px; font-weight: 700; padding: 10px 0 2px; page-break-inside: avoid; }
+    .chk { width: 18px; }
+    .status { font-size: 10px; color: #666; }
+  </style>
+  </head><body>
+  <h1>Pick Sheet — ${escHtml(projectName)}</h1>
+  <p class="sub">Filter: ${escHtml(filterLabel)} &nbsp;·&nbsp; Printed: ${new Date().toLocaleDateString()}</p>`;
+
+  for (const [path, items] of Object.entries(byPath)) {
+    html += `<div class="suite">${path.replace(/</g,'&lt;')}</div>
+    <table><thead><tr>
+      <th class="chk"></th><th>Description</th><th>Qty</th><th>Unit</th><th class="status">Status</th>
+    </tr></thead><tbody>`;
+    for (const item of items) {
+      const qty = parseFloat(item.quantity);
+      const qtyStr = qty % 1 === 0 ? qty.toString() : qty.toFixed(2);
+      html += `<tr>
+        <td><input type="checkbox"></td>
+        <td>${item.description.replace(/</g,'&lt;')}</td>
+        <td>${qtyStr}</td>
+        <td>${(item.unit || '').replace(/</g,'&lt;')}</td>
+        <td class="status">${item.status}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  if (!Object.keys(byPath).length) {
+    html += '<p>No needed or ordered items match the selected filter.</p>';
+  }
+
+  html += '</body></html>';
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+  closePickSheetModal();
+}
+
+// ── Bulk actions (Review — manage only) ───────────────────────────────────────
+
+let _bulkTab = null; // 'deficiencies' | 'material'
+
+function updateBulkBar(tab) {
+  _bulkTab = tab;
+  const checked = [...document.querySelectorAll(
+    tab === 'deficiencies' ? '#review-def-list input[type=checkbox]:checked'
+                           : '#review-mat-list input[type=checkbox]:checked'
+  )];
+  const bar = document.getElementById('bulk-bar');
+  const sel = document.getElementById('bulk-bar-select');
+  document.getElementById('bulk-bar-count').textContent = `${checked.length} selected`;
+  bar.classList.toggle('visible', checked.length > 0);
+
+  if (checked.length > 0) {
+    const opts = tab === 'deficiencies'
+      ? [['open','Open'],['in_progress','In Progress'],['resolved','Resolved']]
+      : [['needed','Needed'],['ordered','Ordered'],['delivered','Delivered']];
+    sel.innerHTML = opts.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  }
+}
+
+function clearBulkSelection() {
+  document.querySelectorAll('#review-def-list input[type=checkbox], #review-mat-list input[type=checkbox]')
+    .forEach(cb => { cb.checked = false; });
+  document.getElementById('bulk-bar').classList.remove('visible');
+  _bulkTab = null;
+}
+
+async function applyBulkAction() {
+  if (!_bulkTab) return;
+  const status = document.getElementById('bulk-bar-select').value;
+  const selector = _bulkTab === 'deficiencies'
+    ? '#review-def-list input[type=checkbox]:checked'
+    : '#review-mat-list input[type=checkbox]:checked';
+  const ids = [...document.querySelectorAll(selector)].map(cb => parseInt(cb.dataset.id));
+  if (!ids.length) return;
+
+  const url = _bulkTab === 'deficiencies'
+    ? `/api/projects/${_activeProjectId}/review/deficiencies/bulk`
+    : `/api/projects/${_activeProjectId}/review/material/bulk`;
+
+  try {
+    const r = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, status }),
+    });
+    if (!r.ok) throw new Error();
+    clearBulkSelection();
+    if (_bulkTab === 'deficiencies') {
+      loadReviewDeficiencies();
+      if (_activeProjectId) loadSpaceCounts(_activeProjectId);
+    } else {
+      loadReviewMaterial();
+    }
+  } catch { alert('Failed to apply bulk status change.'); }
+}
+
+// ── Space Material ────────────────────────────────────────────────────────────
+
+async function loadSpaceMaterial(spaceId) {
+  const body = document.getElementById('ds-material-body');
+  if (!body) return;
+  try {
+    const items = await fetch(`/api/spaces/${spaceId}/material`).then(r => r.json());
+    renderSpaceMaterial(spaceId, items);
+  } catch {
+    if (body) body.innerHTML = '<div class="detail-empty">Could not load material.</div>';
+  }
+}
+
+function renderSpaceMaterial(spaceId, items) {
+  const body = document.getElementById('ds-material-body');
+  if (!body) return;
+  const STATUS_ORDER = ['needed','ordered','delivered'];
+  let html = '';
+
+  if (items.length) {
+    html += items.map(item => {
+      const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(item.status) + 1) % STATUS_ORDER.length];
+      const canAdvance = _canEdit || nextStatus === 'delivered';
+      const statusBtn = canAdvance
+        ? `<button class="list-item-status ${item.status}" onclick="cycleMaterialStatus(${item.id},'${nextStatus}',${spaceId})" title="Mark ${nextStatus}">${item.status}</button>`
+        : `<span class="list-item-status ${item.status}">${item.status}</span>`;
+      const qty = parseFloat(item.quantity);
+      const qtyLabel = qty !== 1 || item.unit ? qty + (item.unit ? ' ' + escHtml(item.unit) : '') : '';
+      const canDel = _canEdit || String(item.added_by) === String(_userId);
+      return `<div class="list-item-row" id="mr-row-${item.id}">
+        <span class="list-item-desc">${escHtml(item.description)}</span>
+        ${qtyLabel ? `<span class="list-item-qty">${qtyLabel}</span>` : ''}
+        ${statusBtn}
+        ${canDel ? `<button class="list-item-del" onclick="deleteMaterialRequest(${item.id},${spaceId})" title="Remove">✕</button>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    html += '<div class="detail-empty">No material requests.</div>';
+  }
+
+  // Add form (field+)
+  html += `<div class="list-add-form" id="mf-${spaceId}">
+    <input type="text" placeholder="Description" id="mr-desc-${spaceId}" inputmode="text" />
+    <input type="number" placeholder="Qty" id="mr-qty-${spaceId}" value="1" min="0.01" step="any" />
+    <input type="text" placeholder="Unit" id="mr-unit-${spaceId}" style="width:60px;" />
+    <button class="btn-add-item" onclick="addMaterialRequest(${spaceId})">Add</button>
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+async function addMaterialRequest(spaceId) {
+  const desc = document.getElementById(`mr-desc-${spaceId}`)?.value.trim();
+  const qty  = document.getElementById(`mr-qty-${spaceId}`)?.value || '1';
+  const unit = document.getElementById(`mr-unit-${spaceId}`)?.value.trim();
+  if (!desc) return;
+  try {
+    await fetch(`/api/spaces/${spaceId}/material`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc, quantity: qty, unit: unit || undefined })
+    });
+    loadSpaceMaterial(spaceId);
+  } catch {}
+}
+
+async function cycleMaterialStatus(mrId, nextStatus, spaceId) {
+  try {
+    await fetch(`/api/material-requests/${mrId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus })
+    });
+    loadSpaceMaterial(spaceId);
+  } catch {}
+}
+
+async function deleteMaterialRequest(mrId, spaceId) {
+  try {
+    await fetch(`/api/material-requests/${mrId}`, { method: 'DELETE' });
+    loadSpaceMaterial(spaceId);
+  } catch {}
+}
+
+// ── Space Lists ───────────────────────────────────────────────────────────────
+
+let _listTypes = [];
+
+async function ensureListTypes() {
+  if (_listTypes.length) return;
+  try { _listTypes = await fetch('/api/list-types').then(r => r.json()); } catch {}
+}
+
+async function loadSpaceLists(spaceId) {
+  const body = document.getElementById('ds-lists-body');
+  if (!body) return;
+  await ensureListTypes();
+  try {
+    const data = await fetch(`/api/spaces/${spaceId}/lists`).then(r => r.json());
+    renderSpaceListsSection(spaceId, data);
+  } catch (e) {
+    if (body) body.innerHTML = '<div class="detail-empty">Could not load lists.</div>';
+  }
+}
+
+function renderSpaceListsSection(spaceId, data) {
+  const body = document.getElementById('ds-lists-body');
+  if (!body) return;
+  const { ownLists = [], typeLists = [] } = data;
+  let html = '';
+
+  if (!ownLists.length && !typeLists.length) {
+    html += '<div class="detail-empty">No lists yet.</div>';
+  }
+
+  // Inherited type lists (read-only for field)
+  for (const list of typeLists) {
+    const suiteLabel = `From Type ${escHtml(list.plan_type_code || '')} — applies to all ${list.suite_count} suites`;
+    html += `<div class="list-block" data-list-id="${list.id}" data-list-owner="type">
+      <div class="list-block-header">
+        <span class="list-block-title">${escHtml(list.list_type)}</span>
+        <span style="font-size:11px;color:var(--gray-400);">${suiteLabel}</span>
+      </div>`;
+    html += renderListItems(list.items, list.id, 'type', spaceId);
+    html += '</div>';
+  }
+
+  // Space-specific lists
+  for (const list of ownLists) {
+    html += `<div class="list-block" data-list-id="${list.id}" data-list-owner="space">
+      <div class="list-block-header">
+        <span class="list-block-title">${escHtml(list.list_type)}</span>
+        ${_canEdit ? `<button class="list-block-del" onclick="deleteSpaceList(${spaceId},${list.id})" title="Delete list">✕</button>` : ''}
+      </div>`;
+    html += renderListItems(list.items, list.id, 'space', spaceId);
+    html += `<div class="list-add-form" id="lf-${list.id}">
+      <input type="text" placeholder="Description" id="li-desc-${list.id}" inputmode="text" />
+      <input type="number" placeholder="Qty" id="li-qty-${list.id}" value="1" min="0.01" step="any" />
+      <input type="text" placeholder="Unit" id="li-unit-${list.id}" style="width:60px;" />
+      <button class="btn-add-item" onclick="addListItem(${spaceId},${list.id})">Add</button>
+    </div>`;
+    html += '</div>';
+  }
+
+  // Create list controls (manage only)
+  if (_canEdit) {
+    const opts = _listTypes.map(lt =>
+      `<option value="${lt.id}">${escHtml(lt.name)}</option>`).join('');
+    html += `<div class="lists-create-row">
+      <select id="new-list-type-${spaceId}">${opts}</select>
+      <button class="btn btn-sm btn-secondary" onclick="createSpaceList(${spaceId})">+ Add List</button>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+}
+
+function renderListItems(items, listId, owner, spaceId) {
+  if (!items.length) return '<div class="detail-empty" style="padding:6px 0;">No items.</div>';
+  const STATUS_ORDER = ['needed','ordered','delivered'];
+  return items.map(item => {
+    const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(item.status) + 1) % STATUS_ORDER.length];
+    // Field can only advance to delivered; manage can cycle freely
+    const canAdvance = _canEdit || nextStatus === 'delivered';
+    const statusBtn = canAdvance
+      ? `<button class="list-item-status ${item.status}" onclick="cycleItemStatus(${item.id},'${nextStatus}',${listId},${owner === 'space' ? spaceId : 0},${owner === 'type' ? 1 : 0})" title="Mark ${nextStatus}">${item.status.replace('_',' ')}</button>`
+      : `<span class="list-item-status ${item.status}">${item.status.replace('_',' ')}</span>`;
+    const qty = parseFloat(item.quantity);
+    const qtyLabel = (qty !== 1 ? qty + (item.unit ? ' ' + escHtml(item.unit) : '') : (item.unit ? '1 ' + escHtml(item.unit) : ''));
+    const canDel = _canEdit || String(item.added_by) === String(_userId);
+    return `<div class="list-item-row" id="li-row-${item.id}">
+      <span class="list-item-desc">${escHtml(item.description)}</span>
+      ${qtyLabel ? `<span class="list-item-qty">${qtyLabel}</span>` : ''}
+      ${statusBtn}
+      ${canDel ? `<button class="list-item-del" onclick="deleteListItem(${item.id},${listId},${owner === 'space' ? spaceId : 0},${owner === 'type' ? 1 : 0})" title="Remove">✕</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function createSpaceList(spaceId) {
+  const sel = document.getElementById(`new-list-type-${spaceId}`);
+  if (!sel) return;
+  try {
+    await fetch(`/api/spaces/${spaceId}/lists`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ list_type_id: sel.value })
+    });
+    loadSpaceLists(spaceId);
+  } catch {}
+}
+
+async function deleteSpaceList(spaceId, listId) {
+  if (!confirm('Delete this list and all its items?')) return;
+  try {
+    await fetch(`/api/spaces/${spaceId}/lists/${listId}`, { method: 'DELETE' });
+    loadSpaceLists(spaceId);
+  } catch {}
+}
+
+async function addListItem(spaceId, listId) {
+  const desc = document.getElementById(`li-desc-${listId}`)?.value.trim();
+  const qty  = document.getElementById(`li-qty-${listId}`)?.value || '1';
+  const unit = document.getElementById(`li-unit-${listId}`)?.value.trim();
+  if (!desc) return;
+  try {
+    await fetch(`/api/lists/${listId}/items`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc, quantity: qty, unit: unit || undefined })
+    });
+    loadSpaceLists(spaceId);
+  } catch {}
+}
+
+async function cycleItemStatus(itemId, nextStatus, listId, spaceId, isTypeList) {
+  try {
+    await fetch(`/api/list-items/${itemId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus })
+    });
+    if (isTypeList) {
+      // Reload rollup context — for now just reload lists
+      if (spaceId) loadSpaceLists(spaceId);
+    } else {
+      loadSpaceLists(spaceId);
+    }
+  } catch {}
+}
+
+async function showRollup(spaceId) {
+  const el = document.getElementById('ds-rollup');
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = '<div style="padding:10px 16px;font-size:13px;color:var(--gray-400);">Loading rollup…</div>';
+  try {
+    const rows = await fetch(`/api/spaces/${spaceId}/list-rollup`).then(r => r.json());
+    if (!rows.length) {
+      el.innerHTML = '<div style="padding:10px 16px;" class="detail-empty">No outstanding items beneath this space.</div>';
+      return;
+    }
+    // Group by list_type
+    const byType = {};
+    for (const row of rows) {
+      if (!byType[row.list_type]) byType[row.list_type] = [];
+      byType[row.list_type].push(row);
+    }
+    let html = '<div style="border-top:2px solid var(--orange);padding:12px 16px;">';
+    html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--orange);margin-bottom:10px;">Rollup — needed &amp; ordered</div>';
+    for (const [type, items] of Object.entries(byType)) {
+      html += `<div style="font-size:12px;font-weight:600;color:var(--gray-500);margin:8px 0 4px;">${escHtml(type)}</div>`;
+      for (const item of items) {
+        const qty = parseFloat(item.total_quantity);
+        const qtyStr = qty % 1 === 0 ? qty.toString() : qty.toFixed(2);
+        html += `<div class="list-item-row">
+          <span class="list-item-desc">${escHtml(item.description)}</span>
+          <span class="list-item-qty">${qtyStr}${item.unit ? ' ' + escHtml(item.unit) : ''}</span>
+        </div>`;
+      }
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch {
+    el.innerHTML = '<div style="padding:10px 16px;" class="detail-empty">Could not load rollup.</div>';
+  }
+}
+
+async function deleteListItem(itemId, listId, spaceId, isTypeList) {
+  try {
+    await fetch(`/api/list-items/${itemId}`, { method: 'DELETE' });
+    if (spaceId) loadSpaceLists(spaceId);
+  } catch {}
+}
+
+// ── Space Notes ───────────────────────────────────────────────────────────────
+
+let _userId = null; // set on init from /api/auth/me
+
+async function loadSpaceNotes(spaceId) {
+  const body = document.getElementById('ds-notes-body');
+  if (!body) return;
+  try {
+    const notes = await fetch(`/api/spaces/${spaceId}/notes`).then(r => r.json());
+    renderSpaceNotesSection(spaceId, notes);
+  } catch {
+    if (body) body.innerHTML = '<div class="detail-empty">Could not load notes.</div>';
+  }
+}
+
+function renderSpaceNotesSection(spaceId, notes) {
+  const body = document.getElementById('ds-notes-body');
+  if (!body) return;
+  const draftKey = `note-draft-space-${spaceId}`;
+  const draft = localStorage.getItem(draftKey) || '';
+
+  let html = '';
+  for (const n of notes) {
+    const canDel = _canEdit || String(n.author_id) === String(_userId);
+    const when = formatRelTime(n.created_at);
+    html += `<div class="note-entry" id="note-${n.id}">
+      <div class="note-meta">
+        <span class="note-author">${escHtml(n.author_name || '—')}</span>
+        <span>${when}</span>
+        ${canDel ? `<button class="note-del" onclick="deleteSpaceNote(${n.id},${spaceId})" title="Delete">✕</button>` : ''}
+      </div>
+      <div class="note-body">${escHtml(n.body)}</div>
+    </div>`;
+  }
+
+  html += `<div class="note-add-form">
+    <textarea id="note-ta-${spaceId}" placeholder="Add a note…" inputmode="text"
+      oninput="localStorage.setItem('${draftKey}',this.value)">${escHtml(draft)}</textarea>
+    <button class="btn-add-note" onclick="submitSpaceNote(${spaceId})">Add Note</button>
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+async function submitSpaceNote(spaceId) {
+  const ta = document.getElementById(`note-ta-${spaceId}`);
+  const body = ta?.value.trim();
+  if (!body) return;
+  try {
+    await fetch(`/api/spaces/${spaceId}/notes`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body })
+    });
+    localStorage.removeItem(`note-draft-space-${spaceId}`);
+    loadSpaceNotes(spaceId);
+  } catch {}
+}
+
+async function deleteSpaceNote(noteId, spaceId) {
+  try {
+    await fetch(`/api/notes/${noteId}`, { method: 'DELETE' });
+    loadSpaceNotes(spaceId);
+  } catch {}
+}
+
+function formatRelTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)   return 'just now';
+  if (m < 60)  return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24)  return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7)   return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+</script>
+
+<!-- Full-screen file viewer -->
+<div class="file-viewer" id="file-viewer" onclick="closeFileViewer()">
+  <button class="file-viewer-close" onclick="event.stopPropagation();closeFileViewer()">&#x2715;</button>
+  <img id="fv-img" style="display:none;" onclick="event.stopPropagation()" />
+  <iframe id="fv-frame" style="display:none;" onclick="event.stopPropagation()"></iframe>
+</div>
+
+</body>
+</html>

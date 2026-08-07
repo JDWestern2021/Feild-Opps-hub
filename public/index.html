@@ -488,6 +488,14 @@
       <p>View, filter &amp; export all time tickets</p>
       <span class="nav-card-arrow">→</span>
     </a>
+    <a href="worksites.html" class="nav-card c-blue" id="card-worksites">
+      <div class="nav-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 3L2 12h3v8h6v-5h2v5h6v-8h3L12 3z"/></svg>
+      </div>
+      <h2>Worksites</h2>
+      <p>Browse job spaces &amp; floors</p>
+      <span class="nav-card-arrow">→</span>
+    </a>
   </div>
 
   <!-- Tagline -->
@@ -533,9 +541,11 @@
   const hasTT = u.role === 'admin' || perms.includes('time_ticket');
   const hasPO = u.role === 'admin' || perms.includes('get_po');
   const hasOD = u.role === 'admin';
+  const wsAccess = (u.module_permissions || {}).worksites || 'none';
   if (!hasTT) document.getElementById('card-tt').style.display = 'none';
   if (!hasPO) document.getElementById('card-po').style.display = 'none';
   if (!hasOD) document.getElementById('card-od').style.display = 'none';
+  if (wsAccess === 'none') document.getElementById('card-worksites').style.display = 'none';
   // Safety card visible to all employees — near miss & incident report gated inside safety.html
   // My Timesheet always visible to authenticated users
 

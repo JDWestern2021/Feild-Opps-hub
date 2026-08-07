@@ -825,6 +825,293 @@ async function initSchema() {
     created_at       TEXT NOT NULL
   )`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_types (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    icon       TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS spaces (
+    id            SERIAL PRIMARY KEY,
+    project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    parent_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,
+    space_type_id INTEGER REFERENCES space_types(id),
+    identifier    TEXT NOT NULL,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    archived_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // Seed space_types once
+  const { rowCount: stCount } = await pool.query('SELECT 1 FROM space_types LIMIT 1');
+  if (stCount === 0) {
+    await pool.query(`
+      INSERT INTO space_types (name, icon, sort_order) VALUES
+        ('Building',          '🏢', 1),
+        ('Floor',             '📐', 2),
+        ('Unit',              '🚪', 3),
+        ('Suite',             '🏠', 4),
+        ('Common Area',       '🛋️', 5),
+        ('Lobby',             '🏛️', 6),
+        ('Parkade',           '🚗', 7),
+        ('Mechanical Room',   '⚙️', 8),
+        ('Electrical Room',   '⚡', 9),
+        ('Stairwell',         '🪜', 10),
+        ('Roof',              '🏗️', 11),
+        ('Exterior',          '🌿', 12),
+        ('Service Room',      '🔧', 13),
+        ('Storage Room',      '📦', 14)
+    `);
+  }
+
+  // ── Plan types (suite layout types, per-project) ───────────────────────────
+  // Panel schedules live here as BYTEA — six files max. See implementation
+  // notes: before deficiency photos, decide on file storage (BYTEA vs object
+  // storage) — thousands of photos as BYTEA inside Postgres is not the plan.
+  await pool.query(`CREATE TABLE IF NOT EXISTS plan_types (
+    id                SERIAL PRIMARY KEY,
+    project_id        INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    code              TEXT NOT NULL,
+    name              TEXT,
+    notes             TEXT,
+    panel_file_data   BYTEA,
+    panel_mime_type   TEXT,
+    panel_file_name   TEXT,
+    panel_file_size   INTEGER,
+    panel_uploaded_by TEXT,
+    panel_uploaded_at TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (project_id, code)
+  )`);
+
+  // plan_type_id — the only change to spaces; nullable so non-suite spaces stay null
+  await pool.query(`ALTER TABLE spaces ADD COLUMN IF NOT EXISTS plan_type_id INTEGER REFERENCES plan_types(id) ON DELETE SET NULL`);
+
+  // New space types for building-level verticals — idempotent, UNIQUE(name) exists
+  await pool.query(`
+    INSERT INTO space_types (name, icon, sort_order)
+    VALUES ('Elevator', '', 15), ('Mechanical Shaft', '', 16)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  // Parking Lot is a surface lot at project level — distinct from Parkade (underground level)
+  await pool.query(`
+    INSERT INTO space_types (name, icon, sort_order)
+    VALUES ('Parking Lot', '🅿️', 17)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS user_module_permissions (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    module     TEXT NOT NULL,
+    access     TEXT NOT NULL DEFAULT 'none' CHECK (access IN ('none','field','manage')),
+    UNIQUE (user_id, module)
+  )`);
+
+  // Rename levels: view→field, edit→manage. DROP before UPDATE so old values
+  // don't violate the new constraint; WHERE guard makes UPDATE a no-op on re-runs.
+  await pool.query(`
+    ALTER TABLE user_module_permissions
+      DROP CONSTRAINT IF EXISTS user_module_permissions_access_check
+  `);
+  await pool.query(`
+    UPDATE user_module_permissions
+      SET access = CASE access WHEN 'view' THEN 'field' WHEN 'edit' THEN 'manage' ELSE access END
+      WHERE access IN ('view', 'edit')
+  `);
+  await pool.query(`
+    ALTER TABLE user_module_permissions
+      ADD CONSTRAINT user_module_permissions_access_check CHECK (access IN ('none','field','manage'))
+  `);
+
+  // Backfill: any existing non-admin user gets 'field' on worksites if they have no row yet
+  await pool.query(`
+    INSERT INTO user_module_permissions (user_id, module, access)
+    SELECT u.id, 'worksites', 'field'
+    FROM users u
+    WHERE u.role <> 'admin'
+      AND NOT EXISTS (
+        SELECT 1 FROM user_module_permissions p
+        WHERE p.user_id = u.id AND p.module = 'worksites'
+      )
+  `);
+
+  // ── space_files ─────────────────────────────────────────────────────────────
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_files (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    file_data    BYTEA NOT NULL,
+    mime_type    TEXT NOT NULL,
+    file_name    TEXT NOT NULL,
+    caption      TEXT,
+    uploaded_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // ── deficiencies ────────────────────────────────────────────────────────────
+  await pool.query(`CREATE TABLE IF NOT EXISTS deficiencies (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    description  TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved')),
+    raised_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    raised_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    assigned_to  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    resolved_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    resolved_at  TIMESTAMPTZ
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS deficiency_photos (
+    id              SERIAL PRIMARY KEY,
+    deficiency_id   INTEGER NOT NULL REFERENCES deficiencies(id) ON DELETE CASCADE,
+    file_data       BYTEA NOT NULL,
+    mime_type       TEXT NOT NULL,
+    uploaded_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS plan_type_files (
+    id            SERIAL PRIMARY KEY,
+    plan_type_id  INTEGER NOT NULL REFERENCES plan_types(id) ON DELETE CASCADE,
+    file_data     BYTEA NOT NULL,
+    mime_type     TEXT NOT NULL,
+    file_name     TEXT NOT NULL,
+    caption       TEXT,
+    uploaded_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // ── Chunk 8: Lists & Notes ──────────────────────────────────────────────
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS list_types (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  await pool.query(`
+    INSERT INTO list_types (name, sort_order) VALUES ('Material', 1), ('Finishing', 2)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  // Exactly one of space_id / plan_type_id must be set (enforced by CHECK).
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_lists (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,
+    plan_type_id INTEGER REFERENCES plan_types(id) ON DELETE CASCADE,
+    list_type_id INTEGER NOT NULL REFERENCES list_types(id),
+    created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (
+      (space_id IS NOT NULL AND plan_type_id IS NULL) OR
+      (space_id IS NULL     AND plan_type_id IS NOT NULL)
+    )
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS list_items (
+    id          SERIAL PRIMARY KEY,
+    list_id     INTEGER NOT NULL REFERENCES space_lists(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    quantity    NUMERIC NOT NULL DEFAULT 1,
+    unit        TEXT,
+    status      TEXT NOT NULL DEFAULT 'needed'
+                  CHECK (status IN ('needed','ordered','received','installed')),
+    added_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes       TEXT
+  )`);
+
+  // Migrate list_items status from 4-value to 3-value set.
+  // Order: drop old constraint → migrate rows → add new constraint.
+  // All three steps are idempotent (IF EXISTS / WHERE covers already-migrated rows).
+  await pool.query(`ALTER TABLE list_items DROP CONSTRAINT IF EXISTS list_items_status_check`);
+  await pool.query(`UPDATE list_items SET status = 'delivered' WHERE status IN ('received','installed')`);
+  await pool.query(`ALTER TABLE list_items ADD CONSTRAINT list_items_status_check
+    CHECK (status IN ('needed','ordered','delivered'))`);
+
+  // One-time migration log — records which migrations have already run.
+  // Checked before any destructive or one-time data operation.
+  await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    name   TEXT PRIMARY KEY,
+    ran_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // Flat material requests per space (replaces space-level space_lists in the UI).
+  // Type-level standard lists still live in space_lists with plan_type_id.
+  await pool.query(`CREATE TABLE IF NOT EXISTS material_requests (
+    id          SERIAL PRIMARY KEY,
+    space_id    INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    quantity    NUMERIC NOT NULL DEFAULT 1,
+    unit        TEXT,
+    status      TEXT NOT NULL DEFAULT 'needed'
+                  CHECK (status IN ('needed','ordered','delivered')),
+    added_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes       TEXT
+  )`);
+
+  // One-time backfill: copy space-level list_items → material_requests.
+  // Guards on the schema_migrations row so it never re-runs (and never
+  // resurrects items the user has deleted).
+  {
+    const { rowCount } = await pool.query(
+      "SELECT 1 FROM schema_migrations WHERE name = 'material_requests_backfill'"
+    );
+    if (!rowCount) {
+      await pool.query(`
+        INSERT INTO material_requests (space_id, description, quantity, unit, status, added_by, added_at, notes)
+        SELECT sl.space_id, li.description, li.quantity, li.unit, li.status, li.added_by, li.added_at, li.notes
+        FROM list_items li
+        JOIN space_lists sl ON sl.id = li.list_id
+        WHERE sl.space_id IS NOT NULL
+      `);
+      await pool.query(
+        "INSERT INTO schema_migrations (name) VALUES ('material_requests_backfill')"
+      );
+    }
+  }
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_notes (
+    id           SERIAL PRIMARY KEY,
+    space_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,
+    plan_type_id INTEGER REFERENCES plan_types(id) ON DELETE CASCADE,
+    body         TEXT NOT NULL,
+    author_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (
+      (space_id IS NOT NULL AND plan_type_id IS NULL) OR
+      (space_id IS NULL     AND plan_type_id IS NOT NULL)
+    )
+  )`);
+
+  // Per-suite panel overrides — separate table keeps BYTEA off the spaces row
+  // so tree loads never pull panel PDFs accidentally.
+  await pool.query(`CREATE TABLE IF NOT EXISTS space_panel_overrides (
+    id              SERIAL PRIMARY KEY,
+    space_id        INTEGER NOT NULL UNIQUE REFERENCES spaces(id) ON DELETE CASCADE,
+    panel_file_data BYTEA NOT NULL,
+    panel_mime_type TEXT,
+    panel_file_name TEXT,
+    panel_file_size INTEGER,
+    uploaded_by     TEXT,
+    uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  // Migrate existing plan_types.notes (free-text textarea) to space_notes entries.
+  // Runs once per type that has notes and no space_notes row yet — idempotent.
+  await pool.query(`
+    INSERT INTO space_notes (plan_type_id, body, author_id, created_at)
+    SELECT pt.id, pt.notes, NULL, NOW()
+    FROM   plan_types pt
+    WHERE  pt.notes IS NOT NULL AND pt.notes != ''
+      AND  NOT EXISTS (
+        SELECT 1 FROM space_notes sn WHERE sn.plan_type_id = pt.id
+      )
+  `);
+
   console.log('  ✓ Database schema ready');
 }
 
