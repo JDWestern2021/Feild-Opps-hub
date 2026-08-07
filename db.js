@@ -1115,6 +1115,31 @@ async function initSchema() {
     )
   )`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS note_acknowledgements (
+    note_id        INTEGER NOT NULL REFERENCES space_notes(id) ON DELETE CASCADE,
+    user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (note_id, user_id)
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS activity_log (
+    id          SERIAL PRIMARY KEY,
+    project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    space_id    INTEGER REFERENCES spaces(id) ON DELETE SET NULL,
+    entity_type TEXT NOT NULL,
+    entity_id   INTEGER,
+    action      TEXT NOT NULL,
+    detail      TEXT,
+    user_id     INTEGER,
+    actor_name  TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_project_created
+    ON activity_log (project_id, created_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_entity
+    ON activity_log (entity_type, entity_id)`);
+
   // Per-suite panel overrides — separate table keeps BYTEA off the spaces row
   // so tree loads never pull panel PDFs accidentally.
   await pool.query(`CREATE TABLE IF NOT EXISTS space_panel_overrides (

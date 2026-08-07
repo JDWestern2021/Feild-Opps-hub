@@ -546,6 +546,31 @@
       white-space: nowrap; font-weight: 500;
     }
 
+    /* ── Note acknowledgements ── */
+    .note-entry.note-unacked { border-left: 3px solid var(--orange); padding-left: 9px; }
+    .note-ack-bar { display: flex; align-items: center; gap: 8px; margin-top: 5px; flex-wrap: wrap; }
+    .note-ack-btn {
+      font-size: 11px; font-weight: 600; color: var(--orange); background: none;
+      border: 1px solid var(--orange); border-radius: 12px; padding: 2px 10px;
+      cursor: pointer; font-family: inherit; min-height: 26px;
+    }
+    .note-ack-btn:hover { background: #fff7ed; }
+    .note-acked-self { font-size: 11px; color: var(--gray-400); }
+    .note-seen-by    { font-size: 11px; color: var(--gray-400); }
+    /* ── Activity log ── */
+    .activity-entry { padding: 10px 14px; border-bottom: 1px solid var(--gray-50); font-size: 12px; }
+    .activity-entry:last-child { border-bottom: none; }
+    .activity-action { font-weight: 600; color: var(--dark); margin-bottom: 1px; }
+    .activity-detail { color: var(--gray-500); margin-bottom: 2px; }
+    .activity-meta   { color: var(--gray-400); font-size: 11px; }
+    .history-section { margin-top: 8px; }
+    .history-toggle {
+      font-size: 11px; font-weight: 600; color: var(--gray-500); background: none;
+      border: none; cursor: pointer; padding: 2px 0; font-family: inherit; letter-spacing: .03em;
+    }
+    .history-toggle:hover { color: var(--dark); }
+    .history-list { display: none; border-top: 1px solid var(--gray-100); margin-top: 4px; }
+    .history-list.open { display: block; }
     /* ── Types view ── */
     .types-view { padding: 12px; }
     .types-table { width: 100%; border-collapse: collapse; }
@@ -852,6 +877,7 @@
           <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
           <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
           <button class="review-sub-tab"        onclick="switchReviewTab('sheets')">Work Sheets</button>
+          <button class="review-sub-tab ws-desktop-only" onclick="switchReviewTab('activity')">Activity</button>
         </div>
       </div>
 
@@ -995,11 +1021,16 @@
               </div>
               <div id="ws-detail-header" style="padding:12px 14px;border-bottom:1px solid var(--gray-100);font-size:13px;"></div>
               <div id="ws-detail-items" class="review-list"></div>
+              <div id="ws-detail-history" class="ws-desktop-only" style="padding:8px 14px;border-top:1px solid var(--gray-100);"></div>
             </div>
           </div>
           <!-- Notes pane -->
           <div id="review-pane-notes" class="review-pane">
             <div id="review-notes-list" class="review-list"></div>
+          </div>
+          <!-- Activity pane — desktop only, never rendered on mobile -->
+          <div id="review-pane-activity" class="review-pane ws-desktop-only">
+            <div id="review-activity-list" class="review-list"></div>
           </div>
           <!-- Material pane -->
           <div id="review-pane-material" class="review-pane">
@@ -1217,6 +1248,26 @@
   </div>
 </div>
 
+<!-- Edit project details modal (admin only) -->
+<div class="modal-backdrop" id="edit-proj-modal" style="display:none;" onclick="if(event.target===this)closeEditProjectModal()">
+  <div class="modal" style="width:400px;">
+    <h3>Edit Project Details</h3>
+    <p style="font-size:12px;color:var(--gray-500);margin:-8px 0 16px;padding:8px 12px;background:#fff7ed;border-radius:6px;border:1px solid #fed7aa;">
+      This updates the project everywhere in the app, not just in Worksites.
+    </p>
+    <label class="form-label">Project name
+      <input type="text" id="edit-proj-name" class="form-input" autocomplete="off">
+    </label>
+    <label class="form-label" style="margin-top:10px;">Job number(s)
+      <input type="text" id="edit-proj-jobs" class="form-input" autocomplete="off" placeholder="e.g. JOB-001, JOB-002">
+    </label>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEditProjectModal()">Cancel</button>
+      <button class="btn btn-primary" id="edit-proj-save-btn" onclick="saveEditProject()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- LOCAL banner -->
 <script>
 (function () {
@@ -1374,6 +1425,7 @@ async function loadProjects(showRemoved) {
     const menu = _isAdmin ? `
       <button class="proj-menu-btn" onclick="openProjMenu(event,${p.id})" aria-label="Project options">⋮</button>
       <div class="proj-menu" id="proj-menu-${p.id}">
+        <button onclick="event.stopPropagation();openEditProjectModal(${p.id},${nameJson},${JSON.stringify(p.job_numbers||'').replace(/"/g,'&quot;')})">Edit details</button>
         ${isRemoved
           ? `<button onclick="event.stopPropagation();restoreToWorksites(${p.id})">Restore to Worksites</button>`
           : `<button class="danger" onclick="event.stopPropagation();removeFromWorksites(${p.id},${nameJson})">Remove from Worksites</button>`
@@ -1420,6 +1472,51 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
   document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
 });
+
+let _editProjId = null;
+
+function openEditProjectModal(id, name, jobNumbers) {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  _editProjId = id;
+  document.getElementById('edit-proj-name').value = name;
+  document.getElementById('edit-proj-jobs').value = jobNumbers || '';
+  document.getElementById('edit-proj-save-btn').disabled = false;
+  document.getElementById('edit-proj-save-btn').textContent = 'Save';
+  document.getElementById('edit-proj-modal').style.display = 'flex';
+  document.getElementById('edit-proj-name').focus();
+}
+
+function closeEditProjectModal() {
+  document.getElementById('edit-proj-modal').style.display = 'none';
+  _editProjId = null;
+}
+
+async function saveEditProject() {
+  const name = document.getElementById('edit-proj-name').value.trim();
+  if (!name) { alert('Project name is required.'); return; }
+  const job_numbers = document.getElementById('edit-proj-jobs').value.trim();
+  const btn = document.getElementById('edit-proj-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch(`/api/project-folders/${_editProjId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, job_numbers: job_numbers || null })
+    });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Save failed'); }
+    closeEditProjectModal();
+    loadProjectList();           // refresh left-hand list
+    // If this project is currently open, update the header title
+    if (_activeProjectId === _editProjId) {
+      const titleEl = document.getElementById('space-panel-title');
+      if (titleEl) titleEl.textContent = name;
+    }
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
 
 async function removeFromWorksites(id, name) {
   document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
@@ -3211,6 +3308,7 @@ function loadReviewTab(tab) {
   else if (tab === 'notes')    loadReviewNotes();
   else if (tab === 'material') loadReviewMaterial();
   else if (tab === 'sheets')   loadWorkSheets();
+  else if (tab === 'activity') loadProjectActivity();
 }
 
 // ── Review: Deficiencies ──────────────────────────────────────────────────────
@@ -3417,6 +3515,7 @@ function renderReviewDeficiencies(rows) {
         <div class="review-row-path">${escHtml(d.space_path || '')}</div>
         <div class="review-row-meta">${meta}</div>
         ${assignLine}
+        ${_historyToggleHtml('deficiency', d.id)}
       </div>
       <div class="review-row-actions">${select}</div>
     </div>`;
@@ -3515,10 +3614,12 @@ function renderReviewNotes(rows) {
       ? `<em>${escHtml(n.plan_type_label)}</em>`
       : escHtml(n.space_path || '');
     const clickable = n.space_id ? `onclick="openSpaceFromReview(${n.space_id})" style="cursor:pointer;"` : '';
+    const ackBar   = n.space_id ? _noteAckBar(n) : '';
     return `<div class="review-row" ${clickable}>
       <div class="review-row-body" style="padding-left:0;">
         <div class="review-row-path">${loc} · ${author} · ${when}</div>
         <div class="review-row-desc" style="font-weight:400;font-size:13px;">${escHtml(n.body)}</div>
+        ${ackBar}
       </div>
     </div>`;
   }).join('');
@@ -4275,6 +4376,7 @@ function renderWsDetail(ws) {
         <div class="ws-detail-item-body">
           <div class="ws-detail-item-desc">${escHtml(d.description)}</div>
           <div class="ws-detail-item-path">${escHtml(statusLabel)}</div>
+          ${_historyToggleHtml('deficiency', d.id)}
         </div>
         <div class="ws-detail-item-actions ws-desktop-only">
           ${isOpen ? `<select class="def-status-select" style="font-size:12px;" onchange="patchWsItemStatus(${d.id},this.value,this)" data-prev="${d.status}">
@@ -4289,6 +4391,12 @@ function renderWsDetail(ws) {
     }
   }
   document.getElementById('ws-detail-items').innerHTML = bulkBar + rows;
+
+  const histEl = document.getElementById('ws-detail-history');
+  if (histEl) {
+    histEl.innerHTML = `<button class="history-toggle" onclick="toggleHistorySection(this,'work_sheet',${ws.id})">▸ Sheet History</button>
+      <div class="history-list"></div>`;
+  }
 }
 
 function _maybeShowCompleteBanner(ws) {
@@ -4899,15 +5007,18 @@ function renderSpaceNotesSection(spaceId, notes) {
 
   let html = '';
   for (const n of notes) {
-    const canDel = _canEdit || String(n.author_id) === String(_userId);
-    const when = formatRelTime(n.created_at);
-    html += `<div class="note-entry" id="note-${n.id}">
+    const canDel  = _canEdit || String(n.author_id) === String(_userId);
+    const when    = formatRelTime(n.created_at);
+    const acked   = (n.acknowledgements || []).some(a => String(a.user_id) === String(_userId));
+    const unacked = !acked;
+    html += `<div class="note-entry${unacked ? ' note-unacked' : ''}" id="note-${n.id}">
       <div class="note-meta">
         <span class="note-author">${escHtml(n.author_name || '—')}</span>
         <span>${when}</span>
         ${canDel ? `<button class="note-del" onclick="deleteSpaceNote(${n.id},${spaceId})" title="Delete">✕</button>` : ''}
       </div>
       <div class="note-body">${escHtml(n.body)}</div>
+      ${_noteAckBar(n)}
     </div>`;
   }
 
@@ -4939,6 +5050,116 @@ async function deleteSpaceNote(noteId, spaceId) {
     await fetch(`/api/notes/${noteId}`, { method: 'DELETE' });
     loadSpaceNotes(spaceId);
   } catch {}
+}
+
+// ── Note acknowledgements ────────────────────────────────────────────────────
+
+function _noteAckBar(n) {
+  const acks    = n.acknowledgements || [];
+  const selfAck = acks.find(a => String(a.user_id) === String(_userId));
+  const others  = acks.filter(a => String(a.user_id) !== String(_userId)).map(a => escHtml(a.user_name || '?'));
+
+  const ackBtn  = selfAck ? '' :
+    `<button class="note-ack-btn" onclick="acknowledgeNote(${n.id},event)">Acknowledge</button>`;
+  const selfStr = selfAck
+    ? `<span class="note-acked-self">Acknowledged by you · ${new Date(selfAck.acknowledged_at).toLocaleDateString()}</span>`
+    : '';
+  const seenStr = others.length
+    ? `<span class="note-seen-by">Seen by: ${others.join(', ')}</span>`
+    : '';
+
+  if (!ackBtn && !selfStr && !seenStr) return '';
+  return `<div class="note-ack-bar">${ackBtn}${selfStr}${seenStr}</div>`;
+}
+
+async function acknowledgeNote(noteId, e) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    await fetch(`/api/notes/${noteId}/acknowledge`, { method: 'POST' });
+    // Reload whichever context this note is in
+    if (_currentReviewTab === 'notes') loadReviewNotes();
+    else if (_detailSpaceId) loadSpaceNotes(_detailSpaceId);
+  } catch { btn.disabled = false; }
+}
+
+// ── Activity log ─────────────────────────────────────────────────────────────
+
+async function loadProjectActivity() {
+  const list = document.getElementById('review-activity-list');
+  if (!list) return;
+  list.innerHTML = '<div class="review-empty">Loading…</div>';
+  try {
+    const rows = await fetch(`/api/projects/${_activeProjectId}/activity?limit=100`).then(r => r.json());
+    renderActivityList(list, rows);
+  } catch { list.innerHTML = '<div class="review-empty">Could not load activity.</div>'; }
+}
+
+function renderActivityList(container, rows) {
+  if (!rows.length) { container.innerHTML = '<div class="review-empty">No activity yet.</div>'; return; }
+  container.innerHTML = rows.map(r => {
+    const when = new Date(r.created_at).toLocaleString();
+    const action = _activityLabel(r.action, r.entity_type);
+    return `<div class="activity-entry">
+      <div class="activity-action">${escHtml(action)}</div>
+      ${r.detail ? `<div class="activity-detail">${escHtml(r.detail)}</div>` : ''}
+      <div class="activity-meta">${escHtml(r.actor_name)} · ${when}</div>
+    </div>`;
+  }).join('');
+}
+
+function _activityLabel(action, entityType) {
+  const labels = {
+    'raised':          'Deficiency raised',
+    'status:open':     entityType === 'work_sheet' ? 'Sheet reopened'    : 'Deficiency reopened',
+    'status:in_progress': 'Deficiency in progress',
+    'status:resolved': 'Deficiency resolved',
+    'updated':         entityType === 'deficiency' ? 'Deficiency updated' : 'Updated',
+    'created':         entityType === 'note' ? 'Note added' : entityType === 'work_sheet' ? 'Work sheet created' : 'Created',
+    'deleted':         entityType === 'note' ? 'Note deleted' : entityType === 'plan_type_note' ? 'Type note deleted' : 'Deleted',
+    'added':           'Material added',
+    'removed':         'Material removed',
+    'status:closed':   'Work sheet closed',
+  };
+  return labels[action] || action;
+}
+
+async function loadItemHistory(entityType, entityId, container) {
+  container.innerHTML = '<div style="padding:6px 0;font-size:11px;color:var(--gray-400);">Loading…</div>';
+  try {
+    const url = entityType === 'deficiency'
+      ? `/api/deficiencies/${entityId}/activity`
+      : `/api/projects/${_activeProjectId}/work-sheets/${entityId}/activity`;
+    const rows = await fetch(url).then(r => r.json());
+    if (!rows.length) { container.innerHTML = '<div style="padding:6px 0;font-size:11px;color:var(--gray-400);">No history yet.</div>'; return; }
+    container.innerHTML = rows.map(r => {
+      const when = new Date(r.created_at).toLocaleString();
+      const action = _activityLabel(r.action, entityType);
+      return `<div class="activity-entry" style="padding:6px 0;">
+        <div class="activity-action">${escHtml(action)}</div>
+        ${r.detail ? `<div class="activity-detail">${escHtml(r.detail)}</div>` : ''}
+        <div class="activity-meta">${escHtml(r.actor_name)} · ${when}</div>
+      </div>`;
+    }).join('');
+  } catch { container.innerHTML = '<div style="padding:6px 0;font-size:11px;color:var(--red);">Could not load history.</div>'; }
+}
+
+function toggleHistorySection(btn, entityType, entityId) {
+  const list = btn.nextElementSibling;
+  const open = list.classList.toggle('open');
+  btn.textContent = open ? '▾ History' : '▸ History';
+  if (open && !list.dataset.loaded) {
+    list.dataset.loaded = '1';
+    loadItemHistory(entityType, entityId, list);
+  }
+}
+
+function _historyToggleHtml(entityType, entityId) {
+  return `<div class="history-section ws-desktop-only">
+    <button class="history-toggle" onclick="toggleHistorySection(this,'${entityType}',${entityId})">▸ History</button>
+    <div class="history-list"></div>
+  </div>`;
 }
 
 function formatRelTime(iso) {
