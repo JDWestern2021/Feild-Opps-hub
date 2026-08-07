@@ -466,6 +466,17 @@
     .review-delivered-toggle summary { list-style: none; font-size: 12px; color: var(--gray-400); cursor: pointer; padding: 10px 12px; }
     .review-delivered-toggle summary::before { content: '▶'; font-size: 9px; margin-right: 4px; }
     .review-delivered-toggle[open] summary::before { content: '▼'; }
+    /* Assignee summary bar */
+    .def-assignee-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--gray-100); }
+    .def-assignee-chip {
+      font-size: 12px; padding: 3px 10px; border-radius: 20px; cursor: pointer; user-select: none;
+      border: 1px solid var(--gray-200); background: var(--gray-50); color: var(--gray-500);
+      transition: background .1s, border-color .1s, color .1s;
+    }
+    .def-assignee-chip:hover { background: var(--gray-100); color: var(--dark); }
+    .def-assignee-chip.active { background: #fff7f0; border-color: var(--orange); color: var(--orange); }
+    .review-row-assign { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
+    @media (max-width: 768px) { #review-def-assignee-bar { display: none !important; } }
     /* Add deficiency form */
     .def-form { border: 1px solid var(--orange); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
     .def-form textarea {
@@ -925,21 +936,26 @@
               </select>
               <button class="btn btn-sm btn-ghost" onclick="printDeficiencySheetFromScope()" style="white-space:nowrap;">Work Sheet</button>
             </div>
+            <datalist id="def-assignee-list"></datalist>
+            <datalist id="def-supervisor-list"></datalist>
             <div id="review-def-sheet-fields" style="display:none;padding:6px 12px 8px;border-bottom:1px solid var(--gray-100);">
-              <div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Work Sheet Assignment (optional)</div>
+              <div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Work Sheet Assignment</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
                   Assigned to
-                  <input id="def-sheet-assigned" type="text" placeholder="Name" autocomplete="off"
+                  <input id="def-sheet-assigned" type="text" placeholder="Name" list="def-assignee-list"
+                    autocomplete="off" onfocus="fetchDefAssignees()"
                     style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
                 </label>
                 <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
                   Supervisor
-                  <input id="def-sheet-supervisor" type="text" placeholder="Name" autocomplete="off"
+                  <input id="def-sheet-supervisor" type="text" placeholder="Name" list="def-supervisor-list"
+                    autocomplete="off" onfocus="fetchDefAssignees()"
                     style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
                 </label>
               </div>
             </div>
+            <div id="review-def-assignee-bar" style="display:none;"></div>
             <div id="review-def-list" class="review-list"></div>
           </div>
           <!-- Notes pane -->
@@ -1361,6 +1377,7 @@ async function restoreToWorksites(id) {
 
 async function selectProject(id, name, el) {
   _activeProjectId = id;
+  _defAssigneesLoaded = false; // refresh autocomplete for new project
   _currentView = 'spaces';
   exitSelectMode();
   closeDetail();
@@ -3131,6 +3148,69 @@ function toggleDefFilter(btn) {
 }
 
 let _reviewDefRows = []; // cached for scope picker + print functions
+let _defAssigneeFilter = null; // null = all, string = name, '__unassigned__' = no assignee
+let _defAssigneesLoaded = false; // autocomplete fetch guard
+
+async function fetchDefAssignees() {
+  if (_defAssigneesLoaded || !_activeProjectId) return;
+  _defAssigneesLoaded = true;
+  try {
+    const names = await fetch(`/api/projects/${_activeProjectId}/deficiency-assignees`).then(r => r.json());
+    const opts = names.map(n => `<option value="${escHtml(n)}">`).join('');
+    document.getElementById('def-assignee-list').innerHTML  = opts;
+    document.getElementById('def-supervisor-list').innerHTML = opts;
+  } catch { /* non-fatal */ }
+}
+
+function renderAssigneeBar(rows) {
+  const bar = document.getElementById('review-def-assignee-bar');
+  if (!bar) return;
+
+  const active = rows.filter(d => d.status !== 'resolved');
+  if (!active.length) { bar.style.display = 'none'; return; }
+
+  // Count by assignee name (null = unassigned)
+  const counts = {};
+  let unassigned = 0;
+  for (const d of active) {
+    if (d.assigned_to_name) { counts[d.assigned_to_name] = (counts[d.assigned_to_name] || 0) + 1; }
+    else unassigned++;
+  }
+
+  const names = Object.keys(counts).sort();
+  if (!names.length && !unassigned) { bar.style.display = 'none'; return; }
+
+  const chips = names.map(n => {
+    const isActive = _defAssigneeFilter === n;
+    return `<span class="def-assignee-chip${isActive ? ' active' : ''}" data-assignee="${escHtml(n)}" onclick="setAssigneeFilter(this.dataset.assignee)">${escHtml(n)} ${counts[n]}</span>`;
+  });
+  if (unassigned) {
+    const isActive = _defAssigneeFilter === '__unassigned__';
+    chips.push(`<span class="def-assignee-chip${isActive ? ' active' : ''}" data-assignee="__unassigned__" onclick="setAssigneeFilter(this.dataset.assignee)">Unassigned ${unassigned}</span>`);
+  }
+
+  bar.className = 'def-assignee-bar';
+  bar.innerHTML = chips.join('');
+  bar.style.display = '';
+}
+
+function setAssigneeFilter(name) {
+  // Toggle off if already active
+  _defAssigneeFilter = (_defAssigneeFilter === name) ? null : name;
+
+  // Pre-fill assignment fields when filtering to a named person (not unassigned)
+  if (_defAssigneeFilter && _defAssigneeFilter !== '__unassigned__') {
+    const assignedInput = document.getElementById('def-sheet-assigned');
+    if (assignedInput) assignedInput.value = _defAssigneeFilter;
+    // Pre-fill supervisor from first matching row that has one
+    const match = _reviewDefRows.find(d => d.assigned_to_name === _defAssigneeFilter && d.assigned_supervisor);
+    const supInput = document.getElementById('def-sheet-supervisor');
+    if (supInput && match?.assigned_supervisor) supInput.value = match.assigned_supervisor;
+  }
+
+  renderAssigneeBar(_reviewDefRows);
+  renderReviewDeficiencies(_reviewDefRows);
+}
 
 async function loadReviewDeficiencies() {
   const list = document.getElementById('review-def-list');
@@ -3143,7 +3223,9 @@ async function loadReviewDeficiencies() {
       `/api/projects/${_activeProjectId}/review/deficiencies?status=${statuses.join(',')}`
     ).then(r => r.json());
     _reviewDefRows = rows;
+    _defAssigneeFilter = null; // reset filter on fresh load
     buildDefScopePicker(rows);
+    renderAssigneeBar(rows);
     renderReviewDeficiencies(rows);
   } catch { list.innerHTML = '<div class="review-empty">Could not load deficiencies.</div>'; }
 }
@@ -3229,6 +3311,14 @@ function applyDefScope() {
 
 function renderReviewDeficiencies(rows) {
   const list = document.getElementById('review-def-list');
+
+  // Apply assignee filter client-side
+  if (_defAssigneeFilter) {
+    rows = _defAssigneeFilter === '__unassigned__'
+      ? rows.filter(d => !d.assigned_to_name)
+      : rows.filter(d => d.assigned_to_name === _defAssigneeFilter);
+  }
+
   if (!rows.length) { list.innerHTML = '<div class="review-empty">No deficiencies found.</div>'; return; }
 
   const active   = rows.filter(d => d.status !== 'resolved');
@@ -3249,11 +3339,23 @@ function renderReviewDeficiencies(rows) {
       <div class="review-row-check">
         <input type="checkbox" data-id="${d.id}" onclick="event.stopPropagation(); updateBulkBar('deficiencies')" />
       </div>` : '';
-    let accountability = '';
-    if (d.status === 'resolved') {
-      if (d.completed_by)  accountability += `<div class="review-row-meta">Completed by: ${escHtml(d.completed_by)}</div>`;
-      if (d.signed_off_by) accountability += `<div class="review-row-meta">Signed off: ${escHtml(d.signed_off_by)}</div>`;
+
+    // Assignment line — visible on all statuses, shows full chain on resolved
+    let assignLine = '';
+    if (d.assigned_to_name || d.status === 'resolved') {
+      const parts = [];
+      if (d.assigned_to_name)   parts.push(`Assigned to ${escHtml(d.assigned_to_name)}`);
+      if (d.assigned_supervisor) parts.push(`Supervisor ${escHtml(d.assigned_supervisor)}`);
+      if (d.status === 'resolved') {
+        if (d.completed_by)  parts.push(`Completed by ${escHtml(d.completed_by)}`);
+        if (d.signed_off_by) {
+          const when = d.signed_off_at ? new Date(d.signed_off_at).toLocaleDateString() : '';
+          parts.push(`Signed off ${escHtml(d.signed_off_by)}${when ? ' · ' + when : ''}`);
+        }
+      }
+      if (parts.length) assignLine = `<div class="review-row-assign">${parts.join(' · ')}</div>`;
     }
+
     return `<div class="review-row" onclick="openSpaceFromReview(${d.space_id})">
       ${checkbox}
       <div class="review-row-left status-${d.status}"></div>
@@ -3261,7 +3363,7 @@ function renderReviewDeficiencies(rows) {
         <div class="review-row-desc">${escHtml(d.description)}</div>
         <div class="review-row-path">${escHtml(d.space_path || '')}</div>
         <div class="review-row-meta">${meta}</div>
-        ${accountability}
+        ${assignLine}
       </div>
       <div class="review-row-actions">${select}</div>
     </div>`;
@@ -3783,14 +3885,39 @@ function _defSheetAssignment() {
   return { assignedTo, supervisor };
 }
 
+async function _assignAndPrint(rows, assignedTo, supervisor, scopeLabel) {
+  const projectName = _activeProjectName();
+  // Only write assignment when a name is given
+  if (assignedTo && rows.length) {
+    const ids = rows.map(d => d.id);
+    try {
+      await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, assigned_to_name: assignedTo, assigned_supervisor: supervisor }),
+      });
+      // Refresh cached rows so the bar and list update after print dialog closes
+      loadReviewDeficiencies();
+      // Also update the datalist so the new name autocompletes immediately
+      _defAssigneesLoaded = false;
+      fetchDefAssignees();
+    } catch { /* print regardless — assignment is best-effort */ }
+  }
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
+}
+
 async function printDeficiencySheetFromScope() {
   const scopeSel    = document.getElementById('review-def-scope');
   const scopeId     = parseInt(scopeSel?.value) || null;
-  const projectName = _activeProjectName();
 
   let rows = _reviewDefRows.filter(d => d.status !== 'resolved');
-  let scopeLabel = 'All spaces';
+  // Also apply any active assignee filter
+  if (_defAssigneeFilter && _defAssigneeFilter !== '__unassigned__')
+    rows = rows.filter(d => d.assigned_to_name === _defAssigneeFilter);
+  else if (_defAssigneeFilter === '__unassigned__')
+    rows = rows.filter(d => !d.assigned_to_name);
 
+  let scopeLabel = 'All spaces';
   if (scopeId) {
     const space = _spaces.find(s => s.id === scopeId);
     if (space) {
@@ -3807,7 +3934,7 @@ async function printDeficiencySheetFromScope() {
   }
 
   const { assignedTo, supervisor } = _defSheetAssignment();
-  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
+  await _assignAndPrint(rows, assignedTo, supervisor, scopeLabel);
 }
 
 async function printDeficiencySheetFromChecked() {
@@ -3815,12 +3942,21 @@ async function printDeficiencySheetFromChecked() {
     [...document.querySelectorAll('#review-def-list input[type=checkbox]:checked')]
       .map(cb => parseInt(cb.dataset.id))
   );
-  if (!checkedIds.size) return;
 
-  const rows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
-  const projectName = _activeProjectName();
+  let rows, scopeLabel;
+  if (checkedIds.size) {
+    rows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
+    scopeLabel = `${checkedIds.size} selected`;
+  } else if (_defAssigneeFilter && _defAssigneeFilter !== '__unassigned__') {
+    // No checkboxes but a person filter is active — print all visible rows for that person
+    rows = _reviewDefRows.filter(d => d.status !== 'resolved' && d.assigned_to_name === _defAssigneeFilter);
+    scopeLabel = _defAssigneeFilter;
+  } else {
+    return; // nothing to print
+  }
+
   const { assignedTo, supervisor } = _defSheetAssignment();
-  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
+  await _assignAndPrint(rows, assignedTo, supervisor, scopeLabel);
 }
 
 // Dispatches the bulk-bar "Print Sheet" button based on active tab
