@@ -7687,6 +7687,188 @@ app.patch('/api/projects/:id/spaces/bulk-assign-type', requireAuth, requireModul
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Space tree export ────────────────────────────────────────────────────────
+app.get('/api/projects/:id/export-spaces', requireAdmin, async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id, 10);
+    if (isNaN(projectId)) return res.status(400).json({ error: 'Invalid project id' });
+
+    const { rows: [proj] } = await pool.query(`SELECT id, name FROM projects WHERE id=$1`, [projectId]);
+    if (!proj) return res.status(404).json({ error: 'Project not found' });
+
+    // Fetch all spaces with their type name and plan type code
+    const { rows: spaces } = await pool.query(`
+      SELECT s.id, s.parent_id, s.identifier, s.sort_order,
+             st.name AS space_type,
+             pt.code AS plan_type_code
+      FROM spaces s
+      LEFT JOIN space_types st ON st.id = s.space_type_id
+      LEFT JOIN plan_types  pt ON pt.id = s.plan_type_id
+      WHERE s.project_id = $1 AND s.archived_at IS NULL
+      ORDER BY s.sort_order, s.id
+    `, [projectId]);
+
+    // Collect distinct plan type codes that are actually used
+    const usedCodes = [...new Set(spaces.filter(s => s.plan_type_code).map(s => s.plan_type_code))];
+    const { rows: planTypes } = usedCodes.length
+      ? await pool.query(`SELECT code, name, notes FROM plan_types WHERE project_id=$1 AND code = ANY($2) ORDER BY code`, [projectId, usedCodes])
+      : { rows: [] };
+
+    const payload = {
+      version: 1,
+      exported_at: new Date().toISOString(),
+      project_name: proj.name,
+      plan_types: planTypes.map(pt => ({ code: pt.code, name: pt.name || null, notes: pt.notes || null })),
+      spaces: spaces.map(s => ({
+        _id: s.id,
+        _parent_id: s.parent_id,
+        space_type: s.space_type,
+        identifier: s.identifier,
+        sort_order: s.sort_order,
+        plan_type_code: s.plan_type_code || null,
+      })),
+    };
+
+    const safeName = proj.name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}-spaces.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.json(payload);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Space tree import ────────────────────────────────────────────────────────
+app.post('/api/projects/:id/import-spaces', requireAdmin, async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id, 10);
+    if (isNaN(projectId)) return res.status(400).json({ error: 'Invalid project id' });
+
+    const { rows: [proj] } = await pool.query(`SELECT id, name FROM projects WHERE id=$1`, [projectId]);
+    if (!proj) return res.status(404).json({ error: 'Project not found' });
+
+    // ── Validate payload ──────────────────────────────────────────────────────
+    const body = req.body;
+    if (!body || body.version !== 1) return res.status(400).json({ error: 'Invalid file: missing version 1 header' });
+    if (!Array.isArray(body.spaces)) return res.status(400).json({ error: 'Invalid file: spaces array missing' });
+    if (!Array.isArray(body.plan_types)) return res.status(400).json({ error: 'Invalid file: plan_types array missing' });
+
+    for (const s of body.spaces) {
+      if (typeof s._id !== 'number') return res.status(400).json({ error: 'Invalid file: each space needs a numeric _id' });
+      if (s._parent_id !== null && typeof s._parent_id !== 'number') return res.status(400).json({ error: 'Invalid file: _parent_id must be number or null' });
+      if (typeof s.space_type !== 'string' || !s.space_type.trim()) return res.status(400).json({ error: 'Invalid file: each space needs a space_type string' });
+      if (typeof s.identifier !== 'string' || !s.identifier.trim()) return res.status(400).json({ error: 'Invalid file: each space needs an identifier string' });
+    }
+
+    // Verify all parent references exist within the file
+    const idSet = new Set(body.spaces.map(s => s._id));
+    for (const s of body.spaces) {
+      if (s._parent_id !== null && !idSet.has(s._parent_id))
+        return res.status(400).json({ error: `Invalid file: space ${s._id} references unknown parent ${s._parent_id}` });
+    }
+
+    // ── Refuse if project already has spaces (beyond General) ─────────────────
+    const { rows: existing } = await pool.query(
+      `SELECT id, identifier FROM spaces WHERE project_id=$1 AND archived_at IS NULL`, [projectId]
+    );
+    const nonGeneral = existing.filter(s => s.identifier !== 'General');
+    if (nonGeneral.length > 0)
+      return res.status(409).json({ error: `Project already has ${nonGeneral.length} space(s). Clear the tree before importing.` });
+
+    // ── Build inside a transaction ────────────────────────────────────────────
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Ensure all referenced space_types exist (INSERT if missing)
+      const typeNames = [...new Set(body.spaces.map(s => s.space_type.trim()))];
+      const typeMap = {}; // name → id
+      for (const name of typeNames) {
+        const { rows: [existing] } = await client.query(`SELECT id FROM space_types WHERE name=$1`, [name]);
+        if (existing) {
+          typeMap[name] = existing.id;
+        } else {
+          const { rows: [ins] } = await client.query(
+            `INSERT INTO space_types (name, sort_order) VALUES ($1, 99) RETURNING id`, [name]
+          );
+          typeMap[name] = ins.id;
+        }
+      }
+
+      // Create plan_types for this project
+      const planTypeMap = {}; // code → id
+      for (const pt of body.plan_types) {
+        const code = (pt.code || '').trim();
+        if (!code) continue;
+        const { rows: [ins] } = await client.query(
+          `INSERT INTO plan_types (project_id, code, name, notes) VALUES ($1,$2,$3,$4)
+           ON CONFLICT (project_id, code) DO UPDATE SET name=EXCLUDED.name, notes=EXCLUDED.notes
+           RETURNING id`,
+          [projectId, code, pt.name || null, pt.notes || null]
+        );
+        planTypeMap[code] = ins.id;
+      }
+
+      // Also collect plan type codes from spaces that aren't in plan_types array
+      for (const s of body.spaces) {
+        const code = (s.plan_type_code || '').trim();
+        if (code && !planTypeMap[code]) {
+          const { rows: [ins] } = await client.query(
+            `INSERT INTO plan_types (project_id, code) VALUES ($1,$2)
+             ON CONFLICT (project_id, code) DO UPDATE SET code=EXCLUDED.code
+             RETURNING id`,
+            [projectId, code]
+          );
+          planTypeMap[code] = ins.id;
+        }
+      }
+
+      // Insert spaces in topological order (parents before children)
+      const oldToNew = {}; // old _id → new db id
+      const toInsert = [...body.spaces];
+      let iterations = 0;
+      while (toInsert.length > 0 && iterations < toInsert.length * 2 + 5) {
+        iterations++;
+        const s = toInsert.shift();
+        // If parent not yet inserted, push to back and try later
+        if (s._parent_id !== null && !oldToNew[s._parent_id]) {
+          toInsert.push(s);
+          continue;
+        }
+        const newParentId = s._parent_id === null ? null : oldToNew[s._parent_id];
+        const planTypeId = s.plan_type_code ? (planTypeMap[s.plan_type_code] ?? null) : null;
+        const { rows: [ins] } = await client.query(
+          `INSERT INTO spaces (project_id, parent_id, space_type_id, identifier, sort_order, plan_type_id)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+          [projectId, newParentId, typeMap[s.space_type.trim()], s.identifier.trim(), s.sort_order ?? 0, planTypeId]
+        );
+        oldToNew[s._id] = ins.id;
+      }
+
+      if (toInsert.length > 0)
+        throw new Error(`Could not resolve parent references for ${toInsert.length} space(s) — possible cycle`);
+
+      const spacesCreated = Object.keys(oldToNew).length;
+      const planTypesCreated = Object.keys(planTypeMap).length;
+      const suitesAssigned = body.spaces.filter(s => s.plan_type_code).length;
+
+      await logActivity(client, {
+        project_id: projectId, space_id: null,
+        entity_type: 'project', entity_id: projectId,
+        action: 'space-tree-imported',
+        detail: `${spacesCreated} spaces, ${planTypesCreated} plan types, ${suitesAssigned} suites assigned`,
+        user: req.user,
+      });
+
+      await client.query('COMMIT');
+      res.json({ ok: true, spaces_created: spacesCreated, plan_types_created: planTypesCreated, suites_assigned: suitesAssigned });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─────────────────────────────────────────────
 // START
 // ─────────────────────────────────────────────

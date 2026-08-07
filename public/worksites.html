@@ -1249,6 +1249,7 @@
 </div>
 
 <!-- Edit project details modal (admin only) -->
+<input type="file" id="space-tree-import-input" accept=".json" style="display:none" onchange="handleSpaceTreeImport(this)">
 <div class="modal-backdrop" id="edit-proj-modal" style="display:none;" onclick="if(event.target===this)closeEditProjectModal()">
   <div class="modal" style="width:400px;">
     <h3>Edit Project Details</h3>
@@ -1426,6 +1427,8 @@ async function loadProjects(showRemoved) {
       <button class="proj-menu-btn" onclick="openProjMenu(event,${p.id})" aria-label="Project options">⋮</button>
       <div class="proj-menu" id="proj-menu-${p.id}">
         <button onclick="event.stopPropagation();openEditProjectModal(${p.id},${nameJson},${JSON.stringify(p.job_numbers||'').replace(/"/g,'&quot;')})">Edit details</button>
+        <button onclick="event.stopPropagation();exportSpaceTree(${p.id},${nameJson})">Export space tree</button>
+        <button onclick="event.stopPropagation();triggerImportSpaceTree(${p.id},${nameJson})">Import space tree</button>
         ${isRemoved
           ? `<button onclick="event.stopPropagation();restoreToWorksites(${p.id})">Restore to Worksites</button>`
           : `<button class="danger" onclick="event.stopPropagation();removeFromWorksites(${p.id},${nameJson})">Remove from Worksites</button>`
@@ -1547,6 +1550,61 @@ async function restoreToWorksites(id) {
   });
   const showRemoved = document.getElementById('ws-show-removed')?.checked;
   await loadProjects(showRemoved);
+}
+
+// ── Space tree export / import ────────────────────────────────────────────────
+function exportSpaceTree(projectId, projectName) {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  const a = document.createElement('a');
+  a.href = `/api/projects/${projectId}/export-spaces`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+let _importTargetId = null;
+let _importTargetName = null;
+
+function triggerImportSpaceTree(projectId, projectName) {
+  document.querySelectorAll('.proj-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.proj-menu-btn.active').forEach(b => b.classList.remove('active'));
+  _importTargetId = projectId;
+  _importTargetName = projectName;
+  document.getElementById('space-tree-import-input').value = '';
+  document.getElementById('space-tree-import-input').click();
+}
+
+async function handleSpaceTreeImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  let payload;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch {
+    alert('Could not read file — make sure it is a valid space tree JSON export.');
+    return;
+  }
+  const confirmed = confirm(
+    `Import space tree from "${payload.project_name || file.name}" into "${_importTargetName}"?\n\n` +
+    `This will fail if the project already has spaces.`
+  );
+  if (!confirmed) return;
+  const res = await fetch(`/api/projects/${_importTargetId}/import-spaces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert('Import failed: ' + (data.error || 'Unknown error'));
+    return;
+  }
+  alert(`Import complete: ${data.spaces_created} spaces, ${data.plan_types_created} plan types, ${data.suites_assigned} suites assigned.`);
+  const showRemoved = document.getElementById('ws-show-removed')?.checked;
+  await loadProjects(showRemoved);
+  if (_activeProjectId === _importTargetId) loadSpaces();
 }
 
 async function selectProject(id, name, el) {
