@@ -2822,7 +2822,7 @@ async function deleteSpaceFile(spaceId, fileId) {
 function defDraftKey(spaceId) { return `def_draft_${spaceId}`; }
 
 function saveDraft(spaceId) {
-  const ta = document.getElementById('def-textarea');
+  const ta = _dsBody('def-textarea');
   if (!ta) return;
   localStorage.setItem(defDraftKey(spaceId), ta.value);
 }
@@ -2951,27 +2951,27 @@ function renderDeficienciesSection(spaceId, defs) {
 let _defPhotos = []; // staged photos for the new deficiency form
 
 function showDefForm(spaceId) {
-  const btn = document.getElementById('def-show-btn');
-  const form = document.getElementById('def-form');
+  const btn = _dsBody('def-show-btn');
+  const form = _dsBody('def-form');
   if (btn) btn.style.display = 'none';
   if (form) form.style.display = '';
-  const ta = document.getElementById('def-textarea');
+  const ta = _dsBody('def-textarea');
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
 
 function hideDefForm() {
-  const btn = document.getElementById('def-show-btn');
-  const form = document.getElementById('def-form');
+  const btn = _dsBody('def-show-btn');
+  const form = _dsBody('def-form');
   if (btn) btn.style.display = '';
   if (form) form.style.display = 'none';
   _defPhotos = [];
-  const preview = document.getElementById('def-photo-preview');
+  const preview = _dsBody('def-photo-preview');
   if (preview) preview.innerHTML = '';
 }
 
 function queueDefPhotos(input) {
   for (const f of Array.from(input.files)) _defPhotos.push(f);
-  const preview = document.getElementById('def-photo-preview');
+  const preview = _dsBody('def-photo-preview');
   if (!preview) return;
   preview.innerHTML = '';
   for (const f of _defPhotos) {
@@ -2981,9 +2981,9 @@ function queueDefPhotos(input) {
 }
 
 async function submitDef(spaceId) {
-  const ta = document.getElementById('def-textarea');
-  const errEl = document.getElementById('def-error');
-  const submitBtn = document.querySelector('#def-form .btn-primary');
+  const ta = _dsBody('def-textarea');
+  const errEl = _dsBody('def-error');
+  const submitBtn = _dsBody('def-form')?.querySelector('.btn-primary');
   const description = ta?.value.trim();
   if (!description) {
     if (errEl) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; }
