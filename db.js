@@ -980,6 +980,26 @@ async function initSchema() {
     uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
+  await pool.query(`CREATE TABLE IF NOT EXISTS work_sheets (
+    id           SERIAL PRIMARY KEY,
+    project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    sheet_number TEXT NOT NULL,
+    assigned_to  TEXT,
+    supervisor   TEXT,
+    status       TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+    created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    closed_at    TIMESTAMPTZ
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS work_sheet_items (
+    id              SERIAL PRIMARY KEY,
+    work_sheet_id   INTEGER NOT NULL REFERENCES work_sheets(id) ON DELETE CASCADE,
+    deficiency_id   INTEGER NOT NULL REFERENCES deficiencies(id) ON DELETE CASCADE
+    -- No UNIQUE on deficiency_id: rule is "at most one OPEN sheet", enforced at app layer.
+    -- Closed sheet history is preserved — a deficiency can appear on multiple closed sheets.
+  )`);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS plan_type_files (
     id            SERIAL PRIMARY KEY,
     plan_type_id  INTEGER NOT NULL REFERENCES plan_types(id) ON DELETE CASCADE,

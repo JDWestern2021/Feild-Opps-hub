@@ -477,6 +477,41 @@
     .def-assignee-chip.active { background: #fff7f0; border-color: var(--orange); color: var(--orange); }
     .review-row-assign { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
     @media (max-width: 768px) { #review-def-assignee-bar { display: none !important; } }
+    /* Work sheets */
+    .ws-row {
+      display: flex; align-items: center; gap: 10px; padding: 11px 14px;
+      border-bottom: 1px solid var(--gray-100); cursor: pointer;
+    }
+    .ws-row:hover { background: var(--gray-50); }
+    .ws-row-number { font-weight: 700; font-size: 13px; color: var(--dark); min-width: 56px; }
+    .ws-row-assignee { font-size: 14px; font-weight: 500; color: var(--dark); flex: 1; min-width: 0; }
+    .ws-row-counts { font-size: 12px; color: var(--gray-400); white-space: nowrap; }
+    .ws-row-date { font-size: 11px; color: var(--gray-400); white-space: nowrap; }
+    .ws-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+                background: var(--gray-100); color: var(--gray-500); text-transform: uppercase; }
+    .ws-badge.closed { background: #e5e7eb; color: #6b7280; }
+    .ws-badge.open { background: #fff7f0; color: var(--orange); border: 1px solid var(--orange); }
+    .ws-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; padding: 2px 7px; border-radius: 10px;
+      background: #fff7f0; color: var(--orange); border: 1px solid #fed7aa;
+      cursor: pointer; white-space: nowrap;
+    }
+    .ws-chip:hover { background: #ffedd5; }
+    .ws-detail-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 10px 14px; border-bottom: 1px solid var(--gray-100);
+    }
+    .ws-detail-item-left { width: 4px; flex-shrink: 0; border-radius: 2px; align-self: stretch; min-height: 20px; }
+    .ws-detail-item-body { flex: 1; min-width: 0; }
+    .ws-detail-item-desc { font-size: 13px; color: var(--dark); font-weight: 500; margin-bottom: 2px; }
+    .ws-detail-item-path { font-size: 11px; color: var(--gray-400); margin-bottom: 3px; }
+    .ws-detail-item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .ws-reassign-form { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); background: var(--gray-50); }
+    @media (max-width: 768px) {
+      .ws-desktop-only { display: none !important; }
+      .ws-row { padding: 10px 12px; }
+    }
     /* Add deficiency form */
     .def-form { border: 1px solid var(--orange); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
     .def-form textarea {
@@ -812,6 +847,7 @@
           <button class="review-sub-tab active" onclick="switchReviewTab('deficiencies')">Deficiencies</button>
           <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
           <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
+          <button class="review-sub-tab"        onclick="switchReviewTab('sheets')">Work Sheets</button>
         </div>
       </div>
 
@@ -921,6 +957,7 @@
             <button class="review-sub-tab active" onclick="switchReviewTab('deficiencies')">Deficiencies</button>
             <button class="review-sub-tab"        onclick="switchReviewTab('notes')">Notes</button>
             <button class="review-sub-tab"        onclick="switchReviewTab('material')">Material</button>
+            <button class="review-sub-tab"        onclick="switchReviewTab('sheets')">Sheets</button>
           </div>
           <!-- Deficiencies pane -->
           <div id="review-pane-deficiencies" class="review-pane active">
@@ -934,29 +971,27 @@
               <select id="review-def-scope" onchange="applyDefScope()" style="flex:1;font-size:13px;padding:4px 6px;border:1px solid var(--gray-200);border-radius:6px;">
                 <option value="">All spaces</option>
               </select>
-              <button class="btn btn-sm btn-ghost" onclick="printDeficiencySheetFromScope()" style="white-space:nowrap;">Work Sheet</button>
-            </div>
-            <datalist id="def-assignee-list"></datalist>
-            <datalist id="def-supervisor-list"></datalist>
-            <div id="review-def-sheet-fields" style="display:none;padding:6px 12px 8px;border-bottom:1px solid var(--gray-100);">
-              <div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Work Sheet Assignment</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
-                  Assigned to
-                  <input id="def-sheet-assigned" type="text" placeholder="Name" list="def-assignee-list"
-                    autocomplete="off" onfocus="fetchDefAssignees()"
-                    style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
-                </label>
-                <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-500);flex:1;min-width:140px;">
-                  Supervisor
-                  <input id="def-sheet-supervisor" type="text" placeholder="Name" list="def-supervisor-list"
-                    autocomplete="off" onfocus="fetchDefAssignees()"
-                    style="font-size:13px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;background:var(--surface);color:var(--dark);font-family:inherit;">
-                </label>
-              </div>
+              <button class="btn btn-sm btn-ghost ws-desktop-only" onclick="openWsCreateModal('scope')" style="white-space:nowrap;">Create Work Sheet</button>
             </div>
             <div id="review-def-assignee-bar" style="display:none;"></div>
             <div id="review-def-list" class="review-list"></div>
+          </div>
+          <!-- Work Sheets pane -->
+          <div id="review-pane-sheets" class="review-pane">
+            <div id="ws-list-view">
+              <div id="ws-list" class="review-list"></div>
+            </div>
+            <div id="ws-detail-view" style="display:none;">
+              <div style="padding:10px 14px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:8px;">
+                <button class="btn btn-sm btn-ghost" onclick="closeWsDetail()">← Back</button>
+                <span id="ws-detail-number" style="font-weight:700;font-size:15px;"></span>
+                <span id="ws-detail-status-badge"></span>
+                <div style="flex:1;"></div>
+                <button class="btn btn-sm btn-secondary ws-desktop-only" onclick="reprintWorkSheet()">Reprint</button>
+              </div>
+              <div id="ws-detail-header" style="padding:12px 14px;border-bottom:1px solid var(--gray-100);font-size:13px;"></div>
+              <div id="ws-detail-items" class="review-list"></div>
+            </div>
           </div>
           <!-- Notes pane -->
           <div id="review-pane-notes" class="review-pane">
@@ -1001,7 +1036,7 @@
   <div class="bulk-bar-count" id="bulk-bar-count">0 selected</div>
   <select id="bulk-bar-select"></select>
   <button class="bulk-bar-apply" onclick="applyBulkAction()">Apply</button>
-  <button class="bulk-bar-sheet" id="bulk-bar-sheet" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;min-height:44px;" onclick="printFromBulkSelection()">Print Sheet</button>
+  <button class="bulk-bar-sheet" id="bulk-bar-sheet" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;min-height:44px;" onclick="printFromBulkSelection()">Work Sheet</button>
   <button class="bulk-bar-clear" onclick="clearBulkSelection()">Clear</button>
 </div>
 
@@ -1140,6 +1175,43 @@
   </div>
 </div>
 
+<!-- Create Work Sheet Modal -->
+<div class="modal-backdrop" id="ws-create-modal" style="display:none;" onclick="if(event.target===this)closeWsCreateModal()">
+  <div class="modal" style="width:460px;">
+    <h3 id="ws-create-title">Create Work Sheet</h3>
+    <div style="margin:-8px 0 16px;padding:10px 14px;background:var(--gray-50);border-radius:8px;border:1px solid var(--gray-200);">
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;">
+        <input type="checkbox" id="ws-do-assign" style="width:18px;height:18px;accent-color:var(--orange);cursor:pointer;" onchange="toggleWsAssignFields()">
+        Assign to a worker
+      </label>
+    </div>
+    <div id="ws-assign-fields" style="display:none;">
+      <datalist id="ws-assignee-list"></datalist>
+      <div class="form-row">
+        <label>Assigned to</label>
+        <input type="text" id="ws-assigned-to" placeholder="Name" list="ws-assignee-list" autocomplete="off" onfocus="fetchWsAssignees()">
+      </div>
+      <div class="form-row">
+        <label>Supervisor</label>
+        <input type="text" id="ws-supervisor" placeholder="Name" list="ws-assignee-list" autocomplete="off">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Set status to (optional)</label>
+      <select id="ws-set-status">
+        <option value="">No change</option>
+        <option value="in_progress">In Progress</option>
+        <option value="open">Open</option>
+      </select>
+    </div>
+    <div class="modal-footer" style="gap:8px;">
+      <button class="btn btn-secondary" onclick="closeWsCreateModal()">Cancel</button>
+      <button class="btn btn-ghost" onclick="wsPrintOnly()">Print only</button>
+      <button class="btn btn-primary" id="ws-create-btn" onclick="wsCreateAndPrint()">Create &amp; Print</button>
+    </div>
+  </div>
+</div>
+
 <!-- LOCAL banner -->
 <script>
 (function () {
@@ -1195,7 +1267,7 @@ let _reviewAccess    = 'none'; // worksites_review module level
 let _canManageReview = false;
 let _currentView     = 'spaces'; // 'spaces' | 'types' | 'review'
 let _spaceCounts     = {};      // { spaceId: { open, inProgress, matCount, noteCount } } — refreshed on project load and after mutations
-let _currentReviewTab   = 'deficiencies'; // 'deficiencies' | 'notes' | 'material'
+let _currentReviewTab   = 'deficiencies'; // 'deficiencies' | 'notes' | 'material' | 'sheets'
 // _reviewMatView removed (Chunk 10: single flat list, no toggle)
 let _mobileReturnView   = null;           // set when navigating to a space from Review on mobile
 let _detailOrigin       = null;           // 'review' when detail opened from Review on desktop
@@ -1377,7 +1449,7 @@ async function restoreToWorksites(id) {
 
 async function selectProject(id, name, el) {
   _activeProjectId = id;
-  _defAssigneesLoaded = false; // refresh autocomplete for new project
+  _wsAssigneesLoaded = false; // refresh WS assignee autocomplete for new project
   _currentView = 'spaces';
   exitSelectMode();
   closeDetail();
@@ -3131,8 +3203,9 @@ function switchReviewTab(tab) {
 function loadReviewTab(tab) {
   if (!_activeProjectId) return;
   if (tab === 'deficiencies') loadReviewDeficiencies();
-  else if (tab === 'notes')   loadReviewNotes();
+  else if (tab === 'notes')    loadReviewNotes();
   else if (tab === 'material') loadReviewMaterial();
+  else if (tab === 'sheets')   loadWorkSheets();
 }
 
 // ── Review: Deficiencies ──────────────────────────────────────────────────────
@@ -3149,18 +3222,6 @@ function toggleDefFilter(btn) {
 
 let _reviewDefRows = []; // cached for scope picker + print functions
 let _defAssigneeFilter = null; // null = all, string = name, '__unassigned__' = no assignee
-let _defAssigneesLoaded = false; // autocomplete fetch guard
-
-async function fetchDefAssignees() {
-  if (_defAssigneesLoaded || !_activeProjectId) return;
-  _defAssigneesLoaded = true;
-  try {
-    const names = await fetch(`/api/projects/${_activeProjectId}/deficiency-assignees`).then(r => r.json());
-    const opts = names.map(n => `<option value="${escHtml(n)}">`).join('');
-    document.getElementById('def-assignee-list').innerHTML  = opts;
-    document.getElementById('def-supervisor-list').innerHTML = opts;
-  } catch { /* non-fatal */ }
-}
 
 function renderAssigneeBar(rows) {
   const bar = document.getElementById('review-def-assignee-bar');
@@ -3169,11 +3230,11 @@ function renderAssigneeBar(rows) {
   const active = rows.filter(d => d.status !== 'resolved');
   if (!active.length) { bar.style.display = 'none'; return; }
 
-  // Count by assignee name (null = unassigned)
+  // Count by sheet assignee (ws_assigned_to); null = unassigned
   const counts = {};
   let unassigned = 0;
   for (const d of active) {
-    if (d.assigned_to_name) { counts[d.assigned_to_name] = (counts[d.assigned_to_name] || 0) + 1; }
+    if (d.ws_assigned_to) { counts[d.ws_assigned_to] = (counts[d.ws_assigned_to] || 0) + 1; }
     else unassigned++;
   }
 
@@ -3195,19 +3256,7 @@ function renderAssigneeBar(rows) {
 }
 
 function setAssigneeFilter(name) {
-  // Toggle off if already active
   _defAssigneeFilter = (_defAssigneeFilter === name) ? null : name;
-
-  // Pre-fill assignment fields when filtering to a named person (not unassigned)
-  if (_defAssigneeFilter && _defAssigneeFilter !== '__unassigned__') {
-    const assignedInput = document.getElementById('def-sheet-assigned');
-    if (assignedInput) assignedInput.value = _defAssigneeFilter;
-    // Pre-fill supervisor from first matching row that has one
-    const match = _reviewDefRows.find(d => d.assigned_to_name === _defAssigneeFilter && d.assigned_supervisor);
-    const supInput = document.getElementById('def-sheet-supervisor');
-    if (supInput && match?.assigned_supervisor) supInput.value = match.assigned_supervisor;
-  }
-
   renderAssigneeBar(_reviewDefRows);
   renderReviewDeficiencies(_reviewDefRows);
 }
@@ -3282,8 +3331,6 @@ function buildDefScopePicker(allRows) {
   if (!opts.length) { scopeRow.style.display = 'none'; return; }
   sel.innerHTML = '<option value="">All spaces</option>' + opts.join('');
   scopeRow.style.display = 'flex';
-  const sheetFields = document.getElementById('review-def-sheet-fields');
-  if (sheetFields) sheetFields.style.display = '';
 }
 function applyDefScope() {
   const scopeId = parseInt(document.getElementById('review-def-scope').value) || null;
@@ -3312,11 +3359,11 @@ function applyDefScope() {
 function renderReviewDeficiencies(rows) {
   const list = document.getElementById('review-def-list');
 
-  // Apply assignee filter client-side
+  // Apply assignee filter client-side (now sourced from ws_assigned_to)
   if (_defAssigneeFilter) {
     rows = _defAssigneeFilter === '__unassigned__'
-      ? rows.filter(d => !d.assigned_to_name)
-      : rows.filter(d => d.assigned_to_name === _defAssigneeFilter);
+      ? rows.filter(d => !d.ws_id)
+      : rows.filter(d => d.ws_assigned_to === _defAssigneeFilter);
   }
 
   if (!rows.length) { list.innerHTML = '<div class="review-empty">No deficiencies found.</div>'; return; }
@@ -3340,21 +3387,22 @@ function renderReviewDeficiencies(rows) {
         <input type="checkbox" data-id="${d.id}" onclick="event.stopPropagation(); updateBulkBar('deficiencies')" />
       </div>` : '';
 
-    // Assignment line — visible on all statuses, shows full chain on resolved
+    // WS chip — sheet membership + resolution chain
     let assignLine = '';
-    if (d.assigned_to_name || d.status === 'resolved') {
-      const parts = [];
-      if (d.assigned_to_name)   parts.push(`Assigned to ${escHtml(d.assigned_to_name)}`);
-      if (d.assigned_supervisor) parts.push(`Supervisor ${escHtml(d.assigned_supervisor)}`);
-      if (d.status === 'resolved') {
-        if (d.completed_by)  parts.push(`Completed by ${escHtml(d.completed_by)}`);
-        if (d.signed_off_by) {
-          const when = d.signed_off_at ? new Date(d.signed_off_at).toLocaleDateString() : '';
-          parts.push(`Signed off ${escHtml(d.signed_off_by)}${when ? ' · ' + when : ''}`);
-        }
+    const wsPart = d.ws_id
+      ? `<span class="ws-chip" onclick="event.stopPropagation();openWorkSheetById(${d.ws_id})">${escHtml(d.ws_number)} · ${escHtml(d.ws_assigned_to || 'Unassigned')}</span>`
+      : `<span style="font-size:11px;color:var(--gray-400);">Unassigned</span>`;
+    const chainParts = [];
+    if (d.status === 'resolved') {
+      if (d.completed_by)  chainParts.push(`Completed by ${escHtml(d.completed_by)}`);
+      if (d.signed_off_by) {
+        const sw = d.signed_off_at ? new Date(d.signed_off_at).toLocaleDateString() : '';
+        chainParts.push(`Signed off ${escHtml(d.signed_off_by)}${sw ? ' · ' + sw : ''}`);
       }
-      if (parts.length) assignLine = `<div class="review-row-assign">${parts.join(' · ')}</div>`;
     }
+    assignLine = `<div class="review-row-assign" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px;">
+      ${wsPart}${chainParts.length ? '<span style="font-size:11px;color:var(--gray-400);">·</span><span style="font-size:11px;color:var(--gray-400);">' + chainParts.join(' · ') + '</span>' : ''}
+    </div>`;
 
     return `<div class="review-row" onclick="openSpaceFromReview(${d.space_id})">
       ${checkbox}
@@ -3878,91 +3926,369 @@ function _defSheetHtml(rows) {
   return body;
 }
 
-function _defSheetAssignment() {
-  // Collect optional assignee/supervisor from inline inputs, or prompt once
-  const assignedTo  = (document.getElementById('def-sheet-assigned')?.value  || '').trim() || null;
-  const supervisor  = (document.getElementById('def-sheet-supervisor')?.value || '').trim() || null;
-  return { assignedTo, supervisor };
-}
+// ── Work Sheet modal ──────────────────────────────────────────────────────────
 
-async function _assignAndPrint(rows, assignedTo, supervisor, scopeLabel) {
-  const projectName = _activeProjectName();
-  // Only write assignment when a name is given
-  if (assignedTo && rows.length) {
-    const ids = rows.map(d => d.id);
-    try {
-      await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/assign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, assigned_to_name: assignedTo, assigned_supervisor: supervisor }),
-      });
-      // Refresh cached rows so the bar and list update after print dialog closes
-      loadReviewDeficiencies();
-      // Also update the datalist so the new name autocompletes immediately
-      _defAssigneesLoaded = false;
-      fetchDefAssignees();
-    } catch { /* print regardless — assignment is best-effort */ }
-  }
-  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length, assignedTo, supervisor }, _defSheetHtml(rows));
-}
+let _wsModalRows = []; // deficiency rows staged for the create modal
 
-async function printDeficiencySheetFromScope() {
-  const scopeSel    = document.getElementById('review-def-scope');
-  const scopeId     = parseInt(scopeSel?.value) || null;
-
-  let rows = _reviewDefRows.filter(d => d.status !== 'resolved');
-  // Also apply any active assignee filter
-  if (_defAssigneeFilter && _defAssigneeFilter !== '__unassigned__')
-    rows = rows.filter(d => d.assigned_to_name === _defAssigneeFilter);
-  else if (_defAssigneeFilter === '__unassigned__')
-    rows = rows.filter(d => !d.assigned_to_name);
-
-  let scopeLabel = 'All spaces';
-  if (scopeId) {
-    const space = _spaces.find(s => s.id === scopeId);
-    if (space) {
-      const parts = [];
-      let cur = space;
-      while (cur) {
-        parts.unshift(cur.identifier);
-        cur = cur.parent_id ? _spaces.find(s => s.id === cur.parent_id) : null;
+function openWsCreateModal(source) {
+  // Collect rows depending on trigger: 'checked' (bulk bar) or 'scope' (scope row button)
+  if (source === 'checked') {
+    const checkedIds = new Set(
+      [...document.querySelectorAll('#review-def-list input[type=checkbox]:checked')]
+        .map(cb => parseInt(cb.dataset.id))
+    );
+    _wsModalRows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
+  } else {
+    // scope: all outstanding in currently applied scope/filter
+    const scopeId = parseInt(document.getElementById('review-def-scope')?.value) || null;
+    let rows = _reviewDefRows.filter(d => d.status !== 'resolved');
+    if (_defAssigneeFilter === '__unassigned__') rows = rows.filter(d => !d.ws_id);
+    else if (_defAssigneeFilter) rows = rows.filter(d => d.ws_assigned_to === _defAssigneeFilter);
+    if (scopeId) {
+      const space = _spaces.find(s => s.id === scopeId);
+      if (space) {
+        const parts = []; let cur = space;
+        while (cur) { parts.unshift(cur.identifier); cur = cur.parent_id ? _spaces.find(s => s.id === cur.parent_id) : null; }
+        const prefix = parts.join(' / ');
+        rows = rows.filter(d => d.space_path === prefix || d.space_path.startsWith(prefix + ' / '));
       }
-      const prefix = parts.join(' / ');
-      rows = rows.filter(d => d.space_path === prefix || d.space_path.startsWith(prefix + ' / '));
-      scopeLabel = prefix;
+    }
+    _wsModalRows = rows;
+  }
+
+  if (!_wsModalRows.length) return;
+
+  // Reset modal state
+  document.getElementById('ws-create-title').textContent = `Create Work Sheet — ${_wsModalRows.length} deficiencie${_wsModalRows.length === 1 ? 'y' : 's'}`;
+  document.getElementById('ws-do-assign').checked = false;
+  document.getElementById('ws-assign-fields').style.display = 'none';
+  document.getElementById('ws-assigned-to').value = '';
+  document.getElementById('ws-supervisor').value = '';
+  document.getElementById('ws-set-status').value = '';
+
+  // Pre-populate assignee datalist from existing sheet names
+  fetchWsAssignees();
+
+  document.getElementById('ws-create-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('ws-assigned-to').focus && document.getElementById('ws-do-assign').focus(), 50);
+}
+
+function closeWsCreateModal() {
+  document.getElementById('ws-create-modal').style.display = 'none';
+  _wsModalRows = [];
+}
+
+function toggleWsAssignFields() {
+  const show = document.getElementById('ws-do-assign').checked;
+  document.getElementById('ws-assign-fields').style.display = show ? '' : 'none';
+  if (show) setTimeout(() => document.getElementById('ws-assigned-to').focus(), 50);
+}
+
+let _wsAssigneesLoaded = false;
+async function fetchWsAssignees() {
+  if (_wsAssigneesLoaded || !_activeProjectId) return;
+  _wsAssigneesLoaded = true;
+  try {
+    const sheets = await fetch(`/api/projects/${_activeProjectId}/work-sheets`).then(r => r.json());
+    const names = [...new Set(sheets.map(s => s.assigned_to).filter(Boolean))].sort();
+    const opts = names.map(n => `<option value="${escHtml(n)}">`).join('');
+    document.getElementById('ws-assignee-list').innerHTML = opts;
+  } catch { /* non-fatal */ }
+}
+
+async function wsPrintOnly() {
+  // Print without creating a sheet — old behaviour
+  const projectName = _activeProjectName();
+  await openPrintWindow(
+    { sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${_wsModalRows.length} items`, itemCount: _wsModalRows.length, assignedTo: null, supervisor: null },
+    _defSheetHtml(_wsModalRows)
+  );
+  closeWsCreateModal();
+}
+
+async function wsCreateAndPrint() {
+  const doAssign  = document.getElementById('ws-do-assign').checked;
+  const assignedTo = doAssign ? (document.getElementById('ws-assigned-to').value.trim() || null) : null;
+  const supervisor = doAssign ? (document.getElementById('ws-supervisor').value.trim() || null) : null;
+  const setStatus  = document.getElementById('ws-set-status').value || null;
+  const btn        = document.getElementById('ws-create-btn');
+
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    const r = await fetch(`/api/projects/${_activeProjectId}/work-sheets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deficiency_ids: _wsModalRows.map(d => d.id),
+        assigned_to: assignedTo,
+        supervisor,
+        set_status: setStatus,
+      }),
+    });
+    if (r.status === 409) {
+      const { conflicts } = await r.json();
+      const nums = [...new Set(conflicts.map(c => c.sheet_number))].join(', ');
+      alert(`Some items are already on an open sheet (${nums}). Remove them first, or use "Print only".`);
+      btn.disabled = false; btn.textContent = 'Create & Print';
+      return;
+    }
+    if (!r.ok) throw new Error((await r.json()).error || 'Server error');
+    const ws = await r.json();
+
+    // Print the sheet
+    const projectName = _activeProjectName();
+    await openPrintWindow(
+      { sheetTitle: ws.sheet_number, projectName, scopeLabel: `${_wsModalRows.length} items`, itemCount: _wsModalRows.length, assignedTo, supervisor },
+      _defSheetHtml(_wsModalRows)
+    );
+
+    closeWsCreateModal();
+    clearBulkSelection();
+    // Refresh deficiency list and sheets list
+    loadReviewDeficiencies();
+    _wsAssigneesLoaded = false; // new name may have been added
+    if (_currentReviewTab === 'sheets') loadWorkSheets();
+  } catch (e) {
+    alert('Failed: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Create & Print';
+  }
+}
+
+// ── Work Sheets tab ───────────────────────────────────────────────────────────
+
+let _currentWs = null; // loaded sheet detail
+
+async function loadWorkSheets() {
+  const list = document.getElementById('ws-list');
+  if (!list) return;
+  closeWsDetailView();
+  list.innerHTML = '<div class="review-empty">Loading…</div>';
+  try {
+    const sheets = await fetch(`/api/projects/${_activeProjectId}/work-sheets`).then(r => r.json());
+    if (!sheets.length) { list.innerHTML = '<div class="review-empty">No work sheets yet.</div>'; return; }
+    list.innerHTML = sheets.map(ws => {
+      const date = ws.created_at ? new Date(ws.created_at).toLocaleDateString() : '';
+      const who  = ws.assigned_to ? escHtml(ws.assigned_to) : '<span style="color:var(--gray-400);">Unassigned</span>';
+      const countLabel = ws.open_count === 0
+        ? `<span style="color:var(--gray-400);">all resolved</span>`
+        : `${ws.open_count} open${ws.resolved_count ? `, ${ws.resolved_count} resolved` : ''}`;
+      const badge = `<span class="ws-badge ${ws.status}">${ws.status}</span>`;
+      return `<div class="ws-row" onclick="openWorkSheet(${ws.id})">
+        <div class="ws-row-number">${escHtml(ws.sheet_number)}</div>
+        <div class="ws-row-assignee">${who}</div>
+        <div class="ws-row-counts">${ws.item_count} items · ${countLabel}</div>
+        <div class="ws-row-date">${date}</div>
+        ${badge}
+      </div>`;
+    }).join('');
+  } catch { list.innerHTML = '<div class="review-empty">Could not load work sheets.</div>'; }
+}
+
+async function openWorkSheet(wsId) {
+  const body = document.getElementById('ws-detail-items');
+  body.innerHTML = '<div class="review-empty">Loading…</div>';
+  document.getElementById('ws-list-view').style.display = 'none';
+  document.getElementById('ws-detail-view').style.display = '';
+  try {
+    const ws = await fetch(`/api/projects/${_activeProjectId}/work-sheets/${wsId}`).then(r => r.json());
+    _currentWs = ws;
+    renderWsDetail(ws);
+  } catch {
+    body.innerHTML = '<div class="review-empty">Could not load sheet.</div>';
+  }
+}
+
+function openWorkSheetById(wsId) {
+  switchReviewTab('sheets');
+  openWorkSheet(wsId);
+}
+
+function closeWsDetailView() {
+  document.getElementById('ws-list-view').style.display = '';
+  document.getElementById('ws-detail-view').style.display = 'none';
+  _currentWs = null;
+}
+
+function closeWsDetail() {
+  closeWsDetailView();
+  loadWorkSheets();
+}
+
+function renderWsDetail(ws) {
+  document.getElementById('ws-detail-number').textContent = ws.sheet_number;
+  document.getElementById('ws-detail-status-badge').innerHTML =
+    `<span class="ws-badge ${ws.status}">${ws.status}</span>`;
+
+  const date = ws.created_at ? new Date(ws.created_at).toLocaleDateString() : '';
+  const closedLine = ws.closed_at ? ` · Closed ${new Date(ws.closed_at).toLocaleDateString()}` : '';
+  document.getElementById('ws-detail-header').innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--dark);">
+          ${ws.assigned_to ? escHtml(ws.assigned_to) : '<span style="color:var(--gray-400);">Unassigned</span>'}
+          ${ws.supervisor ? `<span style="font-weight:400;color:var(--gray-500);"> · Supervisor ${escHtml(ws.supervisor)}</span>` : ''}
+        </div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Created ${date}${closedLine}</div>
+      </div>
+      <div class="ws-desktop-only" style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
+        <button class="btn btn-sm btn-ghost" onclick="showWsReassign(${ws.id})">Reassign</button>
+        ${ws.status === 'open'
+          ? `<button class="btn btn-sm btn-ghost" style="color:var(--gray-500);" onclick="closeWorkSheet(${ws.id})">Close sheet</button>`
+          : `<button class="btn btn-sm btn-ghost" onclick="reopenWorkSheet(${ws.id})">Reopen</button>`
+        }
+      </div>
+    </div>`;
+
+  const items = ws.items || [];
+  if (!items.length) {
+    document.getElementById('ws-detail-items').innerHTML = '<div class="review-empty">No items on this sheet.</div>';
+    return;
+  }
+
+  // Group by space_path
+  const byPath = {};
+  const pathOrder = [];
+  for (const d of items) {
+    if (!byPath[d.space_path]) { byPath[d.space_path] = []; pathOrder.push(d.space_path); }
+    byPath[d.space_path].push(d);
+  }
+
+  let html = '';
+  for (const path of pathOrder) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;padding:8px 14px 4px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);">${escHtml(path)}</div>`;
+    for (const d of byPath[path]) {
+      const statusColor = d.status === 'resolved' ? '#16a34a' : d.status === 'in_progress' ? '#d97706' : '#dc2626';
+      html += `<div class="ws-detail-item">
+        <div class="ws-detail-item-left" style="background:${statusColor};"></div>
+        <div class="ws-detail-item-body">
+          <div class="ws-detail-item-desc">${escHtml(d.description)}</div>
+          <div class="ws-detail-item-path" style="font-size:11px;color:var(--gray-400);">${escHtml(d.status.replace('_',' '))}</div>
+        </div>
+        <div class="ws-detail-item-actions ws-desktop-only">
+          <select class="def-status-select" style="font-size:12px;" onchange="patchWsItemStatus(${d.id},this.value,this)">
+            <option value="open"        ${d.status==='open'        ?'selected':''}>Open</option>
+            <option value="in_progress" ${d.status==='in_progress' ?'selected':''}>In Progress</option>
+            <option value="resolved"    ${d.status==='resolved'    ?'selected':''}>Resolved</option>
+          </select>
+          <button class="btn btn-sm btn-ghost" style="font-size:12px;color:var(--gray-400);"
+            onclick="removeFromWorkSheet(${ws.id},${d.id})">Remove</button>
+        </div>
+      </div>`;
     }
   }
-
-  const { assignedTo, supervisor } = _defSheetAssignment();
-  await _assignAndPrint(rows, assignedTo, supervisor, scopeLabel);
+  document.getElementById('ws-detail-items').innerHTML = html;
 }
 
-async function printDeficiencySheetFromChecked() {
-  const checkedIds = new Set(
-    [...document.querySelectorAll('#review-def-list input[type=checkbox]:checked')]
-      .map(cb => parseInt(cb.dataset.id))
-  );
+function showWsReassign(wsId) {
+  // Replace header with inline form
+  const hdr = document.getElementById('ws-detail-header');
+  const ws = _currentWs;
+  hdr.innerHTML = `
+    <div class="ws-reassign-form">
+      <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Reassign Sheet</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <label style="flex:1;min-width:120px;font-size:12px;color:var(--gray-500);">Assigned to
+          <input type="text" id="ws-reassign-to" value="${escHtml(ws.assigned_to||'')}" list="ws-assignee-list"
+            style="display:block;width:100%;box-sizing:border-box;margin-top:3px;padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;">
+        </label>
+        <label style="flex:1;min-width:120px;font-size:12px;color:var(--gray-500);">Supervisor
+          <input type="text" id="ws-reassign-sup" value="${escHtml(ws.supervisor||'')}" list="ws-assignee-list"
+            style="display:block;width:100%;box-sizing:border-box;margin-top:3px;padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;">
+        </label>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-secondary" onclick="openWorkSheet(${wsId})">Cancel</button>
+        <button class="btn btn-sm btn-primary" onclick="submitWsReassign(${wsId})">Save</button>
+      </div>
+    </div>`;
+  setTimeout(() => document.getElementById('ws-reassign-to')?.focus(), 50);
+}
 
-  let rows, scopeLabel;
-  if (checkedIds.size) {
-    rows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
-    scopeLabel = `${checkedIds.size} selected`;
-  } else if (_defAssigneeFilter && _defAssigneeFilter !== '__unassigned__') {
-    // No checkboxes but a person filter is active — print all visible rows for that person
-    rows = _reviewDefRows.filter(d => d.status !== 'resolved' && d.assigned_to_name === _defAssigneeFilter);
-    scopeLabel = _defAssigneeFilter;
-  } else {
-    return; // nothing to print
+async function submitWsReassign(wsId) {
+  const assignedTo = document.getElementById('ws-reassign-to')?.value.trim() || null;
+  const supervisor = document.getElementById('ws-reassign-sup')?.value.trim() || null;
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/work-sheets/${wsId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assigned_to: assignedTo, supervisor }),
+    });
+    _wsAssigneesLoaded = false;
+    await openWorkSheet(wsId);
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+async function closeWorkSheet(wsId) {
+  const ws = _currentWs;
+  const openCount = (ws?.items || []).filter(d => d.status !== 'resolved').length;
+  if (openCount > 0) {
+    if (!confirm(`${ws.sheet_number} has ${openCount} item${openCount===1?'':'s'} still open. Close anyway?`)) return;
   }
-
-  const { assignedTo, supervisor } = _defSheetAssignment();
-  await _assignAndPrint(rows, assignedTo, supervisor, scopeLabel);
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/work-sheets/${wsId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'closed' }),
+    });
+    await openWorkSheet(wsId);
+    loadReviewDeficiencies(); // refresh ws chips on deficiency rows
+  } catch (e) { alert('Failed: ' + e.message); }
 }
 
-// Dispatches the bulk-bar "Print Sheet" button based on active tab
+async function reopenWorkSheet(wsId) {
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/work-sheets/${wsId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'open' }),
+    });
+    await openWorkSheet(wsId);
+    loadReviewDeficiencies();
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+async function removeFromWorkSheet(wsId, defId) {
+  if (!confirm('Remove this item from the work sheet?\n\nThe deficiency stays — it just becomes unassigned.')) return;
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/work-sheets/${wsId}/items/${defId}`, { method: 'DELETE' });
+    await openWorkSheet(wsId);
+    loadReviewDeficiencies();
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+async function patchWsItemStatus(defId, status, selectEl) {
+  if (status === 'resolved') {
+    selectEl.value = selectEl.dataset.prev || 'open';
+    showReviewResolvePrompt(defId, selectEl);
+    return;
+  }
+  try {
+    await fetch(`/api/projects/${_activeProjectId}/review/deficiencies/${defId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    selectEl.dataset.prev = status;
+    if (_currentWs) await openWorkSheet(_currentWs.id);
+  } catch { selectEl.value = selectEl.dataset.prev || selectEl.value; }
+}
+
+async function reprintWorkSheet() {
+  if (!_currentWs) return;
+  const projectName = _activeProjectName();
+  const rows = (_currentWs.items || []).filter(d => d.status !== 'resolved');
+  // Adapt items to match _defSheetHtml's expected shape (space_path, description, photo_count)
+  const adapted = rows.map(d => ({ ...d, photo_count: 0 }));
+  await openPrintWindow(
+    { sheetTitle: _currentWs.sheet_number, projectName, scopeLabel: `${rows.length} outstanding`, itemCount: rows.length, assignedTo: _currentWs.assigned_to, supervisor: _currentWs.supervisor },
+    _defSheetHtml(adapted)
+  );
+}
+
+// Dispatches the bulk-bar sheet button based on active tab
 function printFromBulkSelection() {
-  if (_bulkTab === 'material')     printPickSheetFromChecked();
-  else if (_bulkTab === 'deficiencies') printDeficiencySheetFromChecked();
+  if (_bulkTab === 'material')          printPickSheetFromChecked();
+  else if (_bulkTab === 'deficiencies') openWsCreateModal('checked');
 }
 
 // ── Bulk actions (Review — manage only) ───────────────────────────────────────
