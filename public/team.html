@@ -554,7 +554,7 @@ function closeMemberDrawer() {
 }
 
 let _activeTab = 'profile';
-function switchDTab(tab) {
+async function switchDTab(tab) {
   _activeTab = tab;
   ['profile','perms','actions'].forEach(t => {
     $('dtab-'+t).classList.toggle('active', t===tab);
