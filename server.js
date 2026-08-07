@@ -1,4 +1,12 @@
-require('dotenv').config(); // load .env in development
+// ── ENV LOADING — DO NOT REMOVE OR REORDER ──────────────────────────────────
+// .env.local must load BEFORE .env so local dev values win over production.
+// Commit be46e9a stripped these two lines while patching an unrelated feature
+// and silently pointed the running server at the live Supabase database.
+// The startup guard below also depends on DATABASE_URL being set correctly
+// before it runs — if you remove these lines, that guard cannot protect you.
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config();
+// ────────────────────────────────────────────────────────────────────────────
 const express      = require('express');
 const path         = require('path');
 const crypto       = require('crypto');
@@ -5740,9 +5748,34 @@ app.get('/api/change-orders/:id/export', requireAuth, async (req, res) => {
 
 (async () => {
   try {
+    // ── DATABASE HOST GUARD — DO NOT REMOVE ─────────────────────────────────
+    // Refuses to start if NODE_ENV !== 'production' and DATABASE_URL points at
+    // a non-local host. This catches .env.local not loading (see top of file).
+    // Commit be46e9a removed this block while patching an unrelated feature —
+    // the server then ran against live Supabase in local dev with no warning.
+    const _dbUrl  = process.env.DATABASE_URL || '';
+    const _dbHost = (() => { try { return new URL(_dbUrl).hostname; } catch { return _dbUrl; } })();
+    const _isLocal = ['localhost', '127.0.0.1', '::1'].includes(_dbHost);
+    const _isProd  = process.env.NODE_ENV === 'production';
+
+    if (!_isProd && !_isLocal) {
+      console.error('');
+      console.error('╔══════════════════════════════════════════════════════════════╗');
+      console.error('║  ABORT — non-local database in non-production mode           ║');
+      console.error(`║  Host: ${_dbHost.padEnd(54)}║`);
+      console.error('║                                                              ║');
+      console.error('║  .env.local did not load, or DATABASE_URL is wrong.          ║');
+      console.error('║  Run:  npm run dev:local                                     ║');
+      console.error('╚══════════════════════════════════════════════════════════════╝');
+      console.error('');
+      process.exit(1);
+    }
+
     app.listen(PORT, () => {
+      const _dbTag = _isLocal ? `${_dbHost} (LOCAL)` : `${_dbHost} (PRODUCTION ⚠)`;
       console.log(`\n  J&D Western Electric — Field Operations Hub`);
-      console.log(`  Running at http://localhost:${PORT}\n`);
+      console.log(`  Running at http://localhost:${PORT}`);
+      console.log(`  DATABASE: ${_dbTag}\n`);
     });
     await connectWithRetry();
     await initSchema();

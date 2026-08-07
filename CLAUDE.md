@@ -21,6 +21,24 @@ directly to `main`. Never push to GitHub without explicit user approval.
 Do not SSH anywhere. Do not modify `.env`. Do not run `git push` unless asked.
 Production changes only when the user says to deploy.
 
+## server.js header — NEVER overwrite these blocks
+
+`server.js` has two marked blocks at the top and in the startup IIFE that are
+safety-critical and easy to accidentally delete when editing the file header:
+
+1. **ENV loading (top of file):** two `require('dotenv').config()` calls —
+   `.env.local` first, then `.env`. Without this order, `.env` (production
+   Supabase creds) loads alone and the server connects to the live database.
+
+2. **Startup DB host guard (async IIFE):** refuses to start if `NODE_ENV !==
+   'production'` and `DATABASE_URL` is not localhost. Without this, a missing
+   `.env.local` connects to prod silently.
+
+Both blocks are marked `DO NOT REMOVE` in the source. When editing `server.js`
+— especially the top few lines or the startup IIFE — confirm both blocks are
+still present before committing. Commit `be46e9a` stripped them both by
+replacing the file header during an unrelated cert-display patch.
+
 ## Database rules — READ THIS EVERY SESSION
 
 **Never run any script against a non-localhost database.**
