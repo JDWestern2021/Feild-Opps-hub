@@ -5975,13 +5975,14 @@ app.get('/api/projects/:id/review/deficiencies', requireAuth, requireModuleAcces
       SELECT d.id, d.space_id, d.description, d.status, d.raised_at, d.resolved_at,
              ru.name AS raised_by_name,
              rv.name AS resolved_by_name,
-             sp.path AS space_path
+             sp.path AS space_path,
+             (SELECT COUNT(*)::int FROM deficiency_photos WHERE deficiency_id = d.id) AS photo_count
       FROM deficiencies d
       JOIN space_paths sp ON sp.id = d.space_id AND NOT sp.is_cycle
       LEFT JOIN users ru ON ru.id = d.raised_by
       LEFT JOIN users rv ON rv.id = d.resolved_by
       WHERE d.status = ANY($2)
-      ORDER BY d.raised_at DESC
+      ORDER BY sp.path, d.raised_at DESC
     `, [req.params.id, statuses]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }

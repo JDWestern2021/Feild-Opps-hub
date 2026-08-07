@@ -40,7 +40,7 @@
 
       /* Review sub-tabs only show on desktop inside sticky-header */
       #review-sub-tabs-desktop { display: none; }
-      #review-sub-tabs-mobile  { display: flex; }
+      #review-sub-tabs-mobile  { display: none; }
 
       /* Review split: list left, space detail right */
       #view-review { display: flex; min-height: 400px; }
@@ -839,6 +839,13 @@
               <button class="review-chip active" data-status="in_progress" onclick="toggleDefFilter(this)">In Progress</button>
               <button class="review-chip"        data-status="resolved"    onclick="toggleDefFilter(this)">Resolved</button>
             </div>
+            <div class="review-def-scope-row" id="review-def-scope-row" style="display:none;padding:6px 12px;gap:8px;align-items:center;border-bottom:1px solid var(--gray-100);">
+              <label style="font-size:12px;color:var(--gray-500);white-space:nowrap;">Scope</label>
+              <select id="review-def-scope" onchange="applyDefScope()" style="flex:1;font-size:13px;padding:4px 6px;border:1px solid var(--gray-200);border-radius:6px;">
+                <option value="">All spaces</option>
+              </select>
+              <button class="btn btn-sm btn-ghost" onclick="printDeficiencySheetFromScope()" style="white-space:nowrap;">Work Sheet</button>
+            </div>
             <div id="review-def-list" class="review-list"></div>
           </div>
           <!-- Notes pane -->
@@ -884,6 +891,7 @@
   <div class="bulk-bar-count" id="bulk-bar-count">0 selected</div>
   <select id="bulk-bar-select"></select>
   <button class="bulk-bar-apply" onclick="applyBulkAction()">Apply</button>
+  <button class="bulk-bar-sheet" id="bulk-bar-sheet" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;" onclick="printFromBulkSelection()">Print Sheet</button>
   <button class="bulk-bar-clear" onclick="clearBulkSelection()">Clear</button>
 </div>
 
@@ -1085,6 +1093,7 @@ let _detailOrigin       = null;           // 'review' when detail opened from Re
 // Mobile navigation
 let _mobileStack     = [];      // [{id: spaceId|null, scrollY: number}]
 let _wasMobile       = null;    // null = not yet initialized
+let _detailRoot      = null;    // container owning the active ds-* IDs (scopes getElementById)
 
 // Tree state
 let _expanded        = new Set();
@@ -1560,6 +1569,7 @@ function openDetail(id) {
   document.getElementById('detail-space-type').textContent = s.type_name || '';
 
   document.getElementById('detail-sections').innerHTML = buildDetailSectionsHtml(s);
+  _detailRoot = document.getElementById('detail-sections');
 
   loadSpaceFiles(id);
   loadDeficiencies(id);
@@ -1582,6 +1592,14 @@ function closeDetail() {
 // ── Mobile navigation ─────────────────────────────────────────────────────────
 
 function isMobile() { return window.innerWidth <= 768; }
+
+function _dsBody(id) {
+  if (_detailRoot) {
+    const el = _detailRoot.querySelector('#' + id);
+    if (el) return el;
+  }
+  return document.getElementById(id);
+}
 
 function pushMobileLevel(id) {
   const cur = _mobileStack[_mobileStack.length - 1];
@@ -1672,6 +1690,7 @@ function renderMobileLevel() {
     }
     html += buildDetailSectionsHtml(s);
     content.innerHTML = html;
+    _detailRoot = content;
 
     loadSpaceFiles(level.id);
     loadDeficiencies(level.id);
@@ -1787,6 +1806,9 @@ function handleBreakpointChange() {
     const spaceId = top && top.id !== null ? top.id : null;
     _mobileStack = [];
     _detailSpaceId = null;
+    _detailRoot = null;
+    const mnc = document.getElementById('mn-content');
+    if (mnc) mnc.innerHTML = '';
     document.getElementById('view-pills').style.display = _activeProjectId ? 'flex' : 'none';
     renderPanelHeader();
     renderTree();
@@ -2529,7 +2551,7 @@ function closeFileViewer() {
 // ── Space files ───────────────────────────────────────────────────────────────
 
 async function loadSpaceFiles(spaceId) {
-  const body = document.getElementById('ds-files-body');
+  const body = _dsBody('ds-files-body');
   if (!body) return;
   try {
     const files = await fetch(`/api/spaces/${spaceId}/files`).then(r => r.json());
@@ -2540,7 +2562,7 @@ async function loadSpaceFiles(spaceId) {
 }
 
 function renderFilesSection(spaceId, files) {
-  const body = document.getElementById('ds-files-body');
+  const body = _dsBody('ds-files-body');
   if (!body) return;
   let html = '';
   if (files.length) {
@@ -2579,7 +2601,7 @@ function renderFilesSection(spaceId, files) {
 async function uploadSpaceFiles(spaceId, input) {
   const rawFiles = Array.from(input.files);
   if (!rawFiles.length) return;
-  const body = document.getElementById('ds-files-body');
+  const body = _dsBody('ds-files-body');
   if (body) body.innerHTML = '<div class="detail-empty">Uploading…</div>';
   for (const raw of rawFiles) {
     const file = await compressImage(raw);
@@ -2618,7 +2640,7 @@ function loadDraft(spaceId) {
 }
 
 async function loadDeficiencies(spaceId) {
-  const body = document.getElementById('ds-def-body');
+  const body = _dsBody('ds-def-body');
   if (!body) return;
   try {
     const defs = await fetch(`/api/spaces/${spaceId}/deficiencies`).then(r => r.json());
@@ -2675,7 +2697,7 @@ function defCardHtml(d, spaceId) {
 }
 
 function renderDeficienciesSection(spaceId, defs) {
-  const body = document.getElementById('ds-def-body');
+  const body = _dsBody('ds-def-body');
   if (!body) return;
   let html = '';
 
@@ -2861,6 +2883,8 @@ function toggleDefFilter(btn) {
   loadReviewDeficiencies();
 }
 
+let _reviewDefRows = []; // cached for scope picker + print functions
+
 async function loadReviewDeficiencies() {
   const list = document.getElementById('review-def-list');
   if (!list) return;
@@ -2871,14 +2895,97 @@ async function loadReviewDeficiencies() {
     const rows = await fetch(
       `/api/projects/${_activeProjectId}/review/deficiencies?status=${statuses.join(',')}`
     ).then(r => r.json());
+    _reviewDefRows = rows;
+    buildDefScopePicker(rows);
     renderReviewDeficiencies(rows);
   } catch { list.innerHTML = '<div class="review-empty">Could not load deficiencies.</div>'; }
+}
+
+function buildDefScopePicker(allRows) {
+  const scopeRow = document.getElementById('review-def-scope-row');
+  const sel      = document.getElementById('review-def-scope');
+  if (!sel || !_spaces.length) return;
+
+  const outstanding = allRows.filter(d => d.status !== 'resolved');
+  if (!outstanding.length) { scopeRow.style.display = 'none'; return; }
+
+  // Build full path string for each space by walking the tree once.
+  // Derived from _spaces only — no dependency on _spaceCounts timing.
+  const pathOf = {};
+  function spacePath(id) {
+    if (pathOf[id]) return pathOf[id];
+    const s = _spaces.find(x => x.id === id);
+    if (!s) return '';
+    pathOf[id] = s.parent_id
+      ? spacePath(s.parent_id) + ' / ' + s.identifier
+      : s.identifier;
+    return pathOf[id];
+  }
+  _spaces.forEach(s => spacePath(s.id));
+
+  // Count outstanding defs for each space's subtree using path prefix matching.
+  const subtreeCount = {};
+  for (const s of _spaces) {
+    const prefix = pathOf[s.id];
+    subtreeCount[s.id] = outstanding.filter(d =>
+      d.space_path === prefix || d.space_path.startsWith(prefix + ' / ')
+    ).length;
+  }
+
+  // Depth for indentation
+  const depthOf = {};
+  function getDepth(id) {
+    if (depthOf[id] !== undefined) return depthOf[id];
+    const s = _spaces.find(x => x.id === id);
+    depthOf[id] = s && s.parent_id ? 1 + getDepth(s.parent_id) : 0;
+    return depthOf[id];
+  }
+  _spaces.forEach(s => getDepth(s.id));
+
+  const opts = _spaces
+    .filter(s => subtreeCount[s.id] > 0)
+    .sort((a, b) => pathOf[a.id].localeCompare(pathOf[b.id]))
+    .map(s => {
+      const indent = '\u00a0\u00a0\u00a0\u00a0'.repeat(depthOf[s.id] || 0);
+      return `<option value="${s.id}">${indent}${escHtml(s.identifier)} (${subtreeCount[s.id]})</option>`;
+    });
+
+  if (!opts.length) { scopeRow.style.display = 'none'; return; }
+  sel.innerHTML = '<option value="">All spaces</option>' + opts.join('');
+  scopeRow.style.display = 'flex';
+}
+function applyDefScope() {
+  const scopeId = parseInt(document.getElementById('review-def-scope').value) || null;
+  if (!scopeId) {
+    renderReviewDeficiencies(_reviewDefRows);
+    return;
+  }
+  // Find the selected space's path prefix from any row, or from _spaces
+  const space = _spaces.find(s => s.id === scopeId);
+  if (!space) { renderReviewDeficiencies(_reviewDefRows); return; }
+
+  // Build the path prefix by walking up the _spaces tree
+  const parts = [];
+  let cur = space;
+  while (cur) {
+    parts.unshift(cur.identifier);
+    cur = cur.parent_id ? _spaces.find(s => s.id === cur.parent_id) : null;
+  }
+  const prefix = parts.join(' / ');
+  const filtered = _reviewDefRows.filter(d =>
+    d.space_path === prefix || d.space_path.startsWith(prefix + ' / ')
+  );
+  renderReviewDeficiencies(filtered);
 }
 
 function renderReviewDeficiencies(rows) {
   const list = document.getElementById('review-def-list');
   if (!rows.length) { list.innerHTML = '<div class="review-empty">No deficiencies found.</div>'; return; }
-  list.innerHTML = rows.map(d => {
+
+  const active   = rows.filter(d => d.status !== 'resolved');
+  const resolved = rows.filter(d => d.status === 'resolved');
+
+  function rowHtml(d) {
     const when = d.raised_at ? new Date(d.raised_at).toLocaleDateString() : '';
     const by   = d.raised_by_name ? 'by ' + escHtml(d.raised_by_name) : '';
     const meta = [when, by].filter(Boolean).join(' ');
@@ -2903,7 +3010,19 @@ function renderReviewDeficiencies(rows) {
       </div>
       <div class="review-row-actions">${select}</div>
     </div>`;
-  }).join('');
+  }
+
+  let html = active.map(rowHtml).join('');
+  if (!active.length) html = '<div class="review-empty" style="padding:10px 12px;">No outstanding deficiencies.</div>';
+
+  if (resolved.length) {
+    html += `<details class="review-delivered-toggle">
+      <summary>${resolved.length} resolved · view history</summary>
+      ${resolved.map(rowHtml).join('')}
+    </details>`;
+  }
+
+  list.innerHTML = html;
 }
 
 async function patchReviewDef(defId, status, selectEl) {
@@ -2992,7 +3111,10 @@ async function loadReviewMaterial() {
   } catch { list.innerHTML = '<div class="review-empty">Could not load material.</div>'; }
 }
 
+let _reviewMatRows = []; // cached for pick-sheet-from-checked
+
 function renderReviewMaterial(rows) {
+  _reviewMatRows = rows;
   const list = document.getElementById('review-mat-list');
   if (!rows.length) { list.innerHTML = '<div class="review-empty">No items found.</div>'; return; }
 
@@ -3080,6 +3202,7 @@ async function openReviewDetailPanel(spaceId) {
 
   // Render the same sections as the space detail view
   document.getElementById('review-space-body').innerHTML = buildDetailSectionsHtml(s);
+  _detailRoot = document.getElementById('review-space-body');
 
   // Load data using the same functions — they find IDs within the page; now only in review-space-body
   loadSpaceFiles(spaceId);
@@ -3095,6 +3218,110 @@ function closeReviewDetailPanel() {
   // Clear section IDs so they don't conflict when spaces detail is opened later
   const body = document.getElementById('review-space-body');
   if (body) body.innerHTML = '';
+}
+
+// ── Shared print stylesheet ───────────────────────────────────────────────────
+
+const PRINT_STYLES = `
+  @page { size: letter portrait; margin: 14mm 15mm 18mm; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #0C0C0C; margin: 0; }
+  /* ── Company header band ── */
+  .ph { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
+  .ph-left { display: flex; align-items: center; gap: 10px; }
+  .ph-logo { height: 48px; width: auto; display: block; }
+  .ph-co { font-size: 13px; font-weight: 700; letter-spacing: .03em; color: #0C0C0C; line-height: 1.3; }
+  .ph-right { text-align: right; }
+  .ph-sheet { font-size: 17px; font-weight: 700; color: #0C0C0C; line-height: 1; margin-bottom: 3px; }
+  .ph-project { font-size: 12px; color: #0C0C0C; margin-bottom: 1px; }
+  .ph-meta { font-size: 10px; color: #555; }
+  .ph-rule { border: none; border-top: 3px solid #FF6100; margin: 8px 0 14px; }
+  /* ── Body ── */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+  th { text-align: left; border-bottom: 2px solid #333; padding: 4px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 4px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  .group-hdr { font-size: 13px; font-weight: 700; padding: 10px 0 2px; page-break-inside: avoid; border-bottom: none; }
+  .chk { width: 20px; }
+  .photo-col { width: 28px; text-align: center; font-size: 10px; font-weight: 700; color: #555; }
+  .status-col { font-size: 10px; color: #555; width: 56px; }
+  .qty-col { width: 36px; }
+  .unit-col { width: 44px; }
+  /* ── Footer ── */
+  .pf { margin-top: 28px; border-top: 1px solid #999; padding-top: 10px;
+        display: flex; gap: 40px; font-size: 11px; color: #0C0C0C; }
+  .pf-field { flex: 1; }
+  .pf-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #555; margin-bottom: 14px; }
+  .pf-line { border-bottom: 1px solid #0C0C0C; }
+  .print-toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
+  .print-toolbar button { padding: 7px 18px; font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; border: none; border-radius: 4px; cursor: pointer; }
+  .print-toolbar .btn-print { background: #FF6100; color: #fff; }
+  .print-toolbar .btn-close { background: #e0e0e0; color: #0C0C0C; }
+  @media print { .print-toolbar { display: none; } }
+`;
+
+// openPrintWindow: fetches logo once per session, builds branded header + footer.
+// info = { sheetTitle, projectName, scopeLabel, itemCount }
+let _printLogoDataUrl = null;
+async function openPrintWindow(info, bodyHtml) {
+  if (!_printLogoDataUrl) {
+    try {
+      const resp = await fetch('/logo-white.png');
+      const blob = await resp.blob();
+      _printLogoDataUrl = await new Promise(res => {
+        const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob);
+      });
+    } catch { _printLogoDataUrl = ''; }
+  }
+
+  const logoImg = _printLogoDataUrl
+    ? `<img class="ph-logo" src="${_printLogoDataUrl}" alt="J&D Western Electric Ltd.">`
+    : '';
+
+  const dateStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'short', day:'numeric' });
+  const header = `
+  <div class="ph">
+    <div class="ph-left">
+      ${logoImg}
+      <div class="ph-co">J&amp;D WESTERN ELECTRIC LTD.</div>
+    </div>
+    <div class="ph-right">
+      <div class="ph-sheet">${escHtml(info.sheetTitle)}</div>
+      <div class="ph-project">${escHtml(info.projectName)}</div>
+      <div class="ph-meta">Scope: ${escHtml(info.scopeLabel)} &nbsp;·&nbsp; ${info.itemCount} item${info.itemCount === 1 ? '' : 's'} &nbsp;·&nbsp; Printed: ${dateStr}</div>
+    </div>
+  </div>
+  <hr class="ph-rule">`;
+
+  const footer = `
+  <div class="pf">
+    <div class="pf-field">
+      <div class="pf-label">Completed by</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+    <div class="pf-field">
+      <div class="pf-label">Date</div>
+      <div class="pf-line">&nbsp;</div>
+    </div>
+  </div>`;
+
+  const title = `${info.sheetTitle} — ${info.projectName}`;
+  const toolbar = `<div class="print-toolbar">
+    <button class="btn-print" onclick="window.print()">Print</button>
+    <button class="btn-close" onclick="window.close()">Close</button>
+  </div>`;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <base href="${window.location.origin}/">
+    <title>${escHtml(title)}</title><style>${PRINT_STYLES}</style>
+  </head><body>${toolbar}${header}${bodyHtml}${footer}</body></html>`);
+  win.document.close();
+  win.focus();
+}
+
+// ── Print helpers ─────────────────────────────────────────────────────────────
+
+function _activeProjectName() {
+  const p = (_projects || []).find(p => p.id === _activeProjectId);
+  return p?.name || document.getElementById('space-panel-title')?.textContent || '';
 }
 
 // ── Pick Sheet ────────────────────────────────────────────────────────────────
@@ -3137,7 +3364,42 @@ function closePickSheetModal() {
   if (modal) modal.style.display = 'none';
 }
 
-function printPickSheet() {
+function _pickSheetHtml(rows) {
+  // Group by space_path, preserving the order rows arrived in (tree order from API)
+  const byPath = {};
+  const pathOrder = [];
+  for (const row of rows) {
+    if (!byPath[row.space_path]) { byPath[row.space_path] = []; pathOrder.push(row.space_path); }
+    byPath[row.space_path].push(row);
+  }
+
+  let body = '';
+
+  for (const path of pathOrder) {
+    const items = byPath[path];
+    body += `<div class="group-hdr">${path.replace(/</g,'&lt;')}</div>
+    <table><thead><tr>
+      <th class="chk"></th><th>Description</th><th class="qty-col">Qty</th><th class="unit-col">Unit</th><th class="status-col">Status</th>
+    </tr></thead><tbody>`;
+    for (const item of items) {
+      const qty = parseFloat(item.quantity);
+      const qtyStr = qty % 1 === 0 ? qty.toString() : qty.toFixed(2);
+      body += `<tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td>${item.description.replace(/</g,'&lt;')}</td>
+        <td class="qty-col">${qtyStr}</td>
+        <td class="unit-col">${(item.unit || '').replace(/</g,'&lt;')}</td>
+        <td class="status-col">${item.status}</td>
+      </tr>`;
+    }
+    body += '</tbody></table>';
+  }
+
+  if (!pathOrder.length) body += '<p>No items match the selected scope.</p>';
+  return body;
+}
+
+async function printPickSheet() {
   if (!_pickSheetData) return;
   const building = document.getElementById('ps-building-filter').value;
   const floor    = document.getElementById('ps-floor-filter').value;
@@ -3146,64 +3408,101 @@ function printPickSheet() {
   if (building) rows = rows.filter(r => r.space_path.startsWith(building + ' / ') || r.space_path === building);
   if (floor)    rows = rows.filter(r => r.space_path.split(' / ')[1] === floor);
 
-  // Group by space_path
+  const projectName = _activeProjectName();
+  const scopeLabel  = [building, floor].filter(Boolean).join(' / ') || 'All suites';
+  await openPrintWindow({ sheetTitle: 'Pick Sheet', projectName, scopeLabel, itemCount: rows.length }, _pickSheetHtml(rows));
+  closePickSheetModal();
+}
+
+async function printPickSheetFromChecked() {
+  const checkedIds = new Set(
+    [...document.querySelectorAll('#review-mat-list input[type=checkbox]:checked')]
+      .map(cb => parseInt(cb.dataset.id))
+  );
+  if (!checkedIds.size) return;
+
+  // _reviewMatRows is set by renderReviewMaterial
+  const rows = (_reviewMatRows || []).filter(r => checkedIds.has(r.id));
+  const projectName = _activeProjectName();
+  await openPrintWindow({ sheetTitle: 'Pick Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length }, _pickSheetHtml(rows));
+}
+
+// ── Deficiency Work Sheet ─────────────────────────────────────────────────────
+
+function _defSheetHtml(rows) {
+  // Group by space_path, preserving order (already sorted by path from API)
   const byPath = {};
-  for (const row of rows) {
-    if (!byPath[row.space_path]) byPath[row.space_path] = [];
-    byPath[row.space_path].push(row);
+  const pathOrder = [];
+  for (const d of rows) {
+    if (!byPath[d.space_path]) { byPath[d.space_path] = []; pathOrder.push(d.space_path); }
+    byPath[d.space_path].push(d);
   }
 
-  const projectName = document.getElementById('space-panel-title')?.textContent || '';
-  const filterLabel = [building, floor].filter(Boolean).join(' / ') || 'All suites';
+  let body = '';
 
-  let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <title>Pick Sheet — ${escHtml(projectName)}</title>
-  <style>
-    @page { size: letter portrait; margin: 18mm 15mm; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
-    h1 { font-size: 16px; margin: 0 0 2px; }
-    .sub { font-size: 11px; color: #666; margin: 0 0 14px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-    th { text-align: left; border-bottom: 2px solid #333; padding: 4px 6px; font-size: 11px; }
-    td { padding: 4px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
-    .suite { font-size: 13px; font-weight: 700; padding: 10px 0 2px; page-break-inside: avoid; }
-    .chk { width: 18px; }
-    .status { font-size: 10px; color: #666; }
-  </style>
-  </head><body>
-  <h1>Pick Sheet — ${escHtml(projectName)}</h1>
-  <p class="sub">Filter: ${escHtml(filterLabel)} &nbsp;·&nbsp; Printed: ${new Date().toLocaleDateString()}</p>`;
-
-  for (const [path, items] of Object.entries(byPath)) {
-    html += `<div class="suite">${path.replace(/</g,'&lt;')}</div>
+  for (const path of pathOrder) {
+    const items = byPath[path];
+    body += `<div class="group-hdr">${path.replace(/</g,'&lt;')}</div>
     <table><thead><tr>
-      <th class="chk"></th><th>Description</th><th>Qty</th><th>Unit</th><th class="status">Status</th>
+      <th class="chk"></th><th>Description</th><th class="photo-col">P</th>
     </tr></thead><tbody>`;
-    for (const item of items) {
-      const qty = parseFloat(item.quantity);
-      const qtyStr = qty % 1 === 0 ? qty.toString() : qty.toFixed(2);
-      html += `<tr>
-        <td><input type="checkbox"></td>
-        <td>${item.description.replace(/</g,'&lt;')}</td>
-        <td>${qtyStr}</td>
-        <td>${(item.unit || '').replace(/</g,'&lt;')}</td>
-        <td class="status">${item.status}</td>
+    for (const d of items) {
+      const photoMark = d.photo_count > 0 ? '[P]' : '';
+      body += `<tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td>${d.description.replace(/</g,'&lt;')}</td>
+        <td class="photo-col">${photoMark}</td>
       </tr>`;
     }
-    html += '</tbody></table>';
+    body += '</tbody></table>';
   }
 
-  if (!Object.keys(byPath).length) {
-    html += '<p>No needed or ordered items match the selected filter.</p>';
+  if (!pathOrder.length) body += '<p>No outstanding deficiencies in the selected scope.</p>';
+  return body;
+}
+
+async function printDeficiencySheetFromScope() {
+  const scopeSel    = document.getElementById('review-def-scope');
+  const scopeId     = parseInt(scopeSel?.value) || null;
+  const projectName = _activeProjectName();
+
+  let rows = _reviewDefRows.filter(d => d.status !== 'resolved');
+  let scopeLabel = 'All spaces';
+
+  if (scopeId) {
+    const space = _spaces.find(s => s.id === scopeId);
+    if (space) {
+      const parts = [];
+      let cur = space;
+      while (cur) {
+        parts.unshift(cur.identifier);
+        cur = cur.parent_id ? _spaces.find(s => s.id === cur.parent_id) : null;
+      }
+      const prefix = parts.join(' / ');
+      rows = rows.filter(d => d.space_path === prefix || d.space_path.startsWith(prefix + ' / '));
+      scopeLabel = prefix;
+    }
   }
 
-  html += '</body></html>';
-  const win = window.open('', '_blank');
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.print();
-  closePickSheetModal();
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel, itemCount: rows.length }, _defSheetHtml(rows));
+}
+
+async function printDeficiencySheetFromChecked() {
+  const checkedIds = new Set(
+    [...document.querySelectorAll('#review-def-list input[type=checkbox]:checked')]
+      .map(cb => parseInt(cb.dataset.id))
+  );
+  if (!checkedIds.size) return;
+
+  const rows = _reviewDefRows.filter(d => checkedIds.has(d.id) && d.status !== 'resolved');
+  const projectName = _activeProjectName();
+  await openPrintWindow({ sheetTitle: 'Deficiency Work Sheet', projectName, scopeLabel: `${checkedIds.size} selected items`, itemCount: rows.length }, _defSheetHtml(rows));
+}
+
+// Dispatches the bulk-bar "Print Sheet" button based on active tab
+function printFromBulkSelection() {
+  if (_bulkTab === 'material')     printPickSheetFromChecked();
+  else if (_bulkTab === 'deficiencies') printDeficiencySheetFromChecked();
 }
 
 // ── Bulk actions (Review — manage only) ───────────────────────────────────────
@@ -3216,8 +3515,9 @@ function updateBulkBar(tab) {
     tab === 'deficiencies' ? '#review-def-list input[type=checkbox]:checked'
                            : '#review-mat-list input[type=checkbox]:checked'
   )];
-  const bar = document.getElementById('bulk-bar');
-  const sel = document.getElementById('bulk-bar-select');
+  const bar       = document.getElementById('bulk-bar');
+  const sel       = document.getElementById('bulk-bar-select');
+  const sheetBtn  = document.getElementById('bulk-bar-sheet');
   document.getElementById('bulk-bar-count').textContent = `${checked.length} selected`;
   bar.classList.toggle('visible', checked.length > 0);
 
@@ -3226,6 +3526,10 @@ function updateBulkBar(tab) {
       ? [['open','Open'],['in_progress','In Progress'],['resolved','Resolved']]
       : [['needed','Needed'],['ordered','Ordered'],['delivered','Delivered']];
     sel.innerHTML = opts.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+    sheetBtn.textContent = tab === 'deficiencies' ? 'Work Sheet' : 'Pick Sheet';
+    sheetBtn.style.display = '';
+  } else {
+    sheetBtn.style.display = 'none';
   }
 }
 
@@ -3269,7 +3573,7 @@ async function applyBulkAction() {
 // ── Space Material ────────────────────────────────────────────────────────────
 
 async function loadSpaceMaterial(spaceId) {
-  const body = document.getElementById('ds-material-body');
+  const body = _dsBody('ds-material-body');
   if (!body) return;
   try {
     const items = await fetch(`/api/spaces/${spaceId}/material`).then(r => r.json());
@@ -3280,28 +3584,39 @@ async function loadSpaceMaterial(spaceId) {
 }
 
 function renderSpaceMaterial(spaceId, items) {
-  const body = document.getElementById('ds-material-body');
+  const body = _dsBody('ds-material-body');
   if (!body) return;
   const STATUS_ORDER = ['needed','ordered','delivered'];
-  let html = '';
 
+  function itemHtml(item) {
+    const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(item.status) + 1) % STATUS_ORDER.length];
+    const canAdvance = _canEdit || nextStatus === 'delivered';
+    const statusBtn = canAdvance
+      ? `<button class="list-item-status ${item.status}" onclick="cycleMaterialStatus(${item.id},'${nextStatus}',${spaceId})" title="Mark ${nextStatus}">${item.status}</button>`
+      : `<span class="list-item-status ${item.status}">${item.status}</span>`;
+    const qty = parseFloat(item.quantity);
+    const qtyLabel = qty !== 1 || item.unit ? qty + (item.unit ? ' ' + escHtml(item.unit) : '') : '';
+    const canDel = _canEdit || String(item.added_by) === String(_userId);
+    return `<div class="list-item-row" id="mr-row-${item.id}">
+      <span class="list-item-desc">${escHtml(item.description)}</span>
+      ${qtyLabel ? `<span class="list-item-qty">${qtyLabel}</span>` : ''}
+      ${statusBtn}
+      ${canDel ? `<button class="list-item-del" onclick="deleteMaterialRequest(${item.id},${spaceId})" title="Remove">✕</button>` : ''}
+    </div>`;
+  }
+
+  let html = '';
   if (items.length) {
-    html += items.map(item => {
-      const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(item.status) + 1) % STATUS_ORDER.length];
-      const canAdvance = _canEdit || nextStatus === 'delivered';
-      const statusBtn = canAdvance
-        ? `<button class="list-item-status ${item.status}" onclick="cycleMaterialStatus(${item.id},'${nextStatus}',${spaceId})" title="Mark ${nextStatus}">${item.status}</button>`
-        : `<span class="list-item-status ${item.status}">${item.status}</span>`;
-      const qty = parseFloat(item.quantity);
-      const qtyLabel = qty !== 1 || item.unit ? qty + (item.unit ? ' ' + escHtml(item.unit) : '') : '';
-      const canDel = _canEdit || String(item.added_by) === String(_userId);
-      return `<div class="list-item-row" id="mr-row-${item.id}">
-        <span class="list-item-desc">${escHtml(item.description)}</span>
-        ${qtyLabel ? `<span class="list-item-qty">${qtyLabel}</span>` : ''}
-        ${statusBtn}
-        ${canDel ? `<button class="list-item-del" onclick="deleteMaterialRequest(${item.id},${spaceId})" title="Remove">✕</button>` : ''}
-      </div>`;
-    }).join('');
+    const active    = items.filter(i => i.status !== 'delivered');
+    const delivered = items.filter(i => i.status === 'delivered');
+    html += active.map(itemHtml).join('');
+    if (!active.length) html = '<div class="detail-empty">No outstanding items.</div>';
+    if (delivered.length) {
+      html += `<details class="review-delivered-toggle">
+        <summary>${delivered.length} delivered · view history</summary>
+        ${delivered.map(itemHtml).join('')}
+      </details>`;
+    }
   } else {
     html += '<div class="detail-empty">No material requests.</div>';
   }
@@ -3358,7 +3673,7 @@ async function ensureListTypes() {
 }
 
 async function loadSpaceLists(spaceId) {
-  const body = document.getElementById('ds-lists-body');
+  const body = _dsBody('ds-lists-body');
   if (!body) return;
   await ensureListTypes();
   try {
@@ -3370,7 +3685,7 @@ async function loadSpaceLists(spaceId) {
 }
 
 function renderSpaceListsSection(spaceId, data) {
-  const body = document.getElementById('ds-lists-body');
+  const body = _dsBody('ds-lists-body');
   if (!body) return;
   const { ownLists = [], typeLists = [] } = data;
   let html = '';
@@ -3493,7 +3808,7 @@ async function cycleItemStatus(itemId, nextStatus, listId, spaceId, isTypeList) 
 }
 
 async function showRollup(spaceId) {
-  const el = document.getElementById('ds-rollup');
+  const el = _dsBody('ds-rollup');
   if (!el) return;
   if (el.style.display !== 'none') { el.style.display = 'none'; return; }
   el.style.display = '';
@@ -3542,7 +3857,7 @@ async function deleteListItem(itemId, listId, spaceId, isTypeList) {
 let _userId = null; // set on init from /api/auth/me
 
 async function loadSpaceNotes(spaceId) {
-  const body = document.getElementById('ds-notes-body');
+  const body = _dsBody('ds-notes-body');
   if (!body) return;
   try {
     const notes = await fetch(`/api/spaces/${spaceId}/notes`).then(r => r.json());
@@ -3553,7 +3868,7 @@ async function loadSpaceNotes(spaceId) {
 }
 
 function renderSpaceNotesSection(spaceId, notes) {
-  const body = document.getElementById('ds-notes-body');
+  const body = _dsBody('ds-notes-body');
   if (!body) return;
   const draftKey = `note-draft-space-${spaceId}`;
   const draft = localStorage.getItem(draftKey) || '';
