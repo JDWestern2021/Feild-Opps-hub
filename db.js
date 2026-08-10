@@ -938,7 +938,22 @@ async function initSchema() {
       )
   `);
 
+  // ── files (shared storage) ───────────────────────────────────────────────────
+  // Stores file bytes once. space_files rows reference this table via file_id
+  // so the same drawing can be attached to many spaces without copying the bytes.
+  await pool.query(`CREATE TABLE IF NOT EXISTS files (
+    id           SERIAL PRIMARY KEY,
+    file_data    BYTEA NOT NULL,
+    mime_type    TEXT NOT NULL,
+    file_name    TEXT NOT NULL,
+    size         INTEGER NOT NULL DEFAULT 0,
+    uploaded_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // ── space_files ─────────────────────────────────────────────────────────────
+  // Old columns (file_data, mime_type, file_name, uploaded_by) are kept intact
+  // until the new read path is confirmed live. Drop them manually after that.
   await pool.query(`CREATE TABLE IF NOT EXISTS space_files (
     id           SERIAL PRIMARY KEY,
     space_id     INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
@@ -949,6 +964,11 @@ async function initSchema() {
     uploaded_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
     uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  // New columns added additively — file_id links to shared files table.
+  // attached_by/attached_at record who linked the file to this specific space.
+  await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS file_id      INTEGER REFERENCES files(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS attached_by  INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS attached_at  TIMESTAMPTZ`);
 
   // ── deficiencies ────────────────────────────────────────────────────────────
   await pool.query(`CREATE TABLE IF NOT EXISTS deficiencies (
@@ -1189,6 +1209,66 @@ async function initSchema() {
       if (projectsWithoutSpaces.length) {
         console.log(`  ✓ Backfilled General space for ${projectsWithoutSpaces.length} project(s)`);
       }
+    }
+  }
+
+  // ── space_files → files backfill ─────────────────────────────────────────────
+  // One-time migration: copy each existing space_files row into the shared files
+  // table and set file_id on the link row. Old columns (file_data, mime_type,
+  // file_name, uploaded_by) are left intact — they are the rollback path.
+  // DO NOT NULL them here; that is a separate deliberate step after confirming
+  // the new read path works in production.
+  //
+  // Note: NULLing a BYTEA column does not reclaim disk without a VACUUM FULL,
+  // so there is no storage argument for doing it in the same pass as the backfill.
+  {
+    const { rowCount: alreadyRan } = await pool.query(
+      "SELECT 1 FROM schema_migrations WHERE name = 'space_files_to_files_backfill'"
+    );
+    if (!alreadyRan) {
+      // Count rows that need backfilling (all of them on first run)
+      const { rows: [{ before_count }] } = await pool.query(
+        'SELECT COUNT(*)::int AS before_count FROM space_files'
+      );
+
+      // Process row-by-row so each space_files row gets its own files entry.
+      // Doing this in SQL with a CTE and RETURNING cannot join back to the source
+      // row safely, so we use a loop. Row count is bounded by real-world uploads.
+      const { rows: sfRows } = await pool.query(
+        'SELECT id, file_data, mime_type, file_name, uploaded_by, uploaded_at FROM space_files WHERE file_id IS NULL'
+      );
+
+      let filesCreated = 0;
+      for (const sf of sfRows) {
+        const size = sf.file_data ? sf.file_data.length : 0;
+        const { rows: [newFile] } = await pool.query(
+          `INSERT INTO files (file_data, mime_type, file_name, size, uploaded_by, uploaded_at)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+          [sf.file_data, sf.mime_type, sf.file_name, size, sf.uploaded_by, sf.uploaded_at]
+        );
+        await pool.query(
+          'UPDATE space_files SET file_id=$1, attached_by=$2, attached_at=$3 WHERE id=$4',
+          [newFile.id, sf.uploaded_by, sf.uploaded_at, sf.id]
+        );
+        filesCreated++;
+      }
+
+      // Reconciliation: every space_files row must now have a file_id.
+      const { rows: [{ after_count }] } = await pool.query(
+        'SELECT COUNT(*)::int AS after_count FROM space_files WHERE file_id IS NOT NULL'
+      );
+
+      if (before_count !== filesCreated || before_count !== after_count) {
+        throw new Error(
+          `space_files_to_files backfill count mismatch: ` +
+          `space_files_before=${before_count}, files_created=${filesCreated}, ` +
+          `space_files_with_file_id=${after_count}. ` +
+          `Server will not start — investigate before retrying.`
+        );
+      }
+
+      await pool.query("INSERT INTO schema_migrations (name) VALUES ('space_files_to_files_backfill')");
+      console.log(`  ✓ Backfilled ${filesCreated} space_files row(s) into shared files table (before=${before_count}, files_created=${filesCreated}, after=${after_count})`);
     }
   }
 

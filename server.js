@@ -6739,50 +6739,119 @@ const spaceFileUpload = multer({ storage: multer.memoryStorage(), limits: { file
 app.get('/api/spaces/:id/files', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT f.id, f.space_id, f.mime_type, f.file_name, f.caption,
-             f.uploaded_at, u.name AS uploaded_by_name
-      FROM space_files f
-      LEFT JOIN users u ON u.id = f.uploaded_by
-      WHERE f.space_id = $1
-      ORDER BY f.uploaded_at DESC
+      SELECT sf.id, sf.space_id, sf.caption, sf.attached_at,
+             COALESCE(fi.mime_type, sf.mime_type)    AS mime_type,
+             COALESCE(fi.file_name, sf.file_name)    AS file_name,
+             COALESCE(fi.size, 0)                    AS size,
+             COALESCE(fi.uploaded_at, sf.uploaded_at) AS uploaded_at,
+             u.name                                   AS uploaded_by_name,
+             sf.file_id,
+             (SELECT COUNT(*)::int FROM space_files sf2 WHERE sf2.file_id = fi.id) AS ref_count
+      FROM space_files sf
+      LEFT JOIN files fi ON fi.id = sf.file_id
+      LEFT JOIN users u  ON u.id  = COALESCE(fi.uploaded_by, sf.uploaded_by)
+      WHERE sf.space_id = $1
+      ORDER BY COALESCE(fi.uploaded_at, sf.uploaded_at) DESC
     `, [req.params.id]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/spaces/:id/files — upload a file (field-level: anyone on site can add)
+// POST /api/spaces/:id/files — upload a file to a single space (field-level)
 app.post('/api/spaces/:id/files', requireAuth, requireModuleAccess('worksites', 'field'),
   spaceFileUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    // Ownership check: space must belong to a project the user can access
     const { rows: [space] } = await pool.query('SELECT project_id FROM spaces WHERE id=$1', [req.params.id]);
     if (!space) return res.status(404).json({ error: 'Space not found' });
-    const { rows: [f] } = await pool.query(`
-      INSERT INTO space_files (space_id, file_data, mime_type, file_name, caption, uploaded_by)
-      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, space_id, mime_type, file_name, caption, uploaded_at
-    `, [req.params.id, req.file.buffer, req.file.mimetype, req.file.originalname, req.body.caption || null, req.user.id]);
-    res.json(f);
+    const now = new Date();
+    // Store bytes once in files, then create the link row in space_files.
+    const { rows: [fi] } = await pool.query(
+      `INSERT INTO files (file_data, mime_type, file_name, size, uploaded_by, uploaded_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [req.file.buffer, req.file.mimetype, req.file.originalname, req.file.buffer.length, req.user.id, now]
+    );
+    const { rows: [sf] } = await pool.query(
+      `INSERT INTO space_files (space_id, file_id, file_data, mime_type, file_name, caption, uploaded_by, uploaded_at, attached_by, attached_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, space_id, caption, attached_at`,
+      [req.params.id, fi.id, req.file.buffer, req.file.mimetype, req.file.originalname,
+       req.body.caption || null, req.user.id, now, req.user.id, now]
+    );
+    res.json({ ...sf, mime_type: req.file.mimetype, file_name: req.file.originalname,
+               size: req.file.buffer.length, uploaded_at: now, ref_count: 1 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/spaces/:id/files/:fileId — manage-only
+// POST /api/bulk-space-files — upload one file and attach it to many spaces (manage-only)
+app.post('/api/bulk-space-files', requireAuth, requireModuleAccess('worksites', 'manage'),
+  spaceFileUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    let spaceIds;
+    try { spaceIds = JSON.parse(req.body.space_ids); } catch { return res.status(400).json({ error: 'space_ids must be a JSON array' }); }
+    if (!Array.isArray(spaceIds) || !spaceIds.length) return res.status(400).json({ error: 'space_ids must be a non-empty array' });
+    const intIds = spaceIds.map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (intIds.length !== spaceIds.length) return res.status(400).json({ error: 'space_ids must all be positive integers' });
+    const caption = req.body.caption || null;
+    const now = new Date();
+
+    // Store bytes once
+    const { rows: [fi] } = await pool.query(
+      `INSERT INTO files (file_data, mime_type, file_name, size, uploaded_by, uploaded_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [req.file.buffer, req.file.mimetype, req.file.originalname, req.file.buffer.length, req.user.id, now]
+    );
+
+    // One link row per space — old columns also populated for rollback safety
+    const linked = [];
+    for (const spaceId of intIds) {
+      const { rows: [sf] } = await pool.query(
+        `INSERT INTO space_files (space_id, file_id, file_data, mime_type, file_name, caption, uploaded_by, uploaded_at, attached_by, attached_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT DO NOTHING
+         RETURNING id, space_id`,
+        [spaceId, fi.id, req.file.buffer, req.file.mimetype, req.file.originalname,
+         caption, req.user.id, now, req.user.id, now]
+      );
+      if (sf) linked.push(sf.space_id);
+    }
+    res.json({ file_id: fi.id, linked_spaces: linked.length, space_ids: linked });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/spaces/:id/files/:fileId — remove from this space; delete shared file if last reference
 app.delete('/api/spaces/:id/files/:fileId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
-    const { rowCount } = await pool.query(
-      'DELETE FROM space_files WHERE id=$1 AND space_id=$2', [req.params.fileId, req.params.id]
+    const { rows: [link] } = await pool.query(
+      'DELETE FROM space_files WHERE id=$1 AND space_id=$2 RETURNING file_id',
+      [req.params.fileId, req.params.id]
     );
-    if (!rowCount) return res.status(404).json({ error: 'File not found' });
+    if (!link) return res.status(404).json({ error: 'File not found' });
+    // If this was the last space referencing the shared file, delete the bytes too
+    if (link.file_id) {
+      const { rows: [{ n }] } = await pool.query(
+        'SELECT COUNT(*)::int AS n FROM space_files WHERE file_id=$1', [link.file_id]
+      );
+      if (n === 0) await pool.query('DELETE FROM files WHERE id=$1', [link.file_id]);
+    }
     res.json({ deleted: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/space-files/:fileId — serve bytes inline (images open in browser, PDFs too)
+// fileId is space_files.id. Reads from shared files table; falls back to old columns
+// so a one-line change (JOIN → LEFT JOIN + COALESCE) reverts to the old path if needed.
 app.get('/api/space-files/:fileId', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
   try {
-    const { rows: [f] } = await pool.query(
-      'SELECT file_data, mime_type, file_name FROM space_files WHERE id=$1', [req.params.fileId]
-    );
+    const { rows: [f] } = await pool.query(`
+      SELECT COALESCE(fi.file_data, sf.file_data) AS file_data,
+             COALESCE(fi.mime_type, sf.mime_type)  AS mime_type,
+             COALESCE(fi.file_name, sf.file_name)  AS file_name
+      FROM space_files sf
+      LEFT JOIN files fi ON fi.id = sf.file_id
+      WHERE sf.id = $1
+    `, [req.params.fileId]);
     if (!f) return res.status(404).json({ error: 'File not found' });
     res.set('Content-Type', f.mime_type);
     res.set('Content-Disposition', `inline; filename="${f.file_name}"`);

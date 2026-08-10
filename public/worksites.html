@@ -328,6 +328,11 @@
       line-height: 1; transition: color .1s, background .1s;
     }
     .file-del:hover { color: var(--red); background: #fef2f2; }
+    .file-shared-badge {
+      display: inline-block; margin-top: 3px;
+      font-size: 10px; font-weight: 600; color: #2563eb;
+      background: #dbeafe; border-radius: 4px; padding: 1px 6px;
+    }
     /* Upload button */
     .file-upload-btn {
       display: inline-flex; align-items: center; gap: 6px;
@@ -3083,14 +3088,22 @@ function renderFilesSection(spaceId, files) {
         ? `<img class="file-thumb" src="/api/space-files/${f.id}" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')" />`
         : `<div class="file-thumb-pdf" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')">PDF</div>`;
       const when = f.uploaded_at ? new Date(f.uploaded_at).toLocaleDateString() : '';
+      const others = (f.ref_count || 1) - 1;
+      const sharedBadge = others > 0
+        ? `<span class="file-shared-badge" title="This file is shared — removing it here does not delete it from other spaces">Also on ${others} other space${others === 1 ? '' : 's'}</span>`
+        : '';
+      const delTitle = others > 0
+        ? `Remove from this space (file stays on ${others} other space${others === 1 ? '' : 's'})`
+        : 'Delete file';
       const delBtn = _canEdit
-        ? `<button class="file-del" onclick="deleteSpaceFile(${spaceId},${f.id})" title="Delete">&#x2715;</button>`
+        ? `<button class="file-del" onclick="deleteSpaceFile(${spaceId},${f.id},${others})" title="${escHtml(delTitle)}">&#x2715;</button>`
         : '';
       html += `<div class="file-row" id="file-row-${f.id}">
         ${thumb}
         <div class="file-info">
           <div class="file-name" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')">${escHtml(f.file_name)}</div>
           <div class="file-meta">${when}${f.uploaded_by_name ? ' · ' + escHtml(f.uploaded_by_name) : ''}${f.caption ? ' · ' + escHtml(f.caption) : ''}</div>
+          ${sharedBadge}
         </div>
         ${delBtn}
       </div>`;
@@ -3099,12 +3112,16 @@ function renderFilesSection(spaceId, files) {
   } else {
     html += '<div class="detail-empty" style="margin-bottom:10px;">No files yet.</div>';
   }
-  // Upload button — field level: anyone can upload
+  // Add File — field level: anyone can upload to this space
   html += `<label class="file-upload-btn">
     + Add File
     <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
       onchange="uploadSpaceFiles(${spaceId}, this)" />
   </label>`;
+  // Bulk Upload — manage/admin only: upload once, attach to many spaces
+  if (_canEdit || _isAdmin) {
+    html += `<button class="file-upload-btn" style="margin-left:8px;" onclick="openBulkUpload(${spaceId})">Bulk Upload</button>`;
+  }
   body.innerHTML = html;
 }
 
@@ -3122,13 +3139,180 @@ async function uploadSpaceFiles(spaceId, input) {
   loadSpaceFiles(spaceId);
 }
 
-async function deleteSpaceFile(spaceId, fileId) {
-  if (!confirm('Delete this file?')) return;
+async function deleteSpaceFile(spaceId, fileId, otherCount) {
+  const msg = otherCount > 0
+    ? `Remove from this space?\n\nThis file is also on ${otherCount} other space${otherCount === 1 ? '' : 's'} — it will stay there.`
+    : 'Delete this file?';
+  if (!confirm(msg)) return;
   await fetch(`/api/spaces/${spaceId}/files/${fileId}`, { method: 'DELETE' });
   document.getElementById(`file-row-${fileId}`)?.remove();
-  // Re-render to show "No files" state if list is now empty
   const remaining = document.querySelectorAll('[id^="file-row-"]');
   if (!remaining.length) loadSpaceFiles(spaceId);
+}
+
+// ── Bulk file upload ──────────────────────────────────────────────────────────
+
+let _bulkUploadFile   = null; // the compressed File object
+let _bulkUploadRawName = '';
+let _bulkOriginSpace  = null; // space we opened the modal from (pre-checked)
+
+function openBulkUpload(originSpaceId) {
+  _bulkOriginSpace = originSpaceId;
+  _bulkUploadFile  = null;
+  _bulkUploadRawName = '';
+
+  const modal = document.createElement('div');
+  modal.id = 'bulk-upload-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;">
+        <div style="font-weight:700;font-size:1rem;flex:1;">Bulk Upload File to Spaces</div>
+        <button onclick="closeBulkUpload()" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:#6b7280;">✕</button>
+      </div>
+      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+        <div style="font-size:.85rem;font-weight:600;color:#374151;margin-bottom:8px;">1. Choose file</div>
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #d1d5db;border-radius:8px;cursor:pointer;font-size:.88rem;background:#f9fafb;">
+          📎 Choose file
+          <input type="file" id="bulk-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onBulkFileChosen(this)">
+        </label>
+        <span id="bulk-file-name" style="margin-left:10px;font-size:.85rem;color:#6b7280;">No file chosen</span>
+      </div>
+      <div style="padding:12px 20px;border-bottom:1px solid #e5e7eb;">
+        <div style="font-size:.85rem;font-weight:600;color:#374151;margin-bottom:8px;">2. Select spaces</div>
+        <div id="bulk-space-tree" style="overflow-y:auto;max-height:280px;border:1px solid #e5e7eb;border-radius:8px;padding:6px 0;"></div>
+      </div>
+      <div style="padding:12px 20px;display:flex;align-items:center;gap:10px;">
+        <span id="bulk-sel-count" style="font-size:.85rem;color:#6b7280;flex:1;">0 spaces selected</span>
+        <button onclick="closeBulkUpload()" style="padding:9px 16px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;font-size:.88rem;">Cancel</button>
+        <button id="bulk-upload-btn" onclick="submitBulkUpload()" style="padding:9px 18px;background:#F47920;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.88rem;opacity:.5;" disabled>Upload</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  renderBulkSpaceTree(originSpaceId);
+}
+
+function closeBulkUpload() {
+  document.getElementById('bulk-upload-modal')?.remove();
+  _bulkUploadFile = null;
+}
+
+async function onBulkFileChosen(input) {
+  const raw = input.files[0];
+  if (!raw) return;
+  _bulkUploadRawName = raw.name;
+  document.getElementById('bulk-file-name').textContent = '⏳ Compressing…';
+  _bulkUploadFile = await compressImage(raw);
+  document.getElementById('bulk-file-name').textContent = _bulkUploadRawName;
+  updateBulkUploadBtn();
+}
+
+function renderBulkSpaceTree(preCheckedSpaceId) {
+  const container = document.getElementById('bulk-space-tree');
+  if (!container) return;
+  // Build children map
+  const childMap = new Map();
+  for (const s of _spaces) {
+    const p = s.parent_id ?? null;
+    if (!childMap.has(p)) childMap.set(p, []);
+    childMap.get(p).push(s);
+  }
+
+  function renderBulkNode(s, depth) {
+    const children = childMap.get(s.id) || [];
+    const isSuite  = s.type_name === 'Suite';
+    const checked  = s.id === preCheckedSpaceId;
+    const indent   = depth * 16;
+    let html = `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px 5px ${indent + 10}px;cursor:pointer;" onclick="toggleBulkSpace(${s.id},this)">`;
+    if (isSuite) {
+      html += `<input type="checkbox" id="bulk-cb-${s.id}" ${checked ? 'checked' : ''} style="accent-color:#F47920;width:15px;height:15px;flex-shrink:0;" onclick="event.stopPropagation();updateBulkSelCount();updateBulkUploadBtn();">`;
+    } else {
+      // Floor/building node: "Select all suites on this floor" shortcut
+      const floorSuiteIds = getAllSuiteDescendants(s.id).join(',');
+      html += `<button onclick="event.stopPropagation();selectAllBulkSuites('${floorSuiteIds}')" style="font-size:.7rem;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;flex-shrink:0;white-space:nowrap;">All</button>`;
+    }
+    html += `<span style="font-size:.85rem;color:${isSuite ? '#111827' : '#374151'};font-weight:${isSuite ? '400' : '600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(s.identifier || s.space_type)}</span>`;
+    html += `</div>`;
+    for (const child of children) html += renderBulkNode(child, depth + 1);
+    return html;
+  }
+
+  const roots = childMap.get(null) || [];
+  container.innerHTML = roots.map(s => renderBulkNode(s, 0)).join('');
+  updateBulkSelCount();
+}
+
+function getAllSuiteDescendants(parentId) {
+  const ids = [];
+  for (const s of _spaces) {
+    if (s.parent_id === parentId) {
+      if (s.type_name === 'Suite') ids.push(s.id);
+      ids.push(...getAllSuiteDescendants(s.id));
+    }
+  }
+  return ids;
+}
+
+function toggleBulkSpace(spaceId, row) {
+  const cb = document.getElementById(`bulk-cb-${spaceId}`);
+  if (!cb) return;
+  cb.checked = !cb.checked;
+  updateBulkSelCount();
+  updateBulkUploadBtn();
+}
+
+function selectAllBulkSuites(idsStr) {
+  const ids = idsStr ? idsStr.split(',').map(Number).filter(Boolean) : [];
+  const allChecked = ids.every(id => document.getElementById(`bulk-cb-${id}`)?.checked);
+  for (const id of ids) {
+    const cb = document.getElementById(`bulk-cb-${id}`);
+    if (cb) cb.checked = !allChecked;
+  }
+  updateBulkSelCount();
+  updateBulkUploadBtn();
+}
+
+function updateBulkSelCount() {
+  const count = document.querySelectorAll('#bulk-space-tree input[type="checkbox"]:checked').length;
+  const el = document.getElementById('bulk-sel-count');
+  if (el) el.textContent = `${count} space${count === 1 ? '' : 's'} selected`;
+}
+
+function updateBulkUploadBtn() {
+  const btn = document.getElementById('bulk-upload-btn');
+  if (!btn) return;
+  const hasFile = !!_bulkUploadFile;
+  const hasSpaces = document.querySelectorAll('#bulk-space-tree input[type="checkbox"]:checked').length > 0;
+  btn.disabled = !(hasFile && hasSpaces);
+  btn.style.opacity = (hasFile && hasSpaces) ? '1' : '.5';
+}
+
+async function submitBulkUpload() {
+  const checkedIds = [...document.querySelectorAll('#bulk-space-tree input[type="checkbox"]:checked')]
+    .map(cb => parseInt(cb.id.replace('bulk-cb-', '')));
+  if (!_bulkUploadFile || !checkedIds.length) return;
+
+  const btn = document.getElementById('bulk-upload-btn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+
+  const fd = new FormData();
+  fd.append('file', _bulkUploadFile, _bulkUploadRawName);
+  fd.append('space_ids', JSON.stringify(checkedIds));
+
+  try {
+    const r = await fetch('/api/bulk-space-files', { method: 'POST', body: fd });
+    const result = await r.json();
+    if (!r.ok) throw new Error(result.error || 'Upload failed');
+    closeBulkUpload();
+    // Reload files for the currently open space detail (it was one of the targets)
+    if (_bulkOriginSpace) loadSpaceFiles(_bulkOriginSpace);
+    alert(`Uploaded to ${result.linked_spaces} space${result.linked_spaces === 1 ? '' : 's'}.`);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Upload';
+    alert('Upload failed: ' + e.message);
+  }
 }
 
 // ── Deficiencies ──────────────────────────────────────────────────────────────
