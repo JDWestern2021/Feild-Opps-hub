@@ -3152,43 +3152,54 @@ async function deleteSpaceFile(spaceId, fileId, otherCount) {
 
 // ── Bulk file upload ──────────────────────────────────────────────────────────
 
-let _bulkUploadFile   = null; // the compressed File object
+let _bulkUploadFile   = null;
 let _bulkUploadRawName = '';
-let _bulkOriginSpace  = null; // space we opened the modal from (pre-checked)
+let _bulkOriginSpace  = null;
+let _bulkBldgFilter   = 'both'; // 'both' | building space id (as string)
 
 function openBulkUpload(originSpaceId) {
-  _bulkOriginSpace = originSpaceId;
-  _bulkUploadFile  = null;
+  _bulkOriginSpace  = originSpaceId;
+  _bulkUploadFile   = null;
   _bulkUploadRawName = '';
+  _bulkBldgFilter   = 'both';
 
   const modal = document.createElement('div');
   modal.id = 'bulk-upload-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center;padding:16px;';
   modal.innerHTML = `
-    <div style="background:#fff;border-radius:12px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
-      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;">
+    <div style="background:#fff;border-radius:12px;width:100%;max-width:680px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;flex-shrink:0;">
         <div style="font-weight:700;font-size:1rem;flex:1;">Bulk Upload File to Spaces</div>
         <button onclick="closeBulkUpload()" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:#6b7280;">✕</button>
       </div>
-      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
-        <div style="font-size:.85rem;font-weight:600;color:#374151;margin-bottom:8px;">1. Choose file</div>
-        <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #d1d5db;border-radius:8px;cursor:pointer;font-size:.88rem;background:#f9fafb;">
+
+      <div style="padding:14px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
+        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:8px;">1 · CHOOSE FILE</div>
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid #d1d5db;border-radius:8px;cursor:pointer;font-size:.88rem;background:#f9fafb;">
           📎 Choose file
           <input type="file" id="bulk-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onBulkFileChosen(this)">
         </label>
         <span id="bulk-file-name" style="margin-left:10px;font-size:.85rem;color:#6b7280;">No file chosen</span>
       </div>
-      <div style="padding:12px 20px;border-bottom:1px solid #e5e7eb;">
-        <div style="font-size:.85rem;font-weight:600;color:#374151;margin-bottom:8px;">2. Select spaces</div>
-        <div id="bulk-space-tree" style="overflow-y:auto;max-height:280px;border:1px solid #e5e7eb;border-radius:8px;padding:6px 0;"></div>
+
+      <div style="padding:14px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
+        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:10px;">2 · QUICK SELECT</div>
+        <div id="bulk-quick-select"></div>
       </div>
-      <div style="padding:12px 20px;display:flex;align-items:center;gap:10px;">
-        <span id="bulk-sel-count" style="font-size:.85rem;color:#6b7280;flex:1;">0 spaces selected</span>
+
+      <div style="padding:12px 20px;border-bottom:1px solid #e5e7eb;flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;">
+        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:8px;">3 · OR PICK INDIVIDUALLY</div>
+        <div id="bulk-space-tree" style="overflow-y:auto;flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:6px 0;min-height:80px;max-height:180px;"></div>
+      </div>
+
+      <div style="padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <span id="bulk-sel-count" style="font-size:.88rem;font-weight:600;color:#374151;flex:1;">0 spaces selected</span>
         <button onclick="closeBulkUpload()" style="padding:9px 16px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;font-size:.88rem;">Cancel</button>
         <button id="bulk-upload-btn" onclick="submitBulkUpload()" style="padding:9px 18px;background:#F47920;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.88rem;opacity:.5;" disabled>Upload</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
+  renderBulkQuickSelect();
   renderBulkSpaceTree(originSpaceId);
 }
 
@@ -3207,67 +3218,161 @@ async function onBulkFileChosen(input) {
   updateBulkUploadBtn();
 }
 
+// ── Quick-select helpers ──────────────────────────────────────────────────────
+
+function _bulkCheckable() {
+  // Checkable = leaf nodes (no children in the project tree)
+  const hasChildren = new Set();
+  for (const s of _spaces) { if (s.parent_id !== null) hasChildren.add(s.parent_id); }
+  return _spaces.filter(s => !hasChildren.has(s.id));
+}
+
+function _bulkRootOf(spaceId) {
+  let s = _spaces.find(x => x.id === spaceId);
+  while (s && s.parent_id !== null) s = _spaces.find(x => x.id === s.parent_id);
+  return s;
+}
+
+function _bulkFloorOf(spaceId) {
+  // Floor = first ancestor whose parent is a root (building)
+  const bldgIds = new Set(_spaces.filter(s => s.parent_id === null).map(s => s.id));
+  let cur = _spaces.find(x => x.id === spaceId);
+  let floor = null;
+  while (cur && cur.parent_id !== null) {
+    if (bldgIds.has(cur.parent_id)) floor = cur;
+    cur = _spaces.find(x => x.id === cur.parent_id);
+  }
+  return floor;
+}
+
+function _bulkApplyBldgFilter(spaces) {
+  if (_bulkBldgFilter === 'both') return spaces;
+  const targetId = parseInt(_bulkBldgFilter);
+  return spaces.filter(s => _bulkRootOf(s.id)?.id === targetId);
+}
+
+function _bulkToggle(spaces) {
+  // All already checked → uncheck all; otherwise check all (additive)
+  const allOn = spaces.every(s => document.getElementById(`bulk-cb-${s.id}`)?.checked);
+  for (const s of spaces) {
+    const cb = document.getElementById(`bulk-cb-${s.id}`);
+    if (cb) cb.checked = !allOn;
+  }
+  updateBulkSelCount();
+  updateBulkUploadBtn();
+}
+
+function setBulkBldgFilter(val) {
+  _bulkBldgFilter = val;
+  renderBulkQuickSelect();
+}
+
+function bulkSelectByPosition(pos) {
+  const matching = _bulkCheckable().filter(s => s.identifier?.match(/(\d{2})$/)?.[1] === pos);
+  _bulkToggle(_bulkApplyBldgFilter(matching));
+}
+
+function bulkSelectByType(type) {
+  const matching = _bulkCheckable().filter(s => s.type_name === type);
+  _bulkToggle(_bulkApplyBldgFilter(matching));
+}
+
+function bulkSelectByFloor(floorLabel) {
+  const matching = _bulkCheckable().filter(s => _bulkFloorOf(s.id)?.identifier === floorLabel);
+  _bulkToggle(_bulkApplyBldgFilter(matching));
+}
+
+function renderBulkQuickSelect() {
+  const container = document.getElementById('bulk-quick-select');
+  if (!container) return;
+
+  const buildings  = _spaces.filter(s => s.parent_id === null);
+  const bldgIds    = new Set(buildings.map(s => s.id));
+  const floors     = _spaces.filter(s => bldgIds.has(s.parent_id));
+  const checkable  = _bulkCheckable();
+
+  // Suite positions: last 2 digits of identifier
+  const positions = [...new Set(
+    checkable.map(s => s.identifier?.match(/(\d{2})$/)?.[1]).filter(Boolean)
+  )].sort();
+
+  // Unique type_names of leaf spaces
+  const types = [...new Set(checkable.map(s => s.type_name).filter(Boolean))].sort();
+
+  // Unique floor labels (preserve floor sort order, deduplicate across buildings)
+  const seenFloor = new Set();
+  const floorLabels = floors
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.identifier.localeCompare(b.identifier))
+    .map(f => f.identifier)
+    .filter(id => { if (seenFloor.has(id)) return false; seenFloor.add(id); return true; });
+
+  const pill = 'font-size:.78rem;padding:3px 10px;border:1px solid #d1d5db;border-radius:20px;background:#f9fafb;cursor:pointer;white-space:nowrap;';
+  const activePill = 'font-size:.78rem;padding:3px 10px;border:1px solid #F47920;border-radius:20px;background:#fff7ed;color:#c2410c;font-weight:600;cursor:pointer;white-space:nowrap;';
+  const rowStyle = 'display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;';
+  const lbl = 'font-size:.78rem;color:#6b7280;font-weight:600;min-width:58px;flex-shrink:0;';
+
+  let html = '';
+
+  if (buildings.length > 1) {
+    html += `<div style="${rowStyle}"><span style="${lbl}">Building:</span>
+      <button onclick="setBulkBldgFilter('both')" style="${_bulkBldgFilter === 'both' ? activePill : pill}">Both</button>`;
+    for (const b of buildings)
+      html += `<button onclick="setBulkBldgFilter('${b.id}')" style="${_bulkBldgFilter == b.id ? activePill : pill}">${escHtml(b.identifier)}</button>`;
+    html += `</div>`;
+  }
+
+  if (positions.length)
+    html += `<div style="${rowStyle}"><span style="${lbl}">Position:</span>${positions.map(p =>
+      `<button onclick="bulkSelectByPosition('${p}')" style="${pill}">${p}</button>`).join('')}</div>`;
+
+  if (types.length)
+    html += `<div style="${rowStyle}"><span style="${lbl}">Type:</span>${types.map(t =>
+      `<button onclick="bulkSelectByType(this.dataset.t)" data-t="${escHtml(t)}" style="${pill}">${escHtml(t)}</button>`).join('')}</div>`;
+
+  if (floorLabels.length > 1)
+    html += `<div style="${rowStyle}"><span style="${lbl}">Floor:</span>${floorLabels.map(fl =>
+      `<button onclick="bulkSelectByFloor(this.dataset.f)" data-f="${escHtml(fl)}" style="${pill}">${escHtml(fl)}</button>`).join('')}</div>`;
+
+  container.innerHTML = html || `<span style="font-size:.82rem;color:#9ca3af;">No quick-select options for this project.</span>`;
+}
+
 function renderBulkSpaceTree(preCheckedSpaceId) {
   const container = document.getElementById('bulk-space-tree');
   if (!container) return;
-  // Build children map
   const childMap = new Map();
   for (const s of _spaces) {
     const p = s.parent_id ?? null;
     if (!childMap.has(p)) childMap.set(p, []);
     childMap.get(p).push(s);
   }
+  const checkableIds = new Set(_bulkCheckable().map(s => s.id));
 
-  function renderBulkNode(s, depth) {
-    const children = childMap.get(s.id) || [];
-    const isSuite  = s.type_name === 'Suite';
-    const checked  = s.id === preCheckedSpaceId;
-    const indent   = depth * 16;
-    let html = `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px 5px ${indent + 10}px;cursor:pointer;" onclick="toggleBulkSpace(${s.id},this)">`;
-    if (isSuite) {
+  function renderNode(s, depth) {
+    const children  = childMap.get(s.id) || [];
+    const isLeaf    = checkableIds.has(s.id);
+    const checked   = s.id === preCheckedSpaceId;
+    const indent    = depth * 16;
+    let html = `<div style="display:flex;align-items:center;gap:6px;padding:4px 10px 4px ${indent + 10}px;${isLeaf ? 'cursor:pointer;' : ''}" ${isLeaf ? `onclick="toggleBulkSpace(${s.id})"` : ''}>`;
+    if (isLeaf) {
       html += `<input type="checkbox" id="bulk-cb-${s.id}" ${checked ? 'checked' : ''} style="accent-color:#F47920;width:15px;height:15px;flex-shrink:0;" onclick="event.stopPropagation();updateBulkSelCount();updateBulkUploadBtn();">`;
     } else {
-      // Floor/building node: "Select all suites on this floor" shortcut
-      const floorSuiteIds = getAllSuiteDescendants(s.id).join(',');
-      html += `<button onclick="event.stopPropagation();selectAllBulkSuites('${floorSuiteIds}')" style="font-size:.7rem;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;flex-shrink:0;white-space:nowrap;">All</button>`;
+      html += `<span style="width:15px;flex-shrink:0;"></span>`;
     }
-    html += `<span style="font-size:.85rem;color:${isSuite ? '#111827' : '#374151'};font-weight:${isSuite ? '400' : '600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(s.identifier || s.space_type)}</span>`;
+    html += `<span style="font-size:.84rem;color:${isLeaf ? '#111827' : '#374151'};font-weight:${isLeaf ? '400' : '600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(s.identifier || s.type_name || '')}</span>`;
     html += `</div>`;
-    for (const child of children) html += renderBulkNode(child, depth + 1);
+    for (const child of children) html += renderNode(child, depth + 1);
     return html;
   }
 
   const roots = childMap.get(null) || [];
-  container.innerHTML = roots.map(s => renderBulkNode(s, 0)).join('');
+  container.innerHTML = roots.map(s => renderNode(s, 0)).join('');
   updateBulkSelCount();
 }
 
-function getAllSuiteDescendants(parentId) {
-  const ids = [];
-  for (const s of _spaces) {
-    if (s.parent_id === parentId) {
-      if (s.type_name === 'Suite') ids.push(s.id);
-      ids.push(...getAllSuiteDescendants(s.id));
-    }
-  }
-  return ids;
-}
-
-function toggleBulkSpace(spaceId, row) {
+function toggleBulkSpace(spaceId) {
   const cb = document.getElementById(`bulk-cb-${spaceId}`);
   if (!cb) return;
   cb.checked = !cb.checked;
-  updateBulkSelCount();
-  updateBulkUploadBtn();
-}
-
-function selectAllBulkSuites(idsStr) {
-  const ids = idsStr ? idsStr.split(',').map(Number).filter(Boolean) : [];
-  const allChecked = ids.every(id => document.getElementById(`bulk-cb-${id}`)?.checked);
-  for (const id of ids) {
-    const cb = document.getElementById(`bulk-cb-${id}`);
-    if (cb) cb.checked = !allChecked;
-  }
   updateBulkSelCount();
   updateBulkUploadBtn();
 }
@@ -3281,10 +3386,9 @@ function updateBulkSelCount() {
 function updateBulkUploadBtn() {
   const btn = document.getElementById('bulk-upload-btn');
   if (!btn) return;
-  const hasFile = !!_bulkUploadFile;
-  const hasSpaces = document.querySelectorAll('#bulk-space-tree input[type="checkbox"]:checked').length > 0;
-  btn.disabled = !(hasFile && hasSpaces);
-  btn.style.opacity = (hasFile && hasSpaces) ? '1' : '.5';
+  const ok = !!_bulkUploadFile && document.querySelectorAll('#bulk-space-tree input[type="checkbox"]:checked').length > 0;
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '.5';
 }
 
 async function submitBulkUpload() {
@@ -3305,7 +3409,6 @@ async function submitBulkUpload() {
     const result = await r.json();
     if (!r.ok) throw new Error(result.error || 'Upload failed');
     closeBulkUpload();
-    // Reload files for the currently open space detail (it was one of the targets)
     if (_bulkOriginSpace) loadSpaceFiles(_bulkOriginSpace);
     alert(`Uploaded to ${result.linked_spaces} space${result.linked_spaces === 1 ? '' : 's'}.`);
   } catch (e) {
