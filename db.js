@@ -1226,18 +1226,16 @@ async function initSchema() {
       "SELECT 1 FROM schema_migrations WHERE name = 'space_files_to_files_backfill'"
     );
     if (!alreadyRan) {
-      // Count rows that need backfilling (all of them on first run)
-      const { rows: [{ before_count }] } = await pool.query(
-        'SELECT COUNT(*)::int AS before_count FROM space_files'
+      // Count only rows that need backfilling (file_id IS NULL).
+      // Rows already linked from new uploads are excluded from both sides.
+      const { rows: sfRows } = await pool.query(
+        'SELECT id, file_data, mime_type, file_name, uploaded_by, uploaded_at FROM space_files WHERE file_id IS NULL'
       );
+      const pending_count = sfRows.length;
 
       // Process row-by-row so each space_files row gets its own files entry.
       // Doing this in SQL with a CTE and RETURNING cannot join back to the source
       // row safely, so we use a loop. Row count is bounded by real-world uploads.
-      const { rows: sfRows } = await pool.query(
-        'SELECT id, file_data, mime_type, file_name, uploaded_by, uploaded_at FROM space_files WHERE file_id IS NULL'
-      );
-
       let filesCreated = 0;
       for (const sf of sfRows) {
         const size = sf.file_data ? sf.file_data.length : 0;
@@ -1253,22 +1251,23 @@ async function initSchema() {
         filesCreated++;
       }
 
-      // Reconciliation: every space_files row must now have a file_id.
-      const { rows: [{ after_count }] } = await pool.query(
-        'SELECT COUNT(*)::int AS after_count FROM space_files WHERE file_id IS NOT NULL'
+      // Reconciliation: rows we processed must all have a file_id now,
+      // and the number of files we created must match what we set out to do.
+      const { rows: [{ remaining }] } = await pool.query(
+        'SELECT COUNT(*)::int AS remaining FROM space_files WHERE file_id IS NULL'
       );
 
-      if (before_count !== filesCreated || before_count !== after_count) {
+      if (filesCreated !== pending_count || remaining !== 0) {
         throw new Error(
           `space_files_to_files backfill count mismatch: ` +
-          `space_files_before=${before_count}, files_created=${filesCreated}, ` +
-          `space_files_with_file_id=${after_count}. ` +
+          `pending=${pending_count}, files_created=${filesCreated}, ` +
+          `still_unlinked=${remaining}. ` +
           `Server will not start — investigate before retrying.`
         );
       }
 
       await pool.query("INSERT INTO schema_migrations (name) VALUES ('space_files_to_files_backfill')");
-      console.log(`  ✓ Backfilled ${filesCreated} space_files row(s) into shared files table (before=${before_count}, files_created=${filesCreated}, after=${after_count})`);
+      console.log(`  ✓ Backfilled ${filesCreated} space_files row(s) into shared files table (pending=${pending_count}, files_created=${filesCreated}, remaining_unlinked=${remaining})`);
     }
   }
 
