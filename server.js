@@ -6820,6 +6820,83 @@ app.post('/api/bulk-space-files', requireAuth, requireModuleAccess('worksites', 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/projects/:id/files — distinct files attached to any space in this project, with space count
+app.get('/api/projects/:id/files', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) return res.status(400).json({ error: 'Invalid project id' });
+    const { rows } = await pool.query(`
+      SELECT sf.file_id,
+             COALESCE(fi.file_name, sf.file_name) AS file_name,
+             COALESCE(fi.mime_type, sf.mime_type)  AS mime_type,
+             COUNT(sf.id)::int                     AS space_count,
+             MIN(sf.uploaded_at)                   AS uploaded_at
+        FROM space_files sf
+        LEFT JOIN files fi ON fi.id = sf.file_id
+        JOIN spaces s ON s.id = sf.space_id
+       WHERE s.project_id = $1
+       GROUP BY sf.file_id, COALESCE(fi.file_name, sf.file_name), COALESCE(fi.mime_type, sf.mime_type)
+       ORDER BY MIN(sf.uploaded_at) DESC
+    `, [projectId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/files/:id — rename a shared file (updates everywhere it's referenced)
+app.patch('/api/files/:id', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const fileId = parseInt(req.params.id);
+    const { file_name } = req.body;
+    if (!Number.isInteger(fileId) || fileId <= 0) return res.status(400).json({ error: 'Invalid file id' });
+    if (!file_name || !file_name.trim()) return res.status(400).json({ error: 'file_name required' });
+    const { rows: [f] } = await pool.query(
+      'UPDATE files SET file_name=$1 WHERE id=$2 RETURNING id, file_name',
+      [file_name.trim(), fileId]
+    );
+    if (!f) return res.status(404).json({ error: 'File not found' });
+    res.json(f);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/projects/:id/spaces-with-file/:fileId — which spaces in this project have a given file
+app.get('/api/projects/:id/spaces-with-file/:fileId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const fileId    = parseInt(req.params.fileId);
+    if (!Number.isInteger(projectId) || !Number.isInteger(fileId))
+      return res.status(400).json({ error: 'Invalid id' });
+    const { rows } = await pool.query(`
+      SELECT sf.space_id
+        FROM space_files sf
+        JOIN spaces s ON s.id = sf.space_id
+       WHERE s.project_id = $1 AND sf.file_id = $2
+    `, [projectId, fileId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/bulk-space-files — remove a file from many spaces at once; delete bytes if last reference
+app.delete('/api/bulk-space-files', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { file_id, space_ids } = req.body;
+    if (!file_id || !Array.isArray(space_ids) || !space_ids.length)
+      return res.status(400).json({ error: 'file_id and space_ids required' });
+    const intIds = space_ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (!intIds.length) return res.status(400).json({ error: 'space_ids must be positive integers' });
+
+    const { rows: deleted } = await pool.query(
+      `DELETE FROM space_files WHERE file_id=$1 AND space_id=ANY($2) RETURNING id`,
+      [file_id, intIds]
+    );
+    // Clean up shared file bytes if no more references remain
+    const { rows: [{ n }] } = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM space_files WHERE file_id=$1', [file_id]
+    );
+    if (n === 0) await pool.query('DELETE FROM files WHERE id=$1', [file_id]);
+    res.json({ deleted: deleted.length, bytes_deleted: n === 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // DELETE /api/spaces/:id/files/:fileId — remove from this space; delete shared file if last reference
 app.delete('/api/spaces/:id/files/:fileId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
