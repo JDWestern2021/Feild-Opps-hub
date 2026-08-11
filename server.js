@@ -3400,6 +3400,58 @@ app.patch('/api/safety/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Save a supervisor or worker signature on an incident report.
+// Bypasses the admin-only PATCH restriction so listed workers can sign.
+// A field already signed cannot be overwritten (admin-only DELETE to clear).
+app.post('/api/safety/:id/sign', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { field, signature } = req.body;
+    if (!['supervisor_signature', 'worker_signature'].includes(field))
+      return res.status(400).json({ error: 'field must be supervisor_signature or worker_signature' });
+    if (!signature?.data_url || !signature?.signer_name)
+      return res.status(400).json({ error: 'signature must have data_url and signer_name' });
+
+    const formId = parseInt(req.params.id);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM safety_forms WHERE id=$1 FOR UPDATE', [formId]);
+    if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const f = rows[0];
+    const fd = typeof f.form_data === 'string' ? JSON.parse(f.form_data) : (f.form_data || {});
+
+    // Allow: admin, form owner, or a listed worker (by user_id or name)
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = f.submitted_by_id === req.user.id;
+    const isListed = (fd.workers || []).some(w =>
+      (w.user_id && String(w.user_id) === String(req.user.id)) ||
+      (!w.user_id && w.name && w.name.toLowerCase() === req.user.name.toLowerCase())
+    );
+    if (!isAdmin && !isOwner && !isListed) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'You are not listed on this form' });
+    }
+
+    // Once signed, the field is immutable — admin must use DELETE /signature to clear
+    if (fd[field]?.data_url && !isAdmin) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Already signed — contact an admin to reset' });
+    }
+
+    const updatedData = { ...fd, [field]: signature };
+    await client.query(
+      'UPDATE safety_forms SET form_data=$1 WHERE id=$2',
+      [JSON.stringify(updatedData), formId]
+    );
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // Remove a single worker signature (admin only, explicit action, logged)
 // Signatures are immutable via normal saves — this is the only authorised removal path.
 app.delete('/api/safety/:id/signature', requireAdmin, async (req, res) => {

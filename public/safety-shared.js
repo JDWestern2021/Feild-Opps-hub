@@ -186,31 +186,35 @@
   };
 
   // ── Signature field rendered inside a form ───────────────────
-  S.renderSignatureField = function ({ container, label = 'Signature', required = false, value = null, onChange }) {
+  S.renderSignatureField = function ({ container, label = 'Signature', required = false, value = null, locked = false, onChange }) {
     const id = 'sf-sig-' + S.uid();
     let _val = value;
 
     function render() {
+      const signed = !!_val?.data_url;
+      const showActions = !locked || !signed; // locked + signed → hide buttons
       container.innerHTML = `
         <div class="sf-sig-field" id="${id}">
-          <div class="sf-field-label">${S.esc(label)}${required ? ' <span class="sf-req">*</span>' : ''}</div>
+          <div class="sf-field-label">${S.esc(label)}${required ? ' <span class="sf-req">*</span>' : ''}${locked && signed ? ' <span style="font-size:.75em;color:#6b7280;font-weight:400;">(locked)</span>' : ''}</div>
           <div class="sf-sig-display">
             <div class="sf-sig-preview" id="${id}-preview">
-              ${_val?.data_url ? `<img src="${S.esc(_val.data_url)}" alt="Signature"/>` : '<span class="sf-sig-empty">Not yet signed</span>'}
+              ${signed ? `<img src="${S.esc(_val.data_url)}" alt="Signature"/>` : '<span class="sf-sig-empty">Not yet signed</span>'}
             </div>
             ${_val?.signer_name ? `<div class="sf-sig-meta">${S.esc(_val.signer_name)} — ${S.fmtDT(_val.signed_at)}</div>` : ''}
-            <div style="display:flex;gap:8px;margin-top:6px;">
-              <button class="btn btn-secondary btn-sm" id="${id}-btn">${_val?.data_url ? '✏️ Re-sign' : '✍️ Sign'}</button>
-              ${_val?.data_url ? `<button class="btn btn-ghost btn-sm" id="${id}-clr">Clear</button>` : ''}
-            </div>
+            ${showActions ? `<div style="display:flex;gap:8px;margin-top:6px;">
+              <button class="btn btn-secondary btn-sm" id="${id}-btn">${signed ? '✏️ Re-sign' : '✍️ Sign'}</button>
+              ${signed ? `<button class="btn btn-ghost btn-sm" id="${id}-clr">Clear</button>` : ''}
+            </div>` : ''}
           </div>
         </div>`;
-      document.getElementById(`${id}-btn`).addEventListener('click', async () => {
-        const result = await S.openSignatureModal({ prefillName: _val?.signer_name || '' });
-        if (result) { _val = result; render(); if (onChange) onChange(_val); }
-      });
-      const clr = document.getElementById(`${id}-clr`);
-      if (clr) clr.addEventListener('click', () => { _val = null; render(); if (onChange) onChange(null); });
+      if (showActions) {
+        document.getElementById(`${id}-btn`).addEventListener('click', async () => {
+          const result = await S.openSignatureModal({ prefillName: _val?.signer_name || '' });
+          if (result) { _val = result; render(); if (onChange) onChange(_val); }
+        });
+        const clr = document.getElementById(`${id}-clr`);
+        if (clr) clr.addEventListener('click', () => { _val = null; render(); if (onChange) onChange(null); });
+      }
     }
 
     render();

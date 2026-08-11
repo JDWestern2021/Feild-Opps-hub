@@ -385,6 +385,22 @@
   let _wcbSubmitted    = null;
 
   let _witnessRep, _caRep, _supSig, _workerSig;
+  let _sigsSavedInDb = { supervisor_signature: false, worker_signature: false };
+
+  async function saveSignatureToServer(field, sig) {
+    if (!formId) return; // new form not yet created — will be saved on submit
+    try {
+      const r = await fetch(`/api/safety/${formId}/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, signature: sig })
+      });
+      const body = await r.json();
+      if (!r.ok) { Safety.toast(body.error || 'Signature not saved', 'error'); return; }
+      _sigsSavedInDb[field] = true;
+      Safety.toast('Signature saved', 'success');
+    } catch { Safety.toast('Signature not saved — check connection', 'error'); }
+  }
 
   // ── Defaults ──────────────────────────────────────────────
   document.getElementById('f-date').value = Safety.todayISO();
@@ -728,14 +744,14 @@
     container: document.getElementById('sup-sig-container'),
     label: 'Supervisor Signature',
     required: true,
-    onChange: () => triggerAutosave()
+    onChange: sig => { saveSignatureToServer('supervisor_signature', sig); triggerAutosave(); }
   });
 
   _workerSig = Safety.renderSignatureField({
     container: document.getElementById('worker-sig-container'),
     label: 'Worker Signature (if able)',
     required: false,
-    onChange: () => triggerAutosave()
+    onChange: sig => { saveSignatureToServer('worker_signature', sig); triggerAutosave(); }
   });
 
   // ── Collect form data ─────────────────────────────────────
@@ -882,23 +898,28 @@
       document.getElementById('wcb-submit-date-wrap').style.display = d.wcb_submitted === 'yes' ? '' : 'none';
     }
 
-    // Signatures
+    // Signatures — lock fields that are already saved in the DB (non-admins cannot re-sign)
+    const isAdmin = currentUser.role === 'admin';
     if (d.supervisor_signature) {
+      _sigsSavedInDb.supervisor_signature = true;
       _supSig = Safety.renderSignatureField({
         container: document.getElementById('sup-sig-container'),
         label: 'Supervisor Signature',
         required: true,
         value: d.supervisor_signature,
-        onChange: () => triggerAutosave()
+        locked: !isAdmin,
+        onChange: sig => { saveSignatureToServer('supervisor_signature', sig); triggerAutosave(); }
       });
     }
     if (d.worker_signature) {
+      _sigsSavedInDb.worker_signature = true;
       _workerSig = Safety.renderSignatureField({
         container: document.getElementById('worker-sig-container'),
         label: 'Worker Signature (if able)',
         required: false,
         value: d.worker_signature,
-        onChange: () => triggerAutosave()
+        locked: !isAdmin,
+        onChange: sig => { saveSignatureToServer('worker_signature', sig); triggerAutosave(); }
       });
     }
   }
