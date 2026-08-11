@@ -198,6 +198,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
   /* iOS Safari breaks rowspan inside overflow-x:auto with table-layout:fixed —
      switch to auto layout on mobile so merged multi-pole cells render correctly */
   .panel-grid { table-layout: auto !important; }
+  /* Full-screen view modal on mobile */
+  .modal-overlay { padding: 0; align-items: stretch; }
+  .modal { border-radius: 0; max-width: 100%; display: flex; flex-direction: column; min-height: 100vh; }
+  .modal-body { flex: 1; max-height: none; overflow-y: auto; padding: 12px 14px; }
+  .modal-header { padding: 12px 14px; }
+  .modal-footer { padding: 10px 14px; }
 }
 
 /* Description input popover for mobile — shows a full-width edit bar when focused */
@@ -1508,12 +1514,7 @@ document.getElementById('circuit-tbody').addEventListener('input',  _onPoleChang
   // Draft values being edited in the open sheet
   let _mbDraft      = null;
 
-  // ── Intercept openView on mobile ──────────────────────────────────────────
-  const _desktopOpenView = window.openView;
-  window.openView = async function (id) {
-    if (!onMobile()) return _desktopOpenView(id);
-    await mbOpenView(id);
-  };
+  // openView is no longer intercepted on mobile — the full-table modal is used on all viewports.
 
   // ── Load and render the mobile view ───────────────────────────────────────
   window.mbOpenView = async function (id) {
