@@ -666,6 +666,7 @@
     .modal {
       background: #fff; border-radius: 14px; padding: 24px;
       width: 420px; max-width: calc(100vw - 32px);
+      max-height: 90vh; overflow-y: auto;
       box-shadow: 0 20px 60px rgba(0,0,0,.2);
     }
     .modal h3 { font-size: 16px; font-weight: 800; color: var(--dark); margin: 0 0 16px; }
@@ -1105,11 +1106,12 @@
 
 <!-- Add Space Modal -->
 <div class="modal-backdrop" id="add-modal">
-  <div class="modal">
+  <div class="modal" id="add-modal-inner">
     <h3 id="add-modal-title">Add Space</h3>
     <div class="modal-tabs">
       <button class="modal-tab active" id="tab-single" onclick="switchTab('single')">Single</button>
       <button class="modal-tab" id="tab-bulk" onclick="switchTab('bulk')">Bulk Generate</button>
+      <button class="modal-tab" id="tab-upload" onclick="switchTab('upload')">Bulk Upload</button>
     </div>
     <div id="pane-single">
       <div class="form-row">
@@ -1140,9 +1142,28 @@
         </label>
       </div>
     </div>
+    <div id="pane-upload" style="display:none;">
+      <div style="padding:2px 0 10px;">
+        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:8px;">CHOOSE FILE</div>
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid #d1d5db;border-radius:8px;cursor:pointer;font-size:.88rem;background:#f9fafb;">
+          📎 Choose file
+          <input type="file" id="bulk-upload-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onBulkFileChosen(this)">
+        </label>
+        <span id="bulk-file-name" style="margin-left:10px;font-size:.85rem;color:#6b7280;">No file chosen</span>
+      </div>
+      <div style="padding:2px 0 10px;border-top:1px solid #f3f4f6;">
+        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin:10px 0 8px;">QUICK SELECT</div>
+        <div id="bulk-quick-select"></div>
+      </div>
+      <div style="border-top:1px solid #f3f4f6;">
+        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin:10px 0 8px;">OR PICK INDIVIDUALLY</div>
+        <div id="bulk-space-tree" style="overflow-y:auto;max-height:200px;border:1px solid #e5e7eb;border-radius:8px;padding:6px 0;"></div>
+      </div>
+      <div style="margin-top:10px;font-size:.85rem;font-weight:600;color:#374151;" id="bulk-sel-count">0 spaces selected</div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="submitAdd()">Save</button>
+      <button class="btn btn-primary" id="add-modal-action-btn" onclick="submitAdd()">Save</button>
     </div>
   </div>
 </div>
@@ -2898,20 +2919,43 @@ function closeMenu() {
 
 function openAddModal(parentId, tab) {
   _addParentId = parentId;
+  _bulkUploadFile = null;
+  _bulkUploadRawName = '';
+  _bulkBldgFilter = 'both';
   switchTab(tab || 'single');
   document.getElementById('single-identifier').value = '';
   document.getElementById('add-modal').classList.add('open');
   if (!tab || tab === 'single') setTimeout(() => document.getElementById('single-identifier').focus(), 50);
 }
-function closeAddModal() { document.getElementById('add-modal').classList.remove('open'); }
+function closeAddModal() {
+  document.getElementById('add-modal').classList.remove('open');
+  _bulkUploadFile = null;
+}
 
 function switchTab(tab) {
   _activeTab = tab;
   document.getElementById('tab-single').classList.toggle('active', tab === 'single');
   document.getElementById('tab-bulk').classList.toggle('active',   tab === 'bulk');
+  document.getElementById('tab-upload').classList.toggle('active', tab === 'upload');
   document.getElementById('pane-single').style.display = tab === 'single' ? '' : 'none';
   document.getElementById('pane-bulk').style.display   = tab === 'bulk'   ? '' : 'none';
-  document.getElementById('add-modal-title').textContent = tab === 'single' ? 'Add Space' : 'Bulk Generate';
+  document.getElementById('pane-upload').style.display = tab === 'upload' ? '' : 'none';
+  const titles = { single: 'Add Space', bulk: 'Bulk Generate', upload: 'Bulk Upload' };
+  document.getElementById('add-modal-title').textContent = titles[tab] || 'Add Space';
+  const actionBtn = document.getElementById('add-modal-action-btn');
+  if (tab === 'upload') {
+    actionBtn.textContent = 'Upload';
+    actionBtn.onclick = submitBulkUpload;
+    if (_spaces.length) { renderBulkQuickSelect(); renderBulkSpaceTree(null); }
+  } else {
+    actionBtn.textContent = 'Save';
+    actionBtn.onclick = submitAdd;
+  }
+  // Update count label if switching away from upload
+  if (tab !== 'upload') {
+    const countEl = document.getElementById('bulk-sel-count');
+    if (countEl) countEl.textContent = '0 spaces selected';
+  }
 }
 
 async function submitAdd() {
@@ -3118,10 +3162,6 @@ function renderFilesSection(spaceId, files) {
     <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
       onchange="uploadSpaceFiles(${spaceId}, this)" />
   </label>`;
-  // Bulk Upload — manage/admin only: upload once, attach to many spaces
-  if (_canEdit || _isAdmin) {
-    html += `<button class="file-upload-btn" style="margin-left:8px;" onclick="openBulkUpload(${spaceId})">Bulk Upload</button>`;
-  }
   body.innerHTML = html;
 }
 
@@ -3156,57 +3196,6 @@ let _bulkUploadFile   = null;
 let _bulkUploadRawName = '';
 let _bulkOriginSpace  = null;
 let _bulkBldgFilter   = 'both'; // 'both' | building space id (as string)
-
-function openBulkUpload(originSpaceId) {
-  _bulkOriginSpace  = originSpaceId;
-  _bulkUploadFile   = null;
-  _bulkUploadRawName = '';
-  _bulkBldgFilter   = 'both';
-
-  const modal = document.createElement('div');
-  modal.id = 'bulk-upload-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center;padding:16px;';
-  modal.innerHTML = `
-    <div style="background:#fff;border-radius:12px;width:100%;max-width:680px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
-      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-        <div style="font-weight:700;font-size:1rem;flex:1;">Bulk Upload File to Spaces</div>
-        <button onclick="closeBulkUpload()" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:#6b7280;">✕</button>
-      </div>
-
-      <div style="padding:14px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
-        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:8px;">1 · CHOOSE FILE</div>
-        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid #d1d5db;border-radius:8px;cursor:pointer;font-size:.88rem;background:#f9fafb;">
-          📎 Choose file
-          <input type="file" id="bulk-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onBulkFileChosen(this)">
-        </label>
-        <span id="bulk-file-name" style="margin-left:10px;font-size:.85rem;color:#6b7280;">No file chosen</span>
-      </div>
-
-      <div style="padding:14px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
-        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:10px;">2 · QUICK SELECT</div>
-        <div id="bulk-quick-select"></div>
-      </div>
-
-      <div style="padding:12px 20px;border-bottom:1px solid #e5e7eb;flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;">
-        <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:8px;">3 · OR PICK INDIVIDUALLY</div>
-        <div id="bulk-space-tree" style="overflow-y:auto;flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:6px 0;min-height:80px;max-height:180px;"></div>
-      </div>
-
-      <div style="padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-        <span id="bulk-sel-count" style="font-size:.88rem;font-weight:600;color:#374151;flex:1;">0 spaces selected</span>
-        <button onclick="closeBulkUpload()" style="padding:9px 16px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;font-size:.88rem;">Cancel</button>
-        <button id="bulk-upload-btn" onclick="submitBulkUpload()" style="padding:9px 18px;background:#F47920;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.88rem;opacity:.5;" disabled>Upload</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  renderBulkQuickSelect();
-  renderBulkSpaceTree(originSpaceId);
-}
-
-function closeBulkUpload() {
-  document.getElementById('bulk-upload-modal')?.remove();
-  _bulkUploadFile = null;
-}
 
 async function onBulkFileChosen(input) {
   const raw = input.files[0];
@@ -3384,8 +3373,8 @@ function updateBulkSelCount() {
 }
 
 function updateBulkUploadBtn() {
-  const btn = document.getElementById('bulk-upload-btn');
-  if (!btn) return;
+  const btn = document.getElementById('add-modal-action-btn');
+  if (!btn || _activeTab !== 'upload') return;
   const ok = !!_bulkUploadFile && document.querySelectorAll('#bulk-space-tree input[type="checkbox"]:checked').length > 0;
   btn.disabled = !ok;
   btn.style.opacity = ok ? '1' : '.5';
@@ -3396,7 +3385,7 @@ async function submitBulkUpload() {
     .map(cb => parseInt(cb.id.replace('bulk-cb-', '')));
   if (!_bulkUploadFile || !checkedIds.length) return;
 
-  const btn = document.getElementById('bulk-upload-btn');
+  const btn = document.getElementById('add-modal-action-btn');
   btn.disabled = true;
   btn.textContent = 'Uploading…';
 
@@ -3408,8 +3397,7 @@ async function submitBulkUpload() {
     const r = await fetch('/api/bulk-space-files', { method: 'POST', body: fd });
     const result = await r.json();
     if (!r.ok) throw new Error(result.error || 'Upload failed');
-    closeBulkUpload();
-    if (_bulkOriginSpace) loadSpaceFiles(_bulkOriginSpace);
+    closeAddModal();
     alert(`Uploaded to ${result.linked_spaces} space${result.linked_spaces === 1 ? '' : 's'}.`);
   } catch (e) {
     btn.disabled = false;
