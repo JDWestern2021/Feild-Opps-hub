@@ -1177,7 +1177,7 @@
           <div class="bulk-drop-zone-icon">📂</div>
           <div class="bulk-drop-zone-label"><strong>Click to choose</strong> or drag &amp; drop a file here</div>
           <div id="bulk-file-name" style="font-size:.82rem;color:#F47920;margin-top:4px;display:none;font-weight:600;"></div>
-          <input type="file" id="bulk-upload-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onBulkFileChosen(this)">
+          <input type="file" id="bulk-upload-file-input" accept="*/*" style="display:none;" onchange="onBulkFileChosen(this)">
         </div>
         <div id="bulk-display-name-row" style="display:none;margin-top:10px;">
           <div style="font-size:.72rem;font-weight:700;color:#9ca3af;letter-spacing:.06em;margin-bottom:6px;">DISPLAY NAME <span style="font-weight:400;text-transform:none;letter-spacing:0;">(rename before uploading)</span></div>
@@ -2676,7 +2676,7 @@ function renderTypeFilesContent(typeId, files) {
     <div class="file-drop-zone" id="file-drop-zone-${typeId}" onclick="document.getElementById('file-input-${typeId}').click()">
       <span class="file-drop-zone-icon">📎</span>
       <span class="file-drop-zone-text"><strong>Click to add</strong> or drag &amp; drop files here</span>
-      <input type="file" id="file-input-${typeId}" accept="image/*,.pdf" multiple style="display:none;" onchange="uploadTypeFiles(${typeId},this)"/>
+      <input type="file" id="file-input-${typeId}" accept="*/*" multiple style="display:none;" onchange="uploadTypeFiles(${typeId},this)"/>
     </div>` : ''}
   `;
   if (_canEdit) _initTypeDropZone(typeId);
@@ -2691,7 +2691,7 @@ function _initTypeDropZone(typeId) {
   zone.addEventListener('drop', async e => {
     e.preventDefault(); e.stopPropagation();
     zone.classList.remove('drag-over');
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
+    const files = Array.from(e.dataTransfer.files).filter(f => true);
     if (!files.length) return;
     zone.style.opacity = '.5';
     for (const file of files) {
@@ -3163,7 +3163,7 @@ function escHtml(s) {
 // Resize photos client-side before upload: max 1600px long edge, JPEG ~0.8.
 // PDFs pass through untouched. ~4 MB phone photo → ~400 KB.
 async function compressImage(file, maxPx = 1600, quality = 0.8) {
-  if (file.type === 'application/pdf') return file;
+  if (!file.type.startsWith('image/')) return file; // pass non-images through unchanged
   return new Promise(resolve => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -3258,7 +3258,7 @@ function renderFilesSection(spaceId, files) {
   html += `<div class="file-drop-zone" id="space-drop-zone-${spaceId}" onclick="document.getElementById('space-file-input-${spaceId}').click()">
     <span class="file-drop-zone-icon">📎</span>
     <span class="file-drop-zone-text"><strong>Click to add</strong> or drag &amp; drop files here</span>
-    <input type="file" id="space-file-input-${spaceId}" accept="image/*,application/pdf" multiple style="display:none;"
+    <input type="file" id="space-file-input-${spaceId}" accept="*/*" multiple style="display:none;"
       onchange="uploadSpaceFiles(${spaceId}, this)" />
   </div>`;
   body.innerHTML = html;
@@ -3274,7 +3274,7 @@ function _initSpaceDropZone(spaceId) {
   zone.addEventListener('drop', async e => {
     e.preventDefault(); e.stopPropagation();
     zone.classList.remove('drag-over');
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
+    const files = Array.from(e.dataTransfer.files).filter(f => true);
     if (!files.length) return;
     zone.style.opacity = '.5';
     for (const raw of files) {
@@ -3349,7 +3349,7 @@ function _initBulkDropZone() {
   zone.addEventListener('drop', async e => {
     e.preventDefault(); e.stopPropagation();
     zone.classList.remove('drag-over');
-    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/') || f.type === 'application/pdf');
+    const file = Array.from(e.dataTransfer.files).find(f => true);
     if (file) await _applyBulkFile(file);
   });
 }
