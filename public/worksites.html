@@ -369,8 +369,46 @@
     .bulk-drop-zone-label { font-size: .88rem; color: #6b7280; }
     .bulk-drop-zone-label strong { color: var(--orange); }
     /* Full-screen file viewer */
+    /* ── File action sheet ───────────────────────────────────── */
+    .fsh-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 1900;
+    }
+    .fsh-backdrop.open { display: block; }
+    .fsh-sheet {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: #fff; border-radius: 16px 16px 0 0;
+      padding: 12px 20px 32px; z-index: 1901;
+      transform: translateY(100%); transition: transform .25s ease;
+      max-width: 560px; margin: 0 auto;
+    }
+    .fsh-sheet.open { transform: translateY(0); }
+    .fsh-handle {
+      width: 40px; height: 4px; background: #d1d5db;
+      border-radius: 2px; margin: 0 auto 14px;
+    }
+    .fsh-name {
+      font-size: .92rem; font-weight: 600; color: #111827;
+      margin-bottom: 16px; word-break: break-all;
+      padding-bottom: 12px; border-bottom: 1px solid #f3f4f6;
+    }
+    .fsh-btn {
+      display: flex; align-items: center; gap: 12px;
+      width: 100%; min-height: 52px; padding: 0 4px;
+      border: none; background: none; font-size: .95rem; font-weight: 600;
+      color: #111827; cursor: pointer; border-radius: 10px;
+      text-align: left; font-family: inherit;
+    }
+    .fsh-btn:active { background: #f3f4f6; }
+    .fsh-btn-icon { font-size: 22px; width: 32px; text-align: center; flex-shrink: 0; }
+    .fsh-btn.share { color: #2563eb; }
+    .fsh-btn.download { color: #6b7280; }
+    .fsh-edit-note {
+      font-size: .78rem; color: #9ca3af; margin: 2px 0 6px 44px; line-height: 1.4;
+    }
+    /* ── Full-screen file viewer ─────────────────────────────── */
     .file-viewer {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.92);
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.95);
       z-index: 2000; flex-direction: column; align-items: center; justify-content: center;
     }
     .file-viewer.open { display: flex; }
@@ -385,8 +423,17 @@
       max-width: 100%; max-height: 90vh; border-radius: 8px;
       touch-action: pinch-zoom;
     }
-    .file-viewer iframe {
+    .file-viewer object {
       width: 95vw; height: 90vh; border: none; border-radius: 8px; background: #fff;
+    }
+    .fv-pdf-fallback {
+      color: #fff; text-align: center; padding: 40px 24px;
+      font-size: .95rem; line-height: 1.6;
+    }
+    .fv-pdf-fallback button {
+      margin-top: 16px; padding: 12px 24px; background: var(--orange);
+      color: #fff; border: none; border-radius: 8px; font-size: .95rem;
+      font-weight: 600; cursor: pointer; min-height: 44px;
     }
     /* Deficiency list */
     .def-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
@@ -2658,7 +2705,7 @@ function renderTypeFilesContent(typeId, files) {
     const isImg = f.mime_type && f.mime_type.startsWith('image/');
     const url = `/api/plan-types/${typeId}/files/${f.id}/bytes`;
     return `<div class="file-row">
-      <div class="file-thumb" onclick="openFileViewer('${url}','${escHtml(f.mime_type)}')">
+      <div class="file-thumb" onclick="openFileViewer('${url}','${escHtml(f.mime_type)}','${escHtml(f.file_name)}')">
         ${isImg ? `<img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:4px;" loading="lazy"/>`
                 : `<div class="file-thumb-pdf">PDF</div>`}
       </div>
@@ -3184,25 +3231,110 @@ async function compressImage(file, maxPx = 1600, quality = 0.8) {
 
 // ── File viewer ───────────────────────────────────────────────────────────────
 
-function openFileViewer(url, mimeType) {
-  const v = document.getElementById('file-viewer');
-  const img = document.getElementById('fv-img');
-  const frame = document.getElementById('fv-frame');
-  if (mimeType && mimeType.startsWith('image/')) {
-    img.src = url; img.style.display = '';
-    frame.src = ''; frame.style.display = 'none';
-  } else {
-    frame.src = url; frame.style.display = '';
+// ── File action sheet ─────────────────────────────────────────────────────────
+let _fshUrl = '', _fshMime = '', _fshName = '';
+
+const _EDITABLE_TYPES = new Set([
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.apple.pages',
+  'application/vnd.apple.numbers',
+  'application/vnd.apple.keynote',
+]);
+
+function _canPreview(mime) {
+  if (!mime) return false;
+  return mime.startsWith('image/') || mime === 'application/pdf';
+}
+
+// Main entry point — replaces openFileViewer everywhere
+function openFileViewer(url, mime, name) {
+  _fshUrl  = url;
+  _fshMime = mime  || '';
+  _fshName = name  || url.split('/').pop() || 'File';
+
+  document.getElementById('fsh-name').textContent = _fshName;
+
+  // Preview button — only when we can render it
+  const previewBtn = document.getElementById('fsh-preview-btn');
+  previewBtn.style.display = _canPreview(_fshMime) ? '' : 'none';
+
+  // Share button — feature-detect; will be hidden if not supported
+  const shareBtn = document.getElementById('fsh-share-btn');
+  // Show optimistically; fshShare() will fall back to download if unavailable
+  // canShare requires a File, which we only have after fetching — show the button
+  // and let the handler decide. Hide only if the API is completely absent.
+  shareBtn.style.display = (typeof navigator.share === 'function') ? '' : 'none';
+
+  // Edit warning — show for known editable types
+  document.getElementById('fsh-edit-note').style.display =
+    _EDITABLE_TYPES.has(_fshMime) ? '' : 'none';
+
+  // Open sheet
+  document.getElementById('fsh-backdrop').classList.add('open');
+  requestAnimationFrame(() => document.getElementById('fsh-sheet').classList.add('open'));
+}
+
+function closeFileSheet() {
+  document.getElementById('fsh-sheet').classList.remove('open');
+  document.getElementById('fsh-backdrop').classList.remove('open');
+}
+
+function fshOpenPreview() {
+  closeFileSheet();
+  const img     = document.getElementById('fv-img');
+  const pdfWrap = document.getElementById('fv-pdf-wrap');
+  const obj     = document.getElementById('fv-obj');
+
+  if (_fshMime.startsWith('image/')) {
+    img.src = _fshUrl; img.style.display = '';
+    pdfWrap.style.display = 'none'; obj.data = '';
+  } else if (_fshMime === 'application/pdf') {
+    obj.data = _fshUrl; pdfWrap.style.display = '';
     img.src = ''; img.style.display = 'none';
   }
-  v.classList.add('open');
+  document.getElementById('file-viewer').classList.add('open');
+}
+
+async function fshShare() {
+  if (typeof navigator.share !== 'function') { fshDownload(); return; }
+  try {
+    // Fetch bytes so we can hand a real File to the share sheet
+    const res  = await fetch(_fshUrl);
+    const blob = await res.blob();
+    const file = new File([blob], _fshName, { type: _fshMime || blob.type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: _fshName });
+    } else {
+      // API present but files not supported (older Safari) — share URL instead
+      await navigator.share({ url: _fshUrl, title: _fshName });
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') fshDownload(); // user cancelled = AbortError, ignore
+  }
+}
+
+function fshDownload() {
+  const a = document.createElement('a');
+  a.href = _fshUrl;
+  a.download = _fshName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function closeFileViewer() {
-  const v = document.getElementById('file-viewer');
-  v.classList.remove('open');
-  document.getElementById('fv-img').src = '';
-  document.getElementById('fv-frame').src = '';
+  document.getElementById('file-viewer').classList.remove('open');
+  const img = document.getElementById('fv-img');
+  const obj = document.getElementById('fv-obj');
+  img.src = '';
+  obj.data = '';
+  document.getElementById('fv-pdf-wrap').style.display = 'none';
+  img.style.display = 'none';
 }
 
 // ── Space files ───────────────────────────────────────────────────────────────
@@ -3227,8 +3359,8 @@ function renderFilesSection(spaceId, files) {
     for (const f of files) {
       const isImage = f.mime_type && f.mime_type.startsWith('image/');
       const thumb = isImage
-        ? `<img class="file-thumb" src="/api/space-files/${f.id}" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')" />`
-        : `<div class="file-thumb-pdf" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')">PDF</div>`;
+        ? `<img class="file-thumb" src="/api/space-files/${f.id}" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}','${escHtml(f.file_name)}')" />`
+        : `<div class="file-thumb-pdf" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}','${escHtml(f.file_name)}')">PDF</div>`;
       const when = f.uploaded_at ? new Date(f.uploaded_at).toLocaleDateString() : '';
       const others = (f.ref_count || 1) - 1;
       const sharedBadge = others > 0
@@ -3243,7 +3375,7 @@ function renderFilesSection(spaceId, files) {
       html += `<div class="file-row" id="file-row-${f.id}">
         ${thumb}
         <div class="file-info">
-          <div class="file-name" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}')">${escHtml(f.file_name)}</div>
+          <div class="file-name" onclick="openFileViewer('/api/space-files/${f.id}','${escHtml(f.mime_type)}','${escHtml(f.file_name)}')">${escHtml(f.file_name)}</div>
           <div class="file-meta">${when}${f.uploaded_by_name ? ' · ' + escHtml(f.uploaded_by_name) : ''}${f.caption ? ' · ' + escHtml(f.caption) : ''}</div>
           ${sharedBadge}
         </div>
@@ -3906,7 +4038,7 @@ function defCardHtml(d, spaceId) {
   if (d.photos && d.photos.length) {
     photosHtml = `<div class="def-photos">` +
       d.photos.map(p => `<img class="def-photo" src="/api/deficiency-photos/${p.id}"
-        onclick="openFileViewer('/api/deficiency-photos/${p.id}','${escHtml(p.mime_type)}')" />`).join('') +
+        onclick="openFileViewer('/api/deficiency-photos/${p.id}','${escHtml(p.mime_type)}','Photo')" />`).join('') +
       `</div>`;
   }
   let actionsHtml = '<div class="def-actions">';
@@ -6030,11 +6162,39 @@ function formatRelTime(iso) {
 
 </script>
 
+<!-- File action sheet -->
+<div class="fsh-backdrop" id="fsh-backdrop" onclick="closeFileSheet()"></div>
+<div class="fsh-sheet" id="fsh-sheet">
+  <div class="fsh-handle"></div>
+  <div class="fsh-name" id="fsh-name"></div>
+  <div id="fsh-btns">
+    <button class="fsh-btn" id="fsh-preview-btn" onclick="fshOpenPreview()">
+      <span class="fsh-btn-icon">👁</span> Preview
+    </button>
+    <button class="fsh-btn share" id="fsh-share-btn" onclick="fshShare()">
+      <span class="fsh-btn-icon">⬆️</span> Share / Open in App
+    </button>
+    <div class="fsh-edit-note" id="fsh-edit-note" style="display:none;">
+      Opens a copy. Changes won't save back to FieldHub — re-upload if you edit it.
+    </div>
+    <button class="fsh-btn download" id="fsh-download-btn" onclick="fshDownload()">
+      <span class="fsh-btn-icon">⬇️</span> Download
+    </button>
+  </div>
+</div>
+
 <!-- Full-screen file viewer -->
 <div class="file-viewer" id="file-viewer" onclick="closeFileViewer()">
   <button class="file-viewer-close" onclick="event.stopPropagation();closeFileViewer()">&#x2715;</button>
   <img id="fv-img" style="display:none;" onclick="event.stopPropagation()" />
-  <iframe id="fv-frame" style="display:none;" onclick="event.stopPropagation()"></iframe>
+  <div id="fv-pdf-wrap" style="display:none;" onclick="event.stopPropagation()">
+    <object id="fv-obj" data="" type="application/pdf" style="width:95vw;height:90vh;border:none;border-radius:8px;background:#fff;">
+      <div class="fv-pdf-fallback">
+        <div>PDF preview not available on this device.</div>
+        <button onclick="event.stopPropagation();fshDownload()">Download instead</button>
+      </div>
+    </object>
+  </div>
 </div>
 
 </body>
