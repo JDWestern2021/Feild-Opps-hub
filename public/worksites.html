@@ -3254,13 +3254,37 @@ function renderFilesSection(spaceId, files) {
   } else {
     html += '<div class="detail-empty" style="margin-bottom:10px;">No files yet.</div>';
   }
-  // Add File — field level: anyone can upload to this space
-  html += `<label class="file-upload-btn">
-    + Add File
-    <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
+  // Add File — drop zone; click or drag & drop
+  html += `<div class="file-drop-zone" id="space-drop-zone-${spaceId}" onclick="document.getElementById('space-file-input-${spaceId}').click()">
+    <span class="file-drop-zone-icon">📎</span>
+    <span class="file-drop-zone-text"><strong>Click to add</strong> or drag &amp; drop files here</span>
+    <input type="file" id="space-file-input-${spaceId}" accept="image/*,application/pdf" multiple style="display:none;"
       onchange="uploadSpaceFiles(${spaceId}, this)" />
-  </label>`;
+  </div>`;
   body.innerHTML = html;
+  _initSpaceDropZone(spaceId);
+}
+
+function _initSpaceDropZone(spaceId) {
+  const zone = document.getElementById(`space-drop-zone-${spaceId}`);
+  if (!zone || zone.dataset.dzInit) return;
+  zone.dataset.dzInit = '1';
+  zone.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', e => { e.stopPropagation(); if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
+  zone.addEventListener('drop', async e => {
+    e.preventDefault(); e.stopPropagation();
+    zone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
+    if (!files.length) return;
+    zone.style.opacity = '.5';
+    for (const raw of files) {
+      const file = await compressImage(raw);
+      const fd = new FormData(); fd.append('file', file);
+      await fetch(`/api/spaces/${spaceId}/files`, { method: 'POST', body: fd });
+    }
+    zone.style.opacity = '';
+    loadSpaceFiles(spaceId);
+  });
 }
 
 async function uploadSpaceFiles(spaceId, input) {
