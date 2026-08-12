@@ -2684,19 +2684,22 @@ function renderTypeFilesContent(typeId, files) {
 
 function _initTypeDropZone(typeId) {
   const zone = document.getElementById(`file-drop-zone-${typeId}`);
-  if (!zone) return;
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-  zone.addEventListener('dragleave', e => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
+  if (!zone || zone.dataset.dzInit) return; // only wire once
+  zone.dataset.dzInit = '1';
+  zone.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', e => { e.stopPropagation(); if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
   zone.addEventListener('drop', async e => {
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
     zone.classList.remove('drag-over');
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
     if (!files.length) return;
+    zone.style.opacity = '.5';
     for (const file of files) {
       const compressed = await compressImage(file);
       const fd = new FormData(); fd.append('file', compressed, file.name);
       await fetch(`/api/plan-types/${typeId}/files`, { method: 'POST', body: fd });
     }
+    zone.style.opacity = '';
     await loadTypeFiles(typeId);
   });
 }
@@ -3315,11 +3318,12 @@ async function _applyBulkFile(raw) {
 
 function _initBulkDropZone() {
   const zone = document.getElementById('bulk-drop-zone');
-  if (!zone) return;
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-  zone.addEventListener('dragleave', e => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
+  if (!zone || zone.dataset.dzInit) return; // only wire once
+  zone.dataset.dzInit = '1';
+  zone.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', e => { e.stopPropagation(); if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
   zone.addEventListener('drop', async e => {
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
     zone.classList.remove('drag-over');
     const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/') || f.type === 'application/pdf');
     if (file) await _applyBulkFile(file);
