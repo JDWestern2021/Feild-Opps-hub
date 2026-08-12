@@ -969,6 +969,10 @@ async function initSchema() {
   await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS file_id      INTEGER REFERENCES files(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS attached_by  INTEGER REFERENCES users(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS attached_at  TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS deleted_at   TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE space_files ADD COLUMN IF NOT EXISTS deleted_by   INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE plan_type_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE plan_type_files ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL`);
 
   // ── deficiencies ────────────────────────────────────────────────────────────
   await pool.query(`CREATE TABLE IF NOT EXISTS deficiencies (

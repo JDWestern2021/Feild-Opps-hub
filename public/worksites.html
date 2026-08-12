@@ -354,6 +354,17 @@
     .file-drop-zone-icon { font-size: 20px; flex-shrink: 0; }
     .file-drop-zone-text { font-size: .84rem; color: #6b7280; line-height: 1.4; }
     .file-drop-zone-text strong { color: var(--orange); font-weight: 600; }
+    /* Recently Deleted */
+    .trash-toggle-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .82rem; color: #6b7280; background: none;
+      border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 0 12px; min-height: 32px; cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .trash-toggle-btn:hover { border-color: #9ca3af; color: #374151; }
+    .trash-toggle-btn.active { border-color: var(--orange); color: var(--orange); }
+    .trash-row { opacity: .8; background: #fef2f2; border-radius: 8px; padding: 6px 8px; margin-bottom: 4px; }
     /* Bulk upload drop zone */
     .bulk-drop-zone {
       border: 2px dashed #d1d5db; border-radius: 10px;
@@ -2724,6 +2735,12 @@ function renderTypeFilesContent(typeId, files) {
       <span class="file-drop-zone-icon">📎</span>
       <span class="file-drop-zone-text"><strong>Click to add</strong> or drag &amp; drop files here</span>
       <input type="file" id="file-input-${typeId}" accept="*/*" multiple style="display:none;" onchange="uploadTypeFiles(${typeId},this)"/>
+    </div>
+    <div style="margin-top:14px;">
+      <button class="trash-toggle-btn" onclick="toggleTypeTrash(${typeId}, this)">
+        🗑 Recently Deleted
+      </button>
+      <div id="type-trash-list-${typeId}" style="display:none;margin-top:8px;"></div>
     </div>` : ''}
   `;
   if (_canEdit) _initTypeDropZone(typeId);
@@ -2764,9 +2781,52 @@ async function uploadTypeFiles(typeId, input) {
 }
 
 async function deleteTypeFile(typeId, fileId) {
-  if (!confirm('Delete this file?')) return;
+  if (!confirm('Move to Recently Deleted? You can restore it if needed.')) return;
   await fetch(`/api/plan-types/${typeId}/files/${fileId}`, { method: 'DELETE' });
   await loadTypeFiles(typeId);
+}
+
+function toggleTypeTrash(typeId, btn) {
+  const wrap = document.getElementById(`type-trash-list-${typeId}`);
+  if (!wrap) return;
+  const open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : 'block';
+  btn.classList.toggle('active', !open);
+  if (!open) loadTypeDeletedFiles(typeId);
+}
+
+async function loadTypeDeletedFiles(typeId) {
+  const wrap = document.getElementById(`type-trash-list-${typeId}`);
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="font-size:13px;color:#888;padding:6px 0;">Loading…</div>';
+  const files = await fetch(`/api/plan-types/${typeId}/files/deleted`).then(r => r.json());
+  if (!files.length) { wrap.innerHTML = '<div style="font-size:13px;color:#888;padding:6px 0;">Nothing deleted.</div>'; return; }
+  wrap.innerHTML = files.map(f => {
+    const when = f.deleted_at ? new Date(f.deleted_at).toLocaleDateString() : '';
+    const by = f.deleted_by_name ? ` by ${escHtml(f.deleted_by_name)}` : '';
+    return `<div class="file-row trash-row" id="type-trash-row-${f.id}">
+      <div class="file-thumb-pdf" style="opacity:.5;">🗑</div>
+      <div class="file-info">
+        <div class="file-name">${escHtml(f.file_name)}</div>
+        <div class="file-meta">Deleted ${when}${by}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="file-del" style="background:#16a34a;color:#fff;border-radius:6px;padding:0 10px;font-size:12px;" onclick="restoreTypeFile(${typeId},${f.id})">Restore</button>
+        <button class="file-del" style="background:#dc2626;color:#fff;border-radius:6px;padding:0 10px;font-size:12px;" onclick="purgeTypeFile(${typeId},${f.id})">Delete&nbsp;Forever</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function restoreTypeFile(typeId, fileId) {
+  await fetch(`/api/plan-types/${typeId}/files/${fileId}/restore`, { method: 'POST' });
+  await loadTypeFiles(typeId);
+}
+
+async function purgeTypeFile(typeId, fileId) {
+  if (!confirm('Permanently delete this file? This cannot be undone.')) return;
+  await fetch(`/api/plan-types/${typeId}/files/${fileId}/permanent`, { method: 'DELETE' });
+  document.getElementById(`type-trash-row-${fileId}`)?.remove();
 }
 
 async function loadTypeLists(typeId) {
@@ -3393,6 +3453,14 @@ function renderFilesSection(spaceId, files) {
     <input type="file" id="space-file-input-${spaceId}" accept="*/*" multiple style="display:none;"
       onchange="uploadSpaceFiles(${spaceId}, this)" />
   </div>`;
+  if (_canEdit) {
+    html += `<div style="margin-top:14px;">
+      <button class="trash-toggle-btn" onclick="toggleSpaceTrash(${spaceId}, this)">
+        🗑 Recently Deleted
+      </button>
+      <div id="space-trash-list-${spaceId}" style="display:none;margin-top:8px;"></div>
+    </div>`;
+  }
   body.innerHTML = html;
   _initSpaceDropZone(spaceId);
 }
@@ -3435,13 +3503,56 @@ async function uploadSpaceFiles(spaceId, input) {
 
 async function deleteSpaceFile(spaceId, fileId, otherCount) {
   const msg = otherCount > 0
-    ? `Remove from this space?\n\nThis file is also on ${otherCount} other space${otherCount === 1 ? '' : 's'} — it will stay there.`
-    : 'Delete this file?';
+    ? `Remove from this space?\n\nThis file is also on ${otherCount} other space${otherCount === 1 ? '' : 's'} — it will stay there.\n\nYou can restore it from Recently Deleted.`
+    : 'Move to Recently Deleted? You can restore it if needed.';
   if (!confirm(msg)) return;
   await fetch(`/api/spaces/${spaceId}/files/${fileId}`, { method: 'DELETE' });
   document.getElementById(`file-row-${fileId}`)?.remove();
   const remaining = document.querySelectorAll('[id^="file-row-"]');
   if (!remaining.length) loadSpaceFiles(spaceId);
+}
+
+function toggleSpaceTrash(spaceId, btn) {
+  const wrap = document.getElementById(`space-trash-list-${spaceId}`);
+  if (!wrap) return;
+  const open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : 'block';
+  btn.classList.toggle('active', !open);
+  if (!open) loadSpaceDeletedFiles(spaceId);
+}
+
+async function loadSpaceDeletedFiles(spaceId) {
+  const wrap = document.getElementById(`space-trash-list-${spaceId}`);
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="font-size:13px;color:#888;padding:6px 0;">Loading…</div>';
+  const files = await fetch(`/api/spaces/${spaceId}/files/deleted`).then(r => r.json());
+  if (!files.length) { wrap.innerHTML = '<div style="font-size:13px;color:#888;padding:6px 0;">Nothing deleted.</div>'; return; }
+  wrap.innerHTML = files.map(f => {
+    const when = f.deleted_at ? new Date(f.deleted_at).toLocaleDateString() : '';
+    const by = f.deleted_by_name ? ` by ${escHtml(f.deleted_by_name)}` : '';
+    return `<div class="file-row trash-row" id="trash-row-${f.id}">
+      <div class="file-thumb-pdf" style="opacity:.5;">🗑</div>
+      <div class="file-info">
+        <div class="file-name">${escHtml(f.file_name)}</div>
+        <div class="file-meta">Deleted ${when}${by}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="file-del" style="background:#16a34a;color:#fff;border-radius:6px;padding:0 10px;font-size:12px;" onclick="restoreSpaceFile(${spaceId},${f.id})">Restore</button>
+        <button class="file-del" style="background:#dc2626;color:#fff;border-radius:6px;padding:0 10px;font-size:12px;" onclick="purgeSpaceFile(${spaceId},${f.id})">Delete&nbsp;Forever</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function restoreSpaceFile(spaceId, fileId) {
+  await fetch(`/api/spaces/${spaceId}/files/${fileId}/restore`, { method: 'POST' });
+  loadSpaceFiles(spaceId);
+}
+
+async function purgeSpaceFile(spaceId, fileId) {
+  if (!confirm('Permanently delete this file? This cannot be undone.')) return;
+  await fetch(`/api/spaces/${spaceId}/files/${fileId}/permanent`, { method: 'DELETE' });
+  document.getElementById(`trash-row-${fileId}`)?.remove();
 }
 
 // ── Bulk file upload ──────────────────────────────────────────────────────────

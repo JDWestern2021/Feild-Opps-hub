@@ -6802,7 +6802,7 @@ app.get('/api/spaces/:id/files', requireAuth, requireModuleAccess('worksites', '
       FROM space_files sf
       LEFT JOIN files fi ON fi.id = sf.file_id
       LEFT JOIN users u  ON u.id  = COALESCE(fi.uploaded_by, sf.uploaded_by)
-      WHERE sf.space_id = $1
+      WHERE sf.space_id = $1 AND sf.deleted_at IS NULL
       ORDER BY COALESCE(fi.uploaded_at, sf.uploaded_at) DESC
     `, [req.params.id]);
     res.json(rows);
@@ -6949,15 +6949,60 @@ app.delete('/api/bulk-space-files', requireAuth, requireModuleAccess('worksites'
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/spaces/:id/files/:fileId — remove from this space; delete shared file if last reference
+// DELETE /api/spaces/:id/files/:fileId — soft-delete (recoverable for 30 days)
 app.delete('/api/spaces/:id/files/:fileId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rows: [link] } = await pool.query(
+      `UPDATE space_files SET deleted_at=NOW(), deleted_by=$3
+       WHERE id=$1 AND space_id=$2 AND deleted_at IS NULL RETURNING id`,
+      [req.params.fileId, req.params.id, req.user.id]
+    );
+    if (!link) return res.status(404).json({ error: 'File not found' });
+    res.json({ deleted: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/spaces/:id/files/deleted — list soft-deleted files for this space
+app.get('/api/spaces/:id/files/deleted', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT sf.id, sf.space_id, sf.caption, sf.deleted_at,
+             COALESCE(fi.mime_type, sf.mime_type) AS mime_type,
+             COALESCE(fi.file_name, sf.file_name) AS file_name,
+             COALESCE(fi.size, 0)                 AS size,
+             ud.name                              AS deleted_by_name,
+             sf.file_id
+      FROM space_files sf
+      LEFT JOIN files fi ON fi.id = sf.file_id
+      LEFT JOIN users ud ON ud.id = sf.deleted_by
+      WHERE sf.space_id = $1 AND sf.deleted_at IS NOT NULL
+      ORDER BY sf.deleted_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/spaces/:id/files/:fileId/restore — undo soft-delete
+app.post('/api/spaces/:id/files/:fileId/restore', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rows: [link] } = await pool.query(
+      `UPDATE space_files SET deleted_at=NULL, deleted_by=NULL
+       WHERE id=$1 AND space_id=$2 AND deleted_at IS NOT NULL RETURNING id`,
+      [req.params.fileId, req.params.id]
+    );
+    if (!link) return res.status(404).json({ error: 'File not found or not deleted' });
+    res.json({ restored: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/spaces/:id/files/:fileId/permanent — hard-delete (no recovery)
+app.delete('/api/spaces/:id/files/:fileId/permanent', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     const { rows: [link] } = await pool.query(
       'DELETE FROM space_files WHERE id=$1 AND space_id=$2 RETURNING file_id',
       [req.params.fileId, req.params.id]
     );
     if (!link) return res.status(404).json({ error: 'File not found' });
-    // If this was the last space referencing the shared file, delete the bytes too
     if (link.file_id) {
       const { rows: [{ n }] } = await pool.query(
         'SELECT COUNT(*)::int AS n FROM space_files WHERE file_id=$1', [link.file_id]
@@ -7312,7 +7357,7 @@ app.get('/api/plan-types/:typeId/files', requireAuth, requireModuleAccess('works
   try {
     const { rows } = await pool.query(
       `SELECT id, plan_type_id, mime_type, file_name, caption, uploaded_by, uploaded_at
-       FROM plan_type_files WHERE plan_type_id=$1 ORDER BY uploaded_at`,
+       FROM plan_type_files WHERE plan_type_id=$1 AND deleted_at IS NULL ORDER BY uploaded_at`,
       [req.params.typeId]
     );
     res.json(rows);
@@ -7334,8 +7379,50 @@ app.post('/api/plan-types/:typeId/files', requireAuth, requireModuleAccess('work
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/plan-types/:typeId/files/:fileId — delete (manage)
+// DELETE /api/plan-types/:typeId/files/:fileId — soft-delete (recoverable)
 app.delete('/api/plan-types/:typeId/files/:fileId', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rows: [f] } = await pool.query(
+      `UPDATE plan_type_files SET deleted_at=NOW(), deleted_by=$3
+       WHERE id=$1 AND plan_type_id=$2 AND deleted_at IS NULL RETURNING id`,
+      [req.params.fileId, req.params.typeId, req.user.id]
+    );
+    if (!f) return res.status(404).json({ error: 'File not found' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/plan-types/:typeId/files/deleted — list soft-deleted
+app.get('/api/plan-types/:typeId/files/deleted', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ptf.id, ptf.plan_type_id, ptf.mime_type, ptf.file_name, ptf.caption,
+              ptf.deleted_at, u.name AS deleted_by_name
+       FROM plan_type_files ptf
+       LEFT JOIN users u ON u.id = ptf.deleted_by
+       WHERE ptf.plan_type_id=$1 AND ptf.deleted_at IS NOT NULL
+       ORDER BY ptf.deleted_at DESC`,
+      [req.params.typeId]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/plan-types/:typeId/files/:fileId/restore — restore soft-deleted
+app.post('/api/plan-types/:typeId/files/:fileId/restore', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
+  try {
+    const { rows: [f] } = await pool.query(
+      `UPDATE plan_type_files SET deleted_at=NULL, deleted_by=NULL
+       WHERE id=$1 AND plan_type_id=$2 AND deleted_at IS NOT NULL RETURNING id`,
+      [req.params.fileId, req.params.typeId]
+    );
+    if (!f) return res.status(404).json({ error: 'File not found or not deleted' });
+    res.json({ restored: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/plan-types/:typeId/files/:fileId/permanent — hard-delete (no recovery)
+app.delete('/api/plan-types/:typeId/files/:fileId/permanent', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
     await pool.query(
       `DELETE FROM plan_type_files WHERE id=$1 AND plan_type_id=$2`,
