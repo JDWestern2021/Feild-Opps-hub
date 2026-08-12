@@ -678,15 +678,21 @@ async function switchDTab(tab) {
       if (!isAdmin) {
         modSection.querySelector('#md-save-modules').addEventListener('click', async function() {
           this.disabled=true; this.textContent='Saving…';
-          const saves = Array.from(modSection.querySelectorAll('.mod-access-sel')).map(sel =>
+          const sels = Array.from(modSection.querySelectorAll('.mod-access-sel'));
+          const results = await Promise.all(sels.map(sel =>
             fetch(`/api/users/${u.id}/module-permissions/${sel.dataset.module}`, {
               method:'PATCH', headers:{'Content-Type':'application/json'},
               body: JSON.stringify({ access: sel.value }),
-            })
-          );
-          await Promise.all(saves);
+            }).then(r => ({ ok: r.ok, module: sel.dataset.module }))
+              .catch(() => ({ ok: false, module: sel.dataset.module }))
+          ));
           this.disabled=false; this.textContent='Save Section Access';
-          showToast('Section access saved','success');
+          const failed = results.filter(r => !r.ok);
+          if (failed.length) {
+            showToast(`Failed to save: ${failed.map(r=>r.module).join(', ')}`, 'error');
+          } else {
+            showToast(`Section access saved — ${u.name} needs to reload the app to see changes`, 'success');
+          }
         });
       }
     }
