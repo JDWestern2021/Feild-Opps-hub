@@ -50,14 +50,7 @@ const upload = multer({
 });
 
 const receiptUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const fs = require('fs');
-      fs.mkdirSync(path.join(__dirname,'public','uploads','receipts'), {recursive:true});
-      cb(null, path.join(__dirname,'public','uploads','receipts'));
-    },
-    filename: (req, file, cb) => { cb(null, `receipt-${req.params.id}${path.extname(file.originalname).toLowerCase()}`); }
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 15*1024*1024 },
   fileFilter: (req, file, cb) => {
     const ok = /image\/(png|jpeg|jpg|heic|heif)|application\/pdf/.test(file.mimetype)
@@ -1584,9 +1577,27 @@ app.post('/api/po/:id/receipt', requirePermission('get_po'), receiptUpload.singl
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const { rows } = await pool.query('SELECT id FROM purchase_orders WHERE id=$1',[req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'PO not found' });
-  const p = `/uploads/receipts/receipt-${req.params.id}${path.extname(req.file.originalname).toLowerCase()}`;
-  await pool.query('UPDATE purchase_orders SET receipt_path=$1 WHERE id=$2',[p,req.params.id]);
-  res.json({ ok: true, path: p });
+  await pool.query(
+    'UPDATE purchase_orders SET receipt_data=$1, receipt_mime=$2, receipt_name=$3, receipt_path=NULL WHERE id=$4',
+    [req.file.buffer, req.file.mimetype, req.file.originalname, req.params.id]
+  );
+  res.json({ ok: true, path: `/api/po/${req.params.id}/receipt` });
+});
+
+// GET /api/po/:id/receipt — serve receipt bytes stored in DB
+app.get('/api/po/:id/receipt', requirePermission('get_po'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT receipt_data, receipt_mime, receipt_name FROM purchase_orders WHERE id=$1',
+      [req.params.id]
+    );
+    if (!rows[0] || !rows[0].receipt_data) return res.status(404).json({ error: 'No receipt on file' });
+    const { receipt_data, receipt_mime, receipt_name } = rows[0];
+    const safeName = (receipt_name || 'receipt').replace(/[^\w.\-]/g, '_');
+    res.set('Content-Type', receipt_mime || 'application/octet-stream');
+    res.set('Content-Disposition', `inline; filename="${safeName}"`);
+    res.send(receipt_data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/po', requirePermission('get_po'), async (req, res) => {

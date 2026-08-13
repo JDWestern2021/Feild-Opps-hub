@@ -7290,7 +7290,7 @@ async function openPODetail(id) {
       <div class="detail-field"><label>Estimated Amount</label><div class="val">${po.estimated_amount != null ? '$' + parseFloat(po.estimated_amount).toFixed(2) : '—'}</div></div>
       <div class="detail-field full"><label>Description</label><div class="val" style="white-space:pre-wrap;">${esc(po.description)}</div></div>
       ${po.needs_reimbursement ? `<div class="detail-field full" style="background:#fff8f0;padding:10px 12px;border-radius:8px;border-left:3px solid var(--orange);"><label style="color:var(--orange-dark);">⚠ Reimbursement Required</label><div class="val" style="color:var(--orange-dark);">Yes — tech requires reimbursement for this purchase</div></div>` : ''}
-      ${po.receipt_path ? `<div class="detail-field full"><label>Receipt</label><div class="val"><a href="${po.receipt_path}" target="_blank" class="btn btn-ghost btn-sm">📎 View Receipt</a></div></div>` : ''}
+      ${(po.receipt_path || po.receipt_name) ? `<div class="detail-field full"><label>Receipt</label><div class="val"><a href="/api/po/${po.id}/receipt" target="_blank" class="btn btn-ghost btn-sm">📎 View Receipt</a></div></div>` : ''}
     </div>
     <div class="form-group" style="margin-bottom:16px;">
       <label class="form-label">Office Note</label>

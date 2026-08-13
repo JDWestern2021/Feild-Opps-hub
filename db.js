@@ -115,6 +115,9 @@ async function initSchema() {
       job_name           TEXT,
       needs_reimbursement INTEGER DEFAULT 0,
       receipt_path       TEXT,
+      receipt_data       BYTEA,
+      receipt_mime       TEXT,
+      receipt_name       TEXT,
       project_id         INTEGER,
       project_archived   INTEGER DEFAULT 0
     );
@@ -219,6 +222,9 @@ async function initSchema() {
   await pool.query(`ALTER TABLE timesheet_overrides ADD COLUMN IF NOT EXISTS time_off_request_id INTEGER REFERENCES time_off_requests(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS archived INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS time_off_color TEXT DEFAULT NULL`);
+  await pool.query(`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS receipt_data BYTEA`);
+  await pool.query(`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS receipt_mime TEXT`);
+  await pool.query(`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS receipt_name TEXT`);
   // Indexes for fast time-off calendar queries
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_status       ON time_off_requests(status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tor_start_date   ON time_off_requests(start_date)`);
