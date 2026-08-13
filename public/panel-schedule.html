@@ -806,14 +806,25 @@ function rebuildCircuitGrid(circuitData = []) {
     const rAc = rightCells(raG, 'ra', d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'');
     const rBc = rightCells(rbG, 'rb', d.rb_desc||'', d.rb_poles||'', d.rb_amps||'', 'Tandem B (optional)');
 
-    html += `<tr class="slot-a-row">${lAc}
-      <td class="cct-num ${rowACls} ${sep}">${ls}A</td>
-      <td class="cct-num ${rowACls} ${sep}">${rs}A</td>
-      ${rAc}</tr>
-    <tr class="slot-b-row">${lBc}
-      <td class="cct-num">${ls}B</td>
-      <td class="cct-num">${rs}B</td>
-      ${rBc}</tr>`;
+    if (_panelFlipped) {
+      html += `<tr class="slot-b-row">${lBc}
+        <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
+        <td class="cct-num ${rowACls} ${sep}">${rs}B</td>
+        ${rBc}</tr>
+      <tr class="slot-a-row">${lAc}
+        <td class="cct-num">${ls}A</td>
+        <td class="cct-num">${rs}A</td>
+        ${rAc}</tr>`;
+    } else {
+      html += `<tr class="slot-a-row">${lAc}
+        <td class="cct-num ${rowACls} ${sep}">${ls}A</td>
+        <td class="cct-num ${rowACls} ${sep}">${rs}A</td>
+        ${rAc}</tr>
+      <tr class="slot-b-row">${lBc}
+        <td class="cct-num">${ls}B</td>
+        <td class="cct-num">${rs}B</td>
+        ${rBc}</tr>`;
+    }
   }
   tbody.innerHTML = html;
 }
@@ -943,16 +954,29 @@ function buildViewRows(s) {
         ? `<td class="cct-num mp-merged-r" rowspan="${g.span}" style="background:transparent;">${a}</td><td class="cct-num mp-merged-r" rowspan="${g.span}" style="background:transparent;">${p}</td><td class="mp-merged-r" rowspan="${g.span}">${esc(txt)}</td>`
         : '';
 
-    html += `<tr class="slot-a-row">
-      ${lc(laG, d.la_desc||d.left_desc||'', d.la_poles||d.left_poles||'', d.la_amps||d.left_amps||'')}
-      <td class="cct-num ${rowACls} ${sep}">${ls}A</td>
-      <td class="cct-num ${rowACls} ${sep}">${rs}A</td>
-      ${rc(raG, d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'')}</tr>
-    <tr class="slot-b-row">
-      ${lc(lbG, d.lb_desc||'', d.lb_poles||'', d.lb_amps||'')}
-      <td class="cct-num">${ls}B</td>
-      <td class="cct-num">${rs}B</td>
-      ${rc(rbG, d.rb_desc||'', d.rb_poles||'', d.rb_amps||'')}</tr>`;
+    if (s.flipped) {
+      html += `<tr class="slot-b-row">
+        ${lc(lbG, d.lb_desc||'', d.lb_poles||'', d.lb_amps||'')}
+        <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
+        <td class="cct-num ${rowACls} ${sep}">${rs}B</td>
+        ${rc(rbG, d.rb_desc||'', d.rb_poles||'', d.rb_amps||'')}</tr>
+      <tr class="slot-a-row">
+        ${lc(laG, d.la_desc||d.left_desc||'', d.la_poles||d.left_poles||'', d.la_amps||d.left_amps||'')}
+        <td class="cct-num">${ls}A</td>
+        <td class="cct-num">${rs}A</td>
+        ${rc(raG, d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'')}</tr>`;
+    } else {
+      html += `<tr class="slot-a-row">
+        ${lc(laG, d.la_desc||d.left_desc||'', d.la_poles||d.left_poles||'', d.la_amps||d.left_amps||'')}
+        <td class="cct-num ${rowACls} ${sep}">${ls}A</td>
+        <td class="cct-num ${rowACls} ${sep}">${rs}A</td>
+        ${rc(raG, d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'')}</tr>
+      <tr class="slot-b-row">
+        ${lc(lbG, d.lb_desc||'', d.lb_poles||'', d.lb_amps||'')}
+        <td class="cct-num">${ls}B</td>
+        <td class="cct-num">${rs}B</td>
+        ${rc(rbG, d.rb_desc||'', d.rb_poles||'', d.rb_amps||'')}</tr>`;
+    }
   }
   return html;
 }
