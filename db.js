@@ -418,6 +418,7 @@ async function initSchema() {
       project_archived INTEGER NOT NULL DEFAULT 0
     )
   `);
+  await pool.query(`ALTER TABLE panel_schedules ADD COLUMN IF NOT EXISTS flipped INTEGER NOT NULL DEFAULT 0`);
 
   // Backfill user_id on ticket_employees rows where it was never set (case-insensitive name match)
   await pool.query(`

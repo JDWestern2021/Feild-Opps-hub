@@ -3930,7 +3930,7 @@ app.get('/api/panel-schedules/:id', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM panel_schedules WHERE id=$1', [parseInt(req.params.id)]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json({ ...rows[0], circuit_data: JSON.parse(rows[0].circuit_data || '[]') });
+    res.json({ ...rows[0], circuit_data: JSON.parse(rows[0].circuit_data || '[]'), flipped: !!rows[0].flipped });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -3938,19 +3938,20 @@ app.get('/api/panel-schedules/:id', requireAuth, async (req, res) => {
 app.post('/api/panel-schedules', requireAuth, async (req, res) => {
   try {
     const { panel_name, voltage, main_breaker, bus_rating, enclosure_type, num_circuits,
-            circuit_data, project_id, project_name, job_number } = req.body;
+            circuit_data, project_id, project_name, job_number, flipped } = req.body;
     if (!panel_name) return res.status(400).json({ error: 'Panel name required' });
     const schedule_number = generateScheduleNumber();
     const now = new Date().toISOString();
     const { rows } = await pool.query(
       `INSERT INTO panel_schedules
          (schedule_number, panel_name, voltage, main_breaker, bus_rating, enclosure_type,
-          num_circuits, circuit_data, project_id, project_name, job_number,
+          num_circuits, circuit_data, flipped, project_id, project_name, job_number,
           created_by_id, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING id, schedule_number`,
       [schedule_number, panel_name, voltage||'120/240V 1-Ph', main_breaker||null, bus_rating||null,
        enclosure_type||null, parseInt(num_circuits)||24, JSON.stringify(circuit_data||[]),
+       flipped ? 1 : 0,
        project_id||null, project_name||null, job_number||null,
        req.user.id, req.user.name, now]
     );
@@ -3962,16 +3963,17 @@ app.post('/api/panel-schedules', requireAuth, async (req, res) => {
 app.patch('/api/panel-schedules/:id', requireAuth, async (req, res) => {
   try {
     const { panel_name, voltage, main_breaker, bus_rating, enclosure_type, num_circuits,
-            circuit_data, project_id, project_name, job_number } = req.body;
+            circuit_data, project_id, project_name, job_number, flipped } = req.body;
     const now = new Date().toISOString();
     await pool.query(
       `UPDATE panel_schedules SET
          panel_name=$1, voltage=$2, main_breaker=$3, bus_rating=$4, enclosure_type=$5,
-         num_circuits=$6, circuit_data=$7, project_id=$8, project_name=$9, job_number=$10,
-         updated_at=$11, updated_by=$12
-       WHERE id=$13`,
+         num_circuits=$6, circuit_data=$7, flipped=$8, project_id=$9, project_name=$10, job_number=$11,
+         updated_at=$12, updated_by=$13
+       WHERE id=$14`,
       [panel_name, voltage||'120/240V 1-Ph', main_breaker||null, bus_rating||null, enclosure_type||null,
        parseInt(num_circuits)||24, JSON.stringify(circuit_data||[]),
+       flipped ? 1 : 0,
        project_id||null, project_name||null, job_number||null,
        now, req.user.name, parseInt(req.params.id)]
     );

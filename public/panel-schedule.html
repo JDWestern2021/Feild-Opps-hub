@@ -584,7 +584,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
       </div>
 
       <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-600);">Circuit Schedule</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-600);">Circuit Schedule</div>
+          <button id="btn-flip-panel" onclick="togglePanelFlip()" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border:1.5px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;min-height:30px;" title="Flip circuit order (lowest at bottom)">⇅ Flip</button>
+        </div>
         <div style="font-size:11px;color:var(--gray-500);background:var(--gray-50);border:1px solid var(--gray-200);border-radius:6px;padding:5px 10px;">
           Each slot shows <strong>A</strong> + <strong>B</strong> rows. Fill both rows for a <strong>tandem breaker</strong>; leave B blank for a single breaker.
         </div>
@@ -712,6 +715,7 @@ const AMP_OPTIONS = ['','15','20','25','30','35','40','45','50','60','70','80','
 const POLE_OPTIONS = ['','1','2','3'];
 
 let projects = [], schedules = [], editingId = null, viewingId = null, viewingData = null, currentUser = null;
+let _panelFlipped = false;
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -728,6 +732,18 @@ function poleSel(name, val='') {
   return `<select name="${name}">${POLE_OPTIONS.map(p=>`<option value="${p}"${p===String(val)?'selected':''}>${p||'—'}</option>`).join('')}</select>`;
 }
 
+function togglePanelFlip() {
+  _panelFlipped = !_panelFlipped;
+  const btn = document.getElementById('btn-flip-panel');
+  if (btn) {
+    btn.style.borderColor  = _panelFlipped ? 'var(--orange)' : '#d1d5db';
+    btn.style.color        = _panelFlipped ? 'var(--orange)' : '#374151';
+    btn.style.background   = _panelFlipped ? '#fff8f3'       : '#fff';
+  }
+  // Collect current form data so we don't lose edits when rebuilding
+  rebuildCircuitGrid(collectCircuitData());
+}
+
 // Build the editable circuit grid.
 // Each "slot pair" (one left slot + one right slot) = 2 HTML rows: A and B.
 // left slot = odd circuit number, right slot = even circuit number
@@ -741,7 +757,10 @@ function rebuildCircuitGrid(circuitData = []) {
   const rG    = grp.right;
   let html = '';
 
-  for (let i = 0; i < slots; i++) {
+  const slotOrder = _panelFlipped
+    ? Array.from({length: slots}, (_, k) => slots - 1 - k)
+    : Array.from({length: slots}, (_, k) => k);
+  for (const i of slotOrder) {
     const d   = circuitData[i] || {};
     const ls  = (i * 2) + 1;
     const rs  = (i * 2) + 2;
@@ -749,7 +768,8 @@ function rebuildCircuitGrid(circuitData = []) {
     const raG = rG[2*i],    rbG = rG[2*i+1];
 
     // Slot separator (bold top border) — suppress when A half is consumed from above
-    const sep = (i > 0 && laG?.isLeader !== false) ? 'slot-separator' : '';
+    const slotPos = slotOrder.indexOf(i);
+    const sep = (slotPos > 0 && laG?.isLeader !== false) ? 'slot-separator' : '';
 
     // A/B dashed divider on cct-num cells — suppress when A+B are in the same merged group
     const suppressAB = ((laG?.isLeader === true  && lbG?.isLeader === false) ||
@@ -873,6 +893,13 @@ function openModal(schedule = null) {
   const psel = document.getElementById('f-project');
   psel.innerHTML = '<option value="">— No project —</option>' +
     projects.map(p=>`<option value="${p.id}"${schedule&&schedule.project_id==p.id?' selected':''}>${esc(p.name)}</option>`).join('');
+  _panelFlipped = !!(schedule && schedule.flipped);
+  const flipBtn = document.getElementById('btn-flip-panel');
+  if (flipBtn) {
+    flipBtn.style.borderColor = _panelFlipped ? 'var(--orange)' : '#d1d5db';
+    flipBtn.style.color       = _panelFlipped ? 'var(--orange)' : '#374151';
+    flipBtn.style.background  = _panelFlipped ? '#fff8f3'       : '#fff';
+  }
   const circuits = schedule ? (Array.isArray(schedule.circuit_data) ? schedule.circuit_data : []) : [];
   rebuildCircuitGrid(circuits);
   document.getElementById('modal-overlay').classList.remove('hidden');
@@ -887,12 +914,16 @@ function buildViewRows(s) {
   const rG    = grp.right;
   let html = '';
 
-  for (let i = 0; i < slots; i++) {
+  const slotOrder = s.flipped
+    ? Array.from({length: slots}, (_, k) => slots - 1 - k)
+    : Array.from({length: slots}, (_, k) => k);
+  for (const i of slotOrder) {
     const d   = circuits[i] || {};
     const ls  = (i*2)+1, rs = (i*2)+2;
     const laG = lG[2*i], lbG = lG[2*i+1];
     const raG = rG[2*i], rbG = rG[2*i+1];
-    const sep = (i > 0 && laG?.isLeader !== false) ? 'slot-separator' : '';
+    const slotPos = slotOrder.indexOf(i);
+    const sep = (slotPos > 0 && laG?.isLeader !== false) ? 'slot-separator' : '';
     const suppressAB = ((laG?.isLeader === true  && lbG?.isLeader === false) ||
                         (laG?.isLeader === false && lbG?.isLeader === false)) ||
                        ((raG?.isLeader === true  && rbG?.isLeader === false) ||
@@ -1395,6 +1426,7 @@ document.getElementById('modal-save').addEventListener('click', async () => {
     bus_rating:     document.getElementById('f-bus-rating').value || null,
     enclosure_type: document.getElementById('f-enclosure').value.trim() || null,
     num_circuits:   parseInt(document.getElementById('f-num-circuits').value),
+    flipped:        _panelFlipped,
     circuit_data:   collectCircuitData(),
     project_id:     projectId,
     project_name:   projectName,
