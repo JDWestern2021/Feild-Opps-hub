@@ -712,7 +712,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
 
 <script>
 const AMP_OPTIONS = ['','15','20','25','30','35','40','45','50','60','70','80','100','110','125','150','175','200','225','250','300','350','400'];
-const POLE_OPTIONS = ['','1','2','3','4'];
+const POLE_OPTIONS = ['','1','2','3'];
 
 let projects = [], schedules = [], editingId = null, viewingId = null, viewingData = null, currentUser = null;
 let _panelFlipped = false;
@@ -871,8 +871,8 @@ function computePoleGroups(circuits, slots, flipped = false) {
       if (p >= 2) {
         const isA = (j % 2 === 0);
         // A positions: p full slots = p*2 half-rows
-        // B positions: remainder of current slot + (p-1) full slots = p*2-1 half-rows
-        const span = Math.min(isA ? p * 2 : p * 2 - 1, poleFlat.length - j);
+        // B positions: boundary-straddle — 2-pole = 2 half-rows (1B + 3A)
+        const span = Math.min(isA ? p * 2 : p, poleFlat.length - j);
         if (flipped) {
           // In flipped DOM, slots render in reverse order (B before A within each slot).
           // The last poleFlat index of this group renders first in the DOM — make it the leader.
