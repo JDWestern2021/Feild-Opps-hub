@@ -712,7 +712,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
 
 <script>
 const AMP_OPTIONS = ['','15','20','25','30','35','40','45','50','60','70','80','100','110','125','150','175','200','225','250','300','350','400'];
-const POLE_OPTIONS = ['','1','2','3'];
+const POLE_OPTIONS = ['','1','2','3','4'];
 
 let projects = [], schedules = [], editingId = null, viewingId = null, viewingData = null, currentUser = null;
 let _panelFlipped = false;
@@ -752,7 +752,7 @@ function rebuildCircuitGrid(circuitData = []) {
   const n     = parseInt(document.getElementById('f-num-circuits').value) || 24;
   const slots = n / 2;
   const tbody = document.getElementById('circuit-tbody');
-  const grp   = computePoleGroups(circuitData, slots);
+  const grp   = computePoleGroups(circuitData, slots, _panelFlipped);
   const lG    = grp.left;
   const rG    = grp.right;
   let html = '';
@@ -767,44 +767,62 @@ function rebuildCircuitGrid(circuitData = []) {
     const laG = lG[2*i],    lbG = lG[2*i+1];
     const raG = rG[2*i],    rbG = rG[2*i+1];
 
-    // Slot separator (bold top border) — suppress when A half is consumed from above
+    // Slot separator — in flipped mode B row renders first, so key off lbG; otherwise laG
     const slotPos = slotOrder.indexOf(i);
-    const sep = (slotPos > 0 && laG?.isLeader !== false) ? 'slot-separator' : '';
+    const firstG  = _panelFlipped ? lbG : laG;
+    const sep = (slotPos > 0 && firstG?.isLeader !== false) ? 'slot-separator' : '';
 
-    // A/B dashed divider on cct-num cells — suppress when A+B are in the same merged group
+    // A/B dashed divider — suppress when A+B are in the same merged group
     const suppressAB = ((laG?.isLeader === true  && lbG?.isLeader === false) ||
                         (laG?.isLeader === false && lbG?.isLeader === false)) ||
                        ((raG?.isLeader === true  && rbG?.isLeader === false) ||
                         (raG?.isLeader === false && rbG?.isLeader === false));
     const rowACls = suppressAB ? '' : 'row-a';
 
-    // Helper: build 3 left or right cells for one half-row
-    const leftCells = (g, name, val, poleVal, ampVal, placeholder='Description') =>
-      g === null
-        ? `<td><input type="text" name="${name}_desc_${i}" value="${esc(val)}" placeholder="${placeholder}"/></td>
-           <td class="pole-col">${poleSel(name+'_poles_'+i, poleVal)}</td>
-           <td class="amp-col">${ampSel(name+'_amps_'+i, ampVal)}</td>`
-      : g.isLeader
-        ? `<td class="mp-merged-l" rowspan="${g.span}"><input type="text" name="${name}_desc_${i}" value="${esc(val)}" placeholder="${placeholder}"/></td>
-           <td class="mp-merged-l" rowspan="${g.span}">${poleSel(name+'_poles_'+i, poleVal)}</td>
-           <td class="mp-merged-l" rowspan="${g.span}">${ampSel(name+'_amps_'+i, ampVal)}</td>`
-        : ''; // consumed
+    // In flipped mode, a leader may have dataIdx pointing to the original source slot.
+    // Resolve the circuit data and input-name slot index for that cell.
+    const resolveLeader = (g, defName, defDesc, defPoles, defAmps) => {
+      if (g && g.isLeader && g.dataIdx !== undefined) {
+        const ds  = Math.floor(g.dataIdx / 2);
+        const dk  = g.dataIdx % 2 === 0 ? 'la' : 'lb';
+        const dd  = circuitData[ds] || {};
+        return { name: dk, val: dd[dk+'_desc']||'', poleVal: dd[dk+'_poles']||'', ampVal: dd[dk+'_amps']||'', si: ds };
+      }
+      return { name: defName, val: defDesc, poleVal: defPoles, ampVal: defAmps, si: i };
+    };
 
-    const rightCells = (g, name, val, poleVal, ampVal, placeholder='Description') =>
+    // Helper: build 3 left or right cells for one half-row (si = slot index for input name)
+    const leftCells = (g, name, val, poleVal, ampVal, placeholder, si) =>
       g === null
-        ? `<td class="amp-col">${ampSel(name+'_amps_'+i, ampVal)}</td>
-           <td class="pole-col">${poleSel(name+'_poles_'+i, poleVal)}</td>
-           <td><input type="text" name="${name}_desc_${i}" value="${esc(val)}" placeholder="${placeholder}"/></td>`
+        ? `<td><input type="text" name="${name}_desc_${si}" value="${esc(val)}" placeholder="${placeholder}"/></td>
+           <td class="pole-col">${poleSel(name+'_poles_'+si, poleVal)}</td>
+           <td class="amp-col">${ampSel(name+'_amps_'+si, ampVal)}</td>`
       : g.isLeader
-        ? `<td class="mp-merged-r" rowspan="${g.span}">${ampSel(name+'_amps_'+i, ampVal)}</td>
-           <td class="mp-merged-r" rowspan="${g.span}">${poleSel(name+'_poles_'+i, poleVal)}</td>
-           <td class="mp-merged-r" rowspan="${g.span}"><input type="text" name="${name}_desc_${i}" value="${esc(val)}" placeholder="${placeholder}"/></td>`
+        ? `<td class="mp-merged-l" rowspan="${g.span}"><input type="text" name="${name}_desc_${si}" value="${esc(val)}" placeholder="${placeholder}"/></td>
+           <td class="mp-merged-l" rowspan="${g.span}">${poleSel(name+'_poles_'+si, poleVal)}</td>
+           <td class="mp-merged-l" rowspan="${g.span}">${ampSel(name+'_amps_'+si, ampVal)}</td>`
         : '';
 
-    const lAc = leftCells(laG, 'la', d.la_desc||d.left_desc||'', d.la_poles||d.left_poles||'', d.la_amps||d.left_amps||'');
-    const lBc = leftCells(lbG, 'lb', d.lb_desc||'', d.lb_poles||'', d.lb_amps||'', 'Tandem B (optional)');
-    const rAc = rightCells(raG, 'ra', d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'');
-    const rBc = rightCells(rbG, 'rb', d.rb_desc||'', d.rb_poles||'', d.rb_amps||'', 'Tandem B (optional)');
+    const rightCells = (g, name, val, poleVal, ampVal, placeholder, si) =>
+      g === null
+        ? `<td class="amp-col">${ampSel(name+'_amps_'+si, ampVal)}</td>
+           <td class="pole-col">${poleSel(name+'_poles_'+si, poleVal)}</td>
+           <td><input type="text" name="${name}_desc_${si}" value="${esc(val)}" placeholder="${placeholder}"/></td>`
+      : g.isLeader
+        ? `<td class="mp-merged-r" rowspan="${g.span}">${ampSel(name+'_amps_'+si, ampVal)}</td>
+           <td class="mp-merged-r" rowspan="${g.span}">${poleSel(name+'_poles_'+si, poleVal)}</td>
+           <td class="mp-merged-r" rowspan="${g.span}"><input type="text" name="${name}_desc_${si}" value="${esc(val)}" placeholder="${placeholder}"/></td>`
+        : '';
+
+    const laD = resolveLeader(laG, 'la', d.la_desc||d.left_desc||'',  d.la_poles||d.left_poles||'',  d.la_amps||d.left_amps||'');
+    const lbD = resolveLeader(lbG, 'lb', d.lb_desc||'',               d.lb_poles||'',                d.lb_amps||'');
+    const raD = resolveLeader(raG, 'ra', d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'');
+    const rbD = resolveLeader(rbG, 'rb', d.rb_desc||'',               d.rb_poles||'',                d.rb_amps||'');
+
+    const lAc = leftCells (laG, laD.name, laD.val, laD.poleVal, laD.ampVal, 'Description',         laD.si);
+    const lBc = leftCells (lbG, lbD.name, lbD.val, lbD.poleVal, lbD.ampVal, 'Tandem B (optional)', lbD.si);
+    const rAc = rightCells(raG, raD.name, raD.val, raD.poleVal, raD.ampVal, 'Description',         raD.si);
+    const rBc = rightCells(rbG, rbD.name, rbD.val, rbD.poleVal, rbD.ampVal, 'Tandem B (optional)', rbD.si);
 
     if (_panelFlipped) {
       html += `<tr class="slot-b-row">${lBc}
@@ -832,9 +850,10 @@ function rebuildCircuitGrid(circuitData = []) {
 // Returns flat half-row group arrays (length = slots*2).
 // Index 2i = slot i A half, index 2i+1 = slot i B half.
 // null  → single-pole, render normally
-// {span, isLeader:true}  → first half-row of an N-row merged group
-// {span, isLeader:false} → consumed by the leader above it
-function computePoleGroups(circuits, slots) {
+// {span, isLeader:true}  → first DOM half-row of an N-row merged group
+// {span, isLeader:false} → consumed by the leader
+// {span, isLeader:true, dataIdx:j} → leader whose circuit data lives at poleFlat[j] (flipped mode)
+function computePoleGroups(circuits, slots, flipped = false) {
   function buildPoleFlat(aKey, bKey) {
     const f = [];
     for (let i = 0; i < slots; i++) {
@@ -850,12 +869,21 @@ function computePoleGroups(circuits, slots) {
     while (j < poleFlat.length) {
       const p = poleFlat[j];
       if (p >= 2) {
-        // A positions (even index): span = p*2 (full slots — 2-pole = 4 half-rows)
-        // B positions (odd index):  span = p   (boundary-straddle — 2-pole = 2 half-rows)
         const isA = (j % 2 === 0);
-        const span = Math.min(isA ? p * 2 : p, poleFlat.length - j);
-        r[j] = { span, isLeader: true };
-        for (let k = 1; k < span; k++) r[j+k] = { span, isLeader: false };
+        // A positions: p full slots = p*2 half-rows
+        // B positions: remainder of current slot + (p-1) full slots = p*2-1 half-rows
+        const span = Math.min(isA ? p * 2 : p * 2 - 1, poleFlat.length - j);
+        if (flipped) {
+          // In flipped DOM, slots render in reverse order (B before A within each slot).
+          // The last poleFlat index of this group renders first in the DOM — make it the leader.
+          // dataIdx tells the renderer which slot's circuit data to display in the leader cell.
+          const lastIdx = j + span - 1;
+          r[lastIdx] = { span, isLeader: true, dataIdx: j };
+          for (let k = 0; k < span - 1; k++) r[j + k] = { span, isLeader: false };
+        } else {
+          r[j] = { span, isLeader: true };
+          for (let k = 1; k < span; k++) r[j + k] = { span, isLeader: false };
+        }
         j += span;
       } else {
         j++;
@@ -919,13 +947,14 @@ function openModal(schedule = null) {
 // Build the read-only view tbody — same A/B layout
 function buildViewRows(s) {
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
-  const slots = s.num_circuits / 2;
-  const grp   = computePoleGroups(circuits, slots);
-  const lG    = grp.left;
-  const rG    = grp.right;
+  const slots    = s.num_circuits / 2;
+  const flipped  = !!s.flipped;
+  const grp      = computePoleGroups(circuits, slots, flipped);
+  const lG       = grp.left;
+  const rG       = grp.right;
   let html = '';
 
-  const slotOrder = s.flipped
+  const slotOrder = flipped
     ? Array.from({length: slots}, (_, k) => slots - 1 - k)
     : Array.from({length: slots}, (_, k) => k);
   for (const i of slotOrder) {
@@ -934,12 +963,27 @@ function buildViewRows(s) {
     const laG = lG[2*i], lbG = lG[2*i+1];
     const raG = rG[2*i], rbG = rG[2*i+1];
     const slotPos = slotOrder.indexOf(i);
-    const sep = (slotPos > 0 && laG?.isLeader !== false) ? 'slot-separator' : '';
+    const firstG  = flipped ? lbG : laG;
+    const sep = (slotPos > 0 && firstG?.isLeader !== false) ? 'slot-separator' : '';
     const suppressAB = ((laG?.isLeader === true  && lbG?.isLeader === false) ||
                         (laG?.isLeader === false && lbG?.isLeader === false)) ||
                        ((raG?.isLeader === true  && rbG?.isLeader === false) ||
                         (raG?.isLeader === false && rbG?.isLeader === false));
     const rowACls = suppressAB ? '' : 'row-a';
+
+    const resolveLeader = (g, dk) => {
+      if (g && g.isLeader && g.dataIdx !== undefined) {
+        const ds  = Math.floor(g.dataIdx / 2);
+        const ddk = g.dataIdx % 2 === 0 ? 'la' : 'lb';
+        const dd  = circuits[ds] || {};
+        return { txt: dd[ddk+'_desc']||'', p: dd[ddk+'_poles']||'', a: dd[ddk+'_amps']||'' };
+      }
+      return {
+        txt: d[dk+'_desc'] || (dk==='la' ? d.left_desc : dk==='ra' ? d.right_desc : '') || '',
+        p:   d[dk+'_poles'] || (dk==='la' ? d.left_poles : dk==='ra' ? d.right_poles : '') || '',
+        a:   d[dk+'_amps']  || (dk==='la' ? d.left_amps  : dk==='ra' ? d.right_amps  : '') || '',
+      };
+    };
 
     const lc = (g, txt, p, a) =>
       g === null
@@ -954,28 +998,33 @@ function buildViewRows(s) {
         ? `<td class="cct-num mp-merged-r" rowspan="${g.span}" style="background:transparent;">${a}</td><td class="cct-num mp-merged-r" rowspan="${g.span}" style="background:transparent;">${p}</td><td class="mp-merged-r" rowspan="${g.span}">${esc(txt)}</td>`
         : '';
 
-    if (s.flipped) {
+    const laD = resolveLeader(laG, 'la');
+    const lbD = resolveLeader(lbG, 'lb');
+    const raD = resolveLeader(raG, 'ra');
+    const rbD = resolveLeader(rbG, 'rb');
+
+    if (flipped) {
       html += `<tr class="slot-b-row">
-        ${lc(lbG, d.lb_desc||'', d.lb_poles||'', d.lb_amps||'')}
+        ${lc(lbG, lbD.txt, lbD.p, lbD.a)}
         <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
         <td class="cct-num ${rowACls} ${sep}">${rs}B</td>
-        ${rc(rbG, d.rb_desc||'', d.rb_poles||'', d.rb_amps||'')}</tr>
+        ${rc(rbG, rbD.txt, rbD.p, rbD.a)}</tr>
       <tr class="slot-a-row">
-        ${lc(laG, d.la_desc||d.left_desc||'', d.la_poles||d.left_poles||'', d.la_amps||d.left_amps||'')}
+        ${lc(laG, laD.txt, laD.p, laD.a)}
         <td class="cct-num">${ls}A</td>
         <td class="cct-num">${rs}A</td>
-        ${rc(raG, d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'')}</tr>`;
+        ${rc(raG, raD.txt, raD.p, raD.a)}</tr>`;
     } else {
       html += `<tr class="slot-a-row">
-        ${lc(laG, d.la_desc||d.left_desc||'', d.la_poles||d.left_poles||'', d.la_amps||d.left_amps||'')}
+        ${lc(laG, laD.txt, laD.p, laD.a)}
         <td class="cct-num ${rowACls} ${sep}">${ls}A</td>
         <td class="cct-num ${rowACls} ${sep}">${rs}A</td>
-        ${rc(raG, d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'')}</tr>
+        ${rc(raG, raD.txt, raD.p, raD.a)}</tr>
       <tr class="slot-b-row">
-        ${lc(lbG, d.lb_desc||'', d.lb_poles||'', d.lb_amps||'')}
+        ${lc(lbG, lbD.txt, lbD.p, lbD.a)}
         <td class="cct-num">${ls}B</td>
         <td class="cct-num">${rs}B</td>
-        ${rc(rbG, d.rb_desc||'', d.rb_poles||'', d.rb_amps||'')}</tr>`;
+        ${rc(rbG, rbD.txt, rbD.p, rbD.a)}</tr>`;
     }
   }
   return html;
