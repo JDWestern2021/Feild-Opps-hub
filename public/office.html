@@ -4481,7 +4481,7 @@ async function renderProjectWire(projectId) {
   panel.innerHTML = `
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <div style="font-size:14px;font-weight:800;color:var(--gray-800);">Wire Log</div>
-      <div style="font-size:11px;color:var(--gray-400);background:#f3f4f6;border-radius:6px;padding:3px 8px;">Enter kg → meters auto-calculate</div>
+      <div style="font-size:11px;color:var(--gray-400);background:#f3f4f6;border-radius:6px;padding:3px 8px;">Enter lbs → meters auto-calculate</div>
       <span style="flex:1;"></span>
       <button id="wire-add-preset-btn" class="btn btn-secondary btn-sm">+ Add from Preset</button>
       <button id="wire-add-custom-btn" class="btn btn-secondary btn-sm">+ Custom Wire Type</button>
@@ -4495,12 +4495,12 @@ async function renderProjectWire(projectId) {
             <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">Type</th>
             <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">Gauge</th>
             <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">Color</th>
-            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">kg/m</th>
-            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;border-left:2px solid #bfdbfe;">Sent (kg)</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;">lbs/m</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;border-left:2px solid #bfdbfe;">Sent (lbs)</th>
             <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;">≈ m</th>
-            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;border-left:2px solid #bbf7d0;">Installed (kg)</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;border-left:2px solid #bbf7d0;">Installed (lbs)</th>
             <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;">≈ m</th>
-            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;border-left:2px solid #fde68a;">Remaining on Site (kg)</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;border-left:2px solid #fde68a;">Remaining on Site (lbs)</th>
             <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;">≈ m</th>
             <th style="width:180px;"></th>
           </tr>
@@ -4561,7 +4561,7 @@ async function renderProjectWire(projectId) {
             <!-- kg input -->
             <div id="wire-unit-kg-field">
               <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--gray-700);">
-                Weight (kg)
+                Weight (lbs)
                 <input type="number" id="wire-entry-kg" min="0" step="0.1" placeholder="e.g. 4.5" style="border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:16px;font-family:inherit;"/>
               </label>
               <div id="wire-entry-kg-hint" style="font-size:12px;color:#6b7280;margin-top:4px;min-height:18px;"></div>
@@ -4642,7 +4642,7 @@ function renderWireTable() {
             ${WIRE_COLORS.map(c=>`<option value="${c}"${c===(w.color||'')?'selected':''}>${c||'— color —'}</option>`).join('')}
           </select>
         </td>
-        <td style="padding:6px 8px;text-align:right;font-size:12px;color:var(--gray-500);">${kgpm > 0 ? kgpm + ' kg/m' : '—'}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:12px;color:var(--gray-500);">${kgpm > 0 ? kgpm + ' lbs/m' : '—'}</td>
         <td style="padding:6px 10px;text-align:right;font-weight:700;color:#1d4ed8;border-left:2px solid #bfdbfe;">${sent > 0 ? wireFmt(sent) : '<span style="color:#9ca3af;">—</span>'}</td>
         <td style="padding:6px 8px;text-align:right;font-size:12px;color:#1d4ed8;">${wireFmtM(mSent)}</td>
         <td style="padding:6px 10px;text-align:right;font-weight:700;color:#15803d;border-left:2px solid #bbf7d0;">${inst > 0 ? wireFmt(inst) : '<span style="color:#9ca3af;">—</span>'}</td>
@@ -4727,7 +4727,7 @@ function wireRenderEntries(wireId) {
           return `<tr style="border-bottom:1px solid #f3f4f6;">
             <td style="padding:5px 10px;color:var(--gray-600);">${wireFmtDate(e.entry_date)}</td>
             <td style="padding:5px 10px;"><span style="font-weight:700;color:${color};background:${e.entry_type==='sent'?'#eff6ff':'#f0fdf4'};padding:2px 7px;border-radius:5px;font-size:11px;">${label}</span></td>
-            <td style="padding:5px 10px;text-align:right;font-weight:700;color:${color};">${wireFmt(e.kg)} kg</td>
+            <td style="padding:5px 10px;text-align:right;font-weight:700;color:${color};">${wireFmt(e.kg)} lbs</td>
             <td style="padding:5px 10px;text-align:right;color:var(--gray-500);">${wireFmtM(m)}</td>
             <td style="padding:5px 10px;color:var(--gray-500);">${esc(e.notes||'')}</td>
             <td style="padding:5px 4px;text-align:center;">
@@ -4787,7 +4787,7 @@ async function wireLoadActivity(projectId) {
     return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f3f4f6;">
       <span style="background:${bg};color:${color};font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;">${isSent?'SENT':'INSTALLED'}</span>
       <div style="flex:1;line-height:1.5;${strike}">
-        <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} kg</strong>${mText}${!isPartOfDeletedGroup ? ' of <strong>'+esc(wireLabel)+'</strong>' : ''}${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''}
+        <strong>${esc(who)}</strong> ${verb} <strong>${wireFmt(e.kg)} lbs</strong>${mText}${!isPartOfDeletedGroup ? ' of <strong>'+esc(wireLabel)+'</strong>' : ''}${e.notes ? ' — <span style="color:var(--gray-400);">'+esc(e.notes)+'</span>' : ''}
       </div>
       ${individualRestoreBtn}
     </div>`;
@@ -4854,7 +4854,7 @@ function wireEntryUpdateHints() {
       kgHint.textContent = '≈ ' + (kgVal / kgpm).toFixed(1) + ' m';
       kgHint.style.color = '#1d4ed8';
     } else if (kgVal > 0 && kgpm === 0) {
-      kgHint.textContent = 'No kg/m set for this wire type — meters can\'t be calculated';
+      kgHint.textContent = 'No lbs/m set for this wire type — meters can\'t be calculated';
       kgHint.style.color = '#9ca3af';
     } else {
       kgHint.textContent = '';
@@ -4865,10 +4865,10 @@ function wireEntryUpdateHints() {
   const mHint = $('wire-entry-m-hint');
   if (mHint) {
     if (mVal > 0 && kgpm > 0) {
-      mHint.textContent = '= ' + (mVal * kgpm).toFixed(2) + ' kg (will be saved as kg)';
+      mHint.textContent = '= ' + (mVal * kgpm).toFixed(2) + ' lbs (will be saved as lbs)';
       mHint.style.color = '#15803d';
     } else if (mVal > 0 && kgpm === 0) {
-      mHint.textContent = 'No kg/m set — can\'t convert to kg. Enter kg directly instead.';
+      mHint.textContent = 'No lbs/m set — can\'t convert to lbs. Enter lbs directly instead.';
       mHint.style.color = '#dc2626';
     } else {
       mHint.textContent = '';
@@ -4908,11 +4908,11 @@ window.wireOpenEntry = function(wireId, entryType) {
     if (usingMeters) {
       const mVal = parseFloat($('wire-entry-m').value);
       if (!mVal || mVal <= 0) { alert('Enter a length in meters.'); return; }
-      if (_wireEntryKgpm <= 0) { alert('This wire type has no kg/m value set — switch to kg entry or set kg/m on the wire type.'); return; }
+      if (_wireEntryKgpm <= 0) { alert('This wire type has no lbs/m value set — switch to lbs entry or set lbs/m on the wire type.'); return; }
       kg = mVal * _wireEntryKgpm;
     } else {
       kg = parseFloat($('wire-entry-kg').value);
-      if (!kg || kg <= 0) { alert('Enter a weight in kg.'); return; }
+      if (!kg || kg <= 0) { alert('Enter a weight in lbs.'); return; }
     }
 
     newBtn.disabled = true; newBtn.textContent = 'Saving…';
@@ -5005,7 +5005,7 @@ function renderWirePresetList() {
         <select data-color-for="${idx}" onclick="event.stopPropagation()" style="font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;min-width:90px;">
           ${WIRE_COLORS.map(c=>`<option value="${c}"${c===(p.color||'')?'selected':''}>${c||'— color —'}</option>`).join('')}
         </select>
-        ${p.kg_per_m > 0 ? `<div style="font-size:11px;font-weight:700;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:6px;white-space:nowrap;">${p.kg_per_m} kg/m</div>` : ''}
+        ${p.kg_per_m > 0 ? `<div style="font-size:11px;font-weight:700;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:6px;white-space:nowrap;">${p.kg_per_m} lbs/m</div>` : ''}
       </div>`;
     }).join('')}
   `).join('');
