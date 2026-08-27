@@ -1057,49 +1057,81 @@ function printSchedule(s, widthIn, heightIn) {
   if (!s) return;
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
   const slots = s.num_circuits / 2;
-  const grp   = computePoleGroups(circuits, slots);
-  const lG    = grp.left;
-  const rG    = grp.right;
+  const grp     = computePoleGroups(circuits, slots, flipped);
+  const lG      = grp.left;
+  const rG      = grp.right;
   const ML = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-left:3px solid #1a3a5c;background:#eff6ff;padding:3px 4px;overflow:hidden;';
   const MR = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-right:3px solid #7a2e0a;background:#fff7ed;padding:3px 4px;overflow:hidden;';
   const MA = 'vertical-align:middle;text-align:center;background:#eff6ff;';
   const MB = 'vertical-align:middle;text-align:center;background:#fff7ed;';
   let rows = '';
 
-  for (let i = 0; i < slots; i++) {
+  const slotOrder = flipped
+    ? Array.from({length: slots}, (_, k) => slots - 1 - k)
+    : Array.from({length: slots}, (_, k) => k);
+
+  const lc = (g, txt, p, a) =>
+    g === null
+      ? `<td class="desc-td">${esc(txt)}</td><td class="pole-td">${p}</td><td class="amp-td">${a}</td>`
+    : g.isLeader
+      ? `<td style="${ML}" rowspan="${g.span}">${esc(txt)}</td><td class="pole-td" style="${MA}" rowspan="${g.span}">${p}</td><td class="amp-td" style="${MA}" rowspan="${g.span}">${a}</td>`
+      : '';
+  const rc = (g, txt, p, a) =>
+    g === null
+      ? `<td class="amp-td">${a}</td><td class="pole-td">${p}</td><td class="desc-td">${esc(txt)}</td>`
+    : g.isLeader
+      ? `<td class="amp-td" style="${MB}" rowspan="${g.span}">${a}</td><td class="pole-td" style="${MB}" rowspan="${g.span}">${p}</td><td style="${MR}" rowspan="${g.span}">${esc(txt)}</td>`
+      : '';
+
+  for (const i of slotOrder) {
     const d   = circuits[i] || {};
     const ls  = (i*2)+1, rs = (i*2)+2;
     const laG = lG[2*i], lbG = lG[2*i+1];
     const raG = rG[2*i], rbG = rG[2*i+1];
 
-    const slotTop = laG?.isLeader !== false ? 'slot-top' : '';
+    const resolveL = (g, dk) => {
+      if (g && g.isLeader && g.dataIdx !== undefined) {
+        const ds  = Math.floor(g.dataIdx / 2);
+        const ddk = dk[0] + (g.dataIdx % 2 === 0 ? 'a' : 'b');
+        const dd  = circuits[ds] || {};
+        return { txt: dd[ddk+'_desc']||'', p: dd[ddk+'_poles']||'', a: dd[ddk+'_amps']||'' };
+      }
+      return {
+        txt: d[dk+'_desc'] || (dk==='la' ? d.left_desc : dk==='ra' ? d.right_desc : '') || '',
+        p:   d[dk+'_poles'] || (dk==='la' ? d.left_poles : dk==='ra' ? d.right_poles : '') || '',
+        a:   d[dk+'_amps']  || (dk==='la' ? d.left_amps  : dk==='ra' ? d.right_amps  : '') || '',
+      };
+    };
+    const laD = resolveL(laG, 'la'), lbD = resolveL(lbG, 'lb');
+    const raD = resolveL(raG, 'ra'), rbD = resolveL(rbG, 'rb');
+
     const suppressAB = ((laG?.isLeader === true  && lbG?.isLeader === false) ||
                         (laG?.isLeader === false && lbG?.isLeader === false)) ||
                        ((raG?.isLeader === true  && rbG?.isLeader === false) ||
                         (raG?.isLeader === false && rbG?.isLeader === false));
     const cctAClass = suppressAB ? 'cct-td' : 'cct-td cct-ab-div';
 
-    const lc = (g, txt, p, a) =>
-      g === null
-        ? `<td class="desc-td">${esc(txt)}</td><td class="pole-td">${p}</td><td class="amp-td">${a}</td>`
-      : g.isLeader
-        ? `<td style="${ML}" rowspan="${g.span}">${esc(txt)}</td><td class="pole-td" style="${MA}" rowspan="${g.span}">${p}</td><td class="amp-td" style="${MA}" rowspan="${g.span}">${a}</td>`
-        : '';
-    const rc = (g, txt, p, a) =>
-      g === null
-        ? `<td class="amp-td">${a}</td><td class="pole-td">${p}</td><td class="desc-td">${esc(txt)}</td>`
-      : g.isLeader
-        ? `<td class="amp-td" style="${MB}" rowspan="${g.span}">${a}</td><td class="pole-td" style="${MB}" rowspan="${g.span}">${p}</td><td style="${MR}" rowspan="${g.span}">${esc(txt)}</td>`
-        : '';
-
-    rows += `<tr class="row-a ${slotTop}">
-        ${lc(laG, d.la_desc||d.left_desc||'', d.la_poles||d.left_poles||'', d.la_amps||d.left_amps||'')}
-        <td class="${cctAClass}">${ls}A</td><td class="${cctAClass}">${rs}A</td>
-        ${rc(raG, d.ra_desc||d.right_desc||'', d.ra_poles||d.right_poles||'', d.ra_amps||d.right_amps||'')}</tr>
-      <tr class="row-b">
-        ${lc(lbG, d.lb_desc||'', d.lb_poles||'', d.lb_amps||'')}
+    if (flipped) {
+      const slotTop = lbG?.isLeader !== false ? 'slot-top' : '';
+      rows += `<tr class="row-b ${slotTop}">
+        ${lc(lbG, lbD.txt, lbD.p, lbD.a)}
         <td class="cct-td">${ls}B</td><td class="cct-td">${rs}B</td>
-        ${rc(rbG, d.rb_desc||'', d.rb_poles||'', d.rb_amps||'')}</tr>`;
+        ${rc(rbG, rbD.txt, rbD.p, rbD.a)}</tr>
+      <tr class="row-a">
+        ${lc(laG, laD.txt, laD.p, laD.a)}
+        <td class="${cctAClass}">${ls}A</td><td class="${cctAClass}">${rs}A</td>
+        ${rc(raG, raD.txt, raD.p, raD.a)}</tr>`;
+    } else {
+      const slotTop = laG?.isLeader !== false ? 'slot-top' : '';
+      rows += `<tr class="row-a ${slotTop}">
+        ${lc(laG, laD.txt, laD.p, laD.a)}
+        <td class="${cctAClass}">${ls}A</td><td class="${cctAClass}">${rs}A</td>
+        ${rc(raG, raD.txt, raD.p, raD.a)}</tr>
+      <tr class="row-b">
+        ${lc(lbG, lbD.txt, lbD.p, lbD.a)}
+        <td class="cct-td">${ls}B</td><td class="cct-td">${rs}B</td>
+        ${rc(rbG, rbD.txt, rbD.p, rbD.a)}</tr>`;
+    }
   }
 
   const logoSrc = window.location.origin + '/logo-bolt.png';
