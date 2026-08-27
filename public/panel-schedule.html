@@ -784,7 +784,7 @@ function rebuildCircuitGrid(circuitData = []) {
     const resolveLeader = (g, defName, defDesc, defPoles, defAmps) => {
       if (g && g.isLeader && g.dataIdx !== undefined) {
         const ds  = Math.floor(g.dataIdx / 2);
-        const dk  = g.dataIdx % 2 === 0 ? 'la' : 'lb';
+        const dk  = defName[0] + (g.dataIdx % 2 === 0 ? 'a' : 'b');
         const dd  = circuitData[ds] || {};
         return { name: dk, val: dd[dk+'_desc']||'', poleVal: dd[dk+'_poles']||'', ampVal: dd[dk+'_amps']||'', si: ds };
       }
@@ -974,7 +974,7 @@ function buildViewRows(s) {
     const resolveLeader = (g, dk) => {
       if (g && g.isLeader && g.dataIdx !== undefined) {
         const ds  = Math.floor(g.dataIdx / 2);
-        const ddk = g.dataIdx % 2 === 0 ? 'la' : 'lb';
+        const ddk = dk[0] + (g.dataIdx % 2 === 0 ? 'a' : 'b');
         const dd  = circuits[ds] || {};
         return { txt: dd[ddk+'_desc']||'', p: dd[ddk+'_poles']||'', a: dd[ddk+'_amps']||'' };
       }
