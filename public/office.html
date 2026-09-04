@@ -2142,6 +2142,8 @@
 
 <div id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 
@@ -3696,6 +3698,7 @@ function projBulkBar(type) {
   return `<div class="po-bulk-bar" id="proj-bulk-bar-${type}" style="margin-bottom:8px;">
     <span class="sel-count" id="proj-bulk-count-${type}">0 selected</span>
     <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-export" style="background:#1a6e35;color:white;" title="Download the selected ${noun}s as one Excel file">Export to Excel</button>
+    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-pdf" style="background:#c0392b;color:white;" title="Download the selected ${noun}s as one PDF file">Export to PDF</button>
     <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-print" style="background:#1c1c1e;color:white;" title="Open the selected ${noun}s as one printable document">Print Selected</button>
     ${isArch
       ? `<button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-restore" style="background:#2563eb;color:white;">Restore Selected</button>`
@@ -4047,6 +4050,11 @@ function wireProjBulkBar(panel, type) {
         if (isPO) window.location = `/api/po/export/xlsx?ids=${ids.join(',')}`;
         else exportTicketsToXlsx(items, `JD-Tickets-${safeProj}${isArch ? '-Archived' : ''}-${today}.xlsx`);
 
+      } else if (action === 'proj-bulk-pdf') {
+        if (!items.length) { showToast('Could not find the selected records', 'error'); return; }
+        if (isPO) { showToast('PDF export is only available for time tickets', 'error'); return; }
+        exportTicketsToPdf(items, `JD-Tickets-${safeProj}${isArch ? '-Archived' : ''}-${today}.pdf`);
+
       } else if (action === 'proj-bulk-print') {
         // One print document, one record per page. window.open must stay inside
         // the click gesture (no await before it) or the popup blocker kills it.
@@ -4247,6 +4255,173 @@ function exportTicketsToXlsx(tickets, filename) {
   // Route through a dedicated tickets export endpoint
   const ids = tickets.map(t=>t.id).join(',');
   window.location = `/api/tickets/export/xlsx?ids=${ids}&filename=${encodeURIComponent(filename)}`;
+}
+
+function exportTicketsToPdf(tickets, filename) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const lm = 15, rm = 15, pw = 216 - lm - rm;
+  const co = { header: [30, 30, 30], label: [80, 80, 80], line: [200, 200, 200], accent: [20, 80, 40] };
+
+  // Grand totals accumulators
+  let grandReg = 0, grandOT = 0, grandTravel = 0;
+
+  tickets.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  tickets.forEach((t, idx) => {
+    if (idx > 0) doc.addPage();
+
+    let y = 18;
+
+    // Company header
+    doc.setFontSize(11).setFont('helvetica', 'bold').setTextColor(...co.accent);
+    doc.text('J&D Western Electric Ltd.', lm, y);
+    doc.setFontSize(8).setFont('helvetica', 'normal').setTextColor(...co.label);
+    doc.text('Daily Time Ticket', lm, y + 5);
+
+    // Ticket # top-right
+    doc.setFontSize(14).setFont('helvetica', 'bold').setTextColor(...co.header);
+    doc.text(String(t.ticket_number || ''), 216 - rm, y, { align: 'right' });
+    doc.setFontSize(8).setFont('helvetica', 'normal').setTextColor(...co.label);
+    doc.text('Ticket #', 216 - rm, y + 5, { align: 'right' });
+
+    y += 12;
+    doc.setDrawColor(...co.line).setLineWidth(0.3).line(lm, y, 216 - rm, y);
+    y += 5;
+
+    // Meta row
+    const fields = [
+      ['Date',       t.date       || '—'],
+      ['Job Name',   t.job_name   || '—'],
+      ['Job #',      t.job_number || '—'],
+      ['Supervisor', t.supervisor || '—'],
+    ];
+    const colW = pw / fields.length;
+    fields.forEach(([label, val], i) => {
+      const x = lm + i * colW;
+      doc.setFontSize(7).setFont('helvetica', 'normal').setTextColor(...co.label);
+      doc.text(label, x, y);
+      doc.setFontSize(9).setFont('helvetica', 'bold').setTextColor(...co.header);
+      doc.text(String(val), x, y + 4);
+    });
+    y += 12;
+
+    // Work Description
+    if (t.work_description) {
+      doc.setFontSize(7).setFont('helvetica', 'bold').setTextColor(...co.label);
+      doc.text('WORK DESCRIPTION', lm, y);
+      y += 4;
+      doc.setFontSize(8.5).setFont('helvetica', 'normal').setTextColor(...co.header);
+      const lines = doc.splitTextToSize(t.work_description, pw);
+      doc.text(lines, lm, y);
+      y += lines.length * 4 + 3;
+    }
+
+    if (t.equipment_used) {
+      doc.setFontSize(7).setFont('helvetica', 'bold').setTextColor(...co.label);
+      doc.text('EQUIPMENT / MATERIALS USED', lm, y);
+      y += 4;
+      doc.setFontSize(8.5).setFont('helvetica', 'normal').setTextColor(...co.header);
+      const lines = doc.splitTextToSize(t.equipment_used, pw);
+      doc.text(lines, lm, y);
+      y += lines.length * 4 + 3;
+    }
+
+    if (t.notes) {
+      doc.setFontSize(7).setFont('helvetica', 'bold').setTextColor(...co.label);
+      doc.text('NOTES', lm, y);
+      y += 4;
+      doc.setFontSize(8.5).setFont('helvetica', 'normal').setTextColor(...co.header);
+      const lines = doc.splitTextToSize(t.notes, pw);
+      doc.text(lines, lm, y);
+      y += lines.length * 4 + 3;
+    }
+
+    y += 1;
+    doc.setDrawColor(...co.line).setLineWidth(0.2).line(lm, y, 216 - rm, y);
+    y += 4;
+
+    // Hours table
+    const emps = t.employees || [];
+    let tickReg = 0, tickOT = 0, tickTravel = 0;
+    emps.forEach(e => {
+      tickReg    += parseFloat(e.regular_hours)  || 0;
+      tickOT     += parseFloat(e.overtime_hours) || 0;
+      tickTravel += parseFloat(e.travel_hours)   || 0;
+    });
+    grandReg    += tickReg;
+    grandOT     += tickOT;
+    grandTravel += tickTravel;
+
+    doc.autoTable({
+      startY: y,
+      margin: { left: lm, right: rm },
+      head: [['Employee', 'Level', 'Reg Hrs', 'OT Hrs', 'Travel Hrs', 'Total Hrs']],
+      body: emps.map(e => {
+        const reg    = parseFloat(e.regular_hours)  || 0;
+        const ot     = parseFloat(e.overtime_hours) || 0;
+        const travel = parseFloat(e.travel_hours)   || 0;
+        return [
+          e.employee_name || '—',
+          e.level || 'Journeyman',
+          reg.toFixed(1),
+          ot > 0 ? ot.toFixed(1) : '—',
+          travel > 0 ? travel.toFixed(1) : '—',
+          (reg + ot + travel).toFixed(1),
+        ];
+      }),
+      foot: [[
+        { content: 'TICKET TOTALS', colSpan: 2, styles: { fontStyle: 'bold' } },
+        tickReg.toFixed(1),
+        tickOT > 0 ? tickOT.toFixed(1) : '—',
+        tickTravel > 0 ? tickTravel.toFixed(1) : '—',
+        (tickReg + tickOT + tickTravel).toFixed(1),
+      ]],
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: co.accent, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7 },
+      footStyles: { fillColor: [240,240,240], textColor: co.header, fontStyle: 'bold', fontSize: 8 },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } },
+    });
+  });
+
+  // Grand totals summary page
+  doc.addPage();
+  let y = 18;
+  doc.setFontSize(13).setFont('helvetica', 'bold').setTextColor(...co.accent);
+  doc.text('Summary — All Selected Tickets', lm, y);
+  y += 4;
+  doc.setFontSize(8).setFont('helvetica', 'normal').setTextColor(...co.label);
+  doc.text(`${tickets.length} ticket${tickets.length !== 1 ? 's' : ''} · Generated ${new Date().toLocaleDateString('en-CA')}`, lm, y + 4);
+  y += 12;
+  doc.setDrawColor(...co.line).setLineWidth(0.3).line(lm, y, 216 - rm, y);
+  y += 6;
+
+  doc.autoTable({
+    startY: y,
+    margin: { left: lm, right: rm },
+    head: [['Date', 'Ticket #', 'Job Name', 'Supervisor', 'Reg Hrs', 'OT Hrs', 'Travel', 'Total']],
+    body: tickets.map(t => {
+      const emps = t.employees || [];
+      const r = emps.reduce((s,e) => s + (parseFloat(e.regular_hours) ||0), 0);
+      const o = emps.reduce((s,e) => s + (parseFloat(e.overtime_hours)||0), 0);
+      const v = emps.reduce((s,e) => s + (parseFloat(e.travel_hours)  ||0), 0);
+      return [t.date||'—', t.ticket_number||'—', t.job_name||'—', t.supervisor||'—',
+        r.toFixed(1), o>0?o.toFixed(1):'—', v>0?v.toFixed(1):'—', (r+o+v).toFixed(1)];
+    }),
+    foot: [[
+      { content: 'GRAND TOTAL', colSpan: 4, styles: { fontStyle: 'bold' } },
+      grandReg.toFixed(1),
+      grandOT > 0 ? grandOT.toFixed(1) : '—',
+      grandTravel > 0 ? grandTravel.toFixed(1) : '—',
+      (grandReg + grandOT + grandTravel).toFixed(1),
+    ]],
+    styles: { fontSize: 7.5, cellPadding: 2 },
+    headStyles: { fillColor: co.accent, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7 },
+    footStyles: { fillColor: [240,240,240], textColor: co.header, fontStyle: 'bold', fontSize: 8 },
+    columnStyles: { 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' } },
+  });
+
+  doc.save(filename);
 }
 
 function setProjectSubTab(tab) {
