@@ -3548,7 +3548,7 @@ async function loadProjectPermitBadge(id) {
 
 // ── Project sub-tab rendering helpers ──
 
-function projTicketRow(t, showArchiveBtn = true) {
+function projTicketRow(t, showArchiveBtn = true, cbClass = 'proj-tt-cb') {
   const reg    = t.employees ? t.employees.reduce((s,e)=>s+(e.regular_hours||0), 0) : 0;
   const ot     = t.employees ? t.employees.reduce((s,e)=>s+(e.overtime_hours||0), 0) : 0;
   const travel = t.employees ? t.employees.reduce((s,e)=>s+(e.travel_hours||0),   0) : 0;
@@ -3571,7 +3571,7 @@ function projTicketRow(t, showArchiveBtn = true) {
     : 'background:#fee2e2;color:#991b1b;'; // Pending
   const statusBadge = `<span style="${statusStyle}font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;">${esc(ts)}</span>`;
   return `<tr data-id="${t.id}" data-archived="${t.archived ? 1 : 0}" class="${isOutstanding&&showArchiveBtn ? 'row-outstanding' : 'row-ok'}">
-    <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb proj-tt-cb" data-id="${t.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
+    <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb ${cbClass}" data-id="${t.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
     <td>${fmtDate(t.date)}</td>
     <td><strong style="color:var(--orange);font-size:12px;">${esc(t.ticket_number)}</strong></td>
     <td>${esc(t.job_name)}${t.archived ? ' <span class="archived-label">ARCHIVED</span>' : ''}${otBadge}${reg8Badge}${dupBadge}</td>
@@ -3591,10 +3591,10 @@ function projTicketRow(t, showArchiveBtn = true) {
   </tr>`;
 }
 
-function projPORow(po, showArchiveBtn = true) {
+function projPORow(po, showArchiveBtn = true, cbClass = 'proj-po-cb') {
   const isOutstanding = po.status === 'Open';
   return `<tr data-poid="${po.id}" class="${isOutstanding&&showArchiveBtn ? 'row-outstanding' : 'row-ok'}">
-    <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb proj-po-cb" data-id="${po.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
+    <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="po-cb ${cbClass}" data-id="${po.id}" onclick="event.stopPropagation();updateProjBulk()"/></td>
     <td><strong style="color:var(--orange);font-size:12px;">${esc(po.po_number)}</strong></td>
     <td>${fmtDate(po.date)}</td>
     <td>${esc(po.generated_by_name)}</td>
@@ -3684,15 +3684,22 @@ function attachProjTableEvents(panel) {
   });
 }
 
-const PROJ_TT_HEAD  = `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-tt-select-all" title="Select all"/></th><th>Date</th><th>Ticket #</th><th>Job Name</th><th>Job #</th><th>Supervisor</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel</th><th>Status</th><th></th>`;
-const PROJ_PO_HEAD  = `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-po-select-all" title="Select all"/></th><th>PO #</th><th>Date</th><th>By</th><th>Jobber #</th><th>Job Name</th><th>Supplier</th><th>Description</th><th>Amount</th><th>Status</th><th></th>`;
+// `type` is one of tt | po | arch-tt | arch-po. Each tab gets its own select-all id
+// and its own checkbox class so the active and archived tables never collide.
+const projTTHead = (type='tt') => `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-${type}-select-all" title="Select all"/></th><th>Date</th><th>Ticket #</th><th>Job Name</th><th>Job #</th><th>Supervisor</th><th style="text-align:center;">Reg Hrs</th><th style="text-align:center;">OT Hrs</th><th style="text-align:center;">Travel</th><th>Status</th><th></th>`;
+const projPOHead = (type='po') => `<th class="cb-col"><input type="checkbox" class="po-cb" id="proj-${type}-select-all" title="Select all"/></th><th>PO #</th><th>Date</th><th>By</th><th>Jobber #</th><th>Job Name</th><th>Supplier</th><th>Description</th><th>Amount</th><th>Status</th><th></th>`;
+const PROJ_BULK_TYPES = ['tt','po','arch-tt','arch-po'];
 
 function projBulkBar(type) {
+  const isArch = type.startsWith('arch-');
+  const noun   = (type === 'po' || type === 'arch-po') ? 'PO' : 'Ticket';
   return `<div class="po-bulk-bar" id="proj-bulk-bar-${type}" style="margin-bottom:8px;">
     <span class="sel-count" id="proj-bulk-count-${type}">0 selected</span>
-    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-export" style="background:#1a6e35;color:white;">Export to Excel</button>
-    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-print" style="background:#1c1c1e;color:white;">Print Selected</button>
-    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-archive" style="background:#6e6e6e;color:white;">Archive Selected</button>
+    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-export" style="background:#1a6e35;color:white;" title="Download the selected ${noun}s as one Excel file">Export to Excel</button>
+    <button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-print" style="background:#1c1c1e;color:white;" title="Open the selected ${noun}s as one printable document">Print Selected</button>
+    ${isArch
+      ? `<button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-restore" style="background:#2563eb;color:white;">Restore Selected</button>`
+      : `<button class="btn btn-sm" data-bulk="${type}" data-action="proj-bulk-archive" style="background:#6e6e6e;color:white;">Archive Selected</button>`}
   </div>`;
 }
 
@@ -3704,7 +3711,7 @@ function renderProjectTickets(tickets) {
   }
   const rows = tickets.map(t => projTicketRow(t, true)).join('');
   panel.innerHTML = projBulkBar('tt') + `<div class="po-table-wrap"><table class="po-table">
-    <thead><tr>${PROJ_TT_HEAD}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    <thead><tr>${projTTHead('tt')}</tr></thead><tbody>${rows}</tbody></table></div>`;
   attachProjTableEvents(panel);
   panel.querySelector('#proj-tt-select-all')?.addEventListener('change', e => {
     panel.querySelectorAll('.proj-tt-cb').forEach(cb=>cb.checked=e.target.checked);
@@ -3721,7 +3728,7 @@ function renderProjectPOs(pos) {
   }
   const rows = pos.map(po => projPORow(po, true)).join('');
   panel.innerHTML = projBulkBar('po') + `<div class="po-table-wrap"><table class="po-table">
-    <thead><tr>${PROJ_PO_HEAD}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    <thead><tr>${projPOHead('po')}</tr></thead><tbody>${rows}</tbody></table></div>`;
   attachProjTableEvents(panel);
   panel.querySelector('#proj-po-select-all')?.addEventListener('change', e => {
     panel.querySelectorAll('.proj-po-cb').forEach(cb=>cb.checked=e.target.checked);
@@ -3814,14 +3821,16 @@ function renderProjectArchived(archivedTickets, archivedPOs, archivedSafety = []
   }
   let html = '';
   if (archivedTickets.length) {
-    const rows = archivedTickets.map(t => projTicketRow(t, false)).join('');
+    const rows = archivedTickets.map(t => projTicketRow(t, false, 'proj-arch-tt-cb')).join('');
     html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Time Tickets (${archivedTickets.length})</div>
-    <div class="po-table-wrap"><table class="po-table"><thead><tr>${PROJ_TT_HEAD}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    ${projBulkBar('arch-tt')}
+    <div class="po-table-wrap"><table class="po-table"><thead><tr>${projTTHead('arch-tt')}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   if (archivedPOs.length) {
-    const rows = archivedPOs.map(po => projPORow(po, false)).join('');
+    const rows = archivedPOs.map(po => projPORow(po, false, 'proj-arch-po-cb')).join('');
     html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);padding:8px 0;">Purchase Orders (${archivedPOs.length})</div>
-    <div class="po-table-wrap"><table class="po-table"><thead><tr>${PROJ_PO_HEAD}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    ${projBulkBar('arch-po')}
+    <div class="po-table-wrap"><table class="po-table"><thead><tr>${projPOHead('arch-po')}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   if (archivedSafety.length) {
     const rows = archivedSafety.map(f => {
@@ -3866,6 +3875,20 @@ function renderProjectArchived(archivedTickets, archivedPOs, archivedSafety = []
   }
   panel.innerHTML = html;
   attachProjTableEvents(panel);
+  if (archivedTickets.length) {
+    panel.querySelector('#proj-arch-tt-select-all')?.addEventListener('change', e => {
+      panel.querySelectorAll('.proj-arch-tt-cb').forEach(cb => cb.checked = e.target.checked);
+      updateProjBulk();
+    });
+    wireProjBulkBar(panel, 'arch-tt');
+  }
+  if (archivedPOs.length) {
+    panel.querySelector('#proj-arch-po-select-all')?.addEventListener('change', e => {
+      panel.querySelectorAll('.proj-arch-po-cb').forEach(cb => cb.checked = e.target.checked);
+      updateProjBulk();
+    });
+    wireProjBulkBar(panel, 'arch-po');
+  }
 }
 
 async function restoreSafetyInProject(id) {
@@ -3982,10 +4005,10 @@ async function loadOfficeFlagBanner() {
 }
 
 function updateProjBulk() {
-  for (const type of ['tt','po']) {
-    const checked = document.querySelectorAll(`.proj-${type}-cb:checked`);
+  for (const type of PROJ_BULK_TYPES) {
     const bar = $(`proj-bulk-bar-${type}`);
     if (!bar) continue;
+    const checked = document.querySelectorAll(`.proj-${type}-cb:checked`);
     if (checked.length > 0) {
       bar.classList.add('visible');
       $(`proj-bulk-count-${type}`).textContent = `${checked.length} selected`;
@@ -3995,34 +4018,58 @@ function updateProjBulk() {
   }
 }
 
+// Where each bulk bar reads its records from. Active tabs read the live lists,
+// archived tabs read the archived lists, so print/export work on both.
+const PROJ_BULK_SRC = {
+  'tt':      () => currentProjectData.tickets           || [],
+  'po':      () => currentProjectData.purchase_orders   || [],
+  'arch-tt': () => currentProjectData.archived_tickets  || [],
+  'arch-po': () => currentProjectData.archived_pos      || []
+};
+
 function wireProjBulkBar(panel, type) {
+  const isPO   = (type === 'po' || type === 'arch-po');
+  const isArch = type.startsWith('arch-');
+  const noun   = isPO ? 'PO' : 'ticket';
   panel.querySelectorAll(`[data-bulk="${type}"][data-action]`).forEach(btn => {
     btn.addEventListener('click', async () => {
-      const ids = Array.from(document.querySelectorAll(`.proj-${type}-cb:checked`)).map(cb=>cb.dataset.id);
+      const ids = Array.from(document.querySelectorAll(`.proj-${type}-cb:checked`)).map(cb => cb.dataset.id);
       if (!ids.length) return;
-      const action = btn.dataset.action;
+      const action   = btn.dataset.action;
       const projName = $('project-detail-name').textContent;
-      const today = new Date().toISOString().slice(0,10);
+      const today    = new Date().toISOString().slice(0,10);
+      const safeProj = projName.replace(/[^a-z0-9]/gi,'_');
+      const items    = (PROJ_BULK_SRC[type] ? PROJ_BULK_SRC[type]() : []).filter(x => ids.includes(String(x.id)));
+      const plural   = `${noun}${ids.length !== 1 ? 's' : ''}`;
+
       if (action === 'proj-bulk-export') {
-        if (type === 'po') window.location = `/api/po/export/xlsx?ids=${ids.join(',')}`;
-        else {
-          // Export selected tickets — build a downloadable xlsx via the project export endpoint isn't available, use CSV approach
-          const tickData = currentProjectData.tickets.filter(t=>ids.includes(String(t.id)));
-          exportTicketsToXlsx(tickData, `JD-Tickets-${projName.replace(/[^a-z0-9]/gi,'_')}-${today}.xlsx`);
-        }
+        // One workbook containing every selected record.
+        if (isPO) window.location = `/api/po/export/xlsx?ids=${ids.join(',')}`;
+        else exportTicketsToXlsx(items, `JD-Tickets-${safeProj}${isArch ? '-Archived' : ''}-${today}.xlsx`);
+
       } else if (action === 'proj-bulk-print') {
-        const items = type==='po'
-          ? currentProjectData.purchase_orders.filter(p=>ids.includes(String(p.id)))
-          : currentProjectData.tickets.filter(t=>ids.includes(String(t.id)));
-        if (type==='po') printMultiplePOs(items);
+        // One print document, one record per page. window.open must stay inside
+        // the click gesture (no await before it) or the popup blocker kills it.
+        if (!items.length) { showToast('Could not find the selected records', 'error'); return; }
+        if (isPO) printMultiplePOs(items, projName);
         else printMultipleTickets(items, projName);
+
       } else if (action === 'proj-bulk-archive') {
-        if (!confirm(`Archive ${ids.length} selected ${type==='po'?'PO':'ticket'}${ids.length!==1?'s':''} in this project?`)) return;
-        await Promise.all(ids.map(id => type==='po'
-          ? fetch(`/api/po/${id}/project-archive`,{method:'PATCH'})
-          : fetch(`/api/tickets/${id}/project-archive`,{method:'PATCH'})
+        if (!confirm(`Archive ${ids.length} selected ${plural} in this project?`)) return;
+        await Promise.all(ids.map(id => isPO
+          ? fetch(`/api/po/${id}/project-archive`, { method: 'PATCH' })
+          : fetch(`/api/tickets/${id}/project-archive`, { method: 'PATCH' })
         ));
-        showToast(`${ids.length} ${type==='po'?'PO':'ticket'}${ids.length!==1?'s':''} archived in project`, 'success');
+        showToast(`${ids.length} ${plural} archived in project`, 'success');
+        if (currentProjectId) openProject(currentProjectId);
+
+      } else if (action === 'proj-bulk-restore') {
+        if (!confirm(`Restore ${ids.length} selected ${plural} to the active tab?`)) return;
+        await Promise.all(ids.map(id => isPO
+          ? fetch(`/api/po/${id}/project-unarchive`, { method: 'PATCH' })
+          : fetch(`/api/tickets/${id}/project-unarchive`, { method: 'PATCH' })
+        ));
+        showToast(`${ids.length} ${plural} restored`, 'success');
         if (currentProjectId) openProject(currentProjectId);
       }
     });
@@ -4147,6 +4194,49 @@ function printMultipleTickets(tickets, projName) {
     </div>`;
   }).join('');
   w.document.write(`<!DOCTYPE html><html><head><title>Selected Tickets</title><style>${style}</style></head><body>${pages}<script>window.onload=()=>{window.print();}<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+// ── Print multiple POs ──
+// Shared by the Purchase Orders tab and the per-project bulk bars.
+// Call this synchronously from a click handler so the popup blocker allows it.
+function printMultiplePOs(pos, projName) {
+  if (!pos || !pos.length) return;
+  const w = window.open('', '_blank', 'width=700,height=800');
+  if (!w) { showToast('Allow pop-ups for this site to print', 'error'); return; }
+  const pageStyle = `* { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; }
+    .po-page { padding: 40px; max-width: 600px; margin: 0 auto; page-break-after: always; }
+    .po-page:last-child { page-break-after: auto; }
+    .co-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #888; }
+    .doc-title { font-size: 13px; color: #555; margin-top: 4px; margin-bottom: 20px; }
+    .po-num { font-size: 44px; font-weight: 900; color: #F47920; letter-spacing: .04em; line-height: 1; margin-bottom: 24px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #999; margin-bottom: 2px; }
+    .field .val { font-size: 14px; font-weight: 600; color: #111; line-height: 1.4; }
+    hr { border: none; border-top: 1px solid #e5e5e5; margin: 16px 0; }
+    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 32px; }
+    .reimb { background:#fff8f0; padding:6px 10px; border-radius:5px; border-left:3px solid #F47920; font-size:13px; color:#c05621; font-weight:700; margin-bottom:12px; }
+    @media print { .po-page { padding: 20px; } @page { margin: 1cm; } }`;
+  const pages = pos.map(po => `
+    <div class="po-page">
+      <div class="co-name">J&amp;D Western Electric Ltd${projName ? ` · ${esc(projName)}` : ''}</div>
+      <div class="doc-title">Purchase Order</div>
+      <div class="po-num">${esc(po.po_number)}</div>
+      <div class="field"><label>Date Generated</label><div class="val">${fmtDate(po.date)}</div></div>
+      <div class="field"><label>Generated By</label><div class="val">${esc(po.generated_by_name)}</div></div>
+      <hr/>
+      <div class="field"><label>Jobber Job Number</label><div class="val" style="font-size:16px;">${esc(po.jobber_job_number)}</div></div>
+      ${po.job_name ? `<div class="field"><label>Job Name</label><div class="val">${esc(po.job_name)}</div></div>` : ''}
+      ${po.supplier ? `<div class="field"><label>Supplier</label><div class="val">${esc(po.supplier)}</div></div>` : ''}
+      <div class="field"><label>Description</label><div class="val" style="white-space:pre-wrap;">${esc(po.description)}</div></div>
+      ${po.estimated_amount != null ? `<div class="field"><label>Est. Amount</label><div class="val">$${parseFloat(po.estimated_amount).toFixed(2)}</div></div>` : ''}
+      ${po.needs_reimbursement ? `<div class="reimb">⚠ Reimbursement Required</div>` : ''}
+      ${po.office_note ? `<hr/><div class="field"><label>Office Notes</label><div class="val" style="white-space:pre-wrap;">${esc(po.office_note)}</div></div>` : ''}
+      <div class="footer">J&amp;D Western Electric Ltd — jdwesternelectric.ca</div>
+    </div>`).join('');
+  w.document.write(`<!DOCTYPE html><html><head><title>Selected POs</title><style>${pageStyle}</style></head><body>${pages}<script>window.onload=()=>{window.print();}<\/script>
 </body></html>`);
   w.document.close();
 }
@@ -7530,44 +7620,7 @@ $('btn-print-selected').addEventListener('click', () => {
   const ids = Array.from(document.querySelectorAll('.po-row-cb:checked')).map(cb => parseInt(cb.dataset.id));
   const pos = [...allLoadedPOs, ...allArchivedPOs].filter(po => ids.includes(po.id));
   if (!pos.length) return;
-
-  const w = window.open('', '_blank', 'width=700,height=800');
-  const pageStyle = `* { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; }
-    .po-page { padding: 40px; max-width: 600px; margin: 0 auto; page-break-after: always; }
-    .po-page:last-child { page-break-after: auto; }
-    .co-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #888; }
-    .doc-title { font-size: 13px; color: #555; margin-top: 4px; margin-bottom: 20px; }
-    .po-num { font-size: 44px; font-weight: 900; color: #F47920; letter-spacing: .04em; line-height: 1; margin-bottom: 24px; }
-    .field { margin-bottom: 12px; }
-    .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #999; margin-bottom: 2px; }
-    .field .val { font-size: 14px; font-weight: 600; color: #111; line-height: 1.4; }
-    hr { border: none; border-top: 1px solid #e5e5e5; margin: 16px 0; }
-    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 32px; }
-    .reimb { background:#fff8f0; padding:6px 10px; border-radius:5px; border-left:3px solid #F47920; font-size:13px; color:#c05621; font-weight:700; margin-bottom:12px; }
-    @media print { .po-page { padding: 20px; } @page { margin: 1cm; } }`;
-
-  const pages = pos.map(po => `
-    <div class="po-page">
-      <div class="co-name">J&amp;D Western Electric Ltd</div>
-      <div class="doc-title">Purchase Order</div>
-      <div class="po-num">${esc(po.po_number)}</div>
-      <div class="field"><label>Date Generated</label><div class="val">${fmtDate(po.date)}</div></div>
-      <div class="field"><label>Generated By</label><div class="val">${esc(po.generated_by_name)}</div></div>
-      <hr/>
-      <div class="field"><label>Jobber Job Number</label><div class="val" style="font-size:16px;">${esc(po.jobber_job_number)}</div></div>
-      ${po.job_name ? `<div class="field"><label>Job Name</label><div class="val">${esc(po.job_name)}</div></div>` : ''}
-      ${po.supplier ? `<div class="field"><label>Supplier</label><div class="val">${esc(po.supplier)}</div></div>` : ''}
-      <div class="field"><label>Description</label><div class="val" style="white-space:pre-wrap;">${esc(po.description)}</div></div>
-      ${po.estimated_amount != null ? `<div class="field"><label>Est. Amount</label><div class="val">$${parseFloat(po.estimated_amount).toFixed(2)}</div></div>` : ''}
-      ${po.needs_reimbursement ? `<div class="reimb">⚠ Reimbursement Required</div>` : ''}
-      ${po.office_note ? `<hr/><div class="field"><label>Office Notes</label><div class="val" style="white-space:pre-wrap;">${esc(po.office_note)}</div></div>` : ''}
-      <div class="footer">J&amp;D Western Electric Ltd — jdwesternelectric.ca</div>
-    </div>`).join('');
-
-  w.document.write(`<!DOCTYPE html><html><head><title>Selected POs</title><style>${pageStyle}</style></head><body>${pages}<script>window.onload=()=>{window.print();}<\/script>
-</body></html>`);
-  w.document.close();
+  printMultiplePOs(pos);
 });
 
 // ── Export Selected ──
