@@ -4289,22 +4289,25 @@ function exportTicketsToPdf(tickets, filename) {
     doc.setDrawColor(...co.line).setLineWidth(0.3).line(lm, y, 216 - rm, y);
     y += 5;
 
-    // Meta row
-    const fields = [
-      ['Date',       t.date       || '—'],
-      ['Job Name',   t.job_name   || '—'],
-      ['Job #',      t.job_number || '—'],
-      ['Supervisor', t.supervisor || '—'],
+    // Meta row — variable-width columns: Date(18%), Job Name(42%), Job#(18%), Supervisor(22%)
+    const metaCols = [
+      { label: 'Date',       val: t.date       || '—', w: pw * 0.18 },
+      { label: 'Job Name',   val: t.job_name   || '—', w: pw * 0.42 },
+      { label: 'Job #',      val: t.job_number || '—', w: pw * 0.18 },
+      { label: 'Supervisor', val: t.supervisor || '—', w: pw * 0.22 },
     ];
-    const colW = pw / fields.length;
-    fields.forEach(([label, val], i) => {
-      const x = lm + i * colW;
+    let mx = lm;
+    let metaH = 0;
+    metaCols.forEach(col => {
       doc.setFontSize(7).setFont('helvetica', 'normal').setTextColor(...co.label);
-      doc.text(label, x, y);
+      doc.text(col.label, mx, y);
       doc.setFontSize(9).setFont('helvetica', 'bold').setTextColor(...co.header);
-      doc.text(String(val), x, y + 4);
+      const lines = doc.splitTextToSize(String(col.val), col.w - 2);
+      doc.text(lines, mx, y + 4);
+      metaH = Math.max(metaH, lines.length);
+      mx += col.w;
     });
-    y += 12;
+    y += 6 + metaH * 4;
 
     // Work Description
     if (t.work_description) {
@@ -4362,7 +4365,7 @@ function exportTicketsToPdf(tickets, filename) {
         const ot     = parseFloat(e.overtime_hours) || 0;
         const travel = parseFloat(e.travel_hours)   || 0;
         return [
-          e.employee_name || '—',
+          e.employee_name || e.name || '—',
           e.level || 'Journeyman',
           reg.toFixed(1),
           ot > 0 ? ot.toFixed(1) : '—',
