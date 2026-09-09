@@ -1057,6 +1057,7 @@ function printSchedule(s, widthIn, heightIn) {
   if (!s) return;
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
   const slots = s.num_circuits / 2;
+  const flipped = !!s.flipped;
   const grp     = computePoleGroups(circuits, slots, flipped);
   const lG      = grp.left;
   const rG      = grp.right;
