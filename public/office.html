@@ -4696,6 +4696,7 @@ async function updatePermitInspection(inspId, status) {
 const WIRE_COLORS = ['','Black','White','Red','Blue','Green','Yellow','Orange','Brown','Gray','Purple','Pink'];
 
 const WIRE_PRESETS = [
+  { wire_type:'NMD', gauge:'10/2c', color:'',       kg_per_m:0.44 },
   { wire_type:'NMD', gauge:'10/3c', color:'Orange', kg_per_m:0.53 },
   { wire_type:'NMD', gauge:'12/2c', color:'Yellow', kg_per_m:0.22 },
   { wire_type:'NMD', gauge:'12/2c', color:'Red',    kg_per_m:0.26 },
@@ -4706,6 +4707,7 @@ const WIRE_PRESETS = [
   { wire_type:'BX',  gauge:'12/3C', color:'', kg_per_m:0.44 },
   { wire_type:'BX',  gauge:'12/4C', color:'', kg_per_m:0.53 },
   { wire_type:'LVT', gauge:'18/2',    color:'', kg_per_m:0.09 },
+  { wire_type:'LVT', gauge:'18/3',    color:'', kg_per_m:0.11 },
   { wire_type:'LVT', gauge:'18/6',    color:'', kg_per_m:0.20 },
   { wire_type:'LVT', gauge:'Speaker', color:'', kg_per_m:0.10 },
   { wire_type:'Cat 6',       gauge:'', color:'', kg_per_m:0.08 },
