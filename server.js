@@ -8417,10 +8417,10 @@ app.post('/api/gas-cards/:id/checkout', requireAuth, async (req, res) => {
     'SELECT event_type FROM gas_card_events WHERE card_id=$1 ORDER BY id DESC LIMIT 1', [req.params.id]
   );
   if (last && last.event_type === 'checkout') return res.status(409).json({ error: 'Card is already signed out' });
-  const { notes='' } = req.body;
+  const { notes='', signature='' } = req.body;
   await pool.query(
-    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes) VALUES ($1,$2,$3,'checkout',$4)`,
-    [req.params.id, req.user.id, req.user.name, notes]
+    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes,signature) VALUES ($1,$2,$3,'checkout',$4,$5)`,
+    [req.params.id, req.user.id, req.user.name, notes, signature]
   );
   logAction(req, 'gas_card_checkout', card.id, card.card_name, `Signed out by ${req.user.name}`);
   res.json({ ok: true, pin: card.pin });
@@ -8436,10 +8436,10 @@ app.post('/api/gas-cards/:id/checkin', requireAuth, async (req, res) => {
   if (!last || last.event_type !== 'checkout') return res.status(409).json({ error: 'Card is not signed out' });
   const canForce = ['admin','office','supervisor'].includes(req.user.role);
   if (last.user_id !== req.user.id && !canForce) return res.status(403).json({ error: 'Only the person who signed it out can sign it back in' });
-  const { notes='' } = req.body;
+  const { notes='', signature='' } = req.body;
   await pool.query(
-    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes) VALUES ($1,$2,$3,'checkin',$4)`,
-    [req.params.id, req.user.id, req.user.name, notes]
+    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes,signature) VALUES ($1,$2,$3,'checkin',$4,$5)`,
+    [req.params.id, req.user.id, req.user.name, notes, signature]
   );
   logAction(req, 'gas_card_checkin', card.id, card.card_name, `Signed in by ${req.user.name}`);
   res.json({ ok: true });

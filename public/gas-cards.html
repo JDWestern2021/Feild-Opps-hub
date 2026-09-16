@@ -42,13 +42,12 @@
     .gc-status-out   { background: rgba(239,68,68,0.18); color: #f87171; }
     .gc-tile-by { font-size: 11px; color: rgba(255,255,255,0.35); }
     .gc-chevron { color: rgba(255,255,255,0.2); font-size: 20px; flex-shrink: 0; }
-
     .gc-empty { text-align: center; color: rgba(255,255,255,0.3); font-size: 14px; padding: 48px 0; }
 
     /* Modals */
-    .fc-modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 9900; align-items: center; justify-content: center; padding: 16px; }
+    .fc-modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 9900; align-items: center; justify-content: center; padding: 16px; }
     .fc-modal-bg.open { display: flex; }
-    .fc-modal { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 24px; width: 100%; max-width: 400px; }
+    .fc-modal { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 24px; width: 100%; max-width: 420px; }
     .fc-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
     .fc-modal-head h3 { font-size: 17px; font-weight: 900; color: #fff; margin: 0; }
     .fc-modal h3 { font-size: 17px; font-weight: 900; color: #fff; margin-bottom: 14px; }
@@ -70,6 +69,22 @@
     .fc-btn-confirm { background: #F47920; color: #fff; }
     .fc-btn-confirm-in { background: #16a34a; color: #fff; }
     .fc-warn-box { background: rgba(234,179,8,0.12); border: 1px solid rgba(234,179,8,0.35); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #fde047; line-height: 1.5; margin-bottom: 16px; }
+
+    /* Signature pad */
+    .sig-label { font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 8px; }
+    .sig-canvas-wrap { background: #fff; border-radius: 10px; overflow: hidden; touch-action: none; position: relative; }
+    #sig-canvas { display: block; width: 100%; height: 160px; cursor: crosshair; }
+    .sig-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    .sig-hint span { font-size: 13px; color: rgba(0,0,0,0.25); font-style: italic; }
+    .sig-controls { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; margin-bottom: 18px; }
+    .sig-clear { background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: rgba(255,255,255,0.5); font-size: 12px; padding: 6px 14px; cursor: pointer; min-height: 32px; }
+    .sig-clear:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
+    .sig-status { font-size: 11px; color: rgba(255,255,255,0.35); }
+    .sig-status.signed { color: #4ade80; }
+    .sig-submit { min-height: 48px; width: 100%; border: none; border-radius: 12px; font-size: 15px; font-weight: 800; cursor: pointer; transition: opacity .15s; }
+    .sig-submit:disabled { opacity: .35; cursor: not-allowed; }
+    .sig-submit.out-btn { background: #F47920; color: #fff; }
+    .sig-submit.in-btn  { background: #16a34a; color: #fff; }
   </style>
 </head>
 <body>
@@ -109,8 +124,42 @@
     <p>You are signing out <strong id="fc-co-name"></strong>. Once signed out, the PIN will be revealed and you will be logged as having this card.</p>
     <div class="fc-modal-btns">
       <button class="fc-btn-cancel" id="fc-co-cancel">Cancel</button>
-      <button class="fc-btn-confirm" id="fc-co-confirm">Sign Out &amp; Reveal PIN</button>
+      <button class="fc-btn-confirm" id="fc-co-confirm">Continue →</button>
     </div>
+  </div>
+</div>
+
+<!-- Sign-In Confirm Modal -->
+<div class="fc-modal-bg" id="fc-checkin-modal">
+  <div class="fc-modal">
+    <h3>Sign In Card</h3>
+    <div class="fc-warn-box">⚠ Please ensure the card has been physically returned to the office or your supervisor before signing in.</div>
+    <p>You are signing <strong id="fc-ci-name"></strong> back in.</p>
+    <div class="fc-modal-btns">
+      <button class="fc-btn-cancel" id="fc-ci-cancel">Cancel</button>
+      <button class="fc-btn-confirm-in" id="fc-ci-confirm">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Signature Modal -->
+<div class="fc-modal-bg" id="fc-sig-modal">
+  <div class="fc-modal">
+    <div class="fc-modal-head">
+      <h3 id="fc-sig-title">Sign Your Name</h3>
+      <button class="fc-modal-close" id="fc-sig-close">✕</button>
+    </div>
+    <p id="fc-sig-desc" style="margin-bottom:14px;"></p>
+    <div class="sig-label">Sign below using your finger or stylus</div>
+    <div class="sig-canvas-wrap">
+      <canvas id="sig-canvas"></canvas>
+      <div class="sig-hint" id="sig-hint"><span>Sign here</span></div>
+    </div>
+    <div class="sig-controls">
+      <button class="sig-clear" id="sig-clear">Clear</button>
+      <span class="sig-status" id="sig-status">Not yet signed</span>
+    </div>
+    <button class="sig-submit" id="sig-submit" disabled>Submit</button>
   </div>
 </div>
 
@@ -129,19 +178,6 @@
   </div>
 </div>
 
-<!-- Sign-In Confirm Modal -->
-<div class="fc-modal-bg" id="fc-checkin-modal">
-  <div class="fc-modal">
-    <h3>Sign In Card</h3>
-    <div class="fc-warn-box">⚠ Please ensure the card has been physically returned to the office or your supervisor before signing in.</div>
-    <p>You are signing <strong id="fc-ci-name"></strong> back in.</p>
-    <div class="fc-modal-btns">
-      <button class="fc-btn-cancel" id="fc-ci-cancel">Cancel</button>
-      <button class="fc-btn-confirm-in" id="fc-ci-confirm">Confirm Sign In</button>
-    </div>
-  </div>
-</div>
-
 <script>
 (async () => {
   const r = await fetch('/api/auth/me');
@@ -149,7 +185,6 @@
   const me = await r.json();
   document.body.style.visibility = 'visible';
 
-  // Apply saved logo
   try {
     const s = await fetch('/api/settings/public').then(r => r.json());
     if (s.logo_path) document.querySelector('.header-logo').src = s.logo_path + '?t=' + Date.now();
@@ -157,6 +192,7 @@
 
   let _cards = [];
   let _pendingId = null;
+  let _pendingAction = null; // 'checkout' | 'checkin'
 
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -193,7 +229,6 @@
         <span class="gc-chevron">›</span>
       </div>`;
     }).join('');
-
     list.querySelectorAll('.gc-tile').forEach(tile => {
       tile.addEventListener('click', () => openDetail(parseInt(tile.dataset.id)));
     });
@@ -205,9 +240,7 @@
     _pendingId = id;
     const isOut  = c.status === 'out';
     const myCard = isOut && c.checked_out_by_id == me.id;
-
     document.getElementById('fc-detail-name').textContent = c.card_name;
-
     let html = '';
     if (c.card_number) html += `<div class="fc-detail-row"><span class="fc-detail-label">Card #</span><span class="fc-detail-val">${esc(c.card_number)}</span></div>`;
     html += `<div class="fc-detail-row"><span class="fc-detail-label">Status</span><span class="fc-detail-val">${isOut ? '🔴 Signed Out' : '🟢 Available'}</span></div>`;
@@ -218,16 +251,10 @@
         html += `<div class="fc-detail-row"><span class="fc-detail-label">Since</span><span class="fc-detail-val">${esc(since)}</span></div>`;
       }
     }
-
-    if (!isOut) {
-      html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-out-full" id="fc-detail-action">Sign Out This Card</button>`;
-    } else if (myCard) {
-      html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-in-full" id="fc-detail-action">Sign In This Card</button>`;
-    }
-
+    if (!isOut) html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-out-full" id="fc-detail-action">Sign Out This Card</button>`;
+    else if (myCard) html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-in-full" id="fc-detail-action">Sign In This Card</button>`;
     document.getElementById('fc-detail-body').innerHTML = html;
     document.getElementById('fc-detail-modal').classList.add('open');
-
     const btn = document.getElementById('fc-detail-action');
     if (btn) {
       btn.addEventListener('click', () => {
@@ -242,6 +269,7 @@
     const c = _cards.find(x => x.id === id);
     if (!c) return;
     _pendingId = id;
+    _pendingAction = 'checkout';
     document.getElementById('fc-co-name').textContent = c.card_name;
     document.getElementById('fc-checkout-modal').classList.add('open');
   }
@@ -250,31 +278,127 @@
     const c = _cards.find(x => x.id === id);
     if (!c) return;
     _pendingId = id;
+    _pendingAction = 'checkin';
     document.getElementById('fc-ci-name').textContent = c.card_name;
     document.getElementById('fc-checkin-modal').classList.add('open');
   }
 
-  document.getElementById('fc-detail-close').addEventListener('click', () => {
-    document.getElementById('fc-detail-modal').classList.remove('open');
+  // ── Signature Pad ────────────────────────────────────────────────────────
+  const canvas   = document.getElementById('sig-canvas');
+  const ctx      = canvas.getContext('2d');
+  let drawing    = false;
+  let hasSig     = false;
+
+  function sigResize() {
+    const wrap = canvas.parentElement;
+    const dpr  = window.devicePixelRatio || 1;
+    canvas.width  = wrap.clientWidth  * dpr;
+    canvas.height = 160 * dpr;
+    canvas.style.height = '160px';
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth   = 2.5;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+  }
+
+  function sigClear() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasSig = false;
+    document.getElementById('sig-hint').style.display = '';
+    document.getElementById('sig-status').textContent = 'Not yet signed';
+    document.getElementById('sig-status').classList.remove('signed');
+    document.getElementById('sig-submit').disabled = true;
+  }
+
+  function sigPoint(e) {
+    const rect = canvas.getBoundingClientRect();
+    const src  = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  }
+
+  canvas.addEventListener('mousedown',  e => { drawing = true; const p = sigPoint(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+  canvas.addEventListener('mousemove',  e => { if (!drawing) return; const p = sigPoint(e); ctx.lineTo(p.x, p.y); ctx.stroke(); markSigned(); });
+  canvas.addEventListener('mouseup',    () => { drawing = false; });
+  canvas.addEventListener('mouseleave', () => { drawing = false; });
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = sigPoint(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: false });
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!drawing) return; const p = sigPoint(e); ctx.lineTo(p.x, p.y); ctx.stroke(); markSigned(); }, { passive: false });
+  canvas.addEventListener('touchend',   e => { e.preventDefault(); drawing = false; }, { passive: false });
+
+  function markSigned() {
+    if (!hasSig) {
+      hasSig = true;
+      document.getElementById('sig-hint').style.display = 'none';
+      document.getElementById('sig-status').textContent = 'Signature captured';
+      document.getElementById('sig-status').classList.add('signed');
+      document.getElementById('sig-submit').disabled = false;
+    }
+  }
+
+  document.getElementById('sig-clear').addEventListener('click', sigClear);
+
+  function openSigModal(action) {
+    const c = _cards.find(x => x.id === _pendingId);
+    const isOut = action === 'checkout';
+    document.getElementById('fc-sig-title').textContent = isOut ? 'Sign Out — Signature Required' : 'Sign In — Signature Required';
+    document.getElementById('fc-sig-desc').textContent  = `Please sign below to confirm you are ${isOut ? 'signing out' : 'returning'} ${c?.card_name || 'this card'}.`;
+    const btn = document.getElementById('sig-submit');
+    btn.textContent = isOut ? 'Sign Out & Reveal PIN' : 'Confirm Sign In';
+    btn.className   = 'sig-submit ' + (isOut ? 'out-btn' : 'in-btn');
+    sigResize();
+    sigClear();
+    document.getElementById('fc-sig-modal').classList.add('open');
+  }
+
+  document.getElementById('fc-sig-close').addEventListener('click', () => {
+    document.getElementById('fc-sig-modal').classList.remove('open');
   });
 
-  document.getElementById('fc-co-cancel').addEventListener('click', () => {
-    document.getElementById('fc-checkout-modal').classList.remove('open');
+  document.getElementById('sig-submit').addEventListener('click', async () => {
+    if (!hasSig) return;
+    const signature = canvas.toDataURL('image/png');
+    document.getElementById('fc-sig-modal').classList.remove('open');
+    if (_pendingAction === 'checkout') {
+      await doCheckout(signature);
+    } else {
+      await doCheckin(signature);
+    }
   });
 
-  document.getElementById('fc-co-confirm').addEventListener('click', async () => {
-    document.getElementById('fc-checkout-modal').classList.remove('open');
+  async function doCheckout(signature) {
     const c = _cards.find(x => x.id === _pendingId);
     try {
-      const res = await fetch(`/api/gas-cards/${_pendingId}/checkout`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      const res  = await fetch(`/api/gas-cards/${_pendingId}/checkout`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ signature }) });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Could not sign out card'); return; }
       document.getElementById('fc-pin-card-name').textContent = c?.card_name || '';
-      document.getElementById('fc-pin-value').textContent = data.pin || '(no PIN set)';
+      document.getElementById('fc-pin-value').textContent     = data.pin || '(no PIN set)';
       document.getElementById('fc-pin-modal').classList.add('open');
       load();
     } catch { alert('Network error — please try again'); }
+  }
+
+  async function doCheckin(signature) {
+    try {
+      const res  = await fetch(`/api/gas-cards/${_pendingId}/checkin`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ signature }) });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Could not sign in card'); return; }
+      load();
+    } catch { alert('Network error — please try again'); }
+  }
+
+  // Confirm buttons now open sig modal instead of calling API directly
+  document.getElementById('fc-co-confirm').addEventListener('click', () => {
+    document.getElementById('fc-checkout-modal').classList.remove('open');
+    openSigModal('checkout');
   });
+  document.getElementById('fc-ci-confirm').addEventListener('click', () => {
+    document.getElementById('fc-checkin-modal').classList.remove('open');
+    openSigModal('checkin');
+  });
+
+  document.getElementById('fc-co-cancel').addEventListener('click', () => document.getElementById('fc-checkout-modal').classList.remove('open'));
+  document.getElementById('fc-ci-cancel').addEventListener('click', () => document.getElementById('fc-checkin-modal').classList.remove('open'));
 
   document.getElementById('fc-pin-copy').addEventListener('click', () => {
     const pin = document.getElementById('fc-pin-value').textContent;
@@ -284,30 +408,15 @@
       setTimeout(() => btn.textContent = 'Copy', 2000);
     });
   });
+  document.getElementById('fc-pin-done').addEventListener('click', () => document.getElementById('fc-pin-modal').classList.remove('open'));
 
-  document.getElementById('fc-pin-done').addEventListener('click', () => {
-    document.getElementById('fc-pin-modal').classList.remove('open');
-  });
-
-  document.getElementById('fc-ci-cancel').addEventListener('click', () => {
-    document.getElementById('fc-checkin-modal').classList.remove('open');
-  });
-
-  document.getElementById('fc-ci-confirm').addEventListener('click', async () => {
-    document.getElementById('fc-checkin-modal').classList.remove('open');
-    try {
-      const res = await fetch(`/api/gas-cards/${_pendingId}/checkin`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || 'Could not sign in card'); return; }
-      load();
-    } catch { alert('Network error — please try again'); }
-  });
-
-  ['fc-detail-modal','fc-checkout-modal','fc-pin-modal','fc-checkin-modal'].forEach(id => {
+  ['fc-detail-modal','fc-checkout-modal','fc-checkin-modal','fc-sig-modal','fc-pin-modal'].forEach(id => {
     document.getElementById(id).addEventListener('click', e => {
       if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
     });
   });
+
+  document.getElementById('fc-detail-close').addEventListener('click', () => document.getElementById('fc-detail-modal').classList.remove('open'));
 
   load();
 })();

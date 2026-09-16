@@ -1299,8 +1299,10 @@ async function initSchema() {
     user_name   TEXT NOT NULL DEFAULT '',
     event_type  TEXT NOT NULL CHECK (event_type IN ('checkout','checkin')),
     notes       TEXT NOT NULL DEFAULT '',
+    signature   TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS"Z"')
   )`);
+  await pool.query(`ALTER TABLE gas_card_events ADD COLUMN IF NOT EXISTS signature TEXT NOT NULL DEFAULT ''`);
 
   console.log('  ✓ Database schema ready');
 }

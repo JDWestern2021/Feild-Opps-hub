@@ -1710,8 +1710,8 @@
         </div>
         <div class="po-table-wrap">
           <table class="po-table" id="gc-log-table">
-            <thead><tr><th>Date / Time</th><th>Card</th><th>Employee</th><th>Action</th></tr></thead>
-            <tbody id="gc-log-tbody"><tr><td colspan="4" style="text-align:center;color:var(--gray-400);">Loading…</td></tr></tbody>
+            <thead><tr><th>Date / Time</th><th>Card</th><th>Employee</th><th>Action</th><th>Signature</th></tr></thead>
+            <tbody id="gc-log-tbody"><tr><td colspan="5" style="text-align:center;color:var(--gray-400);">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -6412,19 +6412,29 @@ function renderGcStatus() {
 
 function renderGcLog(log) {
   const tbody = $('gc-log-tbody');
-  if (!log.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray-400);">No activity yet.</td></tr>'; return; }
+  if (!log.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--gray-400);">No activity yet.</td></tr>'; return; }
   tbody.innerHTML = log.map(e => {
     const dt = new Date(e.created_at).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
     const badge = e.event_type === 'checkout'
       ? `<span class="status-badge" style="background:#fff7ed;color:#c2410c;">Signed Out</span>`
       : `<span class="status-badge" style="background:#f0fdf4;color:#16a34a;">Signed In</span>`;
+    const sigCell = e.signature
+      ? `<img src="${e.signature}" alt="Signature" title="Click to enlarge" style="height:36px;max-width:100px;border:1px solid #e5e7eb;border-radius:4px;background:#fff;cursor:pointer;object-fit:contain;" onclick="gcViewSig('${e.signature.replace(/'/g,'\\'+'\'')}')">`
+      : `<span style="color:var(--gray-400);font-size:11px;">—</span>`;
     return `<tr>
       <td style="font-size:12px;">${dt}</td>
       <td style="font-weight:600;">${esc(e.card_name)}</td>
       <td>${esc(e.user_name)}</td>
       <td>${badge}</td>
+      <td>${sigCell}</td>
     </tr>`;
   }).join('');
+}
+
+function gcViewSig(src) {
+  const w = window.open('', '_blank', 'width=500,height=300');
+  w.document.write(`<!DOCTYPE html><html><head><title>Signature</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f9fafb;}img{max-width:100%;border:1px solid #e5e7eb;border-radius:8px;background:#fff;}</style></head><body><img src="${src}"></body></html>`);
+  w.document.close();
 }
 
 // Add / Edit modal
@@ -6493,25 +6503,29 @@ function gcPrintLog() {
     .sub { font-size: 11px; color: #555; margin-bottom: 18px; }
     table { width: 100%; border-collapse: collapse; }
     th { background: #f0f0f0; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 6px 10px; text-align: left; border-bottom: 2px solid #ccc; }
-    td { padding: 6px 10px; border-bottom: 1px solid #e5e5e5; font-size: 12px; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e5e5e5; font-size: 12px; vertical-align: middle; }
     .badge-out { background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
     .badge-in  { background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    img.sig { height: 40px; max-width: 120px; border: 1px solid #ccc; border-radius: 4px; background: #fff; object-fit: contain; }
     @media print { body { padding: 0; } }
   </style></head><body>
   <h2>Fleet Gas Card — Activity Log</h2>
   <div class="sub">Printed ${printDate} &nbsp;·&nbsp; J&amp;D Western Electric Ltd.</div>
   <table>
-    <thead><tr><th>Date / Time</th><th>Card</th><th>Employee</th><th>Action</th></tr></thead>
+    <thead><tr><th>Date / Time</th><th>Card</th><th>Employee</th><th>Action</th><th>Signature</th></tr></thead>
     <tbody>${Array.from(table.querySelectorAll('tbody tr')).map(tr => {
       const cells = tr.querySelectorAll('td');
       if (!cells.length) return '';
       const action = cells[3]?.textContent.trim().toLowerCase();
       const badgeCls = action === 'signed out' ? 'badge-out' : 'badge-in';
+      const sigImg = cells[4]?.querySelector('img');
+      const sigHtml = sigImg ? `<img class="sig" src="${sigImg.src}">` : '—';
       return `<tr>
         <td>${cells[0]?.textContent||''}</td>
         <td>${cells[1]?.textContent||''}</td>
         <td>${cells[2]?.textContent||''}</td>
         <td><span class="${badgeCls}">${cells[3]?.textContent||''}</span></td>
+        <td>${sigHtml}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>
