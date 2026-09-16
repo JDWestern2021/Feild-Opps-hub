@@ -8314,6 +8314,151 @@ app.post('/api/projects/:id/import-spaces', requireAdmin, async (req, res) => {
       process.exit(1);
     }
 
+// ── Gas Cards ────────────────────────────────────────────────────────────────
+
+// GET /api/gas-cards — list active cards + current checkout status
+app.get('/api/gas-cards', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT g.*,
+      e.user_id   AS checked_out_by_id,
+      e.user_name AS checked_out_by,
+      e.created_at AS checked_out_at
+    FROM gas_cards g
+    LEFT JOIN LATERAL (
+      SELECT user_id, user_name, created_at FROM gas_card_events
+      WHERE card_id = g.id ORDER BY id DESC LIMIT 1
+    ) e ON true
+    WHERE g.active = 1
+    ORDER BY g.card_name
+  `);
+  // Only show pin to admin/office; hide from field/supervisor
+  const canSeePins = ['admin','office'].includes(req.user.role);
+  res.json(rows.map(r => {
+    const out = r.checked_out_by_id && r.checked_out_at ? {
+      user_id: r.checked_out_by_id,
+      user_name: r.checked_out_by,
+      at: r.checked_out_at,
+    } : null;
+    // Determine checkout status from last event
+    return {
+      id: r.id, card_name: r.card_name, card_number: r.card_number,
+      notes: r.notes,
+      pin: canSeePins ? r.pin : undefined,
+      checked_out: out,
+    };
+  }));
+});
+
+// GET /api/gas-cards/status — same as above but also resolves last event type
+app.get('/api/gas-cards/status', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT g.id, g.card_name, g.card_number, g.notes, g.pin,
+      e.event_type, e.user_id AS out_user_id, e.user_name AS out_user_name, e.created_at AS out_at
+    FROM gas_cards g
+    LEFT JOIN LATERAL (
+      SELECT event_type, user_id, user_name, created_at FROM gas_card_events
+      WHERE card_id = g.id ORDER BY id DESC LIMIT 1
+    ) e ON true
+    WHERE g.active = 1
+    ORDER BY g.card_name
+  `);
+  const canSeePins = ['admin','office'].includes(req.user.role);
+  res.json(rows.map(r => ({
+    id: r.id,
+    card_name: r.card_name,
+    card_number: r.card_number,
+    notes: r.notes,
+    pin: canSeePins ? r.pin : undefined,
+    status: (!r.event_type || r.event_type === 'checkin') ? 'available' : 'out',
+    checked_out_by_id:   r.event_type === 'checkout' ? r.out_user_id   : null,
+    checked_out_by_name: r.event_type === 'checkout' ? r.out_user_name : null,
+    checked_out_at:      r.event_type === 'checkout' ? r.out_at        : null,
+  })));
+});
+
+// POST /api/gas-cards — admin/office: create card
+app.post('/api/gas-cards', requireAuth, async (req, res) => {
+  if (!['admin','office'].includes(req.user.role)) return res.status(403).json({ error: 'Admin/office only' });
+  const { card_name, card_number='', pin='', notes='' } = req.body;
+  if (!card_name?.trim()) return res.status(400).json({ error: 'card_name required' });
+  const { rows } = await pool.query(
+    `INSERT INTO gas_cards (card_name,card_number,pin,notes) VALUES ($1,$2,$3,$4) RETURNING *`,
+    [card_name.trim(), card_number.trim(), pin.trim(), notes.trim()]
+  );
+  logAction(req, 'gas_card_created', rows[0].id, rows[0].card_name, `Created by ${req.user.name}`);
+  res.json(rows[0]);
+});
+
+// PATCH /api/gas-cards/:id — admin/office: update card
+app.patch('/api/gas-cards/:id', requireAuth, async (req, res) => {
+  if (!['admin','office'].includes(req.user.role)) return res.status(403).json({ error: 'Admin/office only' });
+  const { card_name, card_number, pin, notes, active } = req.body;
+  const { rows } = await pool.query(
+    `UPDATE gas_cards SET
+      card_name   = COALESCE($1, card_name),
+      card_number = COALESCE($2, card_number),
+      pin         = COALESCE($3, pin),
+      notes       = COALESCE($4, notes),
+      active      = COALESCE($5, active)
+     WHERE id=$6 RETURNING *`,
+    [card_name, card_number, pin, notes, active, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  logAction(req, 'gas_card_updated', rows[0].id, rows[0].card_name, `Updated by ${req.user.name}`);
+  res.json(rows[0]);
+});
+
+// POST /api/gas-cards/:id/checkout — any auth user: sign out card, returns PIN
+app.post('/api/gas-cards/:id/checkout', requireAuth, async (req, res) => {
+  const { rows: [card] } = await pool.query('SELECT * FROM gas_cards WHERE id=$1 AND active=1', [req.params.id]);
+  if (!card) return res.status(404).json({ error: 'Card not found' });
+  // Check last event — if already checked out, block
+  const { rows: [last] } = await pool.query(
+    'SELECT event_type FROM gas_card_events WHERE card_id=$1 ORDER BY id DESC LIMIT 1', [req.params.id]
+  );
+  if (last && last.event_type === 'checkout') return res.status(409).json({ error: 'Card is already signed out' });
+  const { notes='' } = req.body;
+  await pool.query(
+    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes) VALUES ($1,$2,$3,'checkout',$4)`,
+    [req.params.id, req.user.id, req.user.name, notes]
+  );
+  logAction(req, 'gas_card_checkout', card.id, card.card_name, `Signed out by ${req.user.name}`);
+  res.json({ ok: true, pin: card.pin });
+});
+
+// POST /api/gas-cards/:id/checkin — signed-out user, or admin/office/supervisor
+app.post('/api/gas-cards/:id/checkin', requireAuth, async (req, res) => {
+  const { rows: [card] } = await pool.query('SELECT * FROM gas_cards WHERE id=$1 AND active=1', [req.params.id]);
+  if (!card) return res.status(404).json({ error: 'Card not found' });
+  const { rows: [last] } = await pool.query(
+    'SELECT * FROM gas_card_events WHERE card_id=$1 ORDER BY id DESC LIMIT 1', [req.params.id]
+  );
+  if (!last || last.event_type !== 'checkout') return res.status(409).json({ error: 'Card is not signed out' });
+  const canForce = ['admin','office','supervisor'].includes(req.user.role);
+  if (last.user_id !== req.user.id && !canForce) return res.status(403).json({ error: 'Only the person who signed it out can sign it back in' });
+  const { notes='' } = req.body;
+  await pool.query(
+    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes) VALUES ($1,$2,$3,'checkin',$4)`,
+    [req.params.id, req.user.id, req.user.name, notes]
+  );
+  logAction(req, 'gas_card_checkin', card.id, card.card_name, `Signed in by ${req.user.name}`);
+  res.json({ ok: true });
+});
+
+// GET /api/gas-cards/log — admin/office: activity log
+app.get('/api/gas-cards/log', requireAuth, async (req, res) => {
+  if (!['admin','office'].includes(req.user.role)) return res.status(403).json({ error: 'Admin/office only' });
+  const limit  = Math.min(parseInt(req.query.limit)  || 100, 500);
+  const offset = parseInt(req.query.offset) || 0;
+  const { rows } = await pool.query(`
+    SELECT e.*, g.card_name, g.card_number
+    FROM gas_card_events e
+    JOIN gas_cards g ON g.id = e.card_id
+    ORDER BY e.id DESC LIMIT $1 OFFSET $2
+  `, [limit, offset]);
+  res.json(rows);
+});
+
     app.listen(PORT, () => {
       const _dbTag = _isLocal ? `${_dbHost} (LOCAL)` : `${_dbHost} (PRODUCTION ⚠)`;
       console.log(`\n  J&D Western Electric — Field Operations Hub`);

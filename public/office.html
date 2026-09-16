@@ -1677,6 +1677,72 @@
           <span style="background:#6b7280;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">Other</span>
         </div>
       </div>
+
+      <!-- ── Gas Cards ── -->
+      <div style="margin-top:32px;padding-top:24px;border-top:1.5px solid var(--gray-200);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:32px;height:32px;background:#F47920;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+              <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:#fff;"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+            </div>
+            <h3 style="font-size:16px;font-weight:800;margin:0;">Gas Cards</h3>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-gc-add" style="background:var(--orange);">+ Add Card</button>
+        </div>
+
+        <!-- Current status table -->
+        <div class="po-table-wrap" style="margin-bottom:20px;">
+          <table class="po-table" id="gc-status-table">
+            <thead><tr>
+              <th>Card Name</th><th>Card #</th><th>PIN</th><th>Status</th><th>Signed Out By</th><th>Since</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="gc-status-tbody"><tr><td colspan="7" style="text-align:center;color:var(--gray-400);">Loading…</td></tr></tbody>
+          </table>
+        </div>
+
+        <!-- Activity log -->
+        <h4 style="font-size:13px;font-weight:800;color:var(--dark);margin:0 0 10px;">Activity Log</h4>
+        <div class="po-table-wrap">
+          <table class="po-table">
+            <thead><tr><th>Date / Time</th><th>Card</th><th>Employee</th><th>Action</th></tr></thead>
+            <tbody id="gc-log-tbody"><tr><td colspan="4" style="text-align:center;color:var(--gray-400);">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Gas Card Add/Edit Modal -->
+  <div id="gc-card-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9200;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:24px;width:400px;max-width:95vw;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h3 style="font-size:16px;font-weight:800;" id="gc-modal-title">Add Gas Card</h3>
+        <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-500);" onclick="document.getElementById('gc-card-modal').style.display='none'">✕</button>
+      </div>
+      <input type="hidden" id="gc-modal-id"/>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Card Name *</label>
+          <input type="text" id="gc-f-name" class="form-control" placeholder="e.g. Petro-Canada Card 1"/>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Card Number (display only)</label>
+          <input type="text" id="gc-f-number" class="form-control" placeholder="e.g. **** **** **** 1234"/>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">PIN / Password</label>
+          <input type="text" id="gc-f-pin" class="form-control" placeholder="Enter PIN"/>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Notes</label>
+          <input type="text" id="gc-f-notes" class="form-control" placeholder="Optional notes"/>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('gc-card-modal').style.display='none'">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="gc-modal-save" style="background:var(--orange);">Save Card</button>
+      </div>
     </div>
   </div>
 
@@ -6272,9 +6338,124 @@ function showFleetRegView() {
   $('fleet-reg-view').style.display = 'block';
   setNavActive('nav-fleet');
   loadFleetReg();
+  loadGasCards();
 }
 
 $('nav-fleet').addEventListener('click', e => { e.preventDefault(); showFleetRegView(); });
+
+// ── Gas Cards (office management) ────────────────────────────────────────────
+let _gcCards = [];
+
+async function loadGasCards() {
+  try {
+    const [statusRes, logRes] = await Promise.all([
+      fetch('/api/gas-cards/status'),
+      fetch('/api/gas-cards/log'),
+    ]);
+    _gcCards = statusRes.ok ? await statusRes.json() : [];
+    const log = logRes.ok ? await logRes.json() : [];
+    renderGcStatus();
+    renderGcLog(log);
+  } catch {}
+}
+
+function renderGcStatus() {
+  const tbody = $('gc-status-tbody');
+  if (!_gcCards.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gray-400);">No gas cards yet — click + Add Card to get started.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _gcCards.map(c => {
+    const isOut = c.status === 'out';
+    const statusBadge = isOut
+      ? `<span class="status-badge" style="background:#fef2f2;color:#dc2626;">Signed Out</span>`
+      : `<span class="status-badge" style="background:#f0fdf4;color:#16a34a;">Available</span>`;
+    const since = isOut && c.checked_out_at ? new Date(c.checked_out_at).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—';
+    return `<tr>
+      <td style="font-weight:700;">${esc(c.card_name)}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${esc(c.card_number||'—')}</td>
+      <td style="font-family:monospace;font-weight:700;">${esc(c.pin||'—')}</td>
+      <td>${statusBadge}</td>
+      <td>${esc(c.checked_out_by_name||'—')}</td>
+      <td style="font-size:12px;">${since}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 8px;" onclick="gcOpenEdit(${c.id})">Edit</button>
+        ${isOut ? `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:#16a34a;color:#fff;margin-left:4px;" onclick="gcForceCheckin(${c.id})">Force In</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderGcLog(log) {
+  const tbody = $('gc-log-tbody');
+  if (!log.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray-400);">No activity yet.</td></tr>'; return; }
+  tbody.innerHTML = log.map(e => {
+    const dt = new Date(e.created_at).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const badge = e.event_type === 'checkout'
+      ? `<span class="status-badge" style="background:#fff7ed;color:#c2410c;">Signed Out</span>`
+      : `<span class="status-badge" style="background:#f0fdf4;color:#16a34a;">Signed In</span>`;
+    return `<tr>
+      <td style="font-size:12px;">${dt}</td>
+      <td style="font-weight:600;">${esc(e.card_name)}</td>
+      <td>${esc(e.user_name)}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Add / Edit modal
+function gcOpenAdd() {
+  $('gc-modal-title').textContent = 'Add Gas Card';
+  $('gc-modal-id').value = '';
+  $('gc-f-name').value = '';
+  $('gc-f-number').value = '';
+  $('gc-f-pin').value = '';
+  $('gc-f-notes').value = '';
+  $('gc-card-modal').style.display = 'flex';
+}
+
+function gcOpenEdit(id) {
+  const card = _gcCards.find(c => c.id === id);
+  if (!card) return;
+  $('gc-modal-title').textContent = 'Edit Gas Card';
+  $('gc-modal-id').value = id;
+  $('gc-f-name').value = card.card_name || '';
+  $('gc-f-number').value = card.card_number || '';
+  $('gc-f-pin').value = card.pin || '';
+  $('gc-f-notes').value = card.notes || '';
+  $('gc-card-modal').style.display = 'flex';
+}
+
+$('btn-gc-add').addEventListener('click', gcOpenAdd);
+
+$('gc-modal-save').addEventListener('click', async () => {
+  const id   = $('gc-modal-id').value;
+  const name = $('gc-f-name').value.trim();
+  if (!name) { showToast('Card name is required', 'error'); return; }
+  const body = {
+    card_name:   name,
+    card_number: $('gc-f-number').value.trim(),
+    pin:         $('gc-f-pin').value.trim(),
+    notes:       $('gc-f-notes').value.trim(),
+  };
+  const url    = id ? `/api/gas-cards/${id}` : '/api/gas-cards';
+  const method = id ? 'PATCH' : 'POST';
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!res.ok) { showToast('Failed to save card', 'error'); return; }
+  $('gc-card-modal').style.display = 'none';
+  showToast(id ? 'Card updated' : 'Card added', 'success');
+  loadGasCards();
+});
+
+async function gcForceCheckin(id) {
+  const card = _gcCards.find(c => c.id === id);
+  if (!card) return;
+  if (!confirm(`Force sign-in "${card.card_name}"? Use this only if the employee is unavailable.`)) return;
+  const res = await fetch(`/api/gas-cards/${id}/checkin`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+  if (!res.ok) { const d = await res.json(); showToast(d.error || 'Failed', 'error'); return; }
+  showToast('Card signed in', 'success');
+  loadGasCards();
+}
 
 $('btn-fleet-refresh').addEventListener('click', loadFleetMaintenance);
 $('btn-certs-refresh').addEventListener('click', loadWorkerCerts);

@@ -1282,6 +1282,26 @@ async function initSchema() {
     }
   }
 
+  // ── Gas Cards ─────────────────────────────────────────────────────────────
+  await pool.query(`CREATE TABLE IF NOT EXISTS gas_cards (
+    id          SERIAL PRIMARY KEY,
+    card_name   TEXT NOT NULL,
+    card_number TEXT NOT NULL DEFAULT '',
+    pin         TEXT NOT NULL DEFAULT '',
+    notes       TEXT NOT NULL DEFAULT '',
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS gas_card_events (
+    id          SERIAL PRIMARY KEY,
+    card_id     INTEGER NOT NULL REFERENCES gas_cards(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL,
+    user_name   TEXT NOT NULL DEFAULT '',
+    event_type  TEXT NOT NULL CHECK (event_type IN ('checkout','checkin')),
+    notes       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  )`);
+
   console.log('  ✓ Database schema ready');
 }
 
