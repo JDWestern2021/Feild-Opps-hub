@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="Field Ops"/>
+  <meta name="theme-color" content="#1c1e22"/>
+  <title>Fleet Gas Cards — J&amp;D Western Electric</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="theme.css"/>
+  <style>
+    body { visibility: hidden; background: #1c1e22; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; }
+
+    .app-header { background: #1c1e22; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 0 16px; display: flex; align-items: center; height: 56px; gap: 12px; position: sticky; top: 0; z-index: 100; }
+    .header-logo { width: 36px; height: 36px; object-fit: contain; background: white; border-radius: 8px; padding: 3px; flex-shrink: 0; }
+    .header-title { font-size: 15px; font-weight: 800; letter-spacing: .03em; color: #fff; flex: 1; }
+    .header-title span { color: #F47920; }
+    .back-btn { display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.55); text-decoration: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .back-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+    .page-body { max-width: 600px; margin: 0 auto; padding: 20px 16px 40px; }
+    .page-title { font-size: 20px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+    .page-sub { font-size: 13px; color: rgba(255,255,255,0.45); margin-bottom: 24px; }
+
+    .cards-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .gc-tile { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; display: flex; align-items: center; gap: 14px; padding: 16px 18px; cursor: pointer; transition: background .15s, transform .1s; min-height: 70px; }
+    .gc-tile:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+    .gc-tile:active { transform: translateY(0); }
+    .gc-tile-icon { width: 42px; height: 42px; border-radius: 10px; background: #7c2d12; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .gc-tile-icon svg { width: 22px; height: 22px; fill: #fff; }
+    .gc-tile-info { flex: 1; min-width: 0; }
+    .gc-tile-name { font-size: 15px; font-weight: 800; color: #fff; }
+    .gc-tile-num { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+    .gc-tile-status { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+    .gc-status-pill { font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 99px; white-space: nowrap; }
+    .gc-status-avail { background: rgba(22,163,74,0.2); color: #4ade80; }
+    .gc-status-out   { background: rgba(239,68,68,0.18); color: #f87171; }
+    .gc-tile-by { font-size: 11px; color: rgba(255,255,255,0.35); }
+    .gc-chevron { color: rgba(255,255,255,0.2); font-size: 20px; flex-shrink: 0; }
+
+    .gc-empty { text-align: center; color: rgba(255,255,255,0.3); font-size: 14px; padding: 48px 0; }
+
+    /* Modals */
+    .fc-modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 9900; align-items: center; justify-content: center; padding: 16px; }
+    .fc-modal-bg.open { display: flex; }
+    .fc-modal { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 24px; width: 100%; max-width: 400px; }
+    .fc-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .fc-modal-head h3 { font-size: 17px; font-weight: 900; color: #fff; margin: 0; }
+    .fc-modal h3 { font-size: 17px; font-weight: 900; color: #fff; margin-bottom: 14px; }
+    .fc-modal p { font-size: 13px; color: rgba(255,255,255,0.65); margin-bottom: 16px; line-height: 1.5; }
+    .fc-modal-close { background: rgba(255,255,255,0.08); border: none; border-radius: 8px; color: rgba(255,255,255,0.6); font-size: 16px; width: 34px; height: 34px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .fc-detail-row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .fc-detail-label { font-size: 11px; color: rgba(255,255,255,0.4); min-width: 90px; padding-top: 2px; text-transform: uppercase; letter-spacing: .04em; }
+    .fc-detail-val { font-size: 14px; color: #fff; font-weight: 600; }
+    .fc-divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 18px 0; }
+    .fc-action-full { width: 100%; min-height: 48px; border: none; border-radius: 12px; font-size: 15px; font-weight: 800; cursor: pointer; margin-bottom: 8px; }
+    .fc-btn-out-full { background: #F47920; color: #fff; }
+    .fc-btn-in-full  { background: #16a34a; color: #fff; }
+    .fc-pin-reveal { background: rgba(244,121,32,0.12); border: 1.5px solid #F47920; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .fc-pin-value { font-size: 26px; font-weight: 900; color: #F47920; letter-spacing: .14em; font-family: monospace; }
+    .fc-pin-copy { background: #F47920; border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; padding: 8px 16px; cursor: pointer; min-height: 36px; }
+    .fc-modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+    .fc-modal-btns button { min-height: 44px; padding: 0 20px; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .fc-btn-cancel { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+    .fc-btn-confirm { background: #F47920; color: #fff; }
+    .fc-btn-confirm-in { background: #16a34a; color: #fff; }
+    .fc-warn-box { background: rgba(234,179,8,0.12); border: 1px solid rgba(234,179,8,0.35); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #fde047; line-height: 1.5; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <img class="header-logo" src="/logo.png" alt="J&D Western" onerror="this.style.display='none'"/>
+  <div class="header-title">J&amp;D <span>Western</span></div>
+  <a href="index.html" class="back-btn">
+    <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z"/></svg>
+    Home
+  </a>
+</header>
+
+<div class="page-body">
+  <div class="page-title">Fleet Gas Cards</div>
+  <div class="page-sub">Tap a card to sign out or check status</div>
+  <div class="cards-list" id="gc-list">
+    <div class="gc-empty">Loading…</div>
+  </div>
+</div>
+
+<!-- Card Detail Modal -->
+<div class="fc-modal-bg" id="fc-detail-modal">
+  <div class="fc-modal">
+    <div class="fc-modal-head">
+      <h3 id="fc-detail-name"></h3>
+      <button class="fc-modal-close" id="fc-detail-close">✕</button>
+    </div>
+    <div id="fc-detail-body"></div>
+  </div>
+</div>
+
+<!-- Sign-Out Confirm Modal -->
+<div class="fc-modal-bg" id="fc-checkout-modal">
+  <div class="fc-modal">
+    <h3>Sign Out Card</h3>
+    <p>You are signing out <strong id="fc-co-name"></strong>. Once signed out, the PIN will be revealed and you will be logged as having this card.</p>
+    <div class="fc-modal-btns">
+      <button class="fc-btn-cancel" id="fc-co-cancel">Cancel</button>
+      <button class="fc-btn-confirm" id="fc-co-confirm">Sign Out &amp; Reveal PIN</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN Reveal Modal -->
+<div class="fc-modal-bg" id="fc-pin-modal">
+  <div class="fc-modal">
+    <h3>Card PIN — <span id="fc-pin-card-name"></span></h3>
+    <p>Keep this PIN secure. You are now signed out with this card.</p>
+    <div class="fc-pin-reveal">
+      <span class="fc-pin-value" id="fc-pin-value"></span>
+      <button class="fc-pin-copy" id="fc-pin-copy">Copy</button>
+    </div>
+    <div class="fc-modal-btns">
+      <button class="fc-btn-confirm" id="fc-pin-done">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sign-In Confirm Modal -->
+<div class="fc-modal-bg" id="fc-checkin-modal">
+  <div class="fc-modal">
+    <h3>Sign In Card</h3>
+    <div class="fc-warn-box">⚠ Please ensure the card has been physically returned to the office or your supervisor before signing in.</div>
+    <p>You are signing <strong id="fc-ci-name"></strong> back in.</p>
+    <div class="fc-modal-btns">
+      <button class="fc-btn-cancel" id="fc-ci-cancel">Cancel</button>
+      <button class="fc-btn-confirm-in" id="fc-ci-confirm">Confirm Sign In</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login.html'; return; }
+  const me = await r.json();
+  document.body.style.visibility = 'visible';
+
+  // Apply saved logo
+  try {
+    const s = await fetch('/api/settings/public').then(r => r.json());
+    if (s.logo_path) document.querySelector('.header-logo').src = s.logo_path + '?t=' + Date.now();
+  } catch {}
+
+  let _cards = [];
+  let _pendingId = null;
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  async function load() {
+    try {
+      const res = await fetch('/api/gas-cards/status');
+      if (!res.ok) return;
+      _cards = await res.json();
+      render();
+    } catch {}
+  }
+
+  function render() {
+    const list = document.getElementById('gc-list');
+    if (!_cards.length) { list.innerHTML = '<div class="gc-empty">No gas cards configured.</div>'; return; }
+    list.innerHTML = _cards.map(c => {
+      const isOut = c.status === 'out';
+      const statusPill = isOut
+        ? `<span class="gc-status-pill gc-status-out">Signed Out</span>`
+        : `<span class="gc-status-pill gc-status-avail">Available</span>`;
+      const byLine = isOut ? `<span class="gc-tile-by">${esc(c.checked_out_by_name || '')}</span>` : '';
+      return `<div class="gc-tile" data-id="${c.id}">
+        <div class="gc-tile-icon">
+          <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+        </div>
+        <div class="gc-tile-info">
+          <div class="gc-tile-name">${esc(c.card_name)}</div>
+          ${c.card_number ? `<div class="gc-tile-num">${esc(c.card_number)}</div>` : ''}
+        </div>
+        <div class="gc-tile-status">
+          ${statusPill}
+          ${byLine}
+        </div>
+        <span class="gc-chevron">›</span>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('.gc-tile').forEach(tile => {
+      tile.addEventListener('click', () => openDetail(parseInt(tile.dataset.id)));
+    });
+  }
+
+  function openDetail(id) {
+    const c = _cards.find(x => x.id === id);
+    if (!c) return;
+    _pendingId = id;
+    const isOut  = c.status === 'out';
+    const myCard = isOut && c.checked_out_by_id == me.id;
+
+    document.getElementById('fc-detail-name').textContent = c.card_name;
+
+    let html = '';
+    if (c.card_number) html += `<div class="fc-detail-row"><span class="fc-detail-label">Card #</span><span class="fc-detail-val">${esc(c.card_number)}</span></div>`;
+    html += `<div class="fc-detail-row"><span class="fc-detail-label">Status</span><span class="fc-detail-val">${isOut ? '🔴 Signed Out' : '🟢 Available'}</span></div>`;
+    if (isOut) {
+      html += `<div class="fc-detail-row"><span class="fc-detail-label">Signed Out By</span><span class="fc-detail-val">${esc(c.checked_out_by_name || '—')}</span></div>`;
+      if (c.checked_out_since) {
+        const since = new Date(c.checked_out_since).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+        html += `<div class="fc-detail-row"><span class="fc-detail-label">Since</span><span class="fc-detail-val">${esc(since)}</span></div>`;
+      }
+    }
+
+    if (!isOut) {
+      html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-out-full" id="fc-detail-action">Sign Out This Card</button>`;
+    } else if (myCard) {
+      html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-in-full" id="fc-detail-action">Sign In This Card</button>`;
+    }
+
+    document.getElementById('fc-detail-body').innerHTML = html;
+    document.getElementById('fc-detail-modal').classList.add('open');
+
+    const btn = document.getElementById('fc-detail-action');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        document.getElementById('fc-detail-modal').classList.remove('open');
+        if (!isOut) openCheckout(id);
+        else openCheckin(id);
+      });
+    }
+  }
+
+  function openCheckout(id) {
+    const c = _cards.find(x => x.id === id);
+    if (!c) return;
+    _pendingId = id;
+    document.getElementById('fc-co-name').textContent = c.card_name;
+    document.getElementById('fc-checkout-modal').classList.add('open');
+  }
+
+  function openCheckin(id) {
+    const c = _cards.find(x => x.id === id);
+    if (!c) return;
+    _pendingId = id;
+    document.getElementById('fc-ci-name').textContent = c.card_name;
+    document.getElementById('fc-checkin-modal').classList.add('open');
+  }
+
+  document.getElementById('fc-detail-close').addEventListener('click', () => {
+    document.getElementById('fc-detail-modal').classList.remove('open');
+  });
+
+  document.getElementById('fc-co-cancel').addEventListener('click', () => {
+    document.getElementById('fc-checkout-modal').classList.remove('open');
+  });
+
+  document.getElementById('fc-co-confirm').addEventListener('click', async () => {
+    document.getElementById('fc-checkout-modal').classList.remove('open');
+    const c = _cards.find(x => x.id === _pendingId);
+    try {
+      const res = await fetch(`/api/gas-cards/${_pendingId}/checkout`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Could not sign out card'); return; }
+      document.getElementById('fc-pin-card-name').textContent = c?.card_name || '';
+      document.getElementById('fc-pin-value').textContent = data.pin || '(no PIN set)';
+      document.getElementById('fc-pin-modal').classList.add('open');
+      load();
+    } catch { alert('Network error — please try again'); }
+  });
+
+  document.getElementById('fc-pin-copy').addEventListener('click', () => {
+    const pin = document.getElementById('fc-pin-value').textContent;
+    navigator.clipboard?.writeText(pin).then(() => {
+      const btn = document.getElementById('fc-pin-copy');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  });
+
+  document.getElementById('fc-pin-done').addEventListener('click', () => {
+    document.getElementById('fc-pin-modal').classList.remove('open');
+  });
+
+  document.getElementById('fc-ci-cancel').addEventListener('click', () => {
+    document.getElementById('fc-checkin-modal').classList.remove('open');
+  });
+
+  document.getElementById('fc-ci-confirm').addEventListener('click', async () => {
+    document.getElementById('fc-checkin-modal').classList.remove('open');
+    try {
+      const res = await fetch(`/api/gas-cards/${_pendingId}/checkin`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Could not sign in card'); return; }
+      load();
+    } catch { alert('Network error — please try again'); }
+  });
+
+  ['fc-detail-modal','fc-checkout-modal','fc-pin-modal','fc-checkin-modal'].forEach(id => {
+    document.getElementById(id).addEventListener('click', e => {
+      if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+    });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
