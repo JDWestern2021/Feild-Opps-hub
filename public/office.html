@@ -1701,9 +1701,15 @@
         </div>
 
         <!-- Activity log -->
-        <h4 style="font-size:13px;font-weight:800;color:var(--dark);margin:0 0 10px;">Activity Log</h4>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;">
+          <h4 style="font-size:13px;font-weight:800;color:var(--dark);margin:0;">Activity Log</h4>
+          <button class="btn btn-sm" onclick="gcPrintLog()" style="display:flex;align-items:center;gap:5px;font-size:12px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print Log
+          </button>
+        </div>
         <div class="po-table-wrap">
-          <table class="po-table">
+          <table class="po-table" id="gc-log-table">
             <thead><tr><th>Date / Time</th><th>Card</th><th>Employee</th><th>Action</th></tr></thead>
             <tbody id="gc-log-tbody"><tr><td colspan="4" style="text-align:center;color:var(--gray-400);">Loading…</td></tr></tbody>
           </table>
@@ -6473,6 +6479,46 @@ async function gcForceCheckin(id) {
   if (!res.ok) { const d = await res.json(); showToast(d.error || 'Failed', 'error'); return; }
   showToast('Card signed in', 'success');
   loadGasCards();
+}
+
+function gcPrintLog() {
+  const table = document.getElementById('gc-log-table');
+  if (!table) return;
+  const printDate = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(`<!DOCTYPE html><html><head><title>Gas Card Activity Log — ${printDate}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px; }
+    h2 { font-size: 16px; margin-bottom: 4px; }
+    .sub { font-size: 11px; color: #555; margin-bottom: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f0f0f0; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 6px 10px; text-align: left; border-bottom: 2px solid #ccc; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e5e5e5; font-size: 12px; }
+    .badge-out { background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .badge-in  { background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    @media print { body { padding: 0; } }
+  </style></head><body>
+  <h2>Fleet Gas Card — Activity Log</h2>
+  <div class="sub">Printed ${printDate} &nbsp;·&nbsp; J&amp;D Western Electric Ltd.</div>
+  <table>
+    <thead><tr><th>Date / Time</th><th>Card</th><th>Employee</th><th>Action</th></tr></thead>
+    <tbody>${Array.from(table.querySelectorAll('tbody tr')).map(tr => {
+      const cells = tr.querySelectorAll('td');
+      if (!cells.length) return '';
+      const action = cells[3]?.textContent.trim().toLowerCase();
+      const badgeCls = action === 'signed out' ? 'badge-out' : 'badge-in';
+      return `<tr>
+        <td>${cells[0]?.textContent||''}</td>
+        <td>${cells[1]?.textContent||''}</td>
+        <td>${cells[2]?.textContent||''}</td>
+        <td><span class="${badgeCls}">${cells[3]?.textContent||''}</span></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 400);
 }
 
 $('btn-fleet-refresh').addEventListener('click', loadFleetMaintenance);
