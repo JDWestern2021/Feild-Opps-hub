@@ -825,14 +825,15 @@ function rebuildCircuitGrid(circuitData = []) {
     const rBc = rightCells(rbG, rbD.name, rbD.val, rbD.poleVal, rbD.ampVal, 'Tandem B (optional)', rbD.si);
 
     if (_panelFlipped) {
-      html += `<tr class="slot-b-row">${lBc}
-        <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
+      // Flipped: even (right) circuits on the left column, odd (left) circuits on the right
+      html += `<tr class="slot-b-row">${rBc}
         <td class="cct-num ${rowACls} ${sep}">${rs}B</td>
-        ${rBc}</tr>
-      <tr class="slot-a-row">${lAc}
-        <td class="cct-num">${ls}A</td>
+        <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
+        ${lBc}</tr>
+      <tr class="slot-a-row">${rAc}
         <td class="cct-num">${rs}A</td>
-        ${rAc}</tr>`;
+        <td class="cct-num">${ls}A</td>
+        ${lAc}</tr>`;
     } else {
       html += `<tr class="slot-a-row">${lAc}
         <td class="cct-num ${rowACls} ${sep}">${ls}A</td>
@@ -1004,16 +1005,17 @@ function buildViewRows(s) {
     const rbD = resolveLeader(rbG, 'rb');
 
     if (flipped) {
+      // Flipped: even (right) circuits on the left column, odd (left) circuits on the right
       html += `<tr class="slot-b-row">
-        ${lc(lbG, lbD.txt, lbD.p, lbD.a)}
-        <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
+        ${lc(rbG, rbD.txt, rbD.p, rbD.a)}
         <td class="cct-num ${rowACls} ${sep}">${rs}B</td>
-        ${rc(rbG, rbD.txt, rbD.p, rbD.a)}</tr>
+        <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
+        ${rc(lbG, lbD.txt, lbD.p, lbD.a)}</tr>
       <tr class="slot-a-row">
-        ${lc(laG, laD.txt, laD.p, laD.a)}
-        <td class="cct-num">${ls}A</td>
+        ${lc(raG, raD.txt, raD.p, raD.a)}
         <td class="cct-num">${rs}A</td>
-        ${rc(raG, raD.txt, raD.p, raD.a)}</tr>`;
+        <td class="cct-num">${ls}A</td>
+        ${rc(laG, laD.txt, laD.p, laD.a)}</tr>`;
     } else {
       html += `<tr class="slot-a-row">
         ${lc(laG, laD.txt, laD.p, laD.a)}
@@ -1389,16 +1391,17 @@ function updatePsPreview() {
     const raD = resolvePv(raG, 'ra'), rbD = resolvePv(rbG, 'rb');
 
     if (flippedP) {
-      const topBorder = lbG?.isLeader !== false ? 'border-top:1px solid #9ca3af;' : '';
+      // Flipped: even (right) circuits on the left column, odd (left) circuits on the right
+      const topBorder = rbG?.isLeader !== false ? 'border-top:1px solid #9ca3af;' : '';
       rows += `<tr style="${topBorder}">
-        ${lcP(lbG, lbD.txt, lbD.p, lbD.a)}
-        <td style="${TD('text-align:center;width:20px;font-weight:800;background:#d1d5db;')}">${ls}B</td>
+        ${lcP(rbG, rbD.txt, rbD.p, rbD.a)}
         <td style="${TD('text-align:center;width:20px;font-weight:800;background:#d1d5db;')}">${rs}B</td>
-        ${rcP(rbG, rbD.txt, rbD.p, rbD.a)}</tr>
+        <td style="${TD('text-align:center;width:20px;font-weight:800;background:#d1d5db;')}">${ls}B</td>
+        ${rcP(lbG, lbD.txt, lbD.p, lbD.a)}</tr>
       <tr>
-        ${lcP(laG, laD.txt, laD.p, laD.a)}
-        <td style="${cctAS}">${ls}A</td><td style="${cctAS}">${rs}A</td>
-        ${rcP(raG, raD.txt, raD.p, raD.a)}</tr>`;
+        ${lcP(raG, raD.txt, raD.p, raD.a)}
+        <td style="${cctAS}">${rs}A</td><td style="${cctAS}">${ls}A</td>
+        ${rcP(laG, laD.txt, laD.p, laD.a)}</tr>`;
     } else {
       const topBorder = laG?.isLeader !== false ? 'border-top:1px solid #9ca3af;' : '';
       rows += `<tr style="${topBorder}">
