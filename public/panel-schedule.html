@@ -823,17 +823,22 @@ function rebuildCircuitGrid(circuitData = []) {
     const lBc = leftCells (lbG, lbD.name, lbD.val, lbD.poleVal, lbD.ampVal, 'Tandem B (optional)', lbD.si);
     const rAc = rightCells(raG, raD.name, raD.val, raD.poleVal, raD.ampVal, 'Description',         raD.si);
     const rBc = rightCells(rbG, rbD.name, rbD.val, rbD.poleVal, rbD.ampVal, 'Tandem B (optional)', rbD.si);
+    // Flipped variants: left-column builder with right-side data, right-column builder with left-side data
+    const flLAc = leftCells (raG, raD.name, raD.val, raD.poleVal, raD.ampVal, 'Description',         raD.si);
+    const flLBc = leftCells (rbG, rbD.name, rbD.val, rbD.poleVal, rbD.ampVal, 'Tandem B (optional)', rbD.si);
+    const flRAc = rightCells(laG, laD.name, laD.val, laD.poleVal, laD.ampVal, 'Description',         laD.si);
+    const flRBc = rightCells(lbG, lbD.name, lbD.val, lbD.poleVal, lbD.ampVal, 'Tandem B (optional)', lbD.si);
 
     if (_panelFlipped) {
       // Flipped: even (right) circuits on the left column, odd (left) circuits on the right
-      html += `<tr class="slot-b-row">${rBc}
+      html += `<tr class="slot-b-row">${flLBc}
         <td class="cct-num ${rowACls} ${sep}">${rs}B</td>
         <td class="cct-num ${rowACls} ${sep}">${ls}B</td>
-        ${lBc}</tr>
-      <tr class="slot-a-row">${rAc}
+        ${flRBc}</tr>
+      <tr class="slot-a-row">${flLAc}
         <td class="cct-num">${rs}A</td>
         <td class="cct-num">${ls}A</td>
-        ${lAc}</tr>`;
+        ${flRAc}</tr>`;
     } else {
       html += `<tr class="slot-a-row">${lAc}
         <td class="cct-num ${rowACls} ${sep}">${ls}A</td>
