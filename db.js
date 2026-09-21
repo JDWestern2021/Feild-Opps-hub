@@ -1304,6 +1304,29 @@ async function initSchema() {
   )`);
   await pool.query(`ALTER TABLE gas_card_events ADD COLUMN IF NOT EXISTS signature TEXT NOT NULL DEFAULT ''`);
 
+  // ── New Hire Package ───────────────────────────────────────────────────────
+  await pool.query(`CREATE TABLE IF NOT EXISTS hire_package_docs (
+    id           SERIAL PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    filename     TEXT NOT NULL,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  )`);
+  // Seed initial docs if table is empty
+  const { rows: [{ cnt }] } = await pool.query('SELECT COUNT(*)::int AS cnt FROM hire_package_docs');
+  if (cnt === 0) {
+    const seedDocs = [
+      { name: 'TD1 – Federal Personal Tax Credits (2026)',  file: 'td1-federal-2026.pdf',    order: 1 },
+      { name: 'TD1 – Provincial Tax Credits (2026)',        file: 'td1-provincial-2026.pdf', order: 2 },
+      { name: 'Driver Authorization Form',                  file: 'driver-authorization.pdf', order: 3 },
+      { name: 'GB Benefits Enrollment Form',                file: 'gb-enrollment-form.pdf',  order: 4 },
+      { name: 'Employment Agreement (Template)',            file: 'employment-agreement.docx', order: 5 },
+    ];
+    for (const d of seedDocs) {
+      await pool.query('INSERT INTO hire_package_docs (display_name,filename,sort_order) VALUES ($1,$2,$3)', [d.name, d.file, d.order]);
+    }
+  }
+
   console.log('  ✓ Database schema ready');
 }
 

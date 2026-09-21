@@ -8459,6 +8459,65 @@ app.get('/api/gas-cards/log', requireAuth, async (req, res) => {
   res.json(rows);
 });
 
+// ── New Hire Package ─────────────────────────────────────────────────────────
+const hireDocUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const fs = require('fs');
+      fs.mkdirSync(path.join(__dirname,'public','hire-docs'), {recursive:true});
+      cb(null, path.join(__dirname,'public','hire-docs'));
+    },
+    filename: (req, file, cb) => {
+      const slug = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '-').toLowerCase();
+      cb(null, Date.now() + '-' + slug);
+    }
+  }),
+  limits: { fileSize: 50*1024*1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /application\/pdf|application\/vnd\.openxmlformats|application\/msword/.test(file.mimetype)
+      || /\.(pdf|doc|docx)$/i.test(file.originalname);
+    cb(null, ok);
+  }
+});
+
+// GET /api/hire-package/docs — list all docs
+app.get('/api/hire-package/docs', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM hire_package_docs ORDER BY sort_order, id');
+  res.json(rows);
+});
+
+// POST /api/hire-package/docs — upload new doc (admin only)
+app.post('/api/hire-package/docs', requireAdmin, hireDocUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const display_name = (req.body.display_name || req.file.originalname).trim();
+  const { rows: [doc] } = await pool.query(
+    'INSERT INTO hire_package_docs (display_name, filename) VALUES ($1,$2) RETURNING *',
+    [display_name, req.file.filename]
+  );
+  res.json(doc);
+});
+
+// PATCH /api/hire-package/docs/:id — rename (admin only)
+app.patch('/api/hire-package/docs/:id', requireAdmin, async (req, res) => {
+  const { display_name, sort_order } = req.body;
+  const { rows } = await pool.query(
+    'UPDATE hire_package_docs SET display_name=COALESCE($1,display_name), sort_order=COALESCE($2,sort_order) WHERE id=$3 RETURNING *',
+    [display_name || null, sort_order ?? null, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+// DELETE /api/hire-package/docs/:id — delete doc + file (admin only)
+app.delete('/api/hire-package/docs/:id', requireAdmin, async (req, res) => {
+  const { rows: [doc] } = await pool.query('DELETE FROM hire_package_docs WHERE id=$1 RETURNING *', [req.params.id]);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  const fs = require('fs');
+  const fp = path.join(__dirname,'public','hire-docs', doc.filename);
+  try { fs.unlinkSync(fp); } catch {}
+  res.json({ ok: true });
+});
+
     app.listen(PORT, () => {
       const _dbTag = _isLocal ? `${_dbHost} (LOCAL)` : `${_dbHost} (PRODUCTION ⚠)`;
       console.log(`\n  J&D Western Electric — Field Operations Hub`);
