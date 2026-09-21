@@ -534,20 +534,21 @@
 
 <script>
 (async () => {
+  // ── 1. Auth check — must pass before anything else ──────────────────────
   const r = await fetch('/api/auth/me');
   if (!r.ok) { location.href = '/login.html'; return; }
   const u = await r.json();
   const perms = (u.permissions || '').split(',');
 
-  // Greeting
+  // ── 2. Render greeting & show page immediately ───────────────────────────
   const firstName = u.name ? u.name.split(' ')[0] : u.name;
   const hr = new Date().getHours();
   const tod = hr < 12 ? 'Good Morning' : hr < 17 ? 'Good Afternoon' : 'Good Evening';
-  const dateStr = new Date().toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric' });
   document.getElementById('greeting-name').textContent = firstName;
   document.getElementById('greeting-time').textContent = tod;
-  document.getElementById('greeting-date').textContent = dateStr;
+  document.getElementById('greeting-date').textContent = new Date().toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric' });
   document.getElementById('greeting-block').style.display = '';
+
   const hasTT = u.role === 'admin' || perms.includes('time_ticket');
   const hasPO = u.role === 'admin' || perms.includes('get_po');
   const hasOD = u.role === 'admin';
@@ -556,71 +557,66 @@
   if (!hasPO) document.getElementById('card-po').style.display = 'none';
   if (!hasOD) document.getElementById('card-od').style.display = 'none';
   if (wsAccess === 'none') document.getElementById('card-worksites').style.display = 'none';
-  // Safety card visible to all employees — near miss & incident report gated inside safety.html
-  // My Timesheet always visible to authenticated users
 
-  // Stats bar — admin only
-  if (hasOD) {
-    document.getElementById('stats-bar').classList.add('visible');
-    try {
-      const ov = await fetch('/api/dashboard/overview').then(r => r.ok ? r.json() : null);
-      if (ov) {
-        document.getElementById('stat-tickets').textContent = ov.tickets?.pending  ?? '—';
-        document.getElementById('stat-po').textContent      = ov.pos?.open        ?? '—';
-        document.getElementById('stat-timeoff').textContent = ov.time_off?.pending ?? '—';
-        const sr = await fetch('/api/safety/pending-signatures').then(r => r.ok ? r.json() : []).catch(() => []);
-        document.getElementById('stat-safety').textContent  = Array.isArray(sr) ? sr.length : '—';
-      }
-    } catch { /* leave dashes */ }
-  }
-
-  // Apply saved logo
-  const s = await fetch('/api/settings/public').then(r=>r.json()).catch(()=>({}));
-  if (s.logo_path) document.querySelector('.logo-wrap img').src = s.logo_path + '?t=' + Date.now();
-
+  // Show the page now — don't wait for secondary data
   document.body.style.visibility = 'visible';
 
-  // Safety pending-signature badge
+  // ── 3. Fire all secondary calls in parallel ──────────────────────────────
+  const [settings, safetyPending, timeOffNotifs, overview] = await Promise.allSettled([
+    fetch('/api/settings/public').then(r => r.ok ? r.json() : {}),
+    fetch('/api/safety/pending-signatures').then(r => r.ok ? r.json() : []),
+    fetch('/api/time-off/my-notifications').then(r => r.ok ? r.json() : []),
+    hasOD ? fetch('/api/dashboard/overview').then(r => r.ok ? r.json() : null) : Promise.resolve(null),
+  ]);
+
+  // Logo
+  const s = settings.status === 'fulfilled' ? settings.value : {};
+  if (s.logo_path) document.querySelector('.logo-wrap img').src = s.logo_path + '?t=' + Date.now();
+
+  // Safety badge
+  const pending = safetyPending.status === 'fulfilled' ? safetyPending.value : [];
+  if (Array.isArray(pending) && pending.length) {
+    const badge = document.getElementById('safety-notif-badge');
+    const txt   = document.getElementById('safety-notif-text');
+    badge.textContent = pending.length;
+    badge.style.display = 'inline-block';
+    txt.textContent = `⚠️ ${pending.length} form${pending.length > 1 ? 's' : ''} require your signature`;
+  }
+
+  // Time off dot
   try {
-    const sr = await fetch('/api/safety/pending-signatures');
-    if (sr.ok) {
-      const pending = await sr.json();
-      if (pending.length) {
-        const badge = document.getElementById('safety-notif-badge');
-        const txt   = document.getElementById('safety-notif-text');
-        badge.textContent = pending.length;
-        badge.style.display = 'inline-block';
-        txt.textContent = `⚠️ ${pending.length} form${pending.length > 1 ? 's' : ''} require your signature`;
-      }
+    const notifs = timeOffNotifs.status === 'fulfilled' ? timeOffNotifs.value : [];
+    const seen   = JSON.parse(localStorage.getItem('to_seen_ids') || '[]');
+    const unseen = notifs.filter(n => !seen.includes(n.id));
+    if (unseen.length) {
+      const dot = document.getElementById('to-notif-dot');
+      const txt = document.getElementById('to-notif-text');
+      dot.style.display = 'inline-flex';
+      const approved = unseen.filter(n => n.status === 'approved').length;
+      const denied   = unseen.filter(n => n.status === 'denied').length;
+      const parts = [];
+      if (approved) parts.push(`${approved} approved`);
+      if (denied)   parts.push(`${denied} denied`);
+      txt.textContent = `📬 Time off update: ${parts.join(' · ')} — tap to view`;
+      document.getElementById('card-timeoff').addEventListener('click', () => {
+        const allIds = notifs.map(n => n.id);
+        const prev = JSON.parse(localStorage.getItem('to_seen_ids') || '[]');
+        localStorage.setItem('to_seen_ids', JSON.stringify([...new Set([...prev,...allIds])]));
+      }, { once: true });
     }
   } catch {}
 
-  // Time Off notification dot
-  try {
-    const nr = await fetch('/api/time-off/my-notifications');
-    if (nr.ok) {
-      const notifs = await nr.json();
-      const seen = JSON.parse(localStorage.getItem('to_seen_ids') || '[]');
-      const unseen = notifs.filter(n => !seen.includes(n.id));
-      if (unseen.length) {
-        const dot = document.getElementById('to-notif-dot');
-        const txt = document.getElementById('to-notif-text');
-        dot.style.display = 'inline-flex';
-        const approved = unseen.filter(n => n.status === 'approved').length;
-        const denied   = unseen.filter(n => n.status === 'denied').length;
-        const parts = [];
-        if (approved) parts.push(`${approved} approved`);
-        if (denied)   parts.push(`${denied} denied`);
-        txt.textContent = `📬 Time off update: ${parts.join(' · ')} — tap to view`;
-        // Mark seen when card is clicked
-        document.getElementById('card-timeoff').addEventListener('click', () => {
-          const allIds = notifs.map(n => n.id);
-          const prev = JSON.parse(localStorage.getItem('to_seen_ids') || '[]');
-          localStorage.setItem('to_seen_ids', JSON.stringify([...new Set([...prev,...allIds])]));
-        }, { once: true });
-      }
+  // Admin stats bar — uses overview + already-fetched safety count
+  if (hasOD) {
+    const ov = overview.status === 'fulfilled' ? overview.value : null;
+    if (ov) {
+      document.getElementById('stats-bar').classList.add('visible');
+      document.getElementById('stat-tickets').textContent  = ov.tickets?.pending  ?? '—';
+      document.getElementById('stat-po').textContent       = ov.pos?.open         ?? '—';
+      document.getElementById('stat-timeoff').textContent  = ov.time_off?.pending ?? '—';
+      document.getElementById('stat-safety').textContent   = Array.isArray(pending) ? pending.length : '—';
     }
-  } catch {}
+  }
 
 })();
 
