@@ -296,6 +296,10 @@
         Archived
         <span class="tm-sidebar-count" id="cnt-archived">—</span>
       </button>
+      <button class="tm-nav-btn" id="nav-hire-pkg" onclick="setView('hire-pkg')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        New Hire Package
+      </button>
     </div>
   </aside>
 
@@ -309,6 +313,19 @@
     <div class="tm-empty" id="tm-empty" style="display:none;">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
       <div style="font-size:14px;font-weight:700;color:#6b7280;">No members found</div>
+    </div>
+
+    <!-- ── New Hire Package view ── -->
+    <div id="hire-pkg-view" style="display:none;max-width:640px;">
+      <div style="font-size:13px;color:#6b7280;margin-bottom:16px;">Select the forms you need and click Print Selected, or print the full package at once.</div>
+      <div id="hire-pkg-view-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+        <div style="color:#9ca3af;font-size:13px;">Loading…</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px;">
+        <button class="btn-save-primary" onclick="printSelectedHireDocs()" style="padding:10px 20px;">Print Selected</button>
+        <button class="btn-cancel-secondary" onclick="printAllHireDocs()" style="padding:10px 20px;">Print All</button>
+        <button class="btn-cancel-secondary" onclick="openHirePkgManager()" style="padding:10px 20px;">Manage Forms</button>
+      </div>
     </div>
   </main>
 </div>
@@ -501,21 +518,30 @@ function updateCounts() {
 }
 
 // ── Views ──
-const VIEW_TITLES = { all: 'All Members', admin: 'Office Admins', field: 'Field Users', pending: 'Pending Invites', archived: 'Archived Members' };
+const VIEW_TITLES = { all: 'All Members', admin: 'Office Admins', field: 'Field Users', pending: 'Pending Invites', archived: 'Archived Members', 'hire-pkg': 'New Hire Package' };
 function setView(v, tabEl) {
   currentView = v;
   _showingArchived = (v === 'archived');
+  const isHirePkg = (v === 'hire-pkg');
   // Sidebar buttons
-  ['all','admin','field','pending','archived'].forEach(x => {
+  ['all','admin','field','pending','archived','hire-pkg'].forEach(x => {
     const b = $('nav-'+x); if (b) b.classList.toggle('active', x===v);
   });
-  loadUsers();
+  // Show/hide member list vs hire package view
+  $('tm-cards').style.display       = isHirePkg ? 'none' : '';
+  $('tm-empty').style.display       = 'none';
+  $('hire-pkg-view').style.display  = isHirePkg ? '' : 'none';
+  $('tm-search').style.display      = isHirePkg ? 'none' : '';
+  if (!isHirePkg) {
+    loadUsers();
+  } else {
+    renderHirePkgView();
+  }
   // Mobile tab pills
   document.querySelectorAll('.tm-tab-pill').forEach(p => p.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
-  $('main-view-title').textContent = VIEW_TITLES[v];
-  $('tm-search').value = '';
-  renderCards();
+  $('main-view-title').textContent = VIEW_TITLES[v] || v;
+  if (!isHirePkg) { $('tm-search').value = ''; renderCards(); }
 }
 
 // Show mobile FAB when sidebar is hidden
@@ -922,6 +948,7 @@ async function loadHireDocs() {
     hireDocs = r.ok ? await r.json() : [];
   } catch { hireDocs = []; }
   renderHireDocList();
+  if (currentView === 'hire-pkg') renderHirePkgView();
 }
 
 function renderHireDocList() {
@@ -942,8 +969,16 @@ function renderHireDocList() {
 }
 
 function getCheckedDocs() {
-  return Array.from($('hire-pkg-list').querySelectorAll('input[type=checkbox]:checked'))
-    .map(cb => ({ id: cb.dataset.id, file: cb.dataset.file, isPdf: cb.dataset.pdf === 'true' }));
+  // Collect from whichever hire-pkg panel is visible
+  const sources = [$('hire-pkg-list'), $('hire-pkg-view-list')];
+  const results = [];
+  sources.forEach(el => {
+    if (!el) return;
+    el.querySelectorAll('input[type=checkbox]:checked').forEach(cb => {
+      results.push({ id: cb.dataset.id, file: cb.dataset.file, isPdf: cb.dataset.pdf === 'true' });
+    });
+  });
+  return results;
 }
 
 function openHireDoc(filename, isPdf) {
@@ -1049,6 +1084,24 @@ async function uploadHireDoc() {
   await loadHireDocs();
   renderHireMgrList();
   showToast('Form added!', 'success');
+}
+
+// Render the full-page hire package view (main area)
+function renderHirePkgView() {
+  const el = $('hire-pkg-view-list');
+  if (!hireDocs.length) { el.innerHTML = '<div style="color:#9ca3af;font-size:13px;">No forms in package yet. Click Manage Forms to add some.</div>'; return; }
+  el.innerHTML = hireDocs.map(d => {
+    const isPdf = d.filename.endsWith('.pdf');
+    const icon = isPdf
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="#dc2626"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="#2563eb"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`;
+    return `<label style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:1px solid #e5e7eb;cursor:pointer;background:#fff;font-size:14px;color:#111827;box-shadow:0 1px 3px rgba(0,0,0,.04);">
+      <input type="checkbox" data-id="${d.id}" data-file="${d.filename}" data-pdf="${isPdf}" style="accent-color:#ea580c;width:16px;height:16px;flex-shrink:0;"/>
+      ${icon}
+      <span style="flex:1;font-weight:500;">${d.display_name}</span>
+      ${!isPdf ? '<span style="font-size:11px;background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-weight:600;">DOCX</span>' : '<span style="font-size:11px;background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-weight:600;">PDF</span>'}
+    </label>`;
+  }).join('');
 }
 
 // Docs loaded during page init via loadHireDocs() called from main init
