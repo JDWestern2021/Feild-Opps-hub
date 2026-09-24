@@ -1168,7 +1168,14 @@
           </div>
           <!-- Drawings pane -->
           <div id="review-pane-drawings" class="review-pane">
-            <div class="review-filters" id="drawings-type-chips" style="flex-wrap:wrap;gap:6px;padding:10px 12px;border-bottom:1px solid var(--gray-100);"></div>
+            <div style="padding:8px 12px 4px;border-bottom:1px solid var(--gray-100);">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:5px;">Floor</div>
+              <div class="review-filters" id="drawings-floor-chips" style="flex-wrap:wrap;gap:6px;"></div>
+            </div>
+            <div style="padding:8px 12px 4px;border-bottom:1px solid var(--gray-100);">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:5px;">Suite Type</div>
+              <div class="review-filters" id="drawings-type-chips" style="flex-wrap:wrap;gap:6px;"></div>
+            </div>
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--gray-100);">
               <span id="drawings-count-label" style="font-size:12px;color:var(--gray-400);"></span>
               <div style="display:flex;gap:6px;">
@@ -4424,15 +4431,17 @@ function loadReviewTab(tab) {
 }
 
 // ── Review: Drawings ─────────────────────────────────────────────────────────
-let _drawingsData      = [];   // flat array of rows from /api/projects/:id/drawings
-let _drawingsTypeFilter = 'all'; // 'all' or a plan_type_id string
+let _drawingsData       = [];     // flat array of rows from /api/projects/:id/drawings
+let _drawingsTypeFilter  = 'all';  // 'all' or plan_type_id string
+let _drawingsFloorFilter = 'all';  // 'all' or floor_id string
 
 async function loadDrawingsTab() {
-  const chipsEl = document.getElementById('drawings-type-chips');
-  const listEl  = document.getElementById('drawings-list');
+  const typeChipsEl  = document.getElementById('drawings-type-chips');
+  const floorChipsEl = document.getElementById('drawings-floor-chips');
+  const listEl       = document.getElementById('drawings-list');
   if (!_activeProjectId) return;
   listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px;">Loading…</div>';
-  chipsEl.innerHTML = '';
+  typeChipsEl.innerHTML = ''; floorChipsEl.innerHTML = '';
 
   const drawResp = await fetch(`/api/projects/${_activeProjectId}/drawings`).catch(() => null);
   if (!drawResp || !drawResp.ok) {
@@ -4442,35 +4451,57 @@ async function loadDrawingsTab() {
   }
   _drawingsData = await drawResp.json();
 
-  // Build type filter chips from distinct plan types present in the data
+  // Build floor chips
+  const floorMap = new Map();
+  _drawingsData.forEach(f => {
+    const key = String(f.floor_id ?? 'none');
+    if (!floorMap.has(key)) floorMap.set(key, { floorId: key, floorName: f.floor_name || 'No Floor', count: 0 });
+    floorMap.get(key).count++;
+  });
+  floorChipsEl.innerHTML = `<button class="review-chip ${_drawingsFloorFilter==='all'?'active':''}" onclick="setDrawingsFloorFilter('all',this)">All</button>` +
+    [...floorMap.values()].map(fl =>
+      `<button class="review-chip ${_drawingsFloorFilter===fl.floorId?'active':''}" onclick="setDrawingsFloorFilter('${fl.floorId}',this)">${escHtml(fl.floorName)} (${fl.count})</button>`
+    ).join('');
+
+  // Build suite type chips
   const typeMap = new Map();
   _drawingsData.forEach(f => {
     const key = String(f.plan_type_id ?? 'none');
     if (!typeMap.has(key)) typeMap.set(key, { typeId: key, typeCode: f.plan_type_code || '—', typeName: f.plan_type_name || 'No Type', count: 0 });
     typeMap.get(key).count++;
   });
-
-  chipsEl.innerHTML = `<button class="review-chip ${_drawingsTypeFilter==='all'?'active':''}" onclick="setDrawingsFilter('all',this)">All (${_drawingsData.length})</button>` +
+  typeChipsEl.innerHTML = `<button class="review-chip ${_drawingsTypeFilter==='all'?'active':''}" onclick="setDrawingsTypeFilter('all',this)">All</button>` +
     [...typeMap.values()].map(t =>
-      `<button class="review-chip ${_drawingsTypeFilter===t.typeId?'active':''}" onclick="setDrawingsFilter('${t.typeId}',this)">Type ${escHtml(t.typeCode)} – ${escHtml(t.typeName)} (${t.count})</button>`
+      `<button class="review-chip ${_drawingsTypeFilter===t.typeId?'active':''}" onclick="setDrawingsTypeFilter('${t.typeId}',this)">Type ${escHtml(t.typeCode)} – ${escHtml(t.typeName)}</button>`
     ).join('');
 
   renderDrawingsList();
 }
 
-function setDrawingsFilter(tid, btn) {
+function setDrawingsFloorFilter(fid, btn) {
+  _drawingsFloorFilter = fid;
+  document.querySelectorAll('#drawings-floor-chips .review-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDrawingsList();
+}
+
+function setDrawingsTypeFilter(tid, btn) {
   _drawingsTypeFilter = tid;
   document.querySelectorAll('#drawings-type-chips .review-chip').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderDrawingsList();
 }
 
+// keep old name working just in case
+function setDrawingsFilter(tid, btn) { setDrawingsTypeFilter(tid, btn); }
+
 function renderDrawingsList() {
   const listEl  = document.getElementById('drawings-list');
   const countEl = document.getElementById('drawings-count-label');
-  const rows = _drawingsTypeFilter === 'all'
-    ? _drawingsData
-    : _drawingsData.filter(f => String(f.plan_type_id ?? 'none') === _drawingsTypeFilter);
+  const rows = _drawingsData.filter(f =>
+    (_drawingsFloorFilter === 'all' || String(f.floor_id ?? 'none') === _drawingsFloorFilter) &&
+    (_drawingsTypeFilter  === 'all' || String(f.plan_type_id ?? 'none') === _drawingsTypeFilter)
+  );
 
   countEl.textContent = `${rows.length} drawing${rows.length === 1 ? '' : 's'}`;
 

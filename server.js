@@ -6900,14 +6900,17 @@ app.get('/api/projects/:id/drawings', requireAuth, requireModuleAccess('worksite
              s.plan_type_id,
              pt.code                                  AS plan_type_code,
              pt.name                                  AS plan_type_name,
+             floor.id                                 AS floor_id,
+             floor.identifier                         AS floor_name,
              sf.uploaded_at
         FROM space_files sf
         LEFT JOIN files fi ON fi.id = sf.file_id
         JOIN spaces s ON s.id = sf.space_id
         LEFT JOIN plan_types pt ON pt.id = s.plan_type_id
+        LEFT JOIN spaces floor ON floor.id = s.parent_id
        WHERE s.project_id = $1
          AND sf.deleted_at IS NULL
-       ORDER BY pt.code NULLS LAST, COALESCE(fi.file_name, sf.file_name)
+       ORDER BY floor.identifier NULLS LAST, pt.code NULLS LAST, COALESCE(fi.file_name, sf.file_name)
     `, [projectId]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
