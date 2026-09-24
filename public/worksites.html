@@ -4424,8 +4424,8 @@ function loadReviewTab(tab) {
 }
 
 // ── Review: Drawings ─────────────────────────────────────────────────────────
-let _drawingsData      = [];   // [{typeId, typeCode, typeName, files:[{id,file_name,mime_type,caption}]}]
-let _drawingsTypeFilter = 'all'; // 'all' or a typeId string
+let _drawingsData      = [];   // flat array of rows from /api/projects/:id/drawings
+let _drawingsTypeFilter = 'all'; // 'all' or a plan_type_id string
 
 async function loadDrawingsTab() {
   const chipsEl = document.getElementById('drawings-type-chips');
@@ -4434,21 +4434,19 @@ async function loadDrawingsTab() {
   listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px;">Loading…</div>';
   chipsEl.innerHTML = '';
 
-  // Fetch all plan types and their files in parallel
-  const types = await fetch(`/api/projects/${_activeProjectId}/plan-types`).then(r => r.json()).catch(() => []);
-  const fileResults = await Promise.all(
-    types.map(t => fetch(`/api/plan-types/${t.id}/files`).then(r => r.json()).catch(() => []))
-  );
-  _drawingsData = types.map((t, i) => ({
-    typeId: String(t.id), typeCode: t.code, typeName: t.name,
-    files: (fileResults[i] || [])
-  })).filter(t => t.files.length > 0);
+  _drawingsData = await fetch(`/api/projects/${_activeProjectId}/drawings`).then(r => r.ok ? r.json() : []).catch(() => []);
 
-  // Build type filter chips
-  const allCount = _drawingsData.reduce((n, t) => n + t.files.length, 0);
-  chipsEl.innerHTML = `<button class="review-chip ${_drawingsTypeFilter==='all'?'active':''}" data-tid="all" onclick="setDrawingsFilter('all',this)">All (${allCount})</button>` +
-    _drawingsData.map(t =>
-      `<button class="review-chip ${_drawingsTypeFilter===t.typeId?'active':''}" data-tid="${t.typeId}" onclick="setDrawingsFilter('${t.typeId}',this)">Type ${escHtml(t.typeCode)} – ${escHtml(t.typeName)} (${t.files.length})</button>`
+  // Build type filter chips from distinct plan types present in the data
+  const typeMap = new Map();
+  _drawingsData.forEach(f => {
+    const key = String(f.plan_type_id ?? 'none');
+    if (!typeMap.has(key)) typeMap.set(key, { typeId: key, typeCode: f.plan_type_code || '—', typeName: f.plan_type_name || 'No Type', count: 0 });
+    typeMap.get(key).count++;
+  });
+
+  chipsEl.innerHTML = `<button class="review-chip ${_drawingsTypeFilter==='all'?'active':''}" onclick="setDrawingsFilter('all',this)">All (${_drawingsData.length})</button>` +
+    [...typeMap.values()].map(t =>
+      `<button class="review-chip ${_drawingsTypeFilter===t.typeId?'active':''}" onclick="setDrawingsFilter('${t.typeId}',this)">Type ${escHtml(t.typeCode)} – ${escHtml(t.typeName)} (${t.count})</button>`
     ).join('');
 
   renderDrawingsList();
@@ -4465,12 +4463,8 @@ function renderDrawingsList() {
   const listEl  = document.getElementById('drawings-list');
   const countEl = document.getElementById('drawings-count-label');
   const rows = _drawingsTypeFilter === 'all'
-    ? _drawingsData.flatMap(t => t.files.map(f => ({ ...f, typeCode: t.typeCode, typeName: t.typeName, typeId: t.typeId })))
-    : (_drawingsData.find(t => t.typeId === _drawingsTypeFilter)?.files || [])
-        .map(f => {
-          const t = _drawingsData.find(x => x.typeId === _drawingsTypeFilter);
-          return { ...f, typeCode: t.typeCode, typeName: t.typeName, typeId: t.typeId };
-        });
+    ? _drawingsData
+    : _drawingsData.filter(f => String(f.plan_type_id ?? 'none') === _drawingsTypeFilter);
 
   countEl.textContent = `${rows.length} drawing${rows.length === 1 ? '' : 's'}`;
 
@@ -4481,14 +4475,16 @@ function renderDrawingsList() {
 
   listEl.innerHTML = rows.map(f => {
     const isPdf = /pdf/i.test(f.mime_type) || /\.pdf$/i.test(f.file_name);
-    const url   = `/api/plan-types/${f.typeId}/files/${f.id}/bytes`;
+    // Use file_id (shared files table) when available, else sf_id directly
+    const url = f.file_id ? `/api/space-files/${f.sf_id}` : `/api/space-files/${f.sf_id}`;
+    const typeLabel = f.plan_type_code ? `Type ${escHtml(f.plan_type_code)} – ${escHtml(f.plan_type_name)}` : 'No Type';
     return `<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;">
-      <input type="checkbox" data-url="${url}" data-pdf="${isPdf}" data-name="${escHtml(f.file_name)}" style="accent-color:var(--orange);width:15px;height:15px;flex-shrink:0;"/>
-      <div style="width:32px;height:32px;border-radius:6px;background:${isPdf?'#fee2e2':'#dbeafe'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:700;color:${isPdf?'#991b1b':'#1e40af'};">${isPdf?'PDF':'DWG'}</div>
+      <input type="checkbox" data-url="${url}" style="accent-color:var(--orange);width:15px;height:15px;flex-shrink:0;"/>
+      <div style="width:32px;height:32px;border-radius:6px;background:${isPdf?'#fee2e2':'#dbeafe'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:700;color:${isPdf?'#991b1b':'#1e40af'};">${isPdf?'PDF':'IMG'}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(f.file_name)}</div>
         ${f.caption ? `<div style="font-size:11px;color:var(--gray-400);margin-top:1px;">${escHtml(f.caption)}</div>` : ''}
-        <div style="font-size:11px;color:var(--gray-400);margin-top:1px;">Type ${escHtml(f.typeCode)} – ${escHtml(f.typeName)}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:1px;">${typeLabel} · ${escHtml(f.space_name || '')}</div>
       </div>
       <button onclick="event.preventDefault();window.open('${url}','_blank')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;" title="Open">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>

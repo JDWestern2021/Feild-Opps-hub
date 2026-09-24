@@ -6885,6 +6885,34 @@ app.post('/api/bulk-space-files', requireAuth, requireModuleAccess('worksites', 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/projects/:id/drawings — all space files with plan-type context for the Drawings tab
+app.get('/api/projects/:id/drawings', requireAuth, requireModuleAccess('worksites', 'field'), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) return res.status(400).json({ error: 'Invalid project id' });
+    const { rows } = await pool.query(`
+      SELECT sf.id                                    AS sf_id,
+             sf.file_id,
+             COALESCE(fi.file_name, sf.file_name)     AS file_name,
+             COALESCE(fi.mime_type, sf.mime_type)      AS mime_type,
+             sf.caption,
+             s.name                                   AS space_name,
+             s.plan_type_id,
+             pt.code                                  AS plan_type_code,
+             pt.name                                  AS plan_type_name,
+             sf.uploaded_at
+        FROM space_files sf
+        LEFT JOIN files fi ON fi.id = sf.file_id
+        JOIN spaces s ON s.id = sf.space_id
+        LEFT JOIN plan_types pt ON pt.id = s.plan_type_id
+       WHERE s.project_id = $1
+         AND sf.deleted_at IS NULL
+       ORDER BY pt.code NULLS LAST, COALESCE(fi.file_name, sf.file_name)
+    `, [projectId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/projects/:id/files — distinct files attached to any space in this project, with space count
 app.get('/api/projects/:id/files', requireAuth, requireModuleAccess('worksites', 'manage'), async (req, res) => {
   try {
