@@ -1474,7 +1474,12 @@ function savePanelScheduleAsPdf(s, widthIn, heightIn) {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
     const el = document.getElementById('schedule-wrap');
-    const canvas = await html2canvas(el, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' });
+    // Wait for images and a paint cycle before capturing
+    await Promise.all([...el.querySelectorAll('img')].map(img =>
+      img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
+    ));
+    await new Promise(r => setTimeout(r, 600));
+    const canvas = await html2canvas(el, { scale: 2, useCORS: false, allowTaint: true, backgroundColor: '#ffffff', logging: false });
     const { jsPDF } = window.jspdf;
     const PW = 8.5, PH = 11, margin = 0.3;
     const maxW = PW - margin * 2;
