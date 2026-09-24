@@ -1349,15 +1349,18 @@ function _sanitizePdfName(name) {
   return (name || 'Panel Schedule').replace(/[\/\\:*?"<>|]/g, '').trim() || 'Panel Schedule';
 }
 
-async function captureAsPdfBlob(s) {
+async function captureAsPdfBlob(s, w, h) {
+  w = parseFloat(w) || 8.5;
+  h = parseFloat(h) || 11;
+  const pxW = Math.round(w * 96);
   return new Promise((resolve, reject) => {
     const token = Math.random().toString(36).slice(2);
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:absolute;left:-9999px;top:0;width:816px;height:1px;border:none;visibility:hidden;';
+    iframe.style.cssText = `position:absolute;left:-9999px;top:0;width:${pxW}px;height:1px;border:none;visibility:hidden;`;
 
     // _cs avoids a literal script-close tag in source, which the HTML parser would misread
     const _cs = '<' + '/script>';
-    const _fitBody = _buildFitScript(8.5, 11).replace(/`/g, '\\`');
+    const _fitBody = _buildFitScript(w, h).replace(/`/g, '\\`');
     const captureScript = `<script src="/vendor/html2canvas.min.js">${_cs}
 <script>
 window.addEventListener('load', function() {
@@ -1380,7 +1383,7 @@ window.addEventListener('load', function() {
 });
 ${_cs}`;
 
-    const html = buildScheduleHtml(s, 8.5, 11, s.panel_name)
+    const html = buildScheduleHtml(s, w, h, s.panel_name)
       .replace('<!--SCRIPTS-->', captureScript);
 
     const timer = setTimeout(() => { cleanup(); reject(new Error('PDF capture timed out')); }, 30000);
@@ -1393,8 +1396,8 @@ ${_cs}`;
         const img = new Image();
         img.onload = () => {
           const { jsPDF } = window.jspdf;
-          const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true });
-          const pW = 8.5, pH = 11;
+          const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format: [w, h], compress: true });
+          const pW = w, pH = h;
           const ar = img.width / img.height;
           const pAr = pW / pH;
           let w, h, x = 0, y = 0;
@@ -1422,9 +1425,11 @@ function _setProgressToast(msg) {
   t.textContent = msg; t.className = 'toast show info';
 }
 
-async function saveSchedules(stubs) {
+async function saveSchedules(stubs, widthIn, heightIn) {
   if (!stubs.length) return;
   const n = stubs.length;
+  const sw = parseFloat(widthIn) || 8.5;
+  const sh = parseFloat(heightIn) || 11;
   const hasPicker = !!window.showSaveFilePicker;
 
   function sanitize(name) { return _sanitizePdfName(name); }
@@ -1456,7 +1461,7 @@ async function saveSchedules(stubs) {
         _setProgressToast('Generating PDF…');
         const res = await fetch('/api/panel-schedules/' + stubs[0].id);
         const full = await res.json();
-        const blob = await captureAsPdfBlob(full);
+        const blob = await captureAsPdfBlob(full, sw, sh);
         const w = await fh.createWritable(); await w.write(blob); await w.close();
         showToast('Saved ' + filenames[0], 'success');
         return;
@@ -1475,7 +1480,7 @@ async function saveSchedules(stubs) {
         _setProgressToast(`Saving ${i + 1} of ${n}…`);
         const res  = await fetch('/api/panel-schedules/' + stubs[i].id);
         const full = await res.json();
-        const blob = await captureAsPdfBlob(full);
+        const blob = await captureAsPdfBlob(full, sw, sh);
         let targetDir = dir;
         if (mixed) { const pn = sanitize(stubs[i].project_name || 'No Project'); targetDir = await dir.getDirectoryHandle(pn, { create: true }); }
         const fh = await targetDir.getFileHandle(filenames[i], { create: true });
@@ -1493,7 +1498,7 @@ async function saveSchedules(stubs) {
       _setProgressToast(`Saving ${i + 1} of ${n}…`);
       const res  = await fetch('/api/panel-schedules/' + stubs[i].id);
       const full = await res.json();
-      blobs.push(await captureAsPdfBlob(full));
+      blobs.push(await captureAsPdfBlob(full, sw, sh));
     }
 
     if (n === 1) {
@@ -1831,7 +1836,7 @@ document.getElementById('btn-bulk-print').addEventListener('click', () => {
 });
 
 document.getElementById('btn-bulk-save').addEventListener('click', () => {
-  saveSchedules(getSelectedSchedules());
+  saveSchedules(getSelectedSchedules(), _psWidth, _psHeight);
 });
 
 document.getElementById('btn-bulk-cancel').addEventListener('click', () => {
@@ -1849,7 +1854,7 @@ document.getElementById('view-close').addEventListener('click', () => document.g
 document.getElementById('view-close-footer').addEventListener('click', () => document.getElementById('view-overlay').classList.add('hidden'));
 
 document.getElementById('view-save-btn').addEventListener('click', () => {
-  if (viewingData) saveSchedules([viewingData]);
+  if (viewingData) saveSchedules([viewingData], _psWidth, _psHeight);
 });
 document.getElementById('view-print-btn').addEventListener('click', () => {
   openPrintSetup(viewingData);
