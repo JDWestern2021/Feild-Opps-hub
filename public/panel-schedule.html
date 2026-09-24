@@ -1312,17 +1312,228 @@ ${saveMode ? `<style>
   pw.document.close();
 }
 
-// ── Save as PDF — opens the same popup as print with the schedule pre-rendered.
-// The popup title = schedule name (browser uses it as the suggested filename).
-// User clicks "⬇ Save as PDF" inside the popup → OS print/save dialog appears.
-function savePanelScheduleAsPdf(s, widthIn, heightIn) {
-  if (!s) return;
+// ── Lazy-load a CDN script once per page ──
+const _scriptCache = {};
+function loadScriptOnce(src) {
+  if (_scriptCache[src]) return _scriptCache[src];
+  _scriptCache[src] = new Promise((res,rej) => {
+    const el = document.createElement('script');
+    el.src = src; el.onload = res; el.onerror = rej;
+    document.head.appendChild(el);
+  });
+  return _scriptCache[src];
+}
 
-  // Use the same popup as printSchedule — it renders the data correctly.
-  // The popup title is set to the schedule name so the browser pre-fills the filename.
-  // The "Save as PDF" button inside triggers window.print() → OS save dialog.
-  const title = (s.name || 'Panel Schedule').replace(/"/g, '');
-  printSchedule(s, widthIn || 8.5, heightIn || 11, title, true);
+// ── Save as PDF — pure jsPDF, no html2canvas, OS file picker ──
+async function savePanelScheduleAsPdf(s) {
+  if (!s) return;
+  const title = (s.name || 'Panel Schedule').replace(/["/\\<>:*?|]/g,'').trim() || 'Panel Schedule';
+
+  await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  const { jsPDF } = window.jspdf;
+
+  const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
+  const slots    = Math.floor(s.num_circuits / 2);
+  const flipped  = !!s.flipped;
+  const grp      = computePoleGroups(circuits, slots, flipped);
+  const lG = grp.left, rG = grp.right;
+  const slotOrder = flipped
+    ? Array.from({length:slots},(_,k)=>slots-1-k)
+    : Array.from({length:slots},(_,k)=>k);
+
+  const PW=8.5, PH=11, lm=0.22, rm=0.22, tm=0.2;
+  const uw = PW-lm-rm;
+  const doc = new jsPDF({orientation:'portrait',unit:'in',format:'letter'});
+  let y = tm;
+
+  function newPageIfNeeded(need) {
+    if (y + need > PH - 0.3) { doc.addPage(); y = tm; return true; }
+    return false;
+  }
+
+  // ── Header ──
+  doc.setFillColor(17,24,39); doc.rect(lm,y,uw,0.72,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(255,255,255);
+  doc.text('J&D WESTERN ELECTRIC', lm+uw/2, y+0.27, {align:'center'});
+  doc.setFontSize(11); doc.setTextColor(244,121,32);
+  doc.text('587-343-4349', lm+uw/2, y+0.5, {align:'center'});
+  doc.setFontSize(7); doc.setTextColor(244,121,32);
+  doc.text('PANEL SCHEDULE', lm+uw-0.04, y+0.38, {align:'right'});
+  y += 0.72;
+
+  // ── Orange bar ──
+  doc.setFillColor(244,121,32); doc.rect(lm,y,uw,0.03,'F'); y+=0.03;
+
+  // ── Info strip ──
+  const iH=0.21, iCols=[2,1,1,1,1.2], iT=iCols.reduce((a,b)=>a+b,0);
+  const iW=iCols.map(c=>c/iT*uw);
+  const iL=['Panel','Voltage','Main','Bus','Type'];
+  const iV=[s.panel_name||'',s.voltage||'—',s.main_breaker?s.main_breaker+'A':'—',s.bus_rating?s.bus_rating+'A':'—',s.enclosure_type||'—'];
+  let ix=lm;
+  doc.setDrawColor(80,80,80); doc.setLineWidth(0.007);
+  for(let i=0;i<iW.length;i++){
+    doc.rect(ix,y,iW[i],iH,'S');
+    doc.setFont('helvetica','bold'); doc.setFontSize(3.8); doc.setTextColor(153,153,153);
+    doc.text(iL[i].toUpperCase(),ix+0.03,y+0.062);
+    doc.setFontSize(6.5); doc.setTextColor(17,17,17);
+    doc.text(String(iV[i]),ix+0.03,y+0.155,{maxWidth:iW[i]-0.06});
+    ix+=iW[i];
+  }
+  y+=iH;
+
+  // ── Meta ──
+  const pd=new Date().toLocaleDateString('en-CA');
+  doc.setFont('helvetica','normal'); doc.setFontSize(4); doc.setTextColor(170,170,170);
+  if(s.project_name) doc.text(String(s.project_name),lm+0.03,y+0.07);
+  doc.text(pd,lm+uw-0.03,y+0.07,{align:'right'});
+  y+=0.1;
+
+  // ── Table column widths ──
+  const dW=(uw-0.13*4-0.18*2)/2;
+  const cols=[dW,0.13,0.13,0.18,0.18,0.13,0.13,dW];
+  const thH=0.095;
+  doc.setLineWidth(0.005);
+
+  // Header row 1
+  const h1=[{t:'LEFT SIDE',s:3,bg:[26,58,92]},{t:'CCT',s:2,bg:[55,65,81]},{t:'RIGHT SIDE',s:3,bg:[122,46,10]}];
+  let hx=lm;
+  for(const h of h1){
+    const hw=cols.slice(hx===lm?0:cols.length-h.s,h.s+(hx===lm?0:0)).reduce(()=>0,0); // recalc below
+    const startIdx = h1.indexOf(h)===0?0: h1.indexOf(h)===1?3:5;
+    const hw2=cols.slice(startIdx,startIdx+h.s).reduce((a,b)=>a+b,0);
+    doc.setFillColor(...h.bg); doc.rect(hx,y,hw2,thH,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(4); doc.setTextColor(255,255,255);
+    doc.text(h.t,hx+hw2/2,y+thH*0.65,{align:'center'});
+    hx+=hw2;
+  }
+  y+=thH;
+
+  // Header row 2
+  const h2=['Description','P','A','#','#','A','P','Description'];
+  const h2bg=[[26,58,92],[26,58,92],[26,58,92],[55,65,81],[55,65,81],[122,46,10],[122,46,10],[122,46,10]];
+  hx=lm;
+  for(let i=0;i<cols.length;i++){
+    doc.setFillColor(...h2bg[i]); doc.rect(hx,y,cols[i],thH,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(3.8); doc.setTextColor(255,255,255);
+    const isDesc=i===0||i===7;
+    doc.text(h2[i],isDesc?hx+0.02:hx+cols[i]/2,y+thH*0.65,{align:isDesc?'left':'center'});
+    hx+=cols[i];
+  }
+  y+=thH;
+
+  // ── Circuit rows ──
+  const rH=0.115;
+  doc.setDrawColor(209,213,219); doc.setLineWidth(0.004);
+
+  for(let i=0;i<slotOrder.length;i++){
+    newPageIfNeeded(rH);
+    const si=slotOrder[i];
+    const cctL=si*2+1, cctR=si*2+2;
+    const cL=circuits.find(c=>c.circuit===cctL)||{};
+    const cR=circuits.find(c=>c.circuit===cctR)||{};
+    const gL=lG[si]!==undefined?lG[si]:null;
+    const gR=rG[si]!==undefined?rG[si]:null;
+    const rb=i%2===0?[249,250,251]:[255,255,255];
+
+    doc.setFillColor(...rb); doc.rect(lm,y,uw,rH,'F');
+    hx=lm;
+
+    // Left desc (handle rowspan)
+    if(gL===null||gL.isLeader){
+      const sp=gL?gL.span:1; const cH=sp*rH;
+      const bg=gL?[239,246,255]:rb;
+      doc.setFillColor(...bg); doc.rect(hx,y,cols[0],cH,'F');
+      if(gL){doc.setDrawColor(26,58,92);doc.setLineWidth(0.018);doc.line(hx,y,hx,y+cH);doc.setDrawColor(209,213,219);doc.setLineWidth(0.004);}
+      doc.rect(hx,y,cols[0],cH,'S');
+      doc.setFont('helvetica','normal');doc.setFontSize(5);doc.setTextColor(17,17,17);
+      doc.text(String(cL.description||''),hx+0.02,y+(gL?cH/2+0.018:rH*0.62),{maxWidth:cols[0]-0.04});
+    }
+    hx+=cols[0];
+
+    // Left poles
+    if(gL===null||gL.isLeader){
+      const sp=gL?gL.span:1;const cH=sp*rH;const bg=gL?[239,246,255]:rb;
+      doc.setFillColor(...bg);doc.rect(hx,y,cols[1],cH,'F');doc.rect(hx,y,cols[1],cH,'S');
+      doc.setFont('helvetica','normal');doc.setFontSize(5);doc.setTextColor(17,17,17);
+      doc.text(String(cL.poles||''),hx+cols[1]/2,y+(gL?cH/2+0.018:rH*0.62),{align:'center'});
+    }
+    hx+=cols[1];
+
+    // Left amps
+    if(gL===null||gL.isLeader){
+      const sp=gL?gL.span:1;const cH=sp*rH;const bg=gL?[239,246,255]:rb;
+      doc.setFillColor(...bg);doc.rect(hx,y,cols[2],cH,'F');doc.rect(hx,y,cols[2],cH,'S');
+      doc.setFont('helvetica','normal');doc.setFontSize(5);doc.setTextColor(17,17,17);
+      doc.text(String(cL.amps||''),hx+cols[2]/2,y+(gL?cH/2+0.018:rH*0.62),{align:'center'});
+    }
+    hx+=cols[2];
+
+    // CCT numbers
+    const cb=i%2===0?[229,231,235]:[243,244,246];
+    doc.setFillColor(...cb);doc.rect(hx,y,cols[3],rH,'F');doc.rect(hx,y,cols[3],rH,'S');
+    doc.setFont('helvetica','bold');doc.setFontSize(4.5);doc.setTextColor(17,17,17);
+    doc.text(String(cctL),hx+cols[3]/2,y+rH*0.62,{align:'center'});hx+=cols[3];
+    doc.setFillColor(...cb);doc.rect(hx,y,cols[4],rH,'F');doc.rect(hx,y,cols[4],rH,'S');
+    doc.text(String(cctR),hx+cols[4]/2,y+rH*0.62,{align:'center'});hx+=cols[4];
+
+    // Right amps
+    if(gR===null||gR.isLeader){
+      const sp=gR?gR.span:1;const cH=sp*rH;const bg=gR?[255,247,237]:rb;
+      doc.setFillColor(...bg);doc.rect(hx,y,cols[5],cH,'F');doc.rect(hx,y,cols[5],cH,'S');
+      doc.setFont('helvetica','normal');doc.setFontSize(5);doc.setTextColor(17,17,17);
+      doc.text(String(cR.amps||''),hx+cols[5]/2,y+(gR?cH/2+0.018:rH*0.62),{align:'center'});
+    }
+    hx+=cols[5];
+
+    // Right poles
+    if(gR===null||gR.isLeader){
+      const sp=gR?gR.span:1;const cH=sp*rH;const bg=gR?[255,247,237]:rb;
+      doc.setFillColor(...bg);doc.rect(hx,y,cols[6],cH,'F');doc.rect(hx,y,cols[6],cH,'S');
+      doc.setFont('helvetica','normal');doc.setFontSize(5);doc.setTextColor(17,17,17);
+      doc.text(String(cR.poles||''),hx+cols[6]/2,y+(gR?cH/2+0.018:rH*0.62),{align:'center'});
+    }
+    hx+=cols[6];
+
+    // Right desc
+    if(gR===null||gR.isLeader){
+      const sp=gR?gR.span:1;const cH=sp*rH;const bg=gR?[255,247,237]:rb;
+      doc.setFillColor(...bg);doc.rect(hx,y,cols[7],cH,'F');
+      if(gR){doc.setDrawColor(122,46,10);doc.setLineWidth(0.018);doc.line(hx+cols[7],y,hx+cols[7],y+cH);doc.setDrawColor(209,213,219);doc.setLineWidth(0.004);}
+      doc.rect(hx,y,cols[7],cH,'S');
+      doc.setFont('helvetica','normal');doc.setFontSize(5);doc.setTextColor(17,17,17);
+      doc.text(String(cR.description||''),hx+0.02,y+(gR?cH/2+0.018:rH*0.62),{maxWidth:cols[7]-0.04});
+    }
+
+    y+=rH;
+  }
+
+  // ── Footer ──
+  newPageIfNeeded(0.38);
+  doc.setFillColor(17,24,39); doc.rect(lm,y+0.04,uw,0.34,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(5.5); doc.setTextColor(244,121,32);
+  doc.text('POWER  •  PERFORMANCE  •  PEACE OF MIND',lm+uw/2,y+0.04+0.17,{align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(4.5); doc.setTextColor(170,170,170);
+  doc.text('587-343-4349  ·  jdwesternelectric.ca',lm+uw/2,y+0.04+0.27,{align:'center'});
+
+  // ── Save: OS file picker on Chrome/Edge, auto-download on Safari/Firefox ──
+  const blob = doc.output('blob');
+  if (window.showSaveFilePicker) {
+    try {
+      const fh = await window.showSaveFilePicker({
+        suggestedName: title + '.pdf',
+        types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }],
+      });
+      const w = await fh.createWritable();
+      await w.write(blob); await w.close();
+      return;
+    } catch(e) { if (e.name === 'AbortError') return; }
+  }
+  // Fallback for Safari / Firefox
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = title + '.pdf';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
 }
 
 // ── Print Setup Modal ──
@@ -1552,7 +1763,7 @@ document.getElementById('ps-print-now').addEventListener('click', () => {
 
 document.getElementById('ps-save-pdf').addEventListener('click', () => {
   document.getElementById('print-setup-overlay').classList.add('hidden');
-  savePanelScheduleAsPdf(_psData, _psWidth, _psHeight);
+  savePanelScheduleAsPdf(_psData);
 });
 
 // ── Schedule list ──
@@ -1620,7 +1831,7 @@ async function bulkFetchAndPrint(asPdf) {
       if (!res.ok) continue;
       const full = await res.json();
       if (asPdf) {
-        savePanelScheduleAsPdf(full, w, h);
+        savePanelScheduleAsPdf(full);
       } else {
         printSchedule(full, w, h);
       }
