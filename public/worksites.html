@@ -4434,7 +4434,13 @@ async function loadDrawingsTab() {
   listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px;">Loading…</div>';
   chipsEl.innerHTML = '';
 
-  _drawingsData = await fetch(`/api/projects/${_activeProjectId}/drawings`).then(r => r.ok ? r.json() : []).catch(() => []);
+  const drawResp = await fetch(`/api/projects/${_activeProjectId}/drawings`).catch(() => null);
+  if (!drawResp || !drawResp.ok) {
+    const errText = drawResp ? await drawResp.text().catch(() => drawResp.status) : 'network error';
+    listEl.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;font-size:13px;">Error loading drawings: ${errText}</div>`;
+    return;
+  }
+  _drawingsData = await drawResp.json();
 
   // Build type filter chips from distinct plan types present in the data
   const typeMap = new Map();
