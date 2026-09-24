@@ -1474,7 +1474,7 @@ function savePanelScheduleAsPdf(s, widthIn, heightIn) {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
     const el = document.getElementById('schedule-wrap');
-    const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+    const canvas = await html2canvas(el, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' });
     const { jsPDF } = window.jspdf;
     const PW = 8.5, PH = 11, margin = 0.3;
     const maxW = PW - margin * 2;
@@ -1486,10 +1486,16 @@ function savePanelScheduleAsPdf(s, widthIn, heightIn) {
     const finalH = cH * scl;
     const doc = new jsPDF({ orientation: finalH > finalW ? 'portrait' : 'landscape', unit: 'in', format: 'letter' });
     doc.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', margin, margin, finalW, finalH);
-    doc.save('${title.replace(/'/g, "\\'")}' + '.pdf');
-    window.close();
+    const blob = doc.output('blob');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = '${title.replace(/'/g, "\\'")}' + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); window.close(); }, 3000);
   } catch(e) {
-    document.getElementById('save-status').textContent = 'Error generating PDF. ' + e.message;
+    document.getElementById('save-status').textContent = 'Error: ' + e.message;
   }
 })();
 <\/script>
