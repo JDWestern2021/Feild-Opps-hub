@@ -426,7 +426,31 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
     <div class="card">
       <div class="card-header">
         <h2>All Panel Schedules</h2>
-        <button class="btn btn-primary" id="btn-new-schedule">+ New Panel Schedule</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="btn-select-all" style="display:none;">Select All</button>
+          <button class="btn btn-secondary" id="btn-bulk-print" style="display:none;">🖨 Print Selected</button>
+          <button class="btn btn-secondary" id="btn-bulk-save" style="display:none;">⬇ Save Selected as PDF</button>
+          <button class="btn btn-primary" id="btn-new-schedule">+ New Panel Schedule</button>
+        </div>
+      </div>
+      <div id="bulk-print-setup" style="display:none;padding:10px 16px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:13px;color:#92400e;">
+        Choose a page size for bulk printing: &nbsp;
+        <select id="bulk-w-sel" style="width:auto;padding:4px 8px;font-size:13px;">
+          <option value="8.5">8½" wide (letter)</option>
+          <option value="5">5" wide</option>
+          <option value="4">4" wide</option>
+          <option value="3.5">3½" wide</option>
+        </select>
+        ×
+        <select id="bulk-h-sel" style="width:auto;padding:4px 8px;font-size:13px;">
+          <option value="11">11" (letter)</option>
+          <option value="9.5">9½"</option>
+          <option value="8.5">8½"</option>
+          <option value="14">14" (legal)</option>
+        </select>
+        &nbsp;
+        <button class="btn btn-primary btn-sm" id="btn-bulk-go" style="padding:5px 14px;font-size:13px;">Go</button>
+        <button class="btn btn-secondary btn-sm" id="btn-bulk-cancel" style="padding:5px 14px;font-size:13px;">Cancel</button>
       </div>
       <div class="card-body" style="padding:0;">
         <div id="schedule-list-wrap">
@@ -1523,23 +1547,93 @@ function renderList() {
     wrap.innerHTML = `<div class="empty-state"><h3>No panel schedules yet</h3><p>Click "+ New Panel Schedule" to create one.</p></div>`;
     return;
   }
-  const rows = schedules.map(s => `<tr style="cursor:pointer;" onclick="openView(${s.id})">
-    <td style="font-weight:600;">${esc(s.panel_name)}</td>
-    <td style="font-size:12px;color:var(--gray-500);">${esc(s.schedule_number)}</td>
-    <td>${esc(s.voltage||'')}</td>
-    <td>${s.main_breaker ? s.main_breaker+' A' : '—'}</td>
-    <td>${s.num_circuits}</td>
-    <td>${esc(s.project_name||'—')}</td>
-    <td>${esc(s.created_by)}</td>
-    <td><span class="badge badge-active">Active</span></td>
+  const rows = schedules.map(s => `<tr>
+    <td onclick="event.stopPropagation()" style="width:36px;text-align:center;">
+      <input type="checkbox" class="sched-cb" data-id="${s.id}" style="accent-color:var(--orange);width:15px;height:15px;cursor:pointer;" onchange="updateBulkBar()"/>
+    </td>
+    <td style="font-weight:600;cursor:pointer;" onclick="openView(${s.id})">${esc(s.panel_name)}</td>
+    <td style="font-size:12px;color:var(--gray-500);cursor:pointer;" onclick="openView(${s.id})">${esc(s.schedule_number)}</td>
+    <td style="cursor:pointer;" onclick="openView(${s.id})">${esc(s.voltage||'')}</td>
+    <td style="cursor:pointer;" onclick="openView(${s.id})">${s.main_breaker ? s.main_breaker+' A' : '—'}</td>
+    <td style="cursor:pointer;" onclick="openView(${s.id})">${s.num_circuits}</td>
+    <td style="cursor:pointer;" onclick="openView(${s.id})">${esc(s.project_name||'—')}</td>
+    <td style="cursor:pointer;" onclick="openView(${s.id})">${esc(s.created_by)}</td>
+    <td style="cursor:pointer;" onclick="openView(${s.id})"><span class="badge badge-active">Active</span></td>
   </tr>`).join('');
   wrap.innerHTML = `<div style="overflow-x:auto;"><table class="sched-table">
-    <thead><tr><th>Panel Name</th><th>Schedule #</th><th>Voltage</th><th>Main Breaker</th><th>Slots</th><th>Project</th><th>Created By</th><th>Status</th></tr></thead>
+    <thead><tr><th style="width:36px;"></th><th>Panel Name</th><th>Schedule #</th><th>Voltage</th><th>Main Breaker</th><th>Slots</th><th>Project</th><th>Created By</th><th>Status</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.sched-cb:checked').length;
+  const total   = document.querySelectorAll('.sched-cb').length;
+  const show    = checked > 0;
+  document.getElementById('btn-bulk-print').style.display = show ? '' : 'none';
+  document.getElementById('btn-bulk-save').style.display  = show ? '' : 'none';
+  document.getElementById('btn-select-all').style.display = total > 0 ? '' : 'none';
+  document.getElementById('btn-select-all').textContent   = checked === total ? 'Deselect All' : 'Select All';
+}
+
+function getSelectedSchedules() {
+  return [...document.querySelectorAll('.sched-cb:checked')]
+    .map(cb => schedules.find(s => s.id === parseInt(cb.dataset.id)))
+    .filter(Boolean);
+}
+
+async function bulkFetchAndPrint(asPdf) {
+  const selected = getSelectedSchedules();
+  if (!selected.length) return;
+  const w = parseFloat(document.getElementById('bulk-w-sel').value);
+  const h = parseFloat(document.getElementById('bulk-h-sel').value);
+  document.getElementById('bulk-print-setup').style.display = 'none';
+
+  // Fetch full circuit data for each, then open print popup one per schedule
+  for (const s of selected) {
+    try {
+      const res = await fetch('/api/panel-schedules/' + s.id);
+      if (!res.ok) continue;
+      const full = await res.json();
+      if (asPdf) {
+        savePanelScheduleAsPdf(full, w, h);
+      } else {
+        printSchedule(full, w, h);
+      }
+      // Small delay so pop-up blocker doesn't kill subsequent windows
+      await new Promise(r => setTimeout(r, 400));
+    } catch {}
+  }
 }
 
 // ── Event listeners ──
+document.getElementById('btn-select-all').addEventListener('click', () => {
+  const cbs = document.querySelectorAll('.sched-cb');
+  const allChecked = [...cbs].every(cb => cb.checked);
+  cbs.forEach(cb => cb.checked = !allChecked);
+  updateBulkBar();
+});
+
+document.getElementById('btn-bulk-print').addEventListener('click', () => {
+  document.getElementById('bulk-print-setup').dataset.mode = 'print';
+  document.getElementById('bulk-print-setup').style.display = '';
+});
+
+document.getElementById('btn-bulk-save').addEventListener('click', () => {
+  document.getElementById('bulk-print-setup').dataset.mode = 'save';
+  document.getElementById('bulk-print-setup').style.display = '';
+});
+
+document.getElementById('btn-bulk-cancel').addEventListener('click', () => {
+  document.getElementById('bulk-print-setup').style.display = 'none';
+});
+
+document.getElementById('btn-bulk-go').addEventListener('click', () => {
+  const mode = document.getElementById('bulk-print-setup').dataset.mode;
+  bulkFetchAndPrint(mode === 'save');
+});
+
 document.getElementById('btn-new-schedule').addEventListener('click', () => openModal());
 document.getElementById('modal-close').addEventListener('click', () => document.getElementById('modal-overlay').classList.add('hidden'));
 document.getElementById('modal-cancel').addEventListener('click', () => document.getElementById('modal-overlay').classList.add('hidden'));
