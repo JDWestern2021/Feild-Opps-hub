@@ -657,6 +657,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
         <div id="view-panel-meta" style="font-size:12px;color:var(--gray-500);margin-top:2px;"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;" class="no-print">
+        <button class="btn btn-sm btn-secondary" id="view-save-btn">⬇ Save as PDF</button>
         <button class="btn btn-sm btn-secondary" id="view-print-btn">🖨 Print</button>
         <button class="btn btn-sm btn-primary" id="view-edit-btn">Edit</button>
         <button class="close-btn" id="view-close">✕</button>
@@ -1085,7 +1086,7 @@ async function openView(id) {
 }
 
 // ── Print ──
-function printSchedule(s, widthIn, heightIn, windowTitle) {
+function printSchedule(s, widthIn, heightIn, windowTitle, saveMode) {
   if (!s) return;
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
   const slots = s.num_circuits / 2;
@@ -1293,175 +1294,52 @@ function printSchedule(s, widthIn, heightIn, windowTitle) {
     <div class="ph-footer-phone">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca</div>
   </div>
 </div>
-<script>window.onload = function(){ window.print(); window.close(); }<\/script>
+${saveMode ? `<style>
+  @media print { #save-bar { display:none !important; } }
+  #save-bar { position:fixed; top:0; left:0; right:0; background:#1a3a5c; color:#fff; padding:10px 20px; display:flex; align-items:center; justify-content:space-between; font-family:Arial,sans-serif; font-size:13px; z-index:9999; gap:12px; }
+  #save-bar button { background:#F47920; color:#fff; border:none; padding:8px 22px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; letter-spacing:.04em; }
+  #save-bar button:hover { background:#d96010; }
+  body { padding-top: 48px; }
+  @media print { body { padding-top:0; } }
+</style>
+<div id="save-bar">
+  <span>📄 <strong>${windowTitle ? windowTitle.replace(/</g,'&lt;') : 'Panel Schedule'}</strong> — Click the button to save as PDF. In the dialog, choose <strong>Save as PDF</strong> as the printer.</span>
+  <button onclick="window.print()">⬇ Save as PDF</button>
+</div>
+<script>window.onload = function(){}<\/script>` : `<script>window.onload = function(){ window.print(); window.close(); }<\/script>`}
 
 </body></html>`);
   pw.document.close();
 }
 
-// ── Lazy-load a script once ──
-const _scriptCache = {};
-function loadScriptOnce(src) {
-  if (_scriptCache[src]) return _scriptCache[src];
-  _scriptCache[src] = new Promise((res, rej) => {
-    const el = document.createElement('script');
-    el.src = src; el.onload = res; el.onerror = rej;
-    document.head.appendChild(el);
-  });
-  return _scriptCache[src];
-}
-
-// ── Save as PDF — renders in main window (no popup), downloads directly ──
-async function savePanelScheduleAsPdf(s, widthIn, heightIn) {
+// ── Save as PDF — opens the same popup as print with the schedule pre-rendered.
+// The popup title = schedule name (browser uses it as the suggested filename).
+// User clicks "⬇ Save as PDF" inside the popup → OS print/save dialog appears.
+function savePanelScheduleAsPdf(s, widthIn, heightIn) {
   if (!s) return;
-  const title = (s && s.name ? s.name : 'Panel Schedule').replace(/["/\\<>:*?|]/g, '').trim() || 'Panel Schedule';
 
-  // Show loading toast in main page
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 24px;border-radius:20px;font-size:14px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.4);pointer-events:none;';
-  toast.textContent = 'Generating PDF…';
-  document.body.appendChild(toast);
-
-  // Build row HTML (same logic as printSchedule)
-  const circuits  = Array.isArray(s.circuit_data) ? s.circuit_data : [];
-  const slots     = s.num_circuits / 2;
-  const flipped   = !!s.flipped;
-  const grp       = computePoleGroups(circuits, slots, flipped);
-  const lG = grp.left, rG = grp.right;
-  const ML = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-left:3px solid #1a3a5c;background:#eff6ff;padding:3px 4px;overflow:hidden;';
-  const MR = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-right:3px solid #7a2e0a;background:#fff7ed;padding:3px 4px;overflow:hidden;';
-  const MA = 'vertical-align:middle;text-align:center;background:#eff6ff;';
-  const MB = 'vertical-align:middle;text-align:center;background:#fff7ed;';
-  const slotOrder = flipped ? Array.from({length:slots},(_,k)=>slots-1-k) : Array.from({length:slots},(_,k)=>k);
-  const lc = (g,txt,p,a) => g===null ? `<td style="padding:2px 3px;border:1px solid #d1d5db;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(txt)}</td><td style="text-align:center;padding:2px 3px;border:1px solid #d1d5db;">${p}</td><td style="text-align:center;padding:2px 3px;border:1px solid #d1d5db;">${a}</td>` : g.isLeader ? `<td style="${ML}" rowspan="${g.span}">${esc(txt)}</td><td style="${MA}" rowspan="${g.span}">${p}</td><td style="${MA}" rowspan="${g.span}">${a}</td>` : '';
-  const rc = (g,txt,p,a) => g===null ? `<td style="text-align:center;padding:2px 3px;border:1px solid #d1d5db;">${a}</td><td style="text-align:center;padding:2px 3px;border:1px solid #d1d5db;">${p}</td><td style="padding:2px 3px;border:1px solid #d1d5db;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(txt)}</td>` : g.isLeader ? `<td style="${MB}" rowspan="${g.span}">${a}</td><td style="${MB}" rowspan="${g.span}">${p}</td><td style="${MR}" rowspan="${g.span}">${esc(txt)}</td>` : '';
-  let rows = '';
-  for (let i = 0; i < slotOrder.length; i++) {
-    const si=slotOrder[i], cctL=si*2+1, cctR=si*2+2;
-    const cL=circuits.find(c=>c.circuit===cctL)||{}, cR=circuits.find(c=>c.circuit===cctR)||{};
-    const gL=lG[si]!==undefined?lG[si]:null, gR=rG[si]!==undefined?rG[si]:null;
-    const rowBg = i%2===0 ? '#f9fafb' : '#fff';
-    const topBorder = (flipped?(i===slotOrder.length-1):(i===0)) ? 'border-top:1.5px solid #9ca3af;' : '';
-    const cctBorder = i<slotOrder.length-1 ? 'border-bottom:1.5px dashed #9ca3af;' : '';
-    rows += `<tr style="${topBorder}background:${rowBg};">
-      ${lc(gL,cL.description||'',cL.poles||'',cL.amps||'')}
-      <td style="text-align:center;font-weight:800;font-size:7px;background:${i%2===0?'#e5e7eb':'#f3f4f6'};padding:2px 3px;border:1px solid #d1d5db;${cctBorder}">${cctL}</td>
-      <td style="text-align:center;font-weight:800;font-size:7px;background:${i%2===0?'#e5e7eb':'#f3f4f6'};padding:2px 3px;border:1px solid #d1d5db;${cctBorder}">${cctR}</td>
-      ${rc(gR,cR.description||'',cR.poles||'',cR.amps||'')}
-    </tr>`;
-  }
-
-  const logoSrc   = window.location.origin + '/logo-bolt.png';
-  const printDate = new Date().toLocaleDateString('en-CA');
-  const pxW = Math.round((parseFloat(widthIn)||8.5) * 96);
-
-  // Create off-screen container in main window
-  const container = document.createElement('div');
-  container.style.cssText = `position:fixed;left:-${pxW+200}px;top:0;width:${pxW}px;background:#fff;font-family:Arial,Helvetica,sans-serif;font-size:8px;box-sizing:border-box;`;
-  container.innerHTML = `
-  <div style="background:#111827;padding:10px 14px;display:flex;align-items:center;gap:14px;">
-    <img src="${logoSrc}" style="width:68px;height:68px;border-radius:6px;flex-shrink:0;" crossorigin="anonymous"/>
-    <div style="flex:1;text-align:center;">
-      <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:.03em;">J&amp;D WESTERN ELECTRIC</div>
-      <div style="font-size:20px;font-weight:900;color:#F47920;margin-top:4px;letter-spacing:.04em;">587-343-4349</div>
-    </div>
-    <div style="text-align:right;flex-shrink:0;">
-      <div style="font-size:16px;font-weight:900;color:#F47920;letter-spacing:.08em;text-transform:uppercase;">PANEL SCHEDULE</div>
-    </div>
-  </div>
-  <div style="height:4px;background:#F47920;"></div>
-  <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.2fr;border:1px solid #333;">
-    <div style="padding:3px 5px;border-right:1px solid #ccc;"><div style="font-size:5.5px;font-weight:700;text-transform:uppercase;color:#999;">Panel</div><div style="font-size:9px;font-weight:700;color:#111;margin-top:1px;">${esc(s.panel_name)}</div></div>
-    <div style="padding:3px 5px;border-right:1px solid #ccc;"><div style="font-size:5.5px;font-weight:700;text-transform:uppercase;color:#999;">Voltage</div><div style="font-size:9px;font-weight:700;color:#111;margin-top:1px;">${esc(s.voltage||'—')}</div></div>
-    <div style="padding:3px 5px;border-right:1px solid #ccc;"><div style="font-size:5.5px;font-weight:700;text-transform:uppercase;color:#999;">Main</div><div style="font-size:9px;font-weight:700;color:#111;margin-top:1px;">${s.main_breaker?s.main_breaker+'A':'—'}</div></div>
-    <div style="padding:3px 5px;border-right:1px solid #ccc;"><div style="font-size:5.5px;font-weight:700;text-transform:uppercase;color:#999;">Bus</div><div style="font-size:9px;font-weight:700;color:#111;margin-top:1px;">${s.bus_rating?s.bus_rating+'A':'—'}</div></div>
-    <div style="padding:3px 5px;"><div style="font-size:5.5px;font-weight:700;text-transform:uppercase;color:#999;">Type</div><div style="font-size:9px;font-weight:700;color:#111;margin-top:1px;">${esc(s.enclosure_type||'—')}</div></div>
-  </div>
-  <div style="font-size:6px;color:#bbb;padding:2px 4px;display:flex;justify-content:space-between;">
-    <span>${s.project_name?esc(s.project_name):''}</span><span>${printDate}</span>
-  </div>
-  <table style="width:100%;border-collapse:collapse;font-size:8px;table-layout:fixed;">
-    <colgroup>
-      <col style="width:auto;"/><col style="width:16px;"/><col style="width:22px;"/>
-      <col style="width:28px;"/><col style="width:28px;"/>
-      <col style="width:22px;"/><col style="width:16px;"/><col style="width:auto;"/>
-    </colgroup>
-    <thead>
-      <tr>
-        <th colspan="3" style="padding:3px 2px;text-align:left;padding-left:4px;font-size:6px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border:1px solid #888;background:#1a3a5c;color:#fff;">LEFT SIDE</th>
-        <th colspan="2" style="padding:3px 2px;text-align:center;font-size:6px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border:1px solid #888;background:#374151;color:#fff;">CCT</th>
-        <th colspan="3" style="padding:3px 2px;text-align:left;padding-left:4px;font-size:6px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border:1px solid #888;background:#7a2e0a;color:#fff;">RIGHT SIDE</th>
-      </tr>
-      <tr>
-        <th style="padding:3px 2px;text-align:left;padding-left:4px;font-size:6px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border:1px solid #888;background:#1a3a5c;color:#fff;">Description</th>
-        <th style="padding:3px 2px;text-align:center;font-size:6px;font-weight:800;border:1px solid #888;background:#1a3a5c;color:#fff;">P</th>
-        <th style="padding:3px 2px;text-align:center;font-size:6px;font-weight:800;border:1px solid #888;background:#1a3a5c;color:#fff;">A</th>
-        <th style="padding:3px 2px;text-align:center;font-size:6px;font-weight:800;border:1px solid #888;background:#374151;color:#fff;">#</th>
-        <th style="padding:3px 2px;text-align:center;font-size:6px;font-weight:800;border:1px solid #888;background:#374151;color:#fff;">#</th>
-        <th style="padding:3px 2px;text-align:center;font-size:6px;font-weight:800;border:1px solid #888;background:#7a2e0a;color:#fff;">A</th>
-        <th style="padding:3px 2px;text-align:center;font-size:6px;font-weight:800;border:1px solid #888;background:#7a2e0a;color:#fff;">P</th>
-        <th style="padding:3px 2px;text-align:left;padding-left:4px;font-size:6px;font-weight:800;border:1px solid #888;background:#7a2e0a;color:#fff;">Description</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div style="background:#111827;padding:8px 12px;text-align:center;margin-top:2px;">
-    <div style="font-size:10px;font-weight:900;color:#F47920;letter-spacing:.12em;text-transform:uppercase;">Power &nbsp;&bull;&nbsp; Performance &nbsp;&bull;&nbsp; Peace of Mind</div>
-    <div style="font-size:8px;color:rgba(255,255,255,.6);margin-top:2px;letter-spacing:.04em;">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca</div>
-  </div>`;
-
-  document.body.appendChild(container);
-
-  try {
-    // Load html2canvas + jsPDF into the main window (cached after first load)
-    await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
-    await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-
-    // Wait for logo image to load
-    const img = container.querySelector('img');
-    if (img && !img.complete) await new Promise(r => { img.onload = r; img.onerror = r; });
-    await new Promise(r => setTimeout(r, 200));
-
-    const canvas = await html2canvas(container, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false });
-
-    const { jsPDF } = window.jspdf;
-    const margin = 0.25;
-    const maxW   = 8.5 - margin * 2;
-    const cW     = canvas.width  / (96 * 2);
-    const cH     = canvas.height / (96 * 2);
-    const scl    = Math.min(maxW / cW, 1);
-    const doc    = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter' });
-    doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, cW * scl, cH * scl);
-
-    // Trigger download from main window — reliable cross-browser
-    const blob = doc.output('blob');
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = title + '.pdf';
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
-
-    toast.textContent = '✓ PDF saved to Downloads';
-    setTimeout(() => toast.remove(), 2500);
-  } catch (e) {
-    toast.textContent = 'Error: ' + e.message;
-    setTimeout(() => toast.remove(), 4000);
-  } finally {
-    container.remove();
-  }
+  // Use the same popup as printSchedule — it renders the data correctly.
+  // The popup title is set to the schedule name so the browser pre-fills the filename.
+  // The "Save as PDF" button inside triggers window.print() → OS save dialog.
+  const title = (s.name || 'Panel Schedule').replace(/"/g, '');
+  printSchedule(s, widthIn || 8.5, heightIn || 11, title, true);
 }
 
 // ── Print Setup Modal ──
-let _psData = null, _psWidth = 8.5, _psHeight = 11;
+let _psData = null, _psWidth = 8.5, _psHeight = 11, _psSaveMode = false;
 
-function openPrintSetup(s) {
-  _psData   = s;
-  _psWidth  = 8.5;
-  _psHeight = 11;
+function openPrintSetup(s, saveMode) {
+  _psData     = s;
+  _psWidth    = 8.5;
+  _psHeight   = 11;
+  _psSaveMode = !!saveMode;
   document.getElementById('view-overlay').classList.add('hidden');
   document.getElementById('print-setup-overlay').classList.remove('hidden');
   document.getElementById('ps-w-slider').value = 8.5;
   document.getElementById('ps-h-slider').value = 11;
+  // Show/hide the right buttons depending on mode
+  document.getElementById('ps-print-now').style.display = saveMode ? 'none' : '';
+  document.getElementById('ps-save-pdf').style.display  = '';
   updatePsPreview();
 }
 
@@ -1785,6 +1663,9 @@ document.getElementById('modal-cancel').addEventListener('click', () => document
 document.getElementById('view-close').addEventListener('click', () => document.getElementById('view-overlay').classList.add('hidden'));
 document.getElementById('view-close-footer').addEventListener('click', () => document.getElementById('view-overlay').classList.add('hidden'));
 
+document.getElementById('view-save-btn').addEventListener('click', () => {
+  openPrintSetup(viewingData, true);
+});
 document.getElementById('view-print-btn').addEventListener('click', () => {
   openPrintSetup(viewingData);
 });
