@@ -502,8 +502,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange);
 
     </div>
     <div class="modal-footer">
-      <div style="font-size:11px;color:#9ca3af;flex:1;">Tip: use "Scale to fit page" in your printer dialog if needed.</div>
+      <div style="font-size:11px;color:#9ca3af;flex:1;">Tip: choose <strong>Save as PDF</strong> in the print dialog to download a file.</div>
       <button class="btn btn-secondary" id="ps-cancel">Cancel</button>
+      <button class="btn btn-secondary" id="ps-save-pdf">⬇ Save as PDF</button>
       <button class="btn btn-primary" id="ps-print-now">🖨 Print Now</button>
     </div>
   </div>
@@ -1060,7 +1061,7 @@ async function openView(id) {
 }
 
 // ── Print ──
-function printSchedule(s, widthIn, heightIn) {
+function printSchedule(s, widthIn, heightIn, windowTitle) {
   if (!s) return;
   const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
   const slots = s.num_circuits / 2;
@@ -1151,7 +1152,7 @@ function printSchedule(s, widthIn, heightIn) {
   // corner — sized exactly, no user scaling needed. Text stays full-size and legible.
   const pw = window.open('', '_blank', 'width=1,height=1');
   if (!pw) { alert('Allow pop-ups for this site to print.'); return; }
-  pw.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  pw.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${windowTitle ? windowTitle.replace(/</g,'&lt;') : 'Panel Schedule'}</title>
 <style>
   * { -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; margin:0; padding:0; }
   @page { size:letter portrait; margin:0.3in 0.22in 0.2in 0.22in; }
@@ -1272,6 +1273,13 @@ function printSchedule(s, widthIn, heightIn) {
 
 </body></html>`);
   pw.document.close();
+}
+
+// ── Save as PDF — same as print but with schedule name as title
+// so the browser Save PDF dialog pre-fills a useful filename ──
+function savePanelScheduleAsPdf(s, widthIn, heightIn) {
+  const title = (s && s.name ? s.name : 'Panel Schedule').replace(/"/g, '');
+  printSchedule(s, widthIn, heightIn, title);
 }
 
 // ── Print Setup Modal ──
@@ -1493,6 +1501,11 @@ document.querySelectorAll('.ps-ph').forEach(btn => {
 document.getElementById('ps-print-now').addEventListener('click', () => {
   document.getElementById('print-setup-overlay').classList.add('hidden');
   printSchedule(_psData, _psWidth, _psHeight);
+});
+
+document.getElementById('ps-save-pdf').addEventListener('click', () => {
+  document.getElementById('print-setup-overlay').classList.add('hidden');
+  savePanelScheduleAsPdf(_psData, _psWidth, _psHeight);
 });
 
 // ── Schedule list ──
