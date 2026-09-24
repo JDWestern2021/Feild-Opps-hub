@@ -6896,7 +6896,7 @@ app.get('/api/projects/:id/drawings', requireAuth, requireModuleAccess('worksite
              COALESCE(fi.file_name, sf.file_name)     AS file_name,
              COALESCE(fi.mime_type, sf.mime_type)      AS mime_type,
              sf.caption,
-             s.name                                   AS space_name,
+             s.identifier                             AS space_name,
              s.plan_type_id,
              pt.code                                  AS plan_type_code,
              pt.name                                  AS plan_type_name,
