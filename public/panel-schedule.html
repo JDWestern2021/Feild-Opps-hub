@@ -1299,11 +1299,202 @@ function printSchedule(s, widthIn, heightIn, windowTitle) {
   pw.document.close();
 }
 
-// ── Save as PDF — same as print but with schedule name as title
-// so the browser Save PDF dialog pre-fills a useful filename ──
+// ── Save as PDF — capture with html2canvas+jsPDF, auto-download ──
 function savePanelScheduleAsPdf(s, widthIn, heightIn) {
-  const title = (s && s.name ? s.name : 'Panel Schedule').replace(/"/g, '');
-  printSchedule(s, widthIn, heightIn, title);
+  if (!s) return;
+  const title = (s && s.name ? s.name : 'Panel Schedule').replace(/["/\\<>:*?|]/g, '').trim() || 'Panel Schedule';
+
+  // Reuse printSchedule to open a hidden popup, but swap the auto-print
+  // script for an html2canvas→jsPDF download script.
+  const circuits = Array.isArray(s.circuit_data) ? s.circuit_data : [];
+  const slots = s.num_circuits / 2;
+  const flipped = !!s.flipped;
+  const grp  = computePoleGroups(circuits, slots, flipped);
+  const lG   = grp.left;
+  const rG   = grp.right;
+  const ML = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-left:3px solid #1a3a5c;background:#eff6ff;padding:3px 4px;overflow:hidden;';
+  const MR = 'vertical-align:middle;text-align:center;word-break:break-word;white-space:normal;border:1px solid #d1d5db;border-right:3px solid #7a2e0a;background:#fff7ed;padding:3px 4px;overflow:hidden;';
+  const MA = 'vertical-align:middle;text-align:center;background:#eff6ff;';
+  const MB = 'vertical-align:middle;text-align:center;background:#fff7ed;';
+  let rows = '';
+
+  const slotOrder = flipped
+    ? Array.from({length: slots}, (_, k) => slots - 1 - k)
+    : Array.from({length: slots}, (_, k) => k);
+
+  const lc = (g, txt, p, a) =>
+    g === null
+      ? `<td class="desc-td">${esc(txt)}</td><td class="pole-td">${p}</td><td class="amp-td">${a}</td>`
+    : g.isLeader
+      ? `<td style="${ML}" rowspan="${g.span}">${esc(txt)}</td><td class="pole-td" style="${MA}" rowspan="${g.span}">${p}</td><td class="amp-td" style="${MA}" rowspan="${g.span}">${a}</td>`
+      : '';
+  const rc = (g, txt, p, a) =>
+    g === null
+      ? `<td class="amp-td">${a}</td><td class="pole-td">${p}</td><td class="desc-td">${esc(txt)}</td>`
+    : g.isLeader
+      ? `<td class="amp-td" style="${MB}" rowspan="${g.span}">${a}</td><td class="pole-td" style="${MB}" rowspan="${g.span}">${p}</td><td style="${MR}" rowspan="${g.span}">${esc(txt)}</td>`
+      : '';
+
+  for (let i = 0; i < slotOrder.length; i++) {
+    const si   = slotOrder[i];
+    const cctL = si * 2 + 1;
+    const cctR = si * 2 + 2;
+    const cL   = circuits.find(c => c.circuit === cctL) || {};
+    const cR   = circuits.find(c => c.circuit === cctR) || {};
+    const gL   = lG[si] !== undefined ? lG[si] : null;
+    const gR   = rG[si] !== undefined ? rG[si] : null;
+    const isTop = flipped ? (i === slotOrder.length - 1) : (i === 0);
+    rows += `<tr class="row-${i%2===0?'a':'b'}${isTop?' slot-top':''}">
+      ${lc(gL, cL.description||'', cL.poles||'', cL.amps||'')}
+      <td class="cct-td${i < slotOrder.length-1?' cct-ab-div':''}">${cctL}</td>
+      <td class="cct-td${i < slotOrder.length-1?' cct-ab-div':''}">${cctR}</td>
+      ${rc(gR, cR.description||'', cR.poles||'', cR.amps||'')}
+    </tr>`;
+  }
+
+  const logoSrc   = window.location.origin + '/logo-bolt.png';
+  const printDate = new Date().toLocaleDateString('en-CA');
+  const w = parseFloat(widthIn)  || 8.5;
+
+  const pw = window.open('', '_blank', 'width=900,height=700');
+  if (!pw) { alert('Allow pop-ups for this site to download.'); return; }
+
+  pw.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
+<style>
+  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
+  .print-page { width:${w}in; display:flex; flex-direction:column; margin:0 auto; }
+  .ph-outer { background:#111827; padding:10px 14px; display:flex; align-items:center; gap:14px; flex-shrink:0; }
+  .ph-logo { width:68px; height:68px; border-radius:6px; flex-shrink:0; }
+  .ph-center { flex:1; text-align:center; }
+  .ph-company-name { font-size:20px; font-weight:900; color:#fff; letter-spacing:.03em; line-height:1.1; }
+  .ph-phone { font-size:20px; font-weight:900; color:#F47920; margin-top:4px; letter-spacing:.04em; }
+  .ph-title-block { text-align:right; flex-shrink:0; }
+  .ph-title { font-size:16px; font-weight:900; color:#F47920; letter-spacing:.08em; text-transform:uppercase; line-height:1; }
+  .mp-l { vertical-align:middle !important; text-align:center !important; border-left:3px solid #1a3a5c !important; background:#eff6ff !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
+  .mp-r { vertical-align:middle !important; text-align:center !important; border-right:3px solid #7a2e0a !important; background:#fff7ed !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
+  .ph-accent { height:4px; background:#F47920; flex-shrink:0; }
+  .pi-strip { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1.2fr; border:1px solid #333; flex-shrink:0; }
+  .pi-cell { padding:3px 5px; border-right:1px solid #ccc; overflow:hidden; }
+  .pi-cell:last-child { border-right:none; }
+  .pi-label { font-size:5.5px; font-weight:700; text-transform:uppercase; color:#999; letter-spacing:.06em; }
+  .pi-value { font-size:9px; font-weight:700; color:#111; margin-top:1px; word-break:break-word; white-space:normal; }
+  .pi-meta  { font-size:6px; color:#bbb; padding:2px 4px; display:flex; justify-content:space-between; flex-shrink:0; }
+  .tbl-wrap { flex:1; }
+  .pt-table { width:100%; border-collapse:collapse; font-size:8px; table-layout:fixed; }
+  .pt-table col.desc-col { width:auto; }
+  .pt-table col.pole-col { width:16px; }
+  .pt-table col.amp-col  { width:22px; }
+  .pt-table col.cct-col  { width:28px; }
+  .pt-table th { padding:3px 2px; text-align:center; font-size:6px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; border:1px solid #888; }
+  .pt-table th.left-hdr  { background:#1a3a5c; color:#fff; }
+  .pt-table th.right-hdr { background:#7a2e0a; color:#fff; }
+  .pt-table th.cct-hdr   { background:#374151; color:#fff; }
+  .pt-table th.desc-hdr  { text-align:left; padding-left:4px; }
+  .pt-table td { padding:2px 3px; border:1px solid #d1d5db; vertical-align:middle; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8px; }
+  .pt-table td.cct-td  { text-align:center; font-weight:800; font-size:7px; background:#f3f4f6; }
+  .pt-table td.pole-td { text-align:center; }
+  .pt-table td.amp-td  { text-align:center; }
+  .pt-table td.desc-td { max-width:0; }
+  .pt-table tr.row-a td     { background:#f9fafb; }
+  .pt-table tr.row-b td     { background:#fff; }
+  .pt-table tr.row-a td.cct-td { background:#e5e7eb; }
+  .pt-table tr.row-b td.cct-td { background:#f3f4f6; }
+  .pt-table tr.slot-top td  { border-top:1.5px solid #9ca3af; }
+  .pt-table td.cct-ab-div  { border-bottom:1.5px dashed #9ca3af; }
+  .ph-footer { background:#111827; padding:8px 12px; flex-shrink:0; text-align:center; }
+  .ph-footer-tagline { font-size:10px; font-weight:900; color:#F47920; letter-spacing:.12em; text-transform:uppercase; }
+  .ph-footer-phone { font-size:8px; color:rgba(255,255,255,.6); margin-top:2px; letter-spacing:.04em; }
+  #save-status { position:fixed; top:10px; left:50%; transform:translateX(-50%); background:#111; color:#fff; padding:8px 20px; border-radius:20px; font-family:Arial,sans-serif; font-size:13px; z-index:9999; }
+</style>
+</head><body>
+<div id="save-status">Generating PDF…</div>
+<div class="print-page" id="schedule-wrap">
+  <div class="ph-outer">
+    <img class="ph-logo" src="${logoSrc}" alt="J&D Logo" crossorigin="anonymous"/>
+    <div class="ph-center">
+      <div class="ph-company-name">J&amp;D WESTERN ELECTRIC</div>
+      <div class="ph-phone">587-343-4349</div>
+    </div>
+    <div class="ph-title-block">
+      <div class="ph-title">PANEL SCHEDULE</div>
+    </div>
+  </div>
+  <div class="ph-accent"></div>
+  <div class="pi-strip">
+    <div class="pi-cell"><div class="pi-label">Panel</div><div class="pi-value">${esc(s.panel_name)}</div></div>
+    <div class="pi-cell"><div class="pi-label">Voltage</div><div class="pi-value">${esc(s.voltage||'—')}</div></div>
+    <div class="pi-cell"><div class="pi-label">Main</div><div class="pi-value">${s.main_breaker ? s.main_breaker+'A' : '—'}</div></div>
+    <div class="pi-cell"><div class="pi-label">Bus</div><div class="pi-value">${s.bus_rating ? s.bus_rating+'A' : '—'}</div></div>
+    <div class="pi-cell"><div class="pi-label">Type</div><div class="pi-value">${esc(s.enclosure_type||'—')}</div></div>
+  </div>
+  <div class="pi-meta">
+    <span>${s.project_name ? esc(s.project_name) : ''}</span>
+    <span>${printDate}</span>
+  </div>
+  <div class="tbl-wrap">
+    <table class="pt-table">
+      <colgroup>
+        <col class="desc-col"/><col class="pole-col"/><col class="amp-col"/>
+        <col class="cct-col"/><col class="cct-col"/>
+        <col class="amp-col"/><col class="pole-col"/><col class="desc-col"/>
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="left-hdr desc-hdr" colspan="3">LEFT SIDE</th>
+          <th class="cct-hdr" colspan="2">CCT</th>
+          <th class="right-hdr desc-hdr" colspan="3">RIGHT SIDE</th>
+        </tr>
+        <tr>
+          <th class="left-hdr desc-hdr">Description</th>
+          <th class="left-hdr">P</th><th class="left-hdr">A</th>
+          <th class="cct-hdr">#</th><th class="cct-hdr">#</th>
+          <th class="right-hdr">A</th><th class="right-hdr">P</th>
+          <th class="right-hdr desc-hdr">Description</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  <div class="ph-footer">
+    <div class="ph-footer-tagline">Power &nbsp;&bull;&nbsp; Performance &nbsp;&bull;&nbsp; Peace of Mind</div>
+    <div class="ph-footer-phone">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca</div>
+  </div>
+</div>
+<script>
+(async function() {
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const el = document.createElement('script');
+      el.src = src; el.onload = res; el.onerror = rej;
+      document.head.appendChild(el);
+    });
+  }
+  try {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    const el = document.getElementById('schedule-wrap');
+    const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+    const { jsPDF } = window.jspdf;
+    const PW = 8.5, PH = 11, margin = 0.3;
+    const maxW = PW - margin * 2;
+    const maxH = PH - margin * 2;
+    const cW = canvas.width / 96;
+    const cH = canvas.height / 96;
+    const scl = Math.min(maxW / cW, maxH / cH, 1);
+    const finalW = cW * scl;
+    const finalH = cH * scl;
+    const doc = new jsPDF({ orientation: finalH > finalW ? 'portrait' : 'landscape', unit: 'in', format: 'letter' });
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', margin, margin, finalW, finalH);
+    doc.save('${title.replace(/'/g, "\\'")}' + '.pdf');
+    window.close();
+  } catch(e) {
+    document.getElementById('save-status').textContent = 'Error generating PDF. ' + e.message;
+  }
+})();
+<\/script>
+</body></html>`);
+  pw.document.close();
 }
 
 // ── Print Setup Modal ──
