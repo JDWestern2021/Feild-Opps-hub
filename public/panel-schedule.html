@@ -1309,7 +1309,7 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
 // or shrinks the whole page uniformly if content overflows. w/h are page inches.
 function _buildFitScript(w, h) {
   return `var _MT=0.35,_MB=0.2,_ML=0.22,_MR=0.22;
-var _aH=(${h}-_MT-_MB)*96,_aW=(${w}-_ML-_MR)*96;
+var _aH=(${h}-_MT-_MB)*96-16,_aW=(${w}-_ML-_MR)*96;
 var _tb=document.querySelector('.pt-table tbody');
 if(_tb){
   var _rows=_tb.querySelectorAll('tr'),_n=_rows.length;
