@@ -1145,15 +1145,16 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
     const cctAClass = suppressAB ? 'cct-td' : 'cct-td cct-ab-div';
 
     if (flipped) {
-      const slotTop = lbG?.isLeader !== false ? 'slot-top' : '';
+      // Flipped: even circuits (ra/rb) render in the LEFT column; odd (la/lb) on RIGHT
+      const slotTop = rbG?.isLeader !== false ? 'slot-top' : '';
       rows += `<tr class="row-b ${slotTop}">
-        ${lc(lbG, lbD.txt, lbD.p, lbD.a)}
-        <td class="cct-td">${ls}B</td><td class="cct-td">${rs}B</td>
-        ${rc(rbG, rbD.txt, rbD.p, rbD.a)}</tr>
+        ${lc(rbG, rbD.txt, rbD.p, rbD.a)}
+        <td class="cct-td">${rs}B</td><td class="cct-td">${ls}B</td>
+        ${rc(lbG, lbD.txt, lbD.p, lbD.a)}</tr>
       <tr class="row-a">
-        ${lc(laG, laD.txt, laD.p, laD.a)}
-        <td class="${cctAClass}">${ls}A</td><td class="${cctAClass}">${rs}A</td>
-        ${rc(raG, raD.txt, raD.p, raD.a)}</tr>`;
+        ${lc(raG, raD.txt, raD.p, raD.a)}
+        <td class="${cctAClass}">${rs}A</td><td class="${cctAClass}">${ls}A</td>
+        ${rc(laG, laD.txt, laD.p, laD.a)}</tr>`;
     } else {
       const slotTop = laG?.isLeader !== false ? 'slot-top' : '';
       rows += `<tr class="row-a ${slotTop}">
@@ -1175,7 +1176,7 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${windowTitle ? windowTitle.replace(/</g,'&lt;') : 'Panel Schedule'}</title>
 <style>
   * { -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; margin:0; padding:0; }
-  @page { size:letter portrait; margin:0.3in 0.22in 0.2in 0.22in; }
+  @page { size:${w}in ${h}in portrait; margin:0.3in 0.22in 0.2in 0.22in; }
   body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
 
   /* The schedule expands to fit all circuits — overflow is allowed */
@@ -1205,7 +1206,7 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
   .pi-cell:last-child { border-right:none; }
   .pi-label { font-size:5.5px; font-weight:700; text-transform:uppercase; color:#999; letter-spacing:.06em; }
   .pi-value { font-size:9px; font-weight:700; color:#111; margin-top:1px; word-break:break-word; white-space:normal; }
-  .pi-meta  { font-size:6px; color:#bbb; padding:2px 4px; display:flex; justify-content:space-between; flex-shrink:0; }
+  .pi-meta  { font-size:6px; color:#555; padding:2px 4px; display:flex; justify-content:space-between; flex-shrink:0; }
 
   /* Circuit table — expands to show all rows */
   .tbl-wrap { flex:1; }
@@ -1293,12 +1294,50 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
 </body></html>`;
 }
 
+// ── Row-height fill / uniform shrink ──
+// Returns a JS snippet (no IIFE) that grows row height to fill the printable area,
+// or shrinks the whole page uniformly if content overflows. w/h are page inches.
+function _buildFitScript(w, h) {
+  return `var _MT=0.3,_MB=0.2,_ML=0.22,_MR=0.22;
+var _aH=(${h}-_MT-_MB)*96,_aW=(${w}-_ML-_MR)*96;
+var _tb=document.querySelector('.pt-table tbody');
+if(_tb){
+  var _rows=_tb.querySelectorAll('tr'),_n=_rows.length;
+  if(_n>0){
+    var _sH=0;
+    ['.ph-outer','.ph-accent','.pi-strip','.pi-meta','.ph-footer'].forEach(function(sel){
+      var e=document.querySelector(sel);if(e)_sH+=e.offsetHeight;
+    });
+    var _nH=_tb.offsetHeight/_n||14;
+    var _rA=_aH-_sH;
+    if(_rA>_nH*_n){
+      var _tH=_rA/_n;
+      var _sc=_tH/_nH;
+      var _fs=parseFloat(Math.min(13,Math.max(7,8*_sc)).toFixed(1));
+      _tb.style.fontSize=_fs+'px';
+      Array.from(_rows).forEach(function(r){r.style.height=_tH+'px';});
+    } else {
+      var _tot=_sH+_nH*_n,_sh=_aH/_tot;
+      if(_sh<0.99){
+        var _pg=document.querySelector('.print-page');
+        _pg.style.transformOrigin='top left';
+        _pg.style.transform='scale('+_sh.toFixed(4)+')';
+        _pg.style.width=Math.ceil(_aW/_sh)+'px';
+      }
+    }
+  }
+}`;
+}
+
 // ── Print ──
 function printSchedule(s, widthIn, heightIn, windowTitle) {
   if (!s) return;
-  const html = buildScheduleHtml(s, widthIn, heightIn, windowTitle)
-    .replace('<!--SCRIPTS-->', '<script>window.onload=function(){window.print();window.close();}<\/script>');
-  const pw = window.open('', '_blank', 'width=1,height=1');
+  const w = parseFloat(widthIn) || 8.5;
+  const h = parseFloat(heightIn) || 11;
+  const fitScr = _buildFitScript(w, h);
+  const html = buildScheduleHtml(s, w, h, windowTitle)
+    .replace('<!--SCRIPTS-->', `<script>window.onload=function(){${fitScr}\nwindow.print();window.close();}<\/script>`);
+  const pw = window.open('', '_blank', `width=${Math.round(w*96)},height=${Math.round(h*96)}`);
   if (!pw) { alert('Allow pop-ups for this site to print.'); return; }
   pw.document.write(html);
   pw.document.close();
@@ -1310,14 +1349,18 @@ function _sanitizePdfName(name) {
   return (name || 'Panel Schedule').replace(/[\/\\:*?"<>|]/g, '').trim() || 'Panel Schedule';
 }
 
-async function captureAsPdfBlob(s) {
+async function captureAsPdfBlob(s, w, h) {
+  w = parseFloat(w) || 8.5;
+  h = parseFloat(h) || 11;
+  const pxW = Math.round(w * 96);
   return new Promise((resolve, reject) => {
     const token = Math.random().toString(36).slice(2);
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:absolute;left:-9999px;top:0;width:816px;height:1px;border:none;visibility:hidden;';
+    iframe.style.cssText = `position:absolute;left:-9999px;top:0;width:${pxW}px;height:1px;border:none;visibility:hidden;`;
 
     // _cs avoids a literal script-close tag in source, which the HTML parser would misread
     const _cs = '<' + '/script>';
+    const _fitBody = _buildFitScript(w, h).replace(/`/g, '\\`');
     const captureScript = `<script src="/vendor/html2canvas.min.js">${_cs}
 <script>
 window.addEventListener('load', function() {
@@ -1326,6 +1369,9 @@ window.addEventListener('load', function() {
   });
   Promise.all([document.fonts.ready].concat(imgPromises)).then(function() {
     return new Promise(function(r) { setTimeout(r, 200); });
+  }).then(function() {
+    ${_fitBody}
+    return new Promise(function(r) { setTimeout(r, 50); });
   }).then(function() {
     var el = document.querySelector('.print-page');
     html2canvas(el, { scale: 2, useCORS: true, allowTaint: false, logging: false, backgroundColor: '#ffffff' }).then(function(canvas) {
@@ -1337,7 +1383,7 @@ window.addEventListener('load', function() {
 });
 ${_cs}`;
 
-    const html = buildScheduleHtml(s, 8.5, 11, s.panel_name)
+    const html = buildScheduleHtml(s, w, h, s.panel_name)
       .replace('<!--SCRIPTS-->', captureScript);
 
     const timer = setTimeout(() => { cleanup(); reject(new Error('PDF capture timed out')); }, 30000);
@@ -1350,8 +1396,8 @@ ${_cs}`;
         const img = new Image();
         img.onload = () => {
           const { jsPDF } = window.jspdf;
-          const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true });
-          const pW = 8.5, pH = 11;
+          const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format: [w, h], compress: true });
+          const pW = w, pH = h;
           const ar = img.width / img.height;
           const pAr = pW / pH;
           let w, h, x = 0, y = 0;
@@ -1379,9 +1425,11 @@ function _setProgressToast(msg) {
   t.textContent = msg; t.className = 'toast show info';
 }
 
-async function saveSchedules(stubs) {
+async function saveSchedules(stubs, widthIn, heightIn) {
   if (!stubs.length) return;
   const n = stubs.length;
+  const sw = parseFloat(widthIn) || 8.5;
+  const sh = parseFloat(heightIn) || 11;
   const hasPicker = !!window.showSaveFilePicker;
 
   function sanitize(name) { return _sanitizePdfName(name); }
@@ -1413,7 +1461,7 @@ async function saveSchedules(stubs) {
         _setProgressToast('Generating PDF…');
         const res = await fetch('/api/panel-schedules/' + stubs[0].id);
         const full = await res.json();
-        const blob = await captureAsPdfBlob(full);
+        const blob = await captureAsPdfBlob(full, sw, sh);
         const w = await fh.createWritable(); await w.write(blob); await w.close();
         showToast('Saved ' + filenames[0], 'success');
         return;
@@ -1432,7 +1480,7 @@ async function saveSchedules(stubs) {
         _setProgressToast(`Saving ${i + 1} of ${n}…`);
         const res  = await fetch('/api/panel-schedules/' + stubs[i].id);
         const full = await res.json();
-        const blob = await captureAsPdfBlob(full);
+        const blob = await captureAsPdfBlob(full, sw, sh);
         let targetDir = dir;
         if (mixed) { const pn = sanitize(stubs[i].project_name || 'No Project'); targetDir = await dir.getDirectoryHandle(pn, { create: true }); }
         const fh = await targetDir.getFileHandle(filenames[i], { create: true });
@@ -1450,7 +1498,7 @@ async function saveSchedules(stubs) {
       _setProgressToast(`Saving ${i + 1} of ${n}…`);
       const res  = await fetch('/api/panel-schedules/' + stubs[i].id);
       const full = await res.json();
-      blobs.push(await captureAsPdfBlob(full));
+      blobs.push(await captureAsPdfBlob(full, sw, sh));
     }
 
     if (n === 1) {
@@ -1788,7 +1836,7 @@ document.getElementById('btn-bulk-print').addEventListener('click', () => {
 });
 
 document.getElementById('btn-bulk-save').addEventListener('click', () => {
-  saveSchedules(getSelectedSchedules());
+  saveSchedules(getSelectedSchedules(), _psWidth, _psHeight);
 });
 
 document.getElementById('btn-bulk-cancel').addEventListener('click', () => {
@@ -1806,7 +1854,7 @@ document.getElementById('view-close').addEventListener('click', () => document.g
 document.getElementById('view-close-footer').addEventListener('click', () => document.getElementById('view-overlay').classList.add('hidden'));
 
 document.getElementById('view-save-btn').addEventListener('click', () => {
-  if (viewingData) saveSchedules([viewingData]);
+  if (viewingData) saveSchedules([viewingData], _psWidth, _psHeight);
 });
 document.getElementById('view-print-btn').addEventListener('click', () => {
   openPrintSetup(viewingData);
