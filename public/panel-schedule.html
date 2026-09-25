@@ -1168,7 +1168,7 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
     }
   }
 
-  const logoSrc = window.location.origin + '/logo-bolt.png';
+  const logoSrc = window.location.origin + '/logo-color.png';
   const printDate = new Date().toLocaleDateString('en-CA');
   const w = parseFloat(widthIn)  || 8.5;
   const h = parseFloat(heightIn) || 11;
@@ -1176,29 +1176,30 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${windowTitle ? windowTitle.replace(/</g,'&lt;') : 'Panel Schedule'}</title>
 <style>
   * { -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; margin:0; padding:0; }
-  @page { size:${w}in ${h}in portrait; margin:0.3in 0.22in 0.2in 0.22in; }
+  @page { size:${w}in ${h}in portrait; margin:0.35in 0.22in 0.2in 0.22in; }
   body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
 
   /* The schedule expands to fit all circuits — overflow is allowed */
   .print-page {
-    width:${w}in;
+    width:${(parseFloat(w)-0.44).toFixed(3)}in;
     display:flex;
     flex-direction:column;
     margin-left:0;
   }
 
   /* Header */
-  .ph-outer { background:#111827; padding:10px 14px; display:flex; align-items:center; gap:14px; flex-shrink:0; }
-  .ph-logo { width:68px; height:68px; border-radius:6px; flex-shrink:0; }
-  .ph-center { flex:1; text-align:center; }
-  .ph-company-name { font-size:20px; font-weight:900; color:#fff; letter-spacing:.03em; line-height:1.1; }
-  .ph-phone { font-size:20px; font-weight:900; color:#F47920; margin-top:4px; letter-spacing:.04em; }
-  .ph-title-block { text-align:right; flex-shrink:0; }
-  .ph-title { font-size:16px; font-weight:900; color:#F47920; letter-spacing:.08em; text-transform:uppercase; line-height:1; }
-  .ph-sub  { font-size:7px; color:rgba(255,255,255,.5); margin-top:3px; }
+  .ph-outer { background:#0C0C0C; padding:6px 14px 6px 10px; display:flex; align-items:center; gap:0; flex-shrink:0; position:relative; overflow:hidden; }
+  .ph-logo-wrap { flex-shrink:0; display:flex; flex-direction:column; align-items:center; }
+  .ph-logo { height:88px; width:auto; display:block; }
+  .ph-commercial { font-size:8px; font-weight:700; color:rgba(255,255,255,.65); letter-spacing:.18em; text-transform:uppercase; margin-top:2px; }
+  .ph-spacer { flex:1; }
+  .ph-slash { position:absolute; right:148px; top:-8px; bottom:-8px; width:3px; background:#FF6100; transform:skewX(-14deg); }
+  .ph-title-block { flex-shrink:0; text-align:right; z-index:1; }
+  .ph-title { font-size:16px; font-weight:900; color:#FF6100; letter-spacing:.08em; text-transform:uppercase; line-height:1; }
+  .ph-phone { font-size:11px; color:#fff; margin-top:6px; letter-spacing:.04em; }
   .mp-l { vertical-align:middle !important; text-align:center !important; border-left:3px solid #1a3a5c !important; background:#eff6ff !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
   .mp-r { vertical-align:middle !important; text-align:center !important; border-right:3px solid #7a2e0a !important; background:#fff7ed !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
-  .ph-accent { height:4px; background:#F47920; flex-shrink:0; }
+  .ph-accent { height:3px; background:#FF6100; flex-shrink:0; }
 
   /* Info strip */
   .pi-strip { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1.2fr; border:1px solid #333; flex-shrink:0; }
@@ -1233,20 +1234,25 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
   .pt-table td.cct-ab-div  { border-bottom:1.5px dashed #9ca3af; }
 
   /* Footer */
-  .ph-footer { background:#111827; padding:8px 12px; flex-shrink:0; text-align:center; }
-  .ph-footer-tagline { font-size:10px; font-weight:900; color:#F47920; letter-spacing:.12em; text-transform:uppercase; }
-  .ph-footer-phone { font-size:8px; color:rgba(255,255,255,.6); margin-top:2px; letter-spacing:.04em; }
+  .ph-footer { background:#0C0C0C; padding:5px 12px 6px; flex-shrink:0; text-align:center; }
+  .ph-footer-rule { display:flex; align-items:center; gap:8px; }
+  .ph-footer-line { flex:1; height:1px; background:#FF6100; }
+  .ph-footer-tagline { font-size:10px; font-weight:900; color:#fff; letter-spacing:.14em; text-transform:uppercase; white-space:nowrap; }
+  .ph-footer-dot { color:#FF6100; }
+  .ph-footer-contact { font-size:7.5px; color:rgba(255,255,255,.55); margin-top:3px; letter-spacing:.03em; }
 </style>
 </head><body>
 <div class="print-page">
   <div class="ph-outer">
-    <img class="ph-logo" src="${logoSrc}" alt="J&D Logo"/>
-    <div class="ph-center">
-      <div class="ph-company-name">J&amp;D WESTERN ELECTRIC</div>
-      <div class="ph-phone">587-343-4349</div>
+    <div class="ph-logo-wrap">
+      <img class="ph-logo" src="${logoSrc}" alt="J&amp;D Western Electric"/>
+      <div class="ph-commercial">COMMERCIAL &amp; RESIDENTIAL</div>
     </div>
+    <div class="ph-spacer"></div>
+    <div class="ph-slash"></div>
     <div class="ph-title-block">
       <div class="ph-title">PANEL SCHEDULE</div>
+      <div class="ph-phone">587-343-4349</div>
     </div>
   </div>
   <div class="ph-accent"></div>
@@ -1286,8 +1292,12 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
     </table>
   </div>
   <div class="ph-footer">
-    <div class="ph-footer-tagline">Power &nbsp;&bull;&nbsp; Performance &nbsp;&bull;&nbsp; Peace of Mind</div>
-    <div class="ph-footer-phone">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca</div>
+    <div class="ph-footer-rule">
+      <div class="ph-footer-line"></div>
+      <div class="ph-footer-tagline">POWER <span class="ph-footer-dot">&bull;</span> PERFORMANCE <span class="ph-footer-dot">&bull;</span> PEACE OF MIND</div>
+      <div class="ph-footer-line"></div>
+    </div>
+    <div class="ph-footer-contact">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca &nbsp;&middot;&nbsp; Grande Prairie, AB</div>
   </div>
 </div>
 <!--SCRIPTS-->
@@ -1298,14 +1308,14 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
 // Returns a JS snippet (no IIFE) that grows row height to fill the printable area,
 // or shrinks the whole page uniformly if content overflows. w/h are page inches.
 function _buildFitScript(w, h) {
-  return `var _MT=0.3,_MB=0.2,_ML=0.22,_MR=0.22;
+  return `var _MT=0.35,_MB=0.2,_ML=0.22,_MR=0.22;
 var _aH=(${h}-_MT-_MB)*96,_aW=(${w}-_ML-_MR)*96;
 var _tb=document.querySelector('.pt-table tbody');
 if(_tb){
   var _rows=_tb.querySelectorAll('tr'),_n=_rows.length;
   if(_n>0){
     var _sH=0;
-    ['.ph-outer','.ph-accent','.pi-strip','.pi-meta','.ph-footer'].forEach(function(sel){
+    ['.ph-outer','.ph-accent','.pi-strip','.pi-meta','.pt-table thead','.ph-footer'].forEach(function(sel){
       var e=document.querySelector(sel);if(e)_sH+=e.offsetHeight;
     });
     var _nH=_tb.offsetHeight/_n||14;
