@@ -1168,7 +1168,7 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
     }
   }
 
-  const logoSrc = window.location.origin + '/logo-color.png';
+  const logoSrc = window.location.origin + '/logo-bolt.png';
   const printDate = new Date().toLocaleDateString('en-CA');
   const w = parseFloat(widthIn)  || 8.5;
   const h = parseFloat(heightIn) || 11;
@@ -1177,7 +1177,7 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
 <style>
   * { -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; margin:0; padding:0; }
   @page { size:${w}in ${h}in portrait; margin:0.35in 0.22in 0.2in 0.22in; }
-  body { font-family:Arial,Helvetica,sans-serif; background:#fff; }
+  html, body { font-family:Arial,Helvetica,sans-serif; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 
   /* The schedule expands to fit all circuits — overflow is allowed */
   .print-page {
@@ -1188,26 +1188,31 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
   }
 
   /* Header */
-  .ph-outer { background:#0C0C0C; padding:6px 14px 6px 10px; display:flex; align-items:center; gap:0; flex-shrink:0; position:relative; overflow:hidden; }
-  .ph-logo-wrap { flex-shrink:0; display:flex; flex-direction:column; align-items:center; }
-  .ph-logo { height:88px; width:auto; display:block; }
-  .ph-commercial { font-size:8px; font-weight:700; color:rgba(255,255,255,.65); letter-spacing:.18em; text-transform:uppercase; margin-top:2px; }
-  .ph-spacer { flex:1; }
-  .ph-slash { position:absolute; right:148px; top:-8px; bottom:-8px; width:3px; background:#FF6100; transform:skewX(-14deg); }
-  .ph-title-block { flex-shrink:0; text-align:right; z-index:1; }
-  .ph-title { font-size:16px; font-weight:900; color:#FF6100; letter-spacing:.08em; text-transform:uppercase; line-height:1; }
-  .ph-phone { font-size:11px; color:#fff; margin-top:6px; letter-spacing:.04em; }
-  .mp-l { vertical-align:middle !important; text-align:center !important; border-left:3px solid #1a3a5c !important; background:#eff6ff !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
-  .mp-r { vertical-align:middle !important; text-align:center !important; border-right:3px solid #7a2e0a !important; background:#fff7ed !important; word-break:break-word; white-space:normal !important; overflow:hidden; }
-  .ph-accent { height:3px; background:#FF6100; flex-shrink:0; }
+  .ph-outer { background:#0C0C0C; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:8px 14px; display:flex; align-items:center; gap:0; justify-content:space-between; flex-shrink:0; }
+  /* Logo: overflow-clip to crop the black padding around the hex mark */
+  .ph-logo-clip { width:60px; height:60px; overflow:hidden; flex-shrink:0; position:relative; margin-right:12px; }
+  .ph-logo-img { position:absolute; width:154%; height:154%; top:-27%; left:-27%; display:block; }
+  .ph-left { display:flex; flex-direction:column; justify-content:center; }
+  .ph-company { font-size:22px; font-weight:900; color:#fff; letter-spacing:.03em; text-transform:uppercase; line-height:1.1; font-family:Arial,Helvetica,sans-serif; }
+  .ph-tagline { font-size:10px; color:#FF6100; margin-top:3px; letter-spacing:.02em; }
+  .ph-tagline-dot { color:#FF6100; }
+  .ph-contact { text-align:right; display:flex; flex-direction:column; gap:2px; justify-content:center; }
+  .ph-contact-line { font-size:9px; color:#fff; line-height:1.3; letter-spacing:.01em; }
+  .ph-accent { height:3px; background:#FF6100; -webkit-print-color-adjust:exact; print-color-adjust:exact; flex-shrink:0; }
+
+  /* Title */
+  .pi-title { font-size:15px; font-weight:900; color:#111; letter-spacing:.04em; text-transform:uppercase; padding:5px 4px 3px; flex-shrink:0; }
 
   /* Info strip */
-  .pi-strip { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1.2fr; border:1px solid #333; flex-shrink:0; }
+  .pi-strip { display:grid; grid-template-columns:1fr 1fr 1fr 1.6fr 2fr 1fr; border:1px solid #bbb; flex-shrink:0; }
   .pi-cell { padding:3px 5px; border-right:1px solid #ccc; overflow:hidden; }
   .pi-cell:last-child { border-right:none; }
   .pi-label { font-size:5.5px; font-weight:700; text-transform:uppercase; color:#999; letter-spacing:.06em; }
   .pi-value { font-size:9px; font-weight:700; color:#111; margin-top:1px; word-break:break-word; white-space:normal; }
-  .pi-meta  { font-size:6px; color:#555; padding:2px 4px; display:flex; justify-content:space-between; flex-shrink:0; }
+
+  /* Merged-cell spans */
+  .mp-l { vertical-align:middle !important; text-align:center !important; border-left:3px solid #1a3a5c !important; background:#eff6ff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; word-break:break-word; white-space:normal !important; overflow:hidden; }
+  .mp-r { vertical-align:middle !important; text-align:center !important; border-right:3px solid #7a2e0a !important; background:#fff7ed !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; word-break:break-word; white-space:normal !important; overflow:hidden; }
 
   /* Circuit table — expands to show all rows */
   .tbl-wrap { flex:1; }
@@ -1216,7 +1221,7 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
   .pt-table col.pole-col { width:16px; }
   .pt-table col.amp-col  { width:22px; }
   .pt-table col.cct-col  { width:28px; }
-  .pt-table th { padding:3px 2px; text-align:center; font-size:6px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; border:1px solid #888; }
+  .pt-table th { padding:3px 2px; text-align:center; font-size:6px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; border:1px solid #888; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .pt-table th.left-hdr  { background:#1a3a5c; color:#fff; }
   .pt-table th.right-hdr { background:#7a2e0a; color:#fff; }
   .pt-table th.cct-hdr   { background:#374151; color:#fff; }
@@ -1234,38 +1239,35 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
   .pt-table td.cct-ab-div  { border-bottom:1.5px dashed #9ca3af; }
 
   /* Footer */
-  .ph-footer { background:#0C0C0C; padding:5px 12px 6px; flex-shrink:0; text-align:center; }
-  .ph-footer-rule { display:flex; align-items:center; gap:8px; }
-  .ph-footer-line { flex:1; height:1px; background:#FF6100; }
-  .ph-footer-tagline { font-size:10px; font-weight:900; color:#fff; letter-spacing:.14em; text-transform:uppercase; white-space:nowrap; }
-  .ph-footer-dot { color:#FF6100; }
-  .ph-footer-contact { font-size:7.5px; color:rgba(255,255,255,.55); margin-top:3px; letter-spacing:.03em; }
+  .ph-footer { background:#0C0C0C; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:4px 10px; flex-shrink:0; display:flex; justify-content:space-between; align-items:center; }
+  .ph-footer-left { font-size:8px; color:#fff; letter-spacing:.01em; }
+  .ph-footer-right { font-size:8px; color:#fff; letter-spacing:.01em; }
 </style>
 </head><body>
 <div class="print-page">
   <div class="ph-outer">
-    <div class="ph-logo-wrap">
-      <img class="ph-logo" src="${logoSrc}" alt="J&amp;D Western Electric"/>
-      <div class="ph-commercial">COMMERCIAL &amp; RESIDENTIAL</div>
+    <div class="ph-logo-clip">
+      <img class="ph-logo-img" src="${logoSrc}" alt="J&amp;D logo"/>
     </div>
-    <div class="ph-spacer"></div>
-    <div class="ph-slash"></div>
-    <div class="ph-title-block">
-      <div class="ph-title">PANEL SCHEDULE</div>
-      <div class="ph-phone">587-343-4349</div>
+    <div class="ph-left">
+      <div class="ph-company">J&amp;D Western Electric Ltd.</div>
+      <div class="ph-tagline">Power <span class="ph-tagline-dot">&bull;</span> Performance <span class="ph-tagline-dot">&bull;</span> Peace of Mind</div>
+    </div>
+    <div class="ph-contact">
+      <div class="ph-contact-line">587-343-4349</div>
+      <div class="ph-contact-line">jeremy@jdwesternelectric.ca</div>
+      <div class="ph-contact-line">jdwesternelectric.ca</div>
     </div>
   </div>
   <div class="ph-accent"></div>
+  <div class="pi-title">PANEL SCHEDULE &mdash; ${esc(s.panel_name)}</div>
   <div class="pi-strip">
-    <div class="pi-cell"><div class="pi-label">Panel</div><div class="pi-value">${esc(s.panel_name)}</div></div>
     <div class="pi-cell"><div class="pi-label">Voltage</div><div class="pi-value">${esc(s.voltage||'—')}</div></div>
     <div class="pi-cell"><div class="pi-label">Main</div><div class="pi-value">${s.main_breaker ? s.main_breaker+'A' : '—'}</div></div>
     <div class="pi-cell"><div class="pi-label">Bus</div><div class="pi-value">${s.bus_rating ? s.bus_rating+'A' : '—'}</div></div>
-    <div class="pi-cell"><div class="pi-label">Type</div><div class="pi-value">${esc(s.enclosure_type||'—')}</div></div>
-  </div>
-  <div class="pi-meta">
-    <span>${s.project_name ? esc(s.project_name) : ''}</span>
-    <span>${printDate}</span>
+    <div class="pi-cell"><div class="pi-label">Enclosure</div><div class="pi-value">${esc(s.enclosure_type||'—')}</div></div>
+    <div class="pi-cell"><div class="pi-label">Project</div><div class="pi-value">${s.project_name ? esc(s.project_name) : '—'}</div></div>
+    <div class="pi-cell"><div class="pi-label">Date</div><div class="pi-value">${printDate}</div></div>
   </div>
   <div class="tbl-wrap">
     <table class="pt-table">
@@ -1292,12 +1294,8 @@ function buildScheduleHtml(s, widthIn, heightIn, windowTitle) {
     </table>
   </div>
   <div class="ph-footer">
-    <div class="ph-footer-rule">
-      <div class="ph-footer-line"></div>
-      <div class="ph-footer-tagline">POWER <span class="ph-footer-dot">&bull;</span> PERFORMANCE <span class="ph-footer-dot">&bull;</span> PEACE OF MIND</div>
-      <div class="ph-footer-line"></div>
-    </div>
-    <div class="ph-footer-contact">587-343-4349 &nbsp;&middot;&nbsp; jdwesternelectric.ca &nbsp;&middot;&nbsp; Grande Prairie, AB</div>
+    <div class="ph-footer-left">J&amp;D Western Electric Ltd. &nbsp;|&nbsp; Panel Schedule &nbsp;|&nbsp; ${esc(s.panel_name)} &nbsp;|&nbsp; ${printDate}</div>
+    <div class="ph-footer-right">jdwesternelectric.ca</div>
   </div>
 </div>
 <!--SCRIPTS-->
@@ -1315,7 +1313,7 @@ if(_tb){
   var _rows=_tb.querySelectorAll('tr'),_n=_rows.length;
   if(_n>0){
     var _sH=0;
-    ['.ph-outer','.ph-accent','.pi-strip','.pi-meta','.pt-table thead','.ph-footer'].forEach(function(sel){
+    ['.ph-outer','.ph-accent','.pi-title','.pi-strip','.pt-table thead','.ph-footer'].forEach(function(sel){
       var e=document.querySelector(sel);if(e)_sH+=e.offsetHeight;
     });
     var _nH=_tb.offsetHeight/_n||14;

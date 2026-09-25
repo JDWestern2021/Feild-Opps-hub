@@ -37,5 +37,8 @@
     "multer": "^2.1.1",
     "nodemailer": "^9.0.1",
     "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
   }
 }
