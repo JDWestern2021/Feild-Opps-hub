@@ -8384,10 +8384,11 @@ app.get('/api/gas-cards', requireAuth, async (req, res) => {
 app.get('/api/gas-cards/status', requireAuth, async (req, res) => {
   const { rows } = await pool.query(`
     SELECT g.id, g.card_name, g.card_number, g.notes, g.pin,
-      e.event_type, e.user_id AS out_user_id, e.user_name AS out_user_name, e.created_at AS out_at
+      e.event_type, e.user_id AS out_user_id, e.user_name AS out_user_name,
+      e.created_at AS out_at, e.vehicle AS out_vehicle
     FROM gas_cards g
     LEFT JOIN LATERAL (
-      SELECT event_type, user_id, user_name, created_at FROM gas_card_events
+      SELECT event_type, user_id, user_name, created_at, vehicle FROM gas_card_events
       WHERE card_id = g.id ORDER BY id DESC LIMIT 1
     ) e ON true
     WHERE g.active = 1
@@ -8401,9 +8402,10 @@ app.get('/api/gas-cards/status', requireAuth, async (req, res) => {
     notes: r.notes,
     pin: canSeePins ? r.pin : undefined,
     status: (!r.event_type || r.event_type === 'checkin') ? 'available' : 'out',
-    checked_out_by_id:   r.event_type === 'checkout' ? r.out_user_id   : null,
-    checked_out_by_name: r.event_type === 'checkout' ? r.out_user_name : null,
-    checked_out_at:      r.event_type === 'checkout' ? r.out_at        : null,
+    checked_out_by_id:      r.event_type === 'checkout' ? r.out_user_id   : null,
+    checked_out_by_name:    r.event_type === 'checkout' ? r.out_user_name : null,
+    checked_out_at:         r.event_type === 'checkout' ? r.out_at        : null,
+    checked_out_vehicle:    r.event_type === 'checkout' ? (r.out_vehicle || '') : null,
   })));
 });
 
@@ -8439,25 +8441,56 @@ app.patch('/api/gas-cards/:id', requireAuth, async (req, res) => {
   res.json(rows[0]);
 });
 
+// Returns true if every pixel in the PNG data URL is fully transparent (blank canvas).
+// A real hand-drawn signature has at least MIN_INK_PIXELS non-transparent pixels.
+const MIN_INK_PIXELS = 50;
+function isBlankSignature(dataUrl) {
+  return new Promise((resolve) => {
+    try {
+      const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+      const buf    = Buffer.from(base64, 'base64');
+      const { PNG } = require('pngjs');
+      const png = new PNG();
+      png.on('parsed', function () {
+        // RGBA: alpha channel is every 4th byte starting at index 3
+        let inkPixels = 0;
+        for (let i = 3; i < this.data.length; i += 4) {
+          if (this.data[i] > 10) { // alpha > 10/255 counts as ink
+            inkPixels++;
+            if (inkPixels >= MIN_INK_PIXELS) { resolve(false); return; }
+          }
+        }
+        resolve(true); // fewer than MIN_INK_PIXELS inked pixels → blank
+      });
+      png.on('error', () => resolve(false)); // parse error → don't block the request
+      png.parse(buf);
+    } catch { resolve(false); }
+  });
+}
+
 // POST /api/gas-cards/:id/checkout — any auth user: sign out card, returns PIN
 app.post('/api/gas-cards/:id/checkout', requireAuth, async (req, res) => {
   const { rows: [card] } = await pool.query('SELECT * FROM gas_cards WHERE id=$1 AND active=1', [req.params.id]);
   if (!card) return res.status(404).json({ error: 'Card not found' });
-  // Check last event — if already checked out, block
   const { rows: [last] } = await pool.query(
     'SELECT event_type FROM gas_card_events WHERE card_id=$1 ORDER BY id DESC LIMIT 1', [req.params.id]
   );
   if (last && last.event_type === 'checkout') return res.status(409).json({ error: 'Card is already signed out' });
-  const { notes='', signature='' } = req.body;
+  const { notes='', signature='', vehicle='' } = req.body;
+  if (!vehicle?.trim()) return res.status(400).json({ error: 'Vehicle / Unit # is required' });
+  if (!signature || !signature.startsWith('data:image/') || signature.length < 1000)
+    return res.status(400).json({ error: 'A valid signature is required' });
+  if (await isBlankSignature(signature))
+    return res.status(400).json({ error: 'Signature appears blank — please draw your signature' });
   await pool.query(
-    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes,signature) VALUES ($1,$2,$3,'checkout',$4,$5)`,
-    [req.params.id, req.user.id, req.user.name, notes, signature]
+    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes,signature,vehicle) VALUES ($1,$2,$3,'checkout',$4,$5,$6)`,
+    [req.params.id, req.user.id, req.user.name, notes, signature, vehicle.trim()]
   );
-  logAction(req, 'gas_card_checkout', card.id, card.card_name, `Signed out by ${req.user.name}`);
+  logAction(req, 'gas_card_checkout', card.id, card.card_name, `Signed out by ${req.user.name} — vehicle: ${vehicle.trim()}`);
   res.json({ ok: true, pin: card.pin });
 });
 
-// POST /api/gas-cards/:id/checkin — signed-out user, or admin/office/supervisor
+// POST /api/gas-cards/:id/checkin — signed-out user, or admin/office/supervisor (force)
 app.post('/api/gas-cards/:id/checkin', requireAuth, async (req, res) => {
   const { rows: [card] } = await pool.query('SELECT * FROM gas_cards WHERE id=$1 AND active=1', [req.params.id]);
   if (!card) return res.status(404).json({ error: 'Card not found' });
@@ -8466,13 +8499,30 @@ app.post('/api/gas-cards/:id/checkin', requireAuth, async (req, res) => {
   );
   if (!last || last.event_type !== 'checkout') return res.status(409).json({ error: 'Card is not signed out' });
   const canForce = ['admin','office','supervisor'].includes(req.user.role);
-  if (last.user_id !== req.user.id && !canForce) return res.status(403).json({ error: 'Only the person who signed it out can sign it back in' });
-  const { notes='', signature='' } = req.body;
+  const isForce  = last.user_id !== req.user.id;
+  if (isForce && !canForce) return res.status(403).json({ error: 'Only the person who signed it out can sign it back in' });
+  const { notes='', signature='', vehicle='' } = req.body;
+  let eventNotes, eventSig;
+  if (isForce) {
+    // Office/supervisor force check-in: reason required, signature not required
+    if (!notes?.trim()) return res.status(400).json({ error: 'A reason is required for force sign-in' });
+    eventNotes = `Force sign-in by ${req.user.name}: ${notes.trim()}`;
+    eventSig   = '';
+  } else {
+    // Employee checking in their own card: signature required
+    if (!signature || !signature.startsWith('data:image/') || signature.length < 1000)
+      return res.status(400).json({ error: 'A valid signature is required' });
+    if (await isBlankSignature(signature))
+      return res.status(400).json({ error: 'Signature appears blank — please draw your signature' });
+    eventNotes = notes;
+    eventSig   = signature;
+  }
   await pool.query(
-    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes,signature) VALUES ($1,$2,$3,'checkin',$4,$5)`,
-    [req.params.id, req.user.id, req.user.name, notes, signature]
+    `INSERT INTO gas_card_events (card_id,user_id,user_name,event_type,notes,signature,vehicle) VALUES ($1,$2,$3,'checkin',$4,$5,$6)`,
+    [req.params.id, req.user.id, req.user.name, eventNotes, eventSig, vehicle.trim() || last.vehicle || '']
   );
-  logAction(req, 'gas_card_checkin', card.id, card.card_name, `Signed in by ${req.user.name}`);
+  logAction(req, 'gas_card_checkin', card.id, card.card_name,
+    isForce ? `Force signed in by ${req.user.name} — reason: ${notes.trim()}` : `Signed in by ${req.user.name}`);
   res.json({ ok: true });
 });
 

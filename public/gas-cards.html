@@ -150,6 +150,9 @@
       <button class="fc-modal-close" id="fc-sig-close">✕</button>
     </div>
     <p id="fc-sig-desc" style="margin-bottom:14px;"></p>
+    <div class="sig-label">Vehicle / Unit #</div>
+    <input type="text" id="sig-vehicle" placeholder="e.g. Truck 3, Unit 7" autocomplete="off"
+      style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:10px;color:#fff;font-size:15px;padding:10px 14px;margin-bottom:14px;min-height:44px;outline:none;"/>
     <div class="sig-label">Sign below using your finger or stylus</div>
     <div class="sig-canvas-wrap">
       <canvas id="sig-canvas"></canvas>
@@ -246,13 +249,14 @@
     html += `<div class="fc-detail-row"><span class="fc-detail-label">Status</span><span class="fc-detail-val">${isOut ? '🔴 Signed Out' : '🟢 Available'}</span></div>`;
     if (isOut) {
       html += `<div class="fc-detail-row"><span class="fc-detail-label">Signed Out By</span><span class="fc-detail-val">${esc(c.checked_out_by_name || '—')}</span></div>`;
-      if (c.checked_out_since) {
-        const since = new Date(c.checked_out_since).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      if (c.checked_out_vehicle) html += `<div class="fc-detail-row"><span class="fc-detail-label">Vehicle</span><span class="fc-detail-val">${esc(c.checked_out_vehicle)}</span></div>`;
+      if (c.checked_out_at) {
+        const since = new Date(c.checked_out_at).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
         html += `<div class="fc-detail-row"><span class="fc-detail-label">Since</span><span class="fc-detail-val">${esc(since)}</span></div>`;
       }
     }
-    if (!isOut) html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-out-full" id="fc-detail-action">Sign Out This Card</button>`;
-    else if (myCard) html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-in-full" id="fc-detail-action">Sign In This Card</button>`;
+    if (!isOut) html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-out-full" id="fc-detail-action" style="min-height:48px">Sign Out This Card</button>`;
+    else if (myCard) html += `<hr class="fc-divider"><button class="fc-action-full fc-btn-in-full" id="fc-detail-action" style="min-height:48px">Sign In This Card</button>`;
     document.getElementById('fc-detail-body').innerHTML = html;
     document.getElementById('fc-detail-modal').classList.add('open');
     const btn = document.getElementById('fc-detail-action');
@@ -286,30 +290,69 @@
   // ── Signature Pad ────────────────────────────────────────────────────────
   const canvas   = document.getElementById('sig-canvas');
   const ctx      = canvas.getContext('2d');
-  let drawing    = false;
-  let hasSig     = false;
+  const sigVehicleEl = document.getElementById('sig-vehicle');
+  let drawing      = false;
+  let hasSig       = false;
+  let strokeLength = 0;
+  let lastPt       = null;
+  const MIN_STROKE = 12; // px cumulative before sig counts as real
 
-  function sigResize() {
-    const wrap = canvas.parentElement;
-    const dpr  = window.devicePixelRatio || 1;
-    canvas.width  = wrap.clientWidth  * dpr;
-    canvas.height = 160 * dpr;
-    canvas.style.height = '160px';
-    ctx.scale(dpr, dpr);
+  function sigSetCtxStyle() {
     ctx.strokeStyle = '#111';
     ctx.lineWidth   = 2.5;
     ctx.lineCap     = 'round';
     ctx.lineJoin    = 'round';
   }
 
+  function sigResize() {
+    const wrap = canvas.parentElement;
+    const dpr  = window.devicePixelRatio || 1;
+    const w    = wrap.clientWidth;
+    if (!w) return; // modal not visible yet — caller must retry after layout
+
+    // Save drawn content before resizing the buffer (rotation recovery)
+    let saved = null;
+    if (hasSig && canvas.width > 0) {
+      try { saved = canvas.toDataURL(); } catch {}
+    }
+
+    canvas.width  = w * dpr;
+    canvas.height = 160 * dpr;
+    canvas.style.height = '160px';
+    ctx.scale(dpr, dpr);
+    sigSetCtxStyle();
+
+    if (saved) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, w, 160);
+      img.src = saved;
+    }
+  }
+
   function sigClear() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    hasSig = false;
+    hasSig       = false;
+    strokeLength = 0;
+    lastPt       = null;
+    drawing      = false;
     document.getElementById('sig-hint').style.display = '';
     document.getElementById('sig-status').textContent = 'Not yet signed';
     document.getElementById('sig-status').classList.remove('signed');
-    document.getElementById('sig-submit').disabled = true;
+    updateSubmitState();
   }
+
+  function updateSubmitState() {
+    const vehicleOk = sigVehicleEl.value.trim().length > 0;
+    const sigOk     = hasSig && strokeLength >= MIN_STROKE;
+    document.getElementById('sig-submit').disabled = !(vehicleOk && sigOk);
+    if (sigOk && !document.getElementById('sig-status').classList.contains('signed')) {
+      document.getElementById('sig-hint').style.display = 'none';
+      document.getElementById('sig-status').textContent = 'Signature captured';
+      document.getElementById('sig-status').classList.add('signed');
+    }
+  }
+
+  sigVehicleEl.addEventListener('input', updateSubmitState);
 
   function sigPoint(e) {
     const rect = canvas.getBoundingClientRect();
@@ -317,23 +360,40 @@
     return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   }
 
-  canvas.addEventListener('mousedown',  e => { drawing = true; const p = sigPoint(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-  canvas.addEventListener('mousemove',  e => { if (!drawing) return; const p = sigPoint(e); ctx.lineTo(p.x, p.y); ctx.stroke(); markSigned(); });
-  canvas.addEventListener('mouseup',    () => { drawing = false; });
-  canvas.addEventListener('mouseleave', () => { drawing = false; });
-  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = sigPoint(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: false });
-  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!drawing) return; const p = sigPoint(e); ctx.lineTo(p.x, p.y); ctx.stroke(); markSigned(); }, { passive: false });
-  canvas.addEventListener('touchend',   e => { e.preventDefault(); drawing = false; }, { passive: false });
-
-  function markSigned() {
-    if (!hasSig) {
-      hasSig = true;
-      document.getElementById('sig-hint').style.display = 'none';
-      document.getElementById('sig-status').textContent = 'Signature captured';
-      document.getElementById('sig-status').classList.add('signed');
-      document.getElementById('sig-submit').disabled = false;
-    }
+  function onDrawStart(e) {
+    drawing = true;
+    lastPt  = sigPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(lastPt.x, lastPt.y);
   }
+
+  function onDrawMove(e) {
+    if (!drawing) return;
+    const p = sigPoint(e);
+    const dx = p.x - lastPt.x, dy = p.y - lastPt.y;
+    strokeLength += Math.sqrt(dx*dx + dy*dy);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    lastPt = p;
+    hasSig = true;
+    updateSubmitState();
+  }
+
+  function onDrawEnd() { drawing = false; lastPt = null; }
+
+  canvas.addEventListener('mousedown',  e => { onDrawStart(e); });
+  canvas.addEventListener('mousemove',  e => { onDrawMove(e); });
+  canvas.addEventListener('mouseup',    onDrawEnd);
+  canvas.addEventListener('mouseleave', onDrawEnd);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); onDrawStart(e); }, { passive: false });
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); onDrawMove(e);  }, { passive: false });
+  canvas.addEventListener('touchend',   e => { e.preventDefault(); onDrawEnd();     }, { passive: false });
+
+  // Handle phone rotation while modal is open
+  const resizeObserver = new ResizeObserver(() => {
+    if (document.getElementById('fc-sig-modal').classList.contains('open')) sigResize();
+  });
+  resizeObserver.observe(canvas.parentElement);
 
   document.getElementById('sig-clear').addEventListener('click', sigClear);
 
@@ -345,9 +405,21 @@
     const btn = document.getElementById('sig-submit');
     btn.textContent = isOut ? 'Sign Out & Reveal PIN' : 'Confirm Sign In';
     btn.className   = 'sig-submit ' + (isOut ? 'out-btn' : 'in-btn');
-    sigResize();
-    sigClear();
+
+    // Pre-fill vehicle for checkin from the card's open checkout
+    if (!isOut && c?.checked_out_vehicle) {
+      sigVehicleEl.value = c.checked_out_vehicle;
+    } else if (isOut) {
+      sigVehicleEl.value = '';
+    }
+
+    // Open modal FIRST so browser lays out the flex container, THEN resize
     document.getElementById('fc-sig-modal').classList.add('open');
+    requestAnimationFrame(() => {
+      sigClear();
+      sigResize();
+      updateSubmitState();
+    });
   }
 
   document.getElementById('fc-sig-close').addEventListener('click', () => {
@@ -355,20 +427,24 @@
   });
 
   document.getElementById('sig-submit').addEventListener('click', async () => {
-    if (!hasSig) return;
+    if (document.getElementById('sig-submit').disabled) return;
     const signature = canvas.toDataURL('image/png');
+    const vehicle   = sigVehicleEl.value.trim();
     document.getElementById('fc-sig-modal').classList.remove('open');
     if (_pendingAction === 'checkout') {
-      await doCheckout(signature);
+      await doCheckout(signature, vehicle);
     } else {
-      await doCheckin(signature);
+      await doCheckin(signature, vehicle);
     }
   });
 
-  async function doCheckout(signature) {
+  async function doCheckout(signature, vehicle) {
     const c = _cards.find(x => x.id === _pendingId);
     try {
-      const res  = await fetch(`/api/gas-cards/${_pendingId}/checkout`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ signature }) });
+      const res  = await fetch(`/api/gas-cards/${_pendingId}/checkout`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ signature, vehicle })
+      });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Could not sign out card'); return; }
       document.getElementById('fc-pin-card-name').textContent = c?.card_name || '';
@@ -378,16 +454,19 @@
     } catch { alert('Network error — please try again'); }
   }
 
-  async function doCheckin(signature) {
+  async function doCheckin(signature, vehicle) {
     try {
-      const res  = await fetch(`/api/gas-cards/${_pendingId}/checkin`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ signature }) });
+      const res  = await fetch(`/api/gas-cards/${_pendingId}/checkin`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ signature, vehicle })
+      });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Could not sign in card'); return; }
       load();
     } catch { alert('Network error — please try again'); }
   }
 
-  // Confirm buttons now open sig modal instead of calling API directly
+  // Confirm buttons open sig modal
   document.getElementById('fc-co-confirm').addEventListener('click', () => {
     document.getElementById('fc-checkout-modal').classList.remove('open');
     openSigModal('checkout');
