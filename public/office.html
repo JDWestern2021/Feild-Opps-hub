@@ -1694,9 +1694,9 @@
         <div class="po-table-wrap" style="margin-bottom:20px;">
           <table class="po-table" id="gc-status-table">
             <thead><tr>
-              <th>Card Name</th><th>Card #</th><th>PIN</th><th>Status</th><th>Signed Out By</th><th>Since</th><th>Actions</th>
+              <th>Card Name</th><th>Card #</th><th>PIN</th><th>Status</th><th>Signed Out By</th><th>Vehicle</th><th>Since</th><th>Actions</th>
             </tr></thead>
-            <tbody id="gc-status-tbody"><tr><td colspan="7" style="text-align:center;color:var(--gray-400);">Loading…</td></tr></tbody>
+            <tbody id="gc-status-tbody"><tr><td colspan="8" style="text-align:center;color:var(--gray-400);">Loading…</td></tr></tbody>
           </table>
         </div>
 
@@ -6386,7 +6386,7 @@ async function loadGasCards() {
 function renderGcStatus() {
   const tbody = $('gc-status-tbody');
   if (!_gcCards.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gray-400);">No gas cards yet — click + Add Card to get started.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--gray-400);">No gas cards yet — click + Add Card to get started.</td></tr>';
     return;
   }
   tbody.innerHTML = _gcCards.map(c => {
@@ -6401,6 +6401,7 @@ function renderGcStatus() {
       <td style="font-family:monospace;font-weight:700;">${esc(c.pin||'—')}</td>
       <td>${statusBadge}</td>
       <td>${esc(c.checked_out_by_name||'—')}</td>
+      <td style="font-size:12px;">${esc(c.checked_out_vehicle||'—')}</td>
       <td style="font-size:12px;">${since}</td>
       <td>
         <button class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 8px;" onclick="gcOpenEdit(${c.id})">Edit</button>
@@ -6484,8 +6485,13 @@ $('gc-modal-save').addEventListener('click', async () => {
 async function gcForceCheckin(id) {
   const card = _gcCards.find(c => c.id === id);
   if (!card) return;
-  if (!confirm(`Force sign-in "${card.card_name}"? Use this only if the employee is unavailable.`)) return;
-  const res = await fetch(`/api/gas-cards/${id}/checkin`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+  const reason = prompt(`Force sign-in "${card.card_name}"\n\nReason (required — e.g. employee absent, card returned by site super):`);
+  if (reason === null) return; // cancelled
+  if (!reason.trim()) { showToast('A reason is required for force sign-in', 'error'); return; }
+  const res = await fetch(`/api/gas-cards/${id}/checkin`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ notes: reason.trim() })
+  });
   if (!res.ok) { const d = await res.json(); showToast(d.error || 'Failed', 'error'); return; }
   showToast('Card signed in', 'success');
   loadGasCards();

@@ -328,6 +328,25 @@ async function seed() {
       VALUES ($1, 'Lisa Field', $2, $3, 'Vacation', 'Family trip', 'pending', $4)
     `, [field2Id, date(14), date(18), now()]);
 
+    // ── Gas cards ────────────────────────────────────────────────────────────
+    console.log('▸ Seeding gas cards...');
+    const gcRows = await client.query(`
+      INSERT INTO gas_cards (card_name, card_number, pin, notes, active)
+      VALUES
+        ('Esso Fleet Card 1', '4715 2200 0001', '4821', 'Primary site card — Esso', 1),
+        ('Shell Fleet Card 2', '6011 4400 0002', '7734', 'Secondary card — Shell', 1),
+        ('Co-op Fleet Card 3', '5500 8800 0003', '2290', 'Bulk fuel depot — Co-op', 1)
+      RETURNING id, card_name
+    `);
+    // Seed one card as currently checked-out by Tom Field (signature is historical seed data, inserted directly)
+    const gcCard1 = gcRows.rows[0];
+    const seedSig = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAASwAAADICAYAAABS39xVAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYxIDY0LjE0MDk0OSwgMjAxMC8xMi8wNy0xMDo1NzowMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNS4xIFdpbmRvd3MiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MUJDN0JFRkI0NDE3MTFFMkE4RUE4NUQ0NzJBMzk0NEIiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MUJDN0JFRkM0NDE3MTFFMkE4RUE4NUQ0NzJBMzk0NEIiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDoxQkM3QkVGOTQ0MTcxMUUyQThFQTg1RDQ3MkEzOTQ0QiIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDoxQkM3QkVGQTQ0MTcxMUUyQThFQTg1RDQ3MkEzOTQ0QiIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4g';
+    await client.query(`
+      INSERT INTO gas_card_events (card_id, user_id, user_name, event_type, notes, signature, vehicle)
+      VALUES ($1, $2, 'Tom Field', 'checkout', 'Seed checkout', $3, 'Truck 3')
+    `, [gcCard1.id, field1Id, seedSig]);
+    console.log(`  ✓ ${gcRows.rows.length} gas cards seeded (${gcCard1.card_name} checked out to Tom Field)`);
+
     await client.query('COMMIT');
 
     // ── Worksites space trees (run after COMMIT — uses pool, not client) ──────

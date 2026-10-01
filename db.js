@@ -1303,6 +1303,7 @@ async function initSchema() {
     created_at  TEXT NOT NULL DEFAULT to_char(NOW(),'YYYY-MM-DD"T"HH24:MI:SS"Z"')
   )`);
   await pool.query(`ALTER TABLE gas_card_events ADD COLUMN IF NOT EXISTS signature TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE gas_card_events ADD COLUMN IF NOT EXISTS vehicle  TEXT NOT NULL DEFAULT ''`);
 
   // ── New Hire Package ───────────────────────────────────────────────────────
   await pool.query(`CREATE TABLE IF NOT EXISTS hire_package_docs (
